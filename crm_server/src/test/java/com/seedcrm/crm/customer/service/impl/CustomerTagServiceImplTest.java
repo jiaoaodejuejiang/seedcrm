@@ -14,6 +14,7 @@ import com.seedcrm.crm.customer.mapper.CustomerTagRuleMapper;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
+import com.seedcrm.crm.wecom.service.WecomTouchService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -35,11 +36,15 @@ class CustomerTagServiceImplTest {
     @Mock
     private OrderMapper orderMapper;
 
+    @Mock
+    private WecomTouchService wecomTouchService;
+
     private CustomerTagServiceImpl customerTagService;
 
     @BeforeEach
     void setUp() {
-        customerTagService = new CustomerTagServiceImpl(customerMapper, customerTagRuleMapper, orderMapper);
+        customerTagService = new CustomerTagServiceImpl(
+                customerMapper, customerTagRuleMapper, orderMapper, wecomTouchService);
     }
 
     @Test
@@ -62,6 +67,7 @@ class CustomerTagServiceImplTest {
 
         assertThat(updated.getTag()).isEqualTo("HIGH_VALUE");
         verify(customerMapper).updateById(customer);
+        verify(wecomTouchService).autoTrigger(1L);
     }
 
     @Test
@@ -80,6 +86,7 @@ class CustomerTagServiceImplTest {
 
         Customer updated = customerTagService.updateTag(2L);
         assertThat(updated.getTag()).isEqualTo("SLEEP");
+        verify(wecomTouchService).autoTrigger(2L);
 
         when(customerTagRuleMapper.selectList(any())).thenReturn(List.of(rule(21L, "REPEAT", "ORDER_COUNT", ">=2", 1)));
         Customer cleared = customerTagService.updateTag(2L);

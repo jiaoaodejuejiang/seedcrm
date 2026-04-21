@@ -10,6 +10,7 @@ import com.seedcrm.crm.customer.service.CustomerTagService;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
+import com.seedcrm.crm.wecom.service.WecomTouchService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -38,13 +39,16 @@ public class CustomerTagServiceImpl implements CustomerTagService {
     private final CustomerMapper customerMapper;
     private final CustomerTagRuleMapper customerTagRuleMapper;
     private final OrderMapper orderMapper;
+    private final WecomTouchService wecomTouchService;
 
     public CustomerTagServiceImpl(CustomerMapper customerMapper,
                                   CustomerTagRuleMapper customerTagRuleMapper,
-                                  OrderMapper orderMapper) {
+                                  OrderMapper orderMapper,
+                                  WecomTouchService wecomTouchService) {
         this.customerMapper = customerMapper;
         this.customerTagRuleMapper = customerTagRuleMapper;
         this.orderMapper = orderMapper;
+        this.wecomTouchService = wecomTouchService;
     }
 
     @Override
@@ -58,6 +62,7 @@ public class CustomerTagServiceImpl implements CustomerTagService {
         if (customer == null) {
             throw new BusinessException("customer not found");
         }
+        String previousTag = customer.getTag();
 
         CustomerOrderStats stats = buildStats(customerId);
         List<CustomerTagRule> rules = customerTagRuleMapper.selectList(Wrappers.<CustomerTagRule>lambdaQuery()
@@ -79,6 +84,9 @@ public class CustomerTagServiceImpl implements CustomerTagService {
         }
 
         log.info("customer tag updated, customerId={}, tag={}", customerId, customer.getTag());
+        if (!Objects.equals(previousTag, customer.getTag()) && StringUtils.hasText(customer.getTag())) {
+            wecomTouchService.autoTrigger(customerId);
+        }
         return customer;
     }
 

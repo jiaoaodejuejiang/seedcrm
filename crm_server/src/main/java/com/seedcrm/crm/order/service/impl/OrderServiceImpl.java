@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.customer.entity.Customer;
+import com.seedcrm.crm.customer.service.CustomerService;
 import com.seedcrm.crm.order.dto.OrderActionDTO;
 import com.seedcrm.crm.order.dto.OrderAppointmentDTO;
 import com.seedcrm.crm.order.dto.OrderCreateDTO;
@@ -27,23 +29,27 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     private final OrderMapper orderMapper;
     private final ClueMapper clueMapper;
+    private final CustomerService customerService;
 
-    public OrderServiceImpl(OrderMapper orderMapper, ClueMapper clueMapper) {
+    public OrderServiceImpl(OrderMapper orderMapper, ClueMapper clueMapper, CustomerService customerService) {
         this.orderMapper = orderMapper;
         this.clueMapper = clueMapper;
+        this.customerService = customerService;
     }
 
     @Override
     @Transactional
     public Order createOrder(OrderCreateDTO orderCreateDTO) {
         validateCreateRequest(orderCreateDTO);
-        validateClue(orderCreateDTO.getClueId());
 
+        Clue clue = getClueIfPresent(orderCreateDTO.getClueId());
+        Customer customer = resolveCustomer(orderCreateDTO, clue);
         LocalDateTime now = LocalDateTime.now();
+
         Order order = new Order();
         order.setOrderNo(OrderNoGenerator.generate());
         order.setClueId(orderCreateDTO.getClueId());
-        order.setCustomerId(orderCreateDTO.getCustomerId());
+        order.setCustomerId(customer == null ? null : customer.getId());
         order.setType(orderCreateDTO.getType());
         order.setAmount(orderCreateDTO.getAmount());
         order.setDeposit(defaultDeposit(orderCreateDTO.getDeposit()));
@@ -52,9 +58,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setCreateTime(now);
         order.setUpdateTime(now);
         if (orderMapper.insert(order) <= 0) {
-            throw new BusinessException("创建订单失败");
+            throw new BusinessException("failed to create order");
         }
-        log.info("order created, orderNo={}, status={}", order.getOrderNo(), order.getStatus());
+
+        markClueConverted(clue);
+        refreshCustomerLifecycle(order.getCustomerId());
+        log.info("order created, orderNo={}, customerId={}, status={}",
+                order.getOrderNo(), order.getCustomerId(), order.getStatus());
         return order;
     }
 
@@ -63,14 +73,15 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     public Order payDeposit(OrderPayDTO orderPayDTO) {
         validateOrderId(orderPayDTO == null ? null : orderPayDTO.getOrderId());
         Order order = getOrderById(orderPayDTO.getOrderId());
+        ensureOrderCustomerBound(order);
         assertNextStatus(order, OrderStatus.PAID_DEPOSIT);
 
         BigDecimal deposit = orderPayDTO.getDeposit() == null ? order.getDeposit() : orderPayDTO.getDeposit();
         if (deposit == null || deposit.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException("定金必须大于 0");
+            throw new BusinessException("deposit must be greater than 0");
         }
         if (deposit.compareTo(order.getAmount()) > 0) {
-            throw new BusinessException("定金不能大于订单总金额");
+            throw new BusinessException("deposit cannot exceed order amount");
         }
 
         order.setDeposit(deposit);
@@ -83,10 +94,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     public Order appointment(OrderAppointmentDTO orderAppointmentDTO) {
         validateOrderId(orderAppointmentDTO == null ? null : orderAppointmentDTO.getOrderId());
         if (orderAppointmentDTO.getAppointmentTime() == null) {
-            throw new BusinessException("预约时间不能为空");
+            throw new BusinessException("appointmentTime is required");
         }
 
         Order order = getOrderById(orderAppointmentDTO.getOrderId());
+        ensureOrderCustomerBound(order);
         assertNextStatus(order, OrderStatus.APPOINTMENT);
         order.setAppointmentTime(orderAppointmentDTO.getAppointmentTime());
         updateRemark(order, orderAppointmentDTO.getRemark());
@@ -124,9 +136,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     public Order cancel(OrderActionDTO orderActionDTO) {
         validateOrderId(orderActionDTO == null ? null : orderActionDTO.getOrderId());
         Order order = getOrderById(orderActionDTO.getOrderId());
+        ensureOrderCustomerBound(order);
         OrderStatus currentStatus = getCurrentStatus(order);
         if (!currentStatus.canCancel()) {
-            throw new BusinessException("当前状态不允许取消订单: " + currentStatus.name());
+            throw new BusinessException("order cannot be cancelled from status " + currentStatus.name());
         }
         updateRemark(order, orderActionDTO.getRemark());
         return updateOrderStatus(order, OrderStatus.CANCELLED);
@@ -137,9 +150,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     public Order refund(OrderActionDTO orderActionDTO) {
         validateOrderId(orderActionDTO == null ? null : orderActionDTO.getOrderId());
         Order order = getOrderById(orderActionDTO.getOrderId());
+        ensureOrderCustomerBound(order);
         OrderStatus currentStatus = getCurrentStatus(order);
         if (!currentStatus.canRefund()) {
-            throw new BusinessException("当前状态不允许退款: " + currentStatus.name());
+            throw new BusinessException("order cannot be refunded from status " + currentStatus.name());
         }
         updateRemark(order, orderActionDTO.getRemark());
         return updateOrderStatus(order, OrderStatus.REFUNDED);
@@ -147,40 +161,60 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     private void validateCreateRequest(OrderCreateDTO orderCreateDTO) {
         if (orderCreateDTO == null) {
-            throw new BusinessException("请求参数不能为空");
+            throw new BusinessException("request body is required");
         }
         if (orderCreateDTO.getClueId() == null && orderCreateDTO.getCustomerId() == null) {
-            throw new BusinessException("clueId 和 customerId 至少传一个");
+            throw new BusinessException("clueId or customerId is required");
         }
         if (!OrderType.isValid(orderCreateDTO.getType())) {
-            throw new BusinessException("订单类型不正确");
+            throw new BusinessException("invalid order type");
         }
         if (orderCreateDTO.getAmount() == null || orderCreateDTO.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException("订单总金额必须大于 0");
+            throw new BusinessException("amount must be greater than 0");
         }
         if (orderCreateDTO.getDeposit() != null && orderCreateDTO.getDeposit().compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessException("定金不能小于 0");
+            throw new BusinessException("deposit cannot be negative");
         }
         if (orderCreateDTO.getDeposit() != null
                 && orderCreateDTO.getDeposit().compareTo(orderCreateDTO.getAmount()) > 0) {
-            throw new BusinessException("定金不能大于订单总金额");
+            throw new BusinessException("deposit cannot exceed order amount");
         }
         if (orderCreateDTO.getClueId() != null && orderCreateDTO.getClueId() <= 0) {
-            throw new BusinessException("clueId 必须大于 0");
+            throw new BusinessException("clueId must be greater than 0");
         }
         if (orderCreateDTO.getCustomerId() != null && orderCreateDTO.getCustomerId() <= 0) {
-            throw new BusinessException("customerId 必须大于 0");
+            throw new BusinessException("customerId must be greater than 0");
         }
     }
 
-    private void validateClue(Long clueId) {
+    private Clue getClueIfPresent(Long clueId) {
         if (clueId == null) {
-            return;
+            return null;
         }
         Clue clue = clueMapper.selectById(clueId);
         if (clue == null) {
-            throw new BusinessException("线索不存在");
+            throw new BusinessException("clue not found");
         }
+        return clue;
+    }
+
+    private Customer resolveCustomer(OrderCreateDTO orderCreateDTO, Clue clue) {
+        Customer customer = null;
+        if (orderCreateDTO.getCustomerId() != null) {
+            customer = customerService.getByIdOrThrow(orderCreateDTO.getCustomerId());
+        }
+        if (clue == null) {
+            return customer;
+        }
+        if (customer != null) {
+            if (StringUtils.hasText(clue.getPhone())
+                    && StringUtils.hasText(customer.getPhone())
+                    && !customer.getPhone().equals(clue.getPhone())) {
+                throw new BusinessException("clue phone does not match customer phone");
+            }
+            return customer;
+        }
+        return customerService.getOrCreateByClue(clue);
     }
 
     private BigDecimal defaultDeposit(BigDecimal deposit) {
@@ -190,31 +224,55 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private Order validateAndGetActionOrder(OrderActionDTO orderActionDTO, OrderStatus targetStatus) {
         validateOrderId(orderActionDTO == null ? null : orderActionDTO.getOrderId());
         Order order = getOrderById(orderActionDTO.getOrderId());
+        ensureOrderCustomerBound(order);
         assertNextStatus(order, targetStatus);
         return order;
     }
 
     private void validateOrderId(Long orderId) {
-        if (orderId == null) {
-            throw new BusinessException("orderId 不能为空");
+        if (orderId == null || orderId <= 0) {
+            throw new BusinessException("orderId is required");
         }
     }
 
     private Order getOrderById(Long orderId) {
         Order order = orderMapper.selectById(orderId);
         if (order == null) {
-            throw new BusinessException("订单不存在");
+            throw new BusinessException("order not found");
         }
         return order;
+    }
+
+    private void ensureOrderCustomerBound(Order order) {
+        if (order.getCustomerId() != null) {
+            customerService.getByIdOrThrow(order.getCustomerId());
+            return;
+        }
+        if (order.getClueId() == null) {
+            return;
+        }
+        Clue clue = getClueIfPresent(order.getClueId());
+        Customer customer = customerService.getOrCreateByClue(clue);
+        order.setCustomerId(customer.getId());
+        markClueConverted(clue);
+    }
+
+    private void markClueConverted(Clue clue) {
+        if (clue == null) {
+            return;
+        }
+        clue.setStatus("converted");
+        clue.setUpdatedAt(LocalDateTime.now());
+        clueMapper.updateById(clue);
     }
 
     private void assertNextStatus(Order order, OrderStatus targetStatus) {
         OrderStatus currentStatus = getCurrentStatus(order);
         OrderStatus expectedNextStatus = currentStatus.nextNormalStatus();
         if (expectedNextStatus != targetStatus) {
-            String expectedStatus = expectedNextStatus == null ? "无后续状态" : expectedNextStatus.name();
-            throw new BusinessException(
-                    "订单状态错误，当前状态为 " + currentStatus.name() + "，下一步只能流转到 " + expectedStatus);
+            String expectedStatus = expectedNextStatus == null ? "no next status" : expectedNextStatus.name();
+            throw new BusinessException("invalid order status transition: " + currentStatus.name()
+                    + " -> " + targetStatus.name() + ", expected " + expectedStatus);
         }
     }
 
@@ -222,7 +280,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         try {
             return OrderStatus.valueOf(order.getStatus());
         } catch (IllegalArgumentException exception) {
-            throw new BusinessException("订单状态非法: " + order.getStatus());
+            throw new BusinessException("invalid order status: " + order.getStatus());
         }
     }
 
@@ -230,10 +288,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setStatus(targetStatus.name());
         order.setUpdateTime(LocalDateTime.now());
         if (orderMapper.updateById(order) <= 0) {
-            throw new BusinessException("订单状态更新失败");
+            throw new BusinessException("failed to update order status");
         }
-        log.info("order status updated, orderNo={}, status={}", order.getOrderNo(), order.getStatus());
+        refreshCustomerLifecycle(order.getCustomerId());
+        log.info("order status updated, orderNo={}, customerId={}, status={}",
+                order.getOrderNo(), order.getCustomerId(), order.getStatus());
         return order;
+    }
+
+    private void refreshCustomerLifecycle(Long customerId) {
+        if (customerId != null) {
+            customerService.refreshCustomerLifecycle(customerId);
+        }
     }
 
     private void updateRemark(Order order, String remark) {

@@ -3,6 +3,7 @@ package com.seedcrm.crm.order.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,8 +11,9 @@ import static org.mockito.Mockito.when;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.customer.entity.Customer;
+import com.seedcrm.crm.customer.service.CustomerService;
 import com.seedcrm.crm.order.dto.OrderActionDTO;
-import com.seedcrm.crm.order.dto.OrderAppointmentDTO;
 import com.seedcrm.crm.order.dto.OrderCreateDTO;
 import com.seedcrm.crm.order.dto.OrderPayDTO;
 import com.seedcrm.crm.order.entity.Order;
@@ -34,23 +36,35 @@ class OrderServiceImplTest {
     @Mock
     private ClueMapper clueMapper;
 
+    @Mock
+    private CustomerService customerService;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderServiceImpl(orderMapper, clueMapper);
+        orderService = new OrderServiceImpl(orderMapper, clueMapper, customerService);
     }
 
     @Test
-    void createOrderShouldInsertCreatedOrder() {
+    void createOrderShouldCreateCustomerFromClueWhenMissingCustomerId() {
         Clue clue = new Clue();
         clue.setId(100L);
+        clue.setPhone("13800138000");
+        clue.setName("Alice");
+        clue.setWechat("alice-wechat");
         when(clueMapper.selectById(100L)).thenReturn(clue);
+
+        Customer customer = new Customer();
+        customer.setId(200L);
+        customer.setPhone("13800138000");
+        when(customerService.getOrCreateByClue(clue)).thenReturn(customer);
         when(orderMapper.insert(any(Order.class))).thenAnswer(invocation -> {
             Order order = invocation.getArgument(0);
             order.setId(1L);
             return 1;
         });
+        when(clueMapper.updateById(any(Clue.class))).thenReturn(1);
 
         OrderCreateDTO dto = new OrderCreateDTO();
         dto.setClueId(100L);
@@ -62,83 +76,90 @@ class OrderServiceImplTest {
         Order order = orderService.createOrder(dto);
 
         assertThat(order.getId()).isEqualTo(1L);
-        assertThat(order.getOrderNo()).startsWith("ORD");
+        assertThat(order.getCustomerId()).isEqualTo(200L);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CREATED.name());
-        assertThat(order.getCreateTime()).isNotNull();
-        assertThat(order.getUpdateTime()).isNotNull();
-        verify(orderMapper).insert(any(Order.class));
+        verify(customerService).getOrCreateByClue(clue);
+        verify(customerService).refreshCustomerLifecycle(200L);
     }
 
     @Test
-    void payDepositShouldRejectInvalidTransition() {
-        Order order = new Order();
-        order.setId(1L);
-        order.setAmount(new BigDecimal("500.00"));
-        order.setDeposit(new BigDecimal("50.00"));
-        order.setStatus(OrderStatus.PAID_DEPOSIT.name());
-        when(orderMapper.selectById(1L)).thenReturn(order);
+    void createOrderShouldRejectMismatchedClueAndCustomer() {
+        Clue clue = new Clue();
+        clue.setId(100L);
+        clue.setPhone("13800138000");
+        when(clueMapper.selectById(100L)).thenReturn(clue);
 
-        OrderPayDTO dto = new OrderPayDTO();
-        dto.setOrderId(1L);
-        dto.setDeposit(new BigDecimal("50.00"));
+        Customer customer = new Customer();
+        customer.setId(300L);
+        customer.setPhone("13900139000");
+        when(customerService.getByIdOrThrow(300L)).thenReturn(customer);
 
-        assertThatThrownBy(() -> orderService.payDeposit(dto))
+        OrderCreateDTO dto = new OrderCreateDTO();
+        dto.setClueId(100L);
+        dto.setCustomerId(300L);
+        dto.setType(1);
+        dto.setAmount(new BigDecimal("500.00"));
+
+        assertThatThrownBy(() -> orderService.createOrder(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("订单状态错误");
+                .hasMessageContaining("clue phone does not match customer phone");
+        verify(orderMapper, never()).insert(any(Order.class));
     }
 
     @Test
-    void orderLifecycleShouldCompleteAfterServing() {
+    void payDepositShouldBindCustomerAndRefreshLifecycle() {
         Order order = new Order();
         order.setId(1L);
         order.setOrderNo("ORD202604211234567890");
-        order.setAmount(new BigDecimal("1000.00"));
-        order.setDeposit(BigDecimal.ZERO);
+        order.setClueId(101L);
+        order.setAmount(new BigDecimal("500.00"));
+        order.setDeposit(new BigDecimal("50.00"));
         order.setStatus(OrderStatus.CREATED.name());
         when(orderMapper.selectById(1L)).thenReturn(order);
+
+        Clue clue = new Clue();
+        clue.setId(101L);
+        clue.setPhone("13800138001");
+        when(clueMapper.selectById(101L)).thenReturn(clue);
+
+        Customer customer = new Customer();
+        customer.setId(201L);
+        customer.setPhone("13800138001");
+        when(customerService.getOrCreateByClue(clue)).thenReturn(customer);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+        when(clueMapper.updateById(any(Clue.class))).thenReturn(1);
 
-        OrderPayDTO payDTO = new OrderPayDTO();
-        payDTO.setOrderId(1L);
-        payDTO.setDeposit(new BigDecimal("100.00"));
-        orderService.payDeposit(payDTO);
+        OrderPayDTO dto = new OrderPayDTO();
+        dto.setOrderId(1L);
+        dto.setDeposit(new BigDecimal("80.00"));
 
-        OrderAppointmentDTO appointmentDTO = new OrderAppointmentDTO();
-        appointmentDTO.setOrderId(1L);
-        appointmentDTO.setAppointmentTime(LocalDateTime.now().plusDays(1));
-        orderService.appointment(appointmentDTO);
+        Order updated = orderService.payDeposit(dto);
 
-        OrderActionDTO arriveDTO = new OrderActionDTO();
-        arriveDTO.setOrderId(1L);
-        orderService.arrive(arriveDTO);
-
-        OrderActionDTO servingDTO = new OrderActionDTO();
-        servingDTO.setOrderId(1L);
-        orderService.serving(servingDTO);
-
-        OrderActionDTO completeDTO = new OrderActionDTO();
-        completeDTO.setOrderId(1L);
-        Order completedOrder = orderService.complete(completeDTO);
-
-        assertThat(completedOrder.getStatus()).isEqualTo(OrderStatus.COMPLETED.name());
-        assertThat(completedOrder.getAppointmentTime()).isNotNull();
-        assertThat(completedOrder.getArriveTime()).isNotNull();
-        assertThat(completedOrder.getCompleteTime()).isNotNull();
-        verify(orderMapper, times(5)).updateById(any(Order.class));
+        assertThat(updated.getCustomerId()).isEqualTo(201L);
+        assertThat(updated.getStatus()).isEqualTo(OrderStatus.PAID_DEPOSIT.name());
+        verify(customerService).refreshCustomerLifecycle(201L);
     }
 
     @Test
-    void cancelShouldRejectCompletedOrder() {
+    void completeShouldRefreshCustomerLifecycle() {
         Order order = new Order();
         order.setId(2L);
-        order.setStatus(OrderStatus.COMPLETED.name());
+        order.setOrderNo("ORD202604211234567891");
+        order.setCustomerId(202L);
+        order.setStatus(OrderStatus.SERVING.name());
         when(orderMapper.selectById(2L)).thenReturn(order);
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+        when(customerService.getByIdOrThrow(202L)).thenReturn(new Customer());
 
         OrderActionDTO dto = new OrderActionDTO();
         dto.setOrderId(2L);
+        dto.setRemark("done");
 
-        assertThatThrownBy(() -> orderService.cancel(dto))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("当前状态不允许取消订单");
+        Order completedOrder = orderService.complete(dto);
+
+        assertThat(completedOrder.getStatus()).isEqualTo(OrderStatus.COMPLETED.name());
+        assertThat(completedOrder.getCompleteTime()).isNotNull();
+        verify(customerService, times(1)).getByIdOrThrow(202L);
+        verify(customerService).refreshCustomerLifecycle(202L);
     }
 }

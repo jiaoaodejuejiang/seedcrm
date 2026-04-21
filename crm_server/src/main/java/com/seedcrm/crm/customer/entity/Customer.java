@@ -33,6 +33,9 @@ public class Customer {
     @TableField("level")
     private String level;
 
+    @TableField("tag")
+    private String tag;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("first_order_time")
     private LocalDateTime firstOrderTime;

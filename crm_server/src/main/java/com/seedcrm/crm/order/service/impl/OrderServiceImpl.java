@@ -6,6 +6,7 @@ import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.customer.entity.Customer;
 import com.seedcrm.crm.customer.service.CustomerService;
+import com.seedcrm.crm.customer.service.CustomerTagService;
 import com.seedcrm.crm.order.dto.OrderActionDTO;
 import com.seedcrm.crm.order.dto.OrderAppointmentDTO;
 import com.seedcrm.crm.order.dto.OrderCreateDTO;
@@ -30,11 +31,16 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final OrderMapper orderMapper;
     private final ClueMapper clueMapper;
     private final CustomerService customerService;
+    private final CustomerTagService customerTagService;
 
-    public OrderServiceImpl(OrderMapper orderMapper, ClueMapper clueMapper, CustomerService customerService) {
+    public OrderServiceImpl(OrderMapper orderMapper,
+                            ClueMapper clueMapper,
+                            CustomerService customerService,
+                            CustomerTagService customerTagService) {
         this.orderMapper = orderMapper;
         this.clueMapper = clueMapper;
         this.customerService = customerService;
+        this.customerTagService = customerTagService;
     }
 
     @Override
@@ -44,6 +50,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         Clue clue = getClueIfPresent(orderCreateDTO.getClueId());
         Customer customer = resolveCustomer(orderCreateDTO, clue);
+        if (customer == null || customer.getId() == null) {
+            throw new BusinessException("customer must be bound before creating order");
+        }
         LocalDateTime now = LocalDateTime.now();
 
         Order order = new Order();
@@ -128,7 +137,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         Order order = validateAndGetActionOrder(orderActionDTO, OrderStatus.COMPLETED);
         order.setCompleteTime(LocalDateTime.now());
         updateRemark(order, orderActionDTO.getRemark());
-        return updateOrderStatus(order, OrderStatus.COMPLETED);
+        Order completedOrder = updateOrderStatus(order, OrderStatus.COMPLETED);
+        customerTagService.updateTag(completedOrder.getCustomerId());
+        return completedOrder;
     }
 
     @Override

@@ -10,14 +10,13 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-public class CustomerTableInitializer {
+public class CustomerTagRuleTableInitializer {
 
-    private static final String TABLE_NAME = "customer";
-    private static final String UNIQUE_INDEX = "uk_customer_phone";
+    private static final String TABLE_NAME = "customer_tag_rule";
 
     private final JdbcTemplate jdbcTemplate;
 
-    public CustomerTableInitializer(DataSource dataSource) {
+    public CustomerTagRuleTableInitializer(DataSource dataSource) {
         this.jdbcTemplate = new JdbcTemplate(dataSource);
     }
 
@@ -26,10 +25,10 @@ public class CustomerTableInitializer {
         if (!tableExists()) {
             jdbcTemplate.execute(createTableSql());
             log.info("created table {}", TABLE_NAME);
-        } else {
-            ensureMissingColumns();
+            return;
         }
-        ensurePhoneUniqueIndex();
+
+        ensureMissingColumns();
     }
 
     private boolean tableExists() {
@@ -62,36 +61,15 @@ public class CustomerTableInitializer {
         return count != null && count > 0;
     }
 
-    private void ensurePhoneUniqueIndex() {
-        Integer count = jdbcTemplate.queryForObject("""
-                SELECT COUNT(1)
-                FROM information_schema.STATISTICS
-                WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = ?
-                  AND INDEX_NAME = ?
-                """, Integer.class, TABLE_NAME, UNIQUE_INDEX);
-        if (count == null || count == 0) {
-            jdbcTemplate.execute("ALTER TABLE " + TABLE_NAME + " ADD UNIQUE KEY " + UNIQUE_INDEX + " (phone)");
-            log.info("added unique index {} on {}.phone", UNIQUE_INDEX, TABLE_NAME);
-        }
-    }
-
     private String createTableSql() {
         return """
-                CREATE TABLE customer (
+                CREATE TABLE customer_tag_rule (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                    name VARCHAR(128),
-                    phone VARCHAR(32) NOT NULL,
-                    wechat VARCHAR(64),
-                    source_clue_id BIGINT,
-                    status VARCHAR(32) NOT NULL,
-                    level VARCHAR(32),
-                    tag VARCHAR(64),
-                    first_order_time DATETIME,
-                    last_order_time DATETIME,
-                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    UNIQUE KEY uk_customer_phone (phone)
+                    tag_code VARCHAR(64),
+                    rule_type VARCHAR(32),
+                    rule_value VARCHAR(255),
+                    priority INT,
+                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
                 """;
     }
@@ -99,17 +77,11 @@ public class CustomerTableInitializer {
     private Map<String, String> expectedColumns() {
         Map<String, String> columns = new LinkedHashMap<>();
         columns.put("id", "id BIGINT PRIMARY KEY AUTO_INCREMENT");
-        columns.put("name", "name VARCHAR(128)");
-        columns.put("phone", "phone VARCHAR(32) NOT NULL");
-        columns.put("wechat", "wechat VARCHAR(64)");
-        columns.put("source_clue_id", "source_clue_id BIGINT");
-        columns.put("status", "status VARCHAR(32) NOT NULL DEFAULT 'NEW'");
-        columns.put("level", "level VARCHAR(32)");
-        columns.put("tag", "tag VARCHAR(64)");
-        columns.put("first_order_time", "first_order_time DATETIME");
-        columns.put("last_order_time", "last_order_time DATETIME");
+        columns.put("tag_code", "tag_code VARCHAR(64)");
+        columns.put("rule_type", "rule_type VARCHAR(32)");
+        columns.put("rule_value", "rule_value VARCHAR(255)");
+        columns.put("priority", "priority INT");
         columns.put("create_time", "create_time DATETIME DEFAULT CURRENT_TIMESTAMP");
-        columns.put("update_time", "update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
         return columns;
     }
 }

@@ -55,3 +55,14 @@
 2026-04-21T18:15:09.189+08:00  INFO 19180 --- [           main] m.e.s.MybatisPlusApplicationContextAware : Register ApplicationContext instances org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext@12d2ce03
 2026-04-21T18:15:09.301+08:00  INFO 19180 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
 2026-04-21T18:15:09.311+08:00  INFO 19180 --- [           main] com.seedcrm.crm.CrmApplication           : Started CrmApplication in 3.954 seconds (process running for 4.348)
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+2026-04-21T18:16:23.611+08:00  INFO 19180 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-04-21T18:16:23.621+08:00  INFO 19180 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 3 ms
+2026-04-21T18:16:24.156+08:00  INFO 19180 --- [nio-8080-exec-3] c.s.c.o.service.impl.OrderServiceImpl    : order created, orderNo=ORD202604211816241153678, customerId=1, status=CREATED
+2026-04-21T18:16:24.236+08:00  INFO 19180 --- [nio-8080-exec-4] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211816241153678, customerId=1, status=PAID_DEPOSIT
+2026-04-21T18:16:24.339+08:00  INFO 19180 --- [nio-8080-exec-9] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211816241153678, customerId=1, status=APPOINTMENT
+2026-04-21T18:16:24.364+08:00  INFO 19180 --- [nio-8080-exec-7] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211816241153678, customerId=1, status=ARRIVED
+2026-04-21T18:16:24.388+08:00  INFO 19180 --- [nio-8080-exec-8] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211816241153678, customerId=1, status=SERVING
+2026-04-21T18:16:24.412+08:00  INFO 19180 --- [nio-8080-exec-6] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211816241153678, customerId=1, status=COMPLETED
+2026-04-21T18:16:24.444+08:00  INFO 19180 --- [nio-8080-exec-1] c.s.c.o.service.impl.OrderServiceImpl    : order created, orderNo=ORD202604211816244305202, customerId=1, status=CREATED
+2026-04-21T18:17:01.554+08:00  INFO 19180 --- [nio-8080-exec-4] c.s.c.o.service.impl.OrderServiceImpl    : order created, orderNo=ORD202604211817015404304, customerId=1, status=CREATED

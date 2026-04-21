@@ -1,0 +1,81 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -----------------------< com.seedcrm:crm_server >-----------------------
+[INFO] Building crm_server 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] >>> spring-boot:3.5.9:run (default-cli) > test-compile @ crm_server >>>
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ crm_server ---
+[INFO] Copying 1 resource from src\main\resources to target\classes
+[INFO] Copying 0 resource from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.14.1:compile (default-compile) @ crm_server ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ crm_server ---
+[INFO] Copying 1 resource from src\test\resources to target\test-classes
+[INFO] 
+[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ crm_server ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] <<< spring-boot:3.5.9:run (default-cli) < test-compile @ crm_server <<<
+[INFO] 
+[INFO] 
+[INFO] --- spring-boot:3.5.9:run (default-cli) @ crm_server ---
+[INFO] Attaching agents: []
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.9)
+
+2026-04-21T18:46:57.121+08:00  INFO 5000 --- [           main] com.seedcrm.crm.CrmApplication           : Starting CrmApplication using Java 17.0.18 with PID 5000 (E:\studio\test\seedcrm\crm_server\target\classes started by Administrator in E:\studio\test\seedcrm\crm_server)
+2026-04-21T18:46:57.123+08:00  INFO 5000 --- [           main] com.seedcrm.crm.CrmApplication           : No active profile set, falling back to 1 default profile: "default"
+2026-04-21T18:46:58.389+08:00  INFO 5000 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-04-21T18:46:58.413+08:00  INFO 5000 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-04-21T18:46:58.413+08:00  INFO 5000 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.50]
+2026-04-21T18:46:58.484+08:00  INFO 5000 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-04-21T18:46:58.484+08:00  INFO 5000 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1304 ms
+2026-04-21T18:46:58.575+08:00  INFO 5000 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-04-21T18:46:58.909+08:00  INFO 5000 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@18a096b5
+2026-04-21T18:46:58.911+08:00  INFO 5000 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+ _ _   |_  _ _|_. ___ _ |    _ 
+| | |\/|_)(_| | |_\  |_)||_|_\ 
+     /               |         
+                        3.5.15 
+2026-04-21T18:46:59.709+08:00  INFO 5000 --- [           main] c.s.c.c.config.CustomerTableInitializer  : added missing column customer.tag
+2026-04-21T18:46:59.728+08:00  INFO 5000 --- [           main] .s.c.c.c.CustomerTagRuleTableInitializer : created table customer_tag_rule
+2026-04-21T18:47:00.122+08:00  INFO 5000 --- [           main] m.e.s.MybatisPlusApplicationContextAware : Register ApplicationContext instances org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext@12d2ce03
+2026-04-21T18:47:00.215+08:00  INFO 5000 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-04-21T18:47:00.223+08:00  INFO 5000 --- [           main] com.seedcrm.crm.CrmApplication           : Started CrmApplication in 3.643 seconds (process running for 4.036)
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+2026-04-21T18:48:30.872+08:00  INFO 5000 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-04-21T18:48:30.882+08:00  INFO 5000 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 3 ms
+2026-04-21T18:48:44.343+08:00  INFO 5000 --- [nio-8080-exec-3] c.s.c.o.service.impl.OrderServiceImpl    : order created, orderNo=ORD202604211848443075779, customerId=2, status=CREATED
+2026-04-21T18:48:58.505+08:00  INFO 5000 --- [nio-8080-exec-9] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211848443075779, customerId=2, status=PAID_DEPOSIT
+2026-04-21T18:48:58.551+08:00  INFO 5000 --- [nio-8080-exec-6] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211848443075779, customerId=2, status=APPOINTMENT
+2026-04-21T18:48:58.580+08:00  INFO 5000 --- [nio-8080-exec-2] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211848443075779, customerId=2, status=ARRIVED
+2026-04-21T18:48:58.607+08:00  INFO 5000 --- [nio-8080-exec-8] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211848443075779, customerId=2, status=SERVING
+2026-04-21T18:48:58.638+08:00  INFO 5000 --- [nio-8080-exec-5] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211848443075779, customerId=2, status=COMPLETED
+2026-04-21T18:48:58.667+08:00  INFO 5000 --- [nio-8080-exec-5] c.s.c.c.s.impl.CustomerTagServiceImpl    : customer tag updated, customerId=2, tag=NEW
+2026-04-21T18:49:29.774+08:00  INFO 5000 --- [nio-8080-exec-3] c.s.c.o.service.impl.OrderServiceImpl    : order created, orderNo=ORD202604211849297614158, customerId=2, status=CREATED
+2026-04-21T18:49:29.832+08:00  INFO 5000 --- [nio-8080-exec-7] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211849297614158, customerId=2, status=PAID_DEPOSIT
+2026-04-21T18:49:29.857+08:00  INFO 5000 --- [nio-8080-exec-9] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211849297614158, customerId=2, status=APPOINTMENT
+2026-04-21T18:49:29.873+08:00  INFO 5000 --- [nio-8080-exec-6] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211849297614158, customerId=2, status=ARRIVED
+2026-04-21T18:49:29.896+08:00  INFO 5000 --- [nio-8080-exec-2] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211849297614158, customerId=2, status=SERVING
+2026-04-21T18:49:29.928+08:00  INFO 5000 --- [nio-8080-exec-8] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211849297614158, customerId=2, status=COMPLETED
+2026-04-21T18:49:29.933+08:00  INFO 5000 --- [nio-8080-exec-8] c.s.c.c.s.impl.CustomerTagServiceImpl    : customer tag updated, customerId=2, tag=REPEAT
+2026-04-21T18:49:45.278+08:00  INFO 5000 --- [nio-8080-exec-1] c.s.c.o.service.impl.OrderServiceImpl    : order created, orderNo=ORD202604211849452699362, customerId=2, status=CREATED
+2026-04-21T18:49:45.321+08:00  INFO 5000 --- [nio-8080-exec-4] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211849452699362, customerId=2, status=PAID_DEPOSIT
+2026-04-21T18:49:45.344+08:00  INFO 5000 --- [nio-8080-exec-3] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211849452699362, customerId=2, status=APPOINTMENT
+2026-04-21T18:49:45.361+08:00  INFO 5000 --- [nio-8080-exec-7] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211849452699362, customerId=2, status=ARRIVED
+2026-04-21T18:49:45.376+08:00  INFO 5000 --- [nio-8080-exec-9] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211849452699362, customerId=2, status=SERVING
+2026-04-21T18:49:45.388+08:00  INFO 5000 --- [nio-8080-exec-6] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604211849452699362, customerId=2, status=COMPLETED
+2026-04-21T18:49:45.393+08:00  INFO 5000 --- [nio-8080-exec-6] c.s.c.c.s.impl.CustomerTagServiceImpl    : customer tag updated, customerId=2, tag=HIGH_VALUE
+2026-04-22T00:01:08.849+08:00  WARN 5000 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=5h8m39s747ms122?s).

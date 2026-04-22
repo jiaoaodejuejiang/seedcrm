@@ -1,0 +1,81 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - paragraph [ref=e6]: Seed CRM
+        - heading "门店业务工作台" [level=1] [ref=e7]
+        - paragraph [ref=e8]: 围绕线索、订单、到店、企微和收益，把真正会被操作的页面串起来。
+      - navigation [ref=e9]:
+        - link "线索管理 接收、认领、转订单" [ref=e10] [cursor=pointer]:
+          - /url: /clues
+          - generic [ref=e11]: 线索管理
+          - generic [ref=e12]: 接收、认领、转订单
+        - link "订单管理 订单列表与到店入口" [ref=e13] [cursor=pointer]:
+          - /url: /orders
+          - generic [ref=e14]: 订单管理
+          - generic [ref=e15]: 订单列表与到店入口
+        - link "到店服务 状态推进与角色切换" [ref=e16] [cursor=pointer]:
+          - /url: /plan-orders
+          - generic [ref=e17]: 到店服务
+          - generic [ref=e18]: 状态推进与角色切换
+        - link "分销管理 带客与收益表现" [ref=e19] [cursor=pointer]:
+          - /url: /distributors
+          - generic [ref=e20]: 分销管理
+          - generic [ref=e21]: 带客与收益表现
+        - link "财务概览 收入、收益、提现" [ref=e22] [cursor=pointer]:
+          - /url: /finance
+          - generic [ref=e23]: 财务概览
+          - generic [ref=e24]: 收入、收益、提现
+      - generic [ref=e25]:
+        - strong [ref=e26]: 最短操作流
+        - paragraph [ref=e27]: 线索页转订单，订单页直接进入到店服务，到店页内完成状态和角色处理。
+    - main [ref=e28]:
+      - generic [ref=e30]:
+        - paragraph [ref=e31]: Store Operation
+        - heading "线索管理" [level=2] [ref=e32]
+        - paragraph [ref=e33]: 客服接收新线索、认领跟进，并一键转成订单。
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - generic [ref=e38]:
+            - generic [ref=e40] [cursor=pointer]:
+              - generic:
+                - combobox [ref=e42]
+                - generic [ref=e43]: 来源渠道
+              - img [ref=e46]
+            - generic [ref=e49] [cursor=pointer]:
+              - generic:
+                - combobox [ref=e51]
+                - generic [ref=e52]: 线索状态
+              - img [ref=e55]
+            - button "筛选" [ref=e57] [cursor=pointer]:
+              - generic [ref=e58]: 筛选
+          - button "新增线索" [ref=e59] [cursor=pointer]:
+            - generic [ref=e60]: 新增线索
+        - generic [ref=e61]:
+          - generic [ref=e62]:
+            - table [ref=e64]:
+              - rowgroup [ref=e72]:
+                - row "客户信息 来源 状态 当前跟进 最近订单 操作" [ref=e73]:
+                  - columnheader "客户信息" [ref=e74]:
+                    - generic [ref=e75]: 客户信息
+                  - columnheader "来源" [ref=e76]:
+                    - generic [ref=e77]: 来源
+                  - columnheader "状态" [ref=e78]:
+                    - generic [ref=e79]: 状态
+                  - columnheader "当前跟进" [ref=e80]:
+                    - generic [ref=e81]: 当前跟进
+                  - columnheader "最近订单" [ref=e82]:
+                    - generic [ref=e83]: 最近订单
+                  - columnheader "操作" [ref=e84]:
+                    - generic [ref=e85]: 操作
+            - generic [ref=e89]:
+              - table:
+                - rowgroup
+              - generic [ref=e91]: No Data
+          - img [ref=e94]
+  - alert [ref=e96]:
+    - img [ref=e98]
+    - paragraph [ref=e100]: Request failed with status code 502
+  - alert [ref=e101]:
+    - img [ref=e103]
+    - paragraph [ref=e105]: Request failed with status code 502

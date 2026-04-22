@@ -72,10 +72,17 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         updatePlanOrder(planOrder, "failed to update arrive time");
 
         Order order = getOrderOrThrow(planOrder.getOrderId());
+        OrderStatus orderStatus = parseOrderStatus(order.getStatus());
+        if (orderStatus == OrderStatus.CANCELLED || orderStatus == OrderStatus.REFUNDED) {
+            throw new BusinessException("order cannot arrive from status " + orderStatus.name());
+        }
         if (order.getArriveTime() == null) {
             order.setArriveTime(now);
-            touchOrder(order, false);
         }
+        if (orderStatus != OrderStatus.COMPLETED) {
+            order.setStatus(OrderStatus.ARRIVED.name());
+        }
+        touchOrder(order, false);
         return planOrder;
     }
 
@@ -93,6 +100,16 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
 
         planOrder.setStartTime(LocalDateTime.now());
         updatePlanOrder(planOrder, "failed to start plan order");
+
+        Order order = getOrderOrThrow(planOrder.getOrderId());
+        OrderStatus orderStatus = parseOrderStatus(order.getStatus());
+        if (orderStatus == OrderStatus.CANCELLED || orderStatus == OrderStatus.REFUNDED) {
+            throw new BusinessException("order cannot start service from status " + orderStatus.name());
+        }
+        if (orderStatus != OrderStatus.COMPLETED) {
+            order.setStatus(OrderStatus.SERVING.name());
+        }
+        touchOrder(order, false);
         return planOrder;
     }
 

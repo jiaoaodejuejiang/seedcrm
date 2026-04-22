@@ -1,0 +1,211 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - paragraph [ref=e6]: Seed CRM
+        - heading "门店业务工作台" [level=1] [ref=e7]
+        - paragraph [ref=e8]: 围绕线索、订单、到店、企微和收益，把真正会被操作的页面串起来。
+      - navigation [ref=e9]:
+        - link "线索管理 接收、认领、转订单" [ref=e10] [cursor=pointer]:
+          - /url: /clues
+          - generic [ref=e11]: 线索管理
+          - generic [ref=e12]: 接收、认领、转订单
+        - link "订单管理 订单列表与到店入口" [ref=e13] [cursor=pointer]:
+          - /url: /orders
+          - generic [ref=e14]: 订单管理
+          - generic [ref=e15]: 订单列表与到店入口
+        - link "到店服务 状态推进与角色切换" [ref=e16] [cursor=pointer]:
+          - /url: /plan-orders
+          - generic [ref=e17]: 到店服务
+          - generic [ref=e18]: 状态推进与角色切换
+        - link "分销管理 带客与收益表现" [ref=e19] [cursor=pointer]:
+          - /url: /distributors
+          - generic [ref=e20]: 分销管理
+          - generic [ref=e21]: 带客与收益表现
+        - link "财务概览 收入、收益、提现" [ref=e22] [cursor=pointer]:
+          - /url: /finance
+          - generic [ref=e23]: 财务概览
+          - generic [ref=e24]: 收入、收益、提现
+      - generic [ref=e25]:
+        - strong [ref=e26]: 最短操作流
+        - paragraph [ref=e27]: 线索页转订单，订单页直接进入到店服务，到店页内完成状态和角色处理。
+    - main [ref=e28]:
+      - generic [ref=e30]:
+        - paragraph [ref=e31]: Store Operation
+        - heading "到店服务" [level=2] [ref=e614]
+        - paragraph [ref=e33]: 在一个页面里完成到店、服务、角色切换和完成闭环。
+      - generic [ref=e857]:
+        - generic [ref=e858]:
+          - generic [ref=e860]:
+            - heading "当前到店单" [level=3] [ref=e861]
+            - paragraph [ref=e862]: 按最短链路处理：到店、开始、完成。
+          - generic [ref=e863]:
+            - 'button "UI Auto Flow #7 / ORD202604221459347488361 已完成" [ref=e1061] [cursor=pointer]':
+              - generic [ref=e865]:
+                - strong [ref=e866]: UI Auto Flow
+                - paragraph [ref=e867]: "#7 / ORD202604221459347488361"
+              - generic [ref=e869]: 已完成
+            - 'button "FinanceClue-1776832767 #6 / ORD202604221239282975273 已完成" [ref=e870] [cursor=pointer]':
+              - generic [ref=e871]:
+                - strong [ref=e872]: FinanceClue-1776832767
+                - paragraph [ref=e873]: "#6 / ORD202604221239282975273"
+              - generic [ref=e875]: 已完成
+            - 'button "FinanceClue-1776832364 #5 / ORD202604221232465408346 已完成" [ref=e876] [cursor=pointer]':
+              - generic [ref=e877]:
+                - strong [ref=e878]: FinanceClue-1776832364
+                - paragraph [ref=e879]: "#5 / ORD202604221232465408346"
+              - generic [ref=e881]: 已完成
+            - 'button "lead-20260422112627 #4 / ORD202604221126278822911 已完成" [ref=e882] [cursor=pointer]':
+              - generic [ref=e883]:
+                - strong [ref=e884]: lead-20260422112627
+                - paragraph [ref=e885]: "#4 / ORD202604221126278822911"
+              - generic [ref=e887]: 已完成
+            - 'button "lead-20260422112519 #3 / ORD202604221125206063802 服务中" [ref=e888] [cursor=pointer]':
+              - generic [ref=e889]:
+                - strong [ref=e890]: lead-20260422112519
+                - paragraph [ref=e891]: "#3 / ORD202604221125206063802"
+              - generic [ref=e893]: 服务中
+            - 'button "Salary Demo #2 / ORD202604221025342021490 已完成" [ref=e894] [cursor=pointer]':
+              - generic [ref=e895]:
+                - strong [ref=e896]: Salary Demo
+                - paragraph [ref=e897]: "#2 / ORD202604221025342021490"
+              - generic [ref=e899]: 已完成
+            - 'button "PlanOrder Auto Test #1 / ORD202604220955338366259 已完成" [ref=e900] [cursor=pointer]':
+              - generic [ref=e901]:
+                - strong [ref=e902]: PlanOrder Auto Test
+                - paragraph [ref=e903]: "#1 / ORD202604220955338366259"
+              - generic [ref=e905]: 已完成
+        - generic [ref=e907]:
+          - generic [ref=e908]:
+            - article [ref=e909]:
+              - generic [ref=e910]: 客户
+              - strong [ref=e911]: UI Auto Flow
+              - text: "13990005678"
+            - article [ref=e912]:
+              - generic [ref=e913]: 订单金额
+              - strong [ref=e914]: ¥5,000.00
+              - text: 抖音
+            - article [ref=e915]:
+              - generic [ref=e916]: 当前状态
+              - strong [ref=e917]: 已完成
+              - text: 订单状态：已完成
+          - generic [ref=e918]:
+            - generic [ref=e919]:
+              - generic [ref=e920]:
+                - heading "服务推进" [level=3] [ref=e921]
+                - paragraph [ref=e922]: 不要跳页面，直接在这里完成整个门店现场流程。
+              - generic [ref=e923]:
+                - button "到店" [disabled] [ref=e924]:
+                  - generic [ref=e925]: 到店
+                - button "开始服务" [disabled] [ref=e926]:
+                  - generic [ref=e927]: 开始服务
+                - button "完成服务" [disabled] [ref=e928]:
+                  - generic [ref=e929]: 完成服务
+                - button "查看客户详情" [ref=e930] [cursor=pointer]:
+                  - generic [ref=e931]: 查看客户详情
+            - generic [ref=e932]:
+              - generic [ref=e933]:
+                - generic [ref=e934]: 到店时间
+                - strong [ref=e935]: 2026/4/22 15:01:54
+              - generic [ref=e936]:
+                - generic [ref=e937]: 开始服务
+                - strong [ref=e938]: 2026/4/22 15:02:45
+              - generic [ref=e939]:
+                - generic [ref=e940]: 完成服务
+                - strong [ref=e941]: 2026/4/22 15:10:51
+          - generic [ref=e942]:
+            - generic [ref=e944]:
+              - heading "角色分配" [level=3] [ref=e945]
+              - paragraph [ref=e946]: 每个岗位直接点人即可切换，不需要再进二级页面。
+            - generic [ref=e947]:
+              - article [ref=e966]:
+                - generic [ref=e967]:
+                  - strong [ref=e968]: 咨询师
+                  - generic [ref=e969]: 王顾问
+                - generic [ref=e970]:
+                  - button "王顾问" [ref=e971] [cursor=pointer]:
+                    - generic [ref=e972]: 王顾问
+                  - button "李顾问" [ref=e973] [cursor=pointer]:
+                    - generic [ref=e974]: 李顾问
+              - article [ref=e948]:
+                - generic [ref=e949]:
+                  - strong [ref=e950]: 医生
+                  - generic [ref=e951]: 张医生
+                - generic [ref=e952]:
+                  - button "张医生" [ref=e953] [cursor=pointer]:
+                    - generic [ref=e954]: 张医生
+                  - button "周医生" [ref=e955] [cursor=pointer]:
+                    - generic [ref=e956]: 周医生
+              - article [ref=e957]:
+                - generic [ref=e958]:
+                  - strong [ref=e959]: 助理
+                  - generic [ref=e960]: 陈助理
+                - generic [ref=e961]:
+                  - button "陈助理" [ref=e962] [cursor=pointer]:
+                    - generic [ref=e963]: 陈助理
+                  - button "林助理" [ref=e964] [cursor=pointer]:
+                    - generic [ref=e965]: 林助理
+              - article [ref=e975]:
+                - generic [ref=e976]:
+                  - strong [ref=e977]: Finance QA Role
+                  - generic [ref=e978]: 待分配
+              - article [ref=e979]:
+                - generic [ref=e980]:
+                  - strong [ref=e981]: Finance QA Role 2
+                  - generic [ref=e982]: 待分配
+          - generic [ref=e983]:
+            - generic [ref=e985]:
+              - heading "角色记录" [level=3] [ref=e986]
+              - paragraph [ref=e987]: 服务过程内所有角色切换都保留痕迹。
+            - generic [ref=e989]:
+              - table [ref=e991]:
+                - rowgroup [ref=e998]:
+                  - row "岗位 员工 开始时间 结束时间 当前生效" [ref=e999]:
+                    - columnheader "岗位" [ref=e1000]:
+                      - generic [ref=e1001]: 岗位
+                    - columnheader "员工" [ref=e1002]:
+                      - generic [ref=e1003]: 员工
+                    - columnheader "开始时间" [ref=e1004]:
+                      - generic [ref=e1005]: 开始时间
+                    - columnheader "结束时间" [ref=e1006]:
+                      - generic [ref=e1007]: 结束时间
+                    - columnheader "当前生效" [ref=e1008]:
+                      - generic [ref=e1009]: 当前生效
+              - table [ref=e1014]:
+                - rowgroup [ref=e1021]:
+                  - row "助理 陈助理 2026/4/22 15:01:23 -- 当前" [ref=e1022]:
+                    - cell "助理" [ref=e1023]:
+                      - generic [ref=e1024]: 助理
+                    - cell "陈助理" [ref=e1025]:
+                      - generic [ref=e1026]: 陈助理
+                    - cell "2026/4/22 15:01:23" [ref=e1027]:
+                      - generic [ref=e1028]: 2026/4/22 15:01:23
+                    - cell "--" [ref=e1029]:
+                      - generic [ref=e1030]: "--"
+                    - cell "当前" [ref=e1031]:
+                      - generic [ref=e1034]: 当前
+                  - row "咨询师 王顾问 2026/4/22 15:01:22 -- 当前" [ref=e1035]:
+                    - cell "咨询师" [ref=e1036]:
+                      - generic [ref=e1037]: 咨询师
+                    - cell "王顾问" [ref=e1038]:
+                      - generic [ref=e1039]: 王顾问
+                    - cell "2026/4/22 15:01:22" [ref=e1040]:
+                      - generic [ref=e1041]: 2026/4/22 15:01:22
+                    - cell "--" [ref=e1042]:
+                      - generic [ref=e1043]: "--"
+                    - cell "当前" [ref=e1044]:
+                      - generic [ref=e1047]: 当前
+                  - row "医生 张医生 2026/4/22 15:01:21 -- 当前" [ref=e1048]:
+                    - cell "医生" [ref=e1049]:
+                      - generic [ref=e1050]: 医生
+                    - cell "张医生" [ref=e1051]:
+                      - generic [ref=e1052]: 张医生
+                    - cell "2026/4/22 15:01:21" [ref=e1053]:
+                      - generic [ref=e1054]: 2026/4/22 15:01:21
+                    - cell "--" [ref=e1055]:
+                      - generic [ref=e1056]: "--"
+                    - cell "当前" [ref=e1057]:
+                      - generic [ref=e1060]: 当前
+  - alert [ref=e1062]:
+    - img [ref=e1064]
+    - paragraph [ref=e1066]: 服务状态已更新

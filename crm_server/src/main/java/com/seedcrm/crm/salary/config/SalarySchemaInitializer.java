@@ -26,6 +26,9 @@ public class SalarySchemaInitializer {
         ensureTable("withdraw_record", withdrawRecordCreateSql(), withdrawRecordColumns());
         ensureIndex("salary_detail", "uk_salary_detail_plan_user_role",
                 "CREATE UNIQUE INDEX uk_salary_detail_plan_user_role ON salary_detail(plan_order_id, user_id, role_code)");
+        ensureDefaultRule("CONSULTANT", "PERCENT", "0.0800");
+        ensureDefaultRule("DOCTOR", "PERCENT", "0.1200");
+        ensureDefaultRule("ASSISTANT", "PERCENT", "0.0500");
     }
 
     private void ensureTable(String tableName, String createSql, Map<String, String> expectedColumns) {
@@ -79,6 +82,23 @@ public class SalarySchemaInitializer {
             jdbcTemplate.execute(createIndexSql);
             log.info("created index {} on {}", indexName, tableName);
         }
+    }
+
+    private void ensureDefaultRule(String roleCode, String ruleType, String ruleValue) {
+        Integer activeCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM salary_rule
+                WHERE role_code = ?
+                  AND is_active = 1
+                """, Integer.class, roleCode);
+        if (activeCount != null && activeCount > 0) {
+            return;
+        }
+        jdbcTemplate.update("""
+                INSERT INTO salary_rule(role_code, rule_type, rule_value, is_active, create_time)
+                VALUES (?, ?, ?, 1, NOW())
+                """, roleCode, ruleType, ruleValue);
+        log.info("inserted default salary rule for role {}", roleCode);
     }
 
     private String salaryRuleCreateSql() {

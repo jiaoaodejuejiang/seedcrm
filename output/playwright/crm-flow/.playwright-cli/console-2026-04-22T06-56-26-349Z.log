@@ -1,0 +1,35 @@
+[   77987ms] [WARNING] Invalid prop: validation failed for prop "type". Expected one of ["primary", "success", "info", "warning", "danger"], got value "". Proxy(Object) at <ElTag>
+at <TableTdWrapper>
+at <ElTableBody>
+at <ElScrollbar>
+at <ElTable>
+at <ClueManagement>
+at <RouterView>
+at <AppLayout>
+at <RouterView>
+at <App> [Object, Object, Object, Object, Object, Object, Object, Object, Object, Object] @ http://127.0.0.1:5173/@vite/client:509
+[   78251ms] [WARNING] Invalid prop: custom validator check failed for prop "type". Proxy(Object) at <ElTag>
+at <TableTdWrapper>
+at <ElTableBody>
+at <ElScrollbar>
+at <ElTable>
+at <ClueManagement>
+at <RouterView>
+at <AppLayout>
+at <RouterView>
+at <App> [Object, Object, Object, Object, Object, Object, Object, Object, Object, Object] @ http://127.0.0.1:5173/@vite/client:509
+[  162860ms] [WARNING] Invalid prop: type check failed for prop "rows". Expected Number with value 3, got String with value "3". null at <ElInput>
+at <ElFormItem>
+at <ElForm>
+at <ElDialogContent>
+at <ElFocusTrap>
+at <ElOverlay>
+at <BaseTransition>
+at <Transition>
+at <Teleport>
+at <ElDialog>
+at <ClueManagement>
+at <RouterView>
+at <AppLayout>
+at <RouterView>
+at <App> [Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object, Object] @ http://127.0.0.1:5173/@vite/client:509

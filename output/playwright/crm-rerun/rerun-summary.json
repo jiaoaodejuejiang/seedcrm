@@ -1,0 +1,24 @@
+{
+  "leadName": "Rerun-42849368",
+  "phone": "13982849368",
+  "wechat": "rerun42849368",
+  "orderId": 20,
+  "orderNo": "ORD202604221527370004335",
+  "customerId": 13,
+  "planOrderId": 9,
+  "finalOrderStatus": "COMPLETED",
+  "finalPlanOrderStatus": "FINISHED",
+  "warnings": [],
+  "screenshots": [
+    "E:\\studio\\test\\seedcrm\\output\\playwright\\crm-rerun\\01-clues.png",
+    "E:\\studio\\test\\seedcrm\\output\\playwright\\crm-rerun\\02-clue-created.png",
+    "E:\\studio\\test\\seedcrm\\output\\playwright\\crm-rerun\\03-clue-converted.png",
+    "E:\\studio\\test\\seedcrm\\output\\playwright\\crm-rerun\\04-orders.png",
+    "E:\\studio\\test\\seedcrm\\output\\playwright\\crm-rerun\\05-service-initial.png",
+    "E:\\studio\\test\\seedcrm\\output\\playwright\\crm-rerun\\06-service-roles.png",
+    "E:\\studio\\test\\seedcrm\\output\\playwright\\crm-rerun\\07-service-finished.png",
+    "E:\\studio\\test\\seedcrm\\output\\playwright\\crm-rerun\\08-customer-detail.png",
+    "E:\\studio\\test\\seedcrm\\output\\playwright\\crm-rerun\\09-distributors.png",
+    "E:\\studio\\test\\seedcrm\\output\\playwright\\crm-rerun\\10-finance.png"
+  ]
+}

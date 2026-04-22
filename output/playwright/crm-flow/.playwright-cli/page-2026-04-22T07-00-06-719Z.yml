@@ -1,0 +1,604 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Seed CRM
+      - heading "门店业务工作台" [level=1] [ref=e7]
+      - paragraph [ref=e8]: 围绕线索、订单、到店、企微和收益，把真正会被操作的页面串起来。
+    - navigation [ref=e9]:
+      - link "线索管理 接收、认领、转订单" [ref=e10] [cursor=pointer]:
+        - /url: /clues
+        - generic [ref=e11]: 线索管理
+        - generic [ref=e12]: 接收、认领、转订单
+      - link "订单管理 订单列表与到店入口" [ref=e13] [cursor=pointer]:
+        - /url: /orders
+        - generic [ref=e14]: 订单管理
+        - generic [ref=e15]: 订单列表与到店入口
+      - link "到店服务 状态推进与角色切换" [ref=e16] [cursor=pointer]:
+        - /url: /plan-orders
+        - generic [ref=e17]: 到店服务
+        - generic [ref=e18]: 状态推进与角色切换
+      - link "分销管理 带客与收益表现" [ref=e19] [cursor=pointer]:
+        - /url: /distributors
+        - generic [ref=e20]: 分销管理
+        - generic [ref=e21]: 带客与收益表现
+      - link "财务概览 收入、收益、提现" [ref=e22] [cursor=pointer]:
+        - /url: /finance
+        - generic [ref=e23]: 财务概览
+        - generic [ref=e24]: 收入、收益、提现
+    - generic [ref=e25]:
+      - strong [ref=e26]: 最短操作流
+      - paragraph [ref=e27]: 线索页转订单，订单页直接进入到店服务，到店页内完成状态和角色处理。
+  - main [ref=e28]:
+    - generic [ref=e30]:
+      - paragraph [ref=e31]: Store Operation
+      - heading "订单管理" [level=2] [ref=e32]
+      - paragraph [ref=e33]: 用订单作为业务中台入口，直接进入到店服务。
+    - generic [ref=e35]:
+      - generic [ref=e36]:
+        - article [ref=e37]:
+          - generic [ref=e38]: 待到店
+          - strong [ref=e39]: "6"
+          - text: 已创建订单，等待客户到店
+        - article [ref=e40]:
+          - generic [ref=e41]: 服务中
+          - strong [ref=e42]: "1"
+          - text: 已到店，当前正在服务流程中
+        - article [ref=e43]:
+          - generic [ref=e44]: 已完成
+          - strong [ref=e45]: "11"
+          - text: 已完成服务和订单闭环
+      - generic [ref=e46]:
+        - generic [ref=e48]:
+          - generic [ref=e50] [cursor=pointer]:
+            - generic:
+              - combobox [ref=e52]
+              - generic [ref=e53]: 订单状态
+            - img [ref=e56]
+          - button "筛选" [ref=e58] [cursor=pointer]:
+            - generic [ref=e59]: 筛选
+        - generic [ref=e60]:
+          - generic [ref=e61]:
+            - table [ref=e63]:
+              - rowgroup [ref=e73]:
+                - row "订单号 客户 来源渠道 金额 状态 到店单 创建时间 操作" [ref=e74]:
+                  - columnheader "订单号" [ref=e75]:
+                    - generic [ref=e76]: 订单号
+                  - columnheader "客户" [ref=e77]:
+                    - generic [ref=e78]: 客户
+                  - columnheader "来源渠道" [ref=e79]:
+                    - generic [ref=e80]: 来源渠道
+                  - columnheader "金额" [ref=e81]:
+                    - generic [ref=e82]: 金额
+                  - columnheader "状态" [ref=e83]:
+                    - generic [ref=e84]: 状态
+                  - columnheader "到店单" [ref=e85]:
+                    - generic [ref=e86]: 到店单
+                  - columnheader "创建时间" [ref=e87]:
+                    - generic [ref=e88]: 创建时间
+                  - columnheader "操作" [ref=e89]:
+                    - generic [ref=e90]: 操作
+            - table [ref=e95]:
+              - rowgroup [ref=e105]:
+                - 'row "ORD202604221459347488361 订单 #18 UI Auto Flow 13990005678 抖音 ¥5,000.00 待到店 未创建 2026/4/22 14:59:35 进入到店服务 客户详情" [ref=e106]':
+                  - 'cell "ORD202604221459347488361 订单 #18" [ref=e107]':
+                    - generic [ref=e109]:
+                      - strong [ref=e110]: ORD202604221459347488361
+                      - generic [ref=e111]: "订单 #18"
+                  - cell "UI Auto Flow 13990005678" [ref=e112]:
+                    - generic [ref=e114]:
+                      - strong [ref=e115]: UI Auto Flow
+                      - generic [ref=e116]: "13990005678"
+                  - cell "抖音" [ref=e117]:
+                    - generic [ref=e118]:
+                      - generic:
+                        - generic: 抖音
+                  - cell "¥5,000.00" [ref=e119]:
+                    - generic [ref=e120]: ¥5,000.00
+                  - cell "待到店" [ref=e121]:
+                    - generic [ref=e122]:
+                      - generic:
+                        - generic: 待到店
+                  - cell "未创建" [ref=e123]:
+                    - generic [ref=e124]: 未创建
+                  - cell "2026/4/22 14:59:35" [ref=e125]:
+                    - generic [ref=e126]: 2026/4/22 14:59:35
+                  - cell "进入到店服务 客户详情" [ref=e127]:
+                    - generic [ref=e129]:
+                      - button "进入到店服务" [ref=e130] [cursor=pointer]:
+                        - generic [ref=e131]: 进入到店服务
+                      - button "客户详情" [ref=e132] [cursor=pointer]:
+                        - generic [ref=e133]: 客户详情
+                - 'row "ORD202604221239282975273 订单 #17 FinanceClue-1776832767 1391001776832767 分销 ¥1,500.00 已完成 #6 2026/4/22 12:39:28 进入到店服务 客户详情" [ref=e134]':
+                  - 'cell "ORD202604221239282975273 订单 #17" [ref=e135]':
+                    - generic [ref=e137]:
+                      - strong [ref=e138]: ORD202604221239282975273
+                      - generic [ref=e139]: "订单 #17"
+                  - cell "FinanceClue-1776832767 1391001776832767" [ref=e140]:
+                    - generic [ref=e142]:
+                      - strong [ref=e143]: FinanceClue-1776832767
+                      - generic [ref=e144]: "1391001776832767"
+                  - cell "分销" [ref=e145]:
+                    - generic [ref=e146]:
+                      - generic:
+                        - generic: 分销
+                  - cell "¥1,500.00" [ref=e147]:
+                    - generic [ref=e148]: ¥1,500.00
+                  - cell "已完成" [ref=e149]:
+                    - generic [ref=e150]:
+                      - generic:
+                        - generic: 已完成
+                  - cell "#6" [ref=e151]:
+                    - generic [ref=e152]: "#6"
+                  - cell "2026/4/22 12:39:28" [ref=e153]:
+                    - generic [ref=e154]: 2026/4/22 12:39:28
+                  - cell "进入到店服务 客户详情" [ref=e155]:
+                    - generic [ref=e157]:
+                      - button "进入到店服务" [ref=e158] [cursor=pointer]:
+                        - generic [ref=e159]: 进入到店服务
+                      - button "客户详情" [ref=e160] [cursor=pointer]:
+                        - generic [ref=e161]: 客户详情
+                - 'row "ORD202604221232465408346 订单 #16 FinanceClue-1776832364 1390001776832364 分销 ¥1,000.00 已完成 #5 2026/4/22 12:32:47 进入到店服务 客户详情" [ref=e162]':
+                  - 'cell "ORD202604221232465408346 订单 #16" [ref=e163]':
+                    - generic [ref=e165]:
+                      - strong [ref=e166]: ORD202604221232465408346
+                      - generic [ref=e167]: "订单 #16"
+                  - cell "FinanceClue-1776832364 1390001776832364" [ref=e168]:
+                    - generic [ref=e170]:
+                      - strong [ref=e171]: FinanceClue-1776832364
+                      - generic [ref=e172]: "1390001776832364"
+                  - cell "分销" [ref=e173]:
+                    - generic [ref=e174]:
+                      - generic:
+                        - generic: 分销
+                  - cell "¥1,000.00" [ref=e175]:
+                    - generic [ref=e176]: ¥1,000.00
+                  - cell "已完成" [ref=e177]:
+                    - generic [ref=e178]:
+                      - generic:
+                        - generic: 已完成
+                  - cell "#5" [ref=e179]:
+                    - generic [ref=e180]: "#5"
+                  - cell "2026/4/22 12:32:47" [ref=e181]:
+                    - generic [ref=e182]: 2026/4/22 12:32:47
+                  - cell "进入到店服务 客户详情" [ref=e183]:
+                    - generic [ref=e185]:
+                      - button "进入到店服务" [ref=e186] [cursor=pointer]:
+                        - generic [ref=e187]: 进入到店服务
+                      - button "客户详情" [ref=e188] [cursor=pointer]:
+                        - generic [ref=e189]: 客户详情
+                - 'row "ORD202604221126278822911 订单 #15 lead-20260422112627 13813513464 分销 ¥1,000.00 已完成 #4 2026/4/22 11:26:28 进入到店服务 客户详情" [ref=e190]':
+                  - 'cell "ORD202604221126278822911 订单 #15" [ref=e191]':
+                    - generic [ref=e193]:
+                      - strong [ref=e194]: ORD202604221126278822911
+                      - generic [ref=e195]: "订单 #15"
+                  - cell "lead-20260422112627 13813513464" [ref=e196]:
+                    - generic [ref=e198]:
+                      - strong [ref=e199]: lead-20260422112627
+                      - generic [ref=e200]: "13813513464"
+                  - cell "分销" [ref=e201]:
+                    - generic [ref=e202]:
+                      - generic:
+                        - generic: 分销
+                  - cell "¥1,000.00" [ref=e203]:
+                    - generic [ref=e204]: ¥1,000.00
+                  - cell "已完成" [ref=e205]:
+                    - generic [ref=e206]:
+                      - generic:
+                        - generic: 已完成
+                  - cell "#4" [ref=e207]:
+                    - generic [ref=e208]: "#4"
+                  - cell "2026/4/22 11:26:28" [ref=e209]:
+                    - generic [ref=e210]: 2026/4/22 11:26:28
+                  - cell "进入到店服务 客户详情" [ref=e211]:
+                    - generic [ref=e213]:
+                      - button "进入到店服务" [ref=e214] [cursor=pointer]:
+                        - generic [ref=e215]: 进入到店服务
+                      - button "客户详情" [ref=e216] [cursor=pointer]:
+                        - generic [ref=e217]: 客户详情
+                - 'row "ORD202604221125206063802 订单 #14 lead-20260422112519 13880822420 分销 ¥1,000.00 待到店 #3 2026/4/22 11:25:21 进入到店服务 客户详情" [ref=e218]':
+                  - 'cell "ORD202604221125206063802 订单 #14" [ref=e219]':
+                    - generic [ref=e221]:
+                      - strong [ref=e222]: ORD202604221125206063802
+                      - generic [ref=e223]: "订单 #14"
+                  - cell "lead-20260422112519 13880822420" [ref=e224]:
+                    - generic [ref=e226]:
+                      - strong [ref=e227]: lead-20260422112519
+                      - generic [ref=e228]: "13880822420"
+                  - cell "分销" [ref=e229]:
+                    - generic [ref=e230]:
+                      - generic:
+                        - generic: 分销
+                  - cell "¥1,000.00" [ref=e231]:
+                    - generic [ref=e232]: ¥1,000.00
+                  - cell "待到店" [ref=e233]:
+                    - generic [ref=e234]:
+                      - generic:
+                        - generic: 待到店
+                  - cell "#3" [ref=e235]:
+                    - generic [ref=e236]: "#3"
+                  - cell "2026/4/22 11:25:21" [ref=e237]:
+                    - generic [ref=e238]: 2026/4/22 11:25:21
+                  - cell "进入到店服务 客户详情" [ref=e239]:
+                    - generic [ref=e241]:
+                      - button "进入到店服务" [ref=e242] [cursor=pointer]:
+                        - generic [ref=e243]: 进入到店服务
+                      - button "客户详情" [ref=e244] [cursor=pointer]:
+                        - generic [ref=e245]: 客户详情
+                - 'row "ORD202604221025342021490 订单 #13 Salary Demo 13973742437 抖音 ¥1,000.00 已完成 #2 2026/4/22 10:25:34 进入到店服务 客户详情" [ref=e246]':
+                  - 'cell "ORD202604221025342021490 订单 #13" [ref=e247]':
+                    - generic [ref=e249]:
+                      - strong [ref=e250]: ORD202604221025342021490
+                      - generic [ref=e251]: "订单 #13"
+                  - cell "Salary Demo 13973742437" [ref=e252]:
+                    - generic [ref=e254]:
+                      - strong [ref=e255]: Salary Demo
+                      - generic [ref=e256]: "13973742437"
+                  - cell "抖音" [ref=e257]:
+                    - generic [ref=e258]:
+                      - generic:
+                        - generic: 抖音
+                  - cell "¥1,000.00" [ref=e259]:
+                    - generic [ref=e260]: ¥1,000.00
+                  - cell "已完成" [ref=e261]:
+                    - generic [ref=e262]:
+                      - generic:
+                        - generic: 已完成
+                  - cell "#2" [ref=e263]:
+                    - generic [ref=e264]: "#2"
+                  - cell "2026/4/22 10:25:34" [ref=e265]:
+                    - generic [ref=e266]: 2026/4/22 10:25:34
+                  - cell "进入到店服务 客户详情" [ref=e267]:
+                    - generic [ref=e269]:
+                      - button "进入到店服务" [ref=e270] [cursor=pointer]:
+                        - generic [ref=e271]: 进入到店服务
+                      - button "客户详情" [ref=e272] [cursor=pointer]:
+                        - generic [ref=e273]: 客户详情
+                - 'row "ORD202604220955338366259 订单 #12 PlanOrder Auto Test 13900003173 抖音 ¥1,280.00 已完成 #1 2026/4/22 09:55:34 进入到店服务 客户详情" [ref=e274]':
+                  - 'cell "ORD202604220955338366259 订单 #12" [ref=e275]':
+                    - generic [ref=e277]:
+                      - strong [ref=e278]: ORD202604220955338366259
+                      - generic [ref=e279]: "订单 #12"
+                  - cell "PlanOrder Auto Test 13900003173" [ref=e280]:
+                    - generic [ref=e282]:
+                      - strong [ref=e283]: PlanOrder Auto Test
+                      - generic [ref=e284]: "13900003173"
+                  - cell "抖音" [ref=e285]:
+                    - generic [ref=e286]:
+                      - generic:
+                        - generic: 抖音
+                  - cell "¥1,280.00" [ref=e287]:
+                    - generic [ref=e288]: ¥1,280.00
+                  - cell "已完成" [ref=e289]:
+                    - generic [ref=e290]:
+                      - generic:
+                        - generic: 已完成
+                  - cell "#1" [ref=e291]:
+                    - generic [ref=e292]: "#1"
+                  - cell "2026/4/22 09:55:34" [ref=e293]:
+                    - generic [ref=e294]: 2026/4/22 09:55:34
+                  - cell "进入到店服务 客户详情" [ref=e295]:
+                    - generic [ref=e297]:
+                      - button "进入到店服务" [ref=e298] [cursor=pointer]:
+                        - generic [ref=e299]: 进入到店服务
+                      - button "客户详情" [ref=e300] [cursor=pointer]:
+                        - generic [ref=e301]: 客户详情
+                - 'row "ORD202604220152140604040 订单 #11 seed-user 13900002385 分销 ¥199.00 待到店 未创建 2026/4/22 01:52:14 进入到店服务 客户详情" [ref=e302]':
+                  - 'cell "ORD202604220152140604040 订单 #11" [ref=e303]':
+                    - generic [ref=e305]:
+                      - strong [ref=e306]: ORD202604220152140604040
+                      - generic [ref=e307]: "订单 #11"
+                  - cell "seed-user 13900002385" [ref=e308]:
+                    - generic [ref=e310]:
+                      - strong [ref=e311]: seed-user
+                      - generic [ref=e312]: "13900002385"
+                  - cell "分销" [ref=e313]:
+                    - generic [ref=e314]:
+                      - generic:
+                        - generic: 分销
+                  - cell "¥199.00" [ref=e315]:
+                    - generic [ref=e316]: ¥199.00
+                  - cell "待到店" [ref=e317]:
+                    - generic [ref=e318]:
+                      - generic:
+                        - generic: 待到店
+                  - cell "未创建" [ref=e319]:
+                    - generic [ref=e320]: 未创建
+                  - cell "2026/4/22 01:52:14" [ref=e321]:
+                    - generic [ref=e322]: 2026/4/22 01:52:14
+                  - cell "进入到店服务 客户详情" [ref=e323]:
+                    - generic [ref=e325]:
+                      - button "进入到店服务" [ref=e326] [cursor=pointer]:
+                        - generic [ref=e327]: 进入到店服务
+                      - button "客户详情" [ref=e328] [cursor=pointer]:
+                        - generic [ref=e329]: 客户详情
+                - 'row "ORD202604220029267336866 订单 #10 ?????? 1390422002925 -- ¥299.00 已完成 未创建 2026/4/22 00:29:27 进入到店服务 客户详情" [ref=e330]':
+                  - 'cell "ORD202604220029267336866 订单 #10" [ref=e331]':
+                    - generic [ref=e333]:
+                      - strong [ref=e334]: ORD202604220029267336866
+                      - generic [ref=e335]: "订单 #10"
+                  - cell "?????? 1390422002925" [ref=e336]:
+                    - generic [ref=e338]:
+                      - strong [ref=e339]: "??????"
+                      - generic [ref=e340]: "1390422002925"
+                  - cell "--" [ref=e341]:
+                    - generic [ref=e342]:
+                      - generic:
+                        - generic: "--"
+                  - cell "¥299.00" [ref=e343]:
+                    - generic [ref=e344]: ¥299.00
+                  - cell "已完成" [ref=e345]:
+                    - generic [ref=e346]:
+                      - generic:
+                        - generic: 已完成
+                  - cell "未创建" [ref=e347]:
+                    - generic [ref=e348]: 未创建
+                  - cell "2026/4/22 00:29:27" [ref=e349]:
+                    - generic [ref=e350]: 2026/4/22 00:29:27
+                  - cell "进入到店服务 客户详情" [ref=e351]:
+                    - generic [ref=e353]:
+                      - button "进入到店服务" [ref=e354] [cursor=pointer]:
+                        - generic [ref=e355]: 进入到店服务
+                      - button "客户详情" [ref=e356] [cursor=pointer]:
+                        - generic [ref=e357]: 客户详情
+                - 'row "ORD202604211849452699362 订单 #9 Tag Test User 13800990001 -- ¥300.00 已完成 未创建 2026/4/21 18:49:45 进入到店服务 客户详情" [ref=e358]':
+                  - 'cell "ORD202604211849452699362 订单 #9" [ref=e359]':
+                    - generic [ref=e361]:
+                      - strong [ref=e362]: ORD202604211849452699362
+                      - generic [ref=e363]: "订单 #9"
+                  - cell "Tag Test User 13800990001" [ref=e364]:
+                    - generic [ref=e366]:
+                      - strong [ref=e367]: Tag Test User
+                      - generic [ref=e368]: "13800990001"
+                  - cell "--" [ref=e369]:
+                    - generic [ref=e370]:
+                      - generic:
+                        - generic: "--"
+                  - cell "¥300.00" [ref=e371]:
+                    - generic [ref=e372]: ¥300.00
+                  - cell "已完成" [ref=e373]:
+                    - generic [ref=e374]:
+                      - generic:
+                        - generic: 已完成
+                  - cell "未创建" [ref=e375]:
+                    - generic [ref=e376]: 未创建
+                  - cell "2026/4/21 18:49:45" [ref=e377]:
+                    - generic [ref=e378]: 2026/4/21 18:49:45
+                  - cell "进入到店服务 客户详情" [ref=e379]:
+                    - generic [ref=e381]:
+                      - button "进入到店服务" [ref=e382] [cursor=pointer]:
+                        - generic [ref=e383]: 进入到店服务
+                      - button "客户详情" [ref=e384] [cursor=pointer]:
+                        - generic [ref=e385]: 客户详情
+                - 'row "ORD202604211849297614158 订单 #8 Tag Test User 13800990001 -- ¥200.00 已完成 未创建 2026/4/21 18:49:30 进入到店服务 客户详情" [ref=e386]':
+                  - 'cell "ORD202604211849297614158 订单 #8" [ref=e387]':
+                    - generic [ref=e389]:
+                      - strong [ref=e390]: ORD202604211849297614158
+                      - generic [ref=e391]: "订单 #8"
+                  - cell "Tag Test User 13800990001" [ref=e392]:
+                    - generic [ref=e394]:
+                      - strong [ref=e395]: Tag Test User
+                      - generic [ref=e396]: "13800990001"
+                  - cell "--" [ref=e397]:
+                    - generic [ref=e398]:
+                      - generic:
+                        - generic: "--"
+                  - cell "¥200.00" [ref=e399]:
+                    - generic [ref=e400]: ¥200.00
+                  - cell "已完成" [ref=e401]:
+                    - generic [ref=e402]:
+                      - generic:
+                        - generic: 已完成
+                  - cell "未创建" [ref=e403]:
+                    - generic [ref=e404]: 未创建
+                  - cell "2026/4/21 18:49:30" [ref=e405]:
+                    - generic [ref=e406]: 2026/4/21 18:49:30
+                  - cell "进入到店服务 客户详情" [ref=e407]:
+                    - generic [ref=e409]:
+                      - button "进入到店服务" [ref=e410] [cursor=pointer]:
+                        - generic [ref=e411]: 进入到店服务
+                      - button "客户详情" [ref=e412] [cursor=pointer]:
+                        - generic [ref=e413]: 客户详情
+                - 'row "ORD202604211848443075779 订单 #7 Tag Test User 13800990001 -- ¥600.00 已完成 未创建 2026/4/21 18:48:44 进入到店服务 客户详情" [ref=e414]':
+                  - 'cell "ORD202604211848443075779 订单 #7" [ref=e415]':
+                    - generic [ref=e417]:
+                      - strong [ref=e418]: ORD202604211848443075779
+                      - generic [ref=e419]: "订单 #7"
+                  - cell "Tag Test User 13800990001" [ref=e420]:
+                    - generic [ref=e422]:
+                      - strong [ref=e423]: Tag Test User
+                      - generic [ref=e424]: "13800990001"
+                  - cell "--" [ref=e425]:
+                    - generic [ref=e426]:
+                      - generic:
+                        - generic: "--"
+                  - cell "¥600.00" [ref=e427]:
+                    - generic [ref=e428]: ¥600.00
+                  - cell "已完成" [ref=e429]:
+                    - generic [ref=e430]:
+                      - generic:
+                        - generic: 已完成
+                  - cell "未创建" [ref=e431]:
+                    - generic [ref=e432]: 未创建
+                  - cell "2026/4/21 18:48:44" [ref=e433]:
+                    - generic [ref=e434]: 2026/4/21 18:48:44
+                  - cell "进入到店服务 客户详情" [ref=e435]:
+                    - generic [ref=e437]:
+                      - button "进入到店服务" [ref=e438] [cursor=pointer]:
+                        - generic [ref=e439]: 进入到店服务
+                      - button "客户详情" [ref=e440] [cursor=pointer]:
+                        - generic [ref=e441]: 客户详情
+                - 'row "ORD202604211817015404304 订单 #6 Closure Test 1390421181623 -- ¥299.00 待到店 未创建 2026/4/21 18:17:02 进入到店服务 客户详情" [ref=e442]':
+                  - 'cell "ORD202604211817015404304 订单 #6" [ref=e443]':
+                    - generic [ref=e445]:
+                      - strong [ref=e446]: ORD202604211817015404304
+                      - generic [ref=e447]: "订单 #6"
+                  - cell "Closure Test 1390421181623" [ref=e448]:
+                    - generic [ref=e450]:
+                      - strong [ref=e451]: Closure Test
+                      - generic [ref=e452]: "1390421181623"
+                  - cell "--" [ref=e453]:
+                    - generic [ref=e454]:
+                      - generic:
+                        - generic: "--"
+                  - cell "¥299.00" [ref=e455]:
+                    - generic [ref=e456]: ¥299.00
+                  - cell "待到店" [ref=e457]:
+                    - generic [ref=e458]:
+                      - generic:
+                        - generic: 待到店
+                  - cell "未创建" [ref=e459]:
+                    - generic [ref=e460]: 未创建
+                  - cell "2026/4/21 18:17:02" [ref=e461]:
+                    - generic [ref=e462]: 2026/4/21 18:17:02
+                  - cell "进入到店服务 客户详情" [ref=e463]:
+                    - generic [ref=e465]:
+                      - button "进入到店服务" [ref=e466] [cursor=pointer]:
+                        - generic [ref=e467]: 进入到店服务
+                      - button "客户详情" [ref=e468] [cursor=pointer]:
+                        - generic [ref=e469]: 客户详情
+                - 'row "ORD202604211816244305202 订单 #5 Closure Test 1390421181623 -- ¥1,999.00 待到店 未创建 2026/4/21 18:16:24 进入到店服务 客户详情" [ref=e470]':
+                  - 'cell "ORD202604211816244305202 订单 #5" [ref=e471]':
+                    - generic [ref=e473]:
+                      - strong [ref=e474]: ORD202604211816244305202
+                      - generic [ref=e475]: "订单 #5"
+                  - cell "Closure Test 1390421181623" [ref=e476]:
+                    - generic [ref=e478]:
+                      - strong [ref=e479]: Closure Test
+                      - generic [ref=e480]: "1390421181623"
+                  - cell "--" [ref=e481]:
+                    - generic [ref=e482]:
+                      - generic:
+                        - generic: "--"
+                  - cell "¥1,999.00" [ref=e483]:
+                    - generic [ref=e484]: ¥1,999.00
+                  - cell "待到店" [ref=e485]:
+                    - generic [ref=e486]:
+                      - generic:
+                        - generic: 待到店
+                  - cell "未创建" [ref=e487]:
+                    - generic [ref=e488]: 未创建
+                  - cell "2026/4/21 18:16:24" [ref=e489]:
+                    - generic [ref=e490]: 2026/4/21 18:16:24
+                  - cell "进入到店服务 客户详情" [ref=e491]:
+                    - generic [ref=e493]:
+                      - button "进入到店服务" [ref=e494] [cursor=pointer]:
+                        - generic [ref=e495]: 进入到店服务
+                      - button "客户详情" [ref=e496] [cursor=pointer]:
+                        - generic [ref=e497]: 客户详情
+                - 'row "ORD202604211816241153678 订单 #4 Closure Test 1390421181623 -- ¥999.00 已完成 未创建 2026/4/21 18:16:24 进入到店服务 客户详情" [ref=e498]':
+                  - 'cell "ORD202604211816241153678 订单 #4" [ref=e499]':
+                    - generic [ref=e501]:
+                      - strong [ref=e502]: ORD202604211816241153678
+                      - generic [ref=e503]: "订单 #4"
+                  - cell "Closure Test 1390421181623" [ref=e504]:
+                    - generic [ref=e506]:
+                      - strong [ref=e507]: Closure Test
+                      - generic [ref=e508]: "1390421181623"
+                  - cell "--" [ref=e509]:
+                    - generic [ref=e510]:
+                      - generic:
+                        - generic: "--"
+                  - cell "¥999.00" [ref=e511]:
+                    - generic [ref=e512]: ¥999.00
+                  - cell "已完成" [ref=e513]:
+                    - generic [ref=e514]:
+                      - generic:
+                        - generic: 已完成
+                  - cell "未创建" [ref=e515]:
+                    - generic [ref=e516]: 未创建
+                  - cell "2026/4/21 18:16:24" [ref=e517]:
+                    - generic [ref=e518]: 2026/4/21 18:16:24
+                  - cell "进入到店服务 客户详情" [ref=e519]:
+                    - generic [ref=e521]:
+                      - button "进入到店服务" [ref=e522] [cursor=pointer]:
+                        - generic [ref=e523]: 进入到店服务
+                      - button "客户详情" [ref=e524] [cursor=pointer]:
+                        - generic [ref=e525]: 客户详情
+                - 'row "ORD202604211659028991559 订单 #3 待绑定客户 -- -- ¥888.00 服务中 未创建 2026/4/21 16:59:03 进入到店服务 客户详情" [ref=e526]':
+                  - 'cell "ORD202604211659028991559 订单 #3" [ref=e527]':
+                    - generic [ref=e529]:
+                      - strong [ref=e530]: ORD202604211659028991559
+                      - generic [ref=e531]: "订单 #3"
+                  - cell "待绑定客户 --" [ref=e532]:
+                    - generic [ref=e534]:
+                      - strong [ref=e535]: 待绑定客户
+                      - generic [ref=e536]: "--"
+                  - cell "--" [ref=e537]:
+                    - generic [ref=e538]:
+                      - generic:
+                        - generic: "--"
+                  - cell "¥888.00" [ref=e539]:
+                    - generic [ref=e540]: ¥888.00
+                  - cell "服务中" [ref=e541]:
+                    - generic [ref=e542]:
+                      - generic:
+                        - generic: 服务中
+                  - cell "未创建" [ref=e543]:
+                    - generic [ref=e544]: 未创建
+                  - cell "2026/4/21 16:59:03" [ref=e545]:
+                    - generic [ref=e546]: 2026/4/21 16:59:03
+                  - cell "进入到店服务 客户详情" [ref=e547]:
+                    - generic [ref=e549]:
+                      - button "进入到店服务" [ref=e550] [cursor=pointer]:
+                        - generic [ref=e551]: 进入到店服务
+                      - button "客户详情" [ref=e552] [cursor=pointer]:
+                        - generic [ref=e553]: 客户详情
+                - 'row "ORD202604211658411069480 订单 #2 待绑定客户 -- -- ¥1,288.50 已完成 未创建 2026/4/21 16:58:41 进入到店服务 客户详情" [ref=e554]':
+                  - 'cell "ORD202604211658411069480 订单 #2" [ref=e555]':
+                    - generic [ref=e557]:
+                      - strong [ref=e558]: ORD202604211658411069480
+                      - generic [ref=e559]: "订单 #2"
+                  - cell "待绑定客户 --" [ref=e560]:
+                    - generic [ref=e562]:
+                      - strong [ref=e563]: 待绑定客户
+                      - generic [ref=e564]: "--"
+                  - cell "--" [ref=e565]:
+                    - generic [ref=e566]:
+                      - generic:
+                        - generic: "--"
+                  - cell "¥1,288.50" [ref=e567]:
+                    - generic [ref=e568]: ¥1,288.50
+                  - cell "已完成" [ref=e569]:
+                    - generic [ref=e570]:
+                      - generic:
+                        - generic: 已完成
+                  - cell "未创建" [ref=e571]:
+                    - generic [ref=e572]: 未创建
+                  - cell "2026/4/21 16:58:41" [ref=e573]:
+                    - generic [ref=e574]: 2026/4/21 16:58:41
+                  - cell "进入到店服务 客户详情" [ref=e575]:
+                    - generic [ref=e577]:
+                      - button "进入到店服务" [ref=e578] [cursor=pointer]:
+                        - generic [ref=e579]: 进入到店服务
+                      - button "客户详情" [ref=e580] [cursor=pointer]:
+                        - generic [ref=e581]: 客户详情
+                - 'row "ORD202604211658188837110 订单 #1 待绑定客户 -- -- ¥999.99 待到店 未创建 2026/4/21 16:58:19 进入到店服务 客户详情" [ref=e582]':
+                  - 'cell "ORD202604211658188837110 订单 #1" [ref=e583]':
+                    - generic [ref=e585]:
+                      - strong [ref=e586]: ORD202604211658188837110
+                      - generic [ref=e587]: "订单 #1"
+                  - cell "待绑定客户 --" [ref=e588]:
+                    - generic [ref=e590]:
+                      - strong [ref=e591]: 待绑定客户
+                      - generic [ref=e592]: "--"
+                  - cell "--" [ref=e593]:
+                    - generic [ref=e594]:
+                      - generic:
+                        - generic: "--"
+                  - cell "¥999.99" [ref=e595]:
+                    - generic [ref=e596]: ¥999.99
+                  - cell "待到店" [ref=e597]:
+                    - generic [ref=e598]:
+                      - generic:
+                        - generic: 待到店
+                  - cell "未创建" [ref=e599]:
+                    - generic [ref=e600]: 未创建
+                  - cell "2026/4/21 16:58:19" [ref=e601]:
+                    - generic [ref=e602]: 2026/4/21 16:58:19
+                  - cell "进入到店服务 客户详情" [ref=e603]:
+                    - generic [ref=e605]:
+                      - button "进入到店服务" [ref=e606] [cursor=pointer]:
+                        - generic [ref=e607]: 进入到店服务
+                      - button "客户详情" [ref=e608] [cursor=pointer]:
+                        - generic [ref=e609]: 客户详情
+          - img [ref=e612]

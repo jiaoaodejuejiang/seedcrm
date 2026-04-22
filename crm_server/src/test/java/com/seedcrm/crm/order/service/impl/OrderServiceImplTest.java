@@ -15,6 +15,7 @@ import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.customer.entity.Customer;
 import com.seedcrm.crm.customer.service.CustomerService;
 import com.seedcrm.crm.customer.service.CustomerTagService;
+import com.seedcrm.crm.distributor.service.DistributorIncomeService;
 import com.seedcrm.crm.order.dto.OrderActionDTO;
 import com.seedcrm.crm.order.dto.OrderCreateDTO;
 import com.seedcrm.crm.order.dto.OrderPayDTO;
@@ -50,12 +51,15 @@ class OrderServiceImplTest {
     @Mock
     private PlanOrderMapper planOrderMapper;
 
+    @Mock
+    private DistributorIncomeService distributorIncomeService;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
     void setUp() {
         orderService = new OrderServiceImpl(orderMapper, clueMapper, customerService, customerTagService,
-                planOrderMapper);
+                planOrderMapper, distributorIncomeService);
     }
 
     @Test
@@ -182,6 +186,7 @@ class OrderServiceImplTest {
         assertThat(completedOrder.getCompleteTime()).isNotNull();
         verify(customerService, times(1)).getByIdOrThrow(202L);
         verify(customerService).refreshCustomerLifecycle(202L);
+        verify(distributorIncomeService).calculate(2L);
         verify(customerTagService).updateTag(202L);
     }
 

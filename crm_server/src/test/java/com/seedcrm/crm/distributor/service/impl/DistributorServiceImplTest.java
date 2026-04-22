@@ -9,10 +9,18 @@ import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.distributor.dto.DistributorCreateRequest;
 import com.seedcrm.crm.distributor.dto.DistributorStatsResponse;
 import com.seedcrm.crm.distributor.entity.Distributor;
+import com.seedcrm.crm.distributor.entity.DistributorIncomeDetail;
+import com.seedcrm.crm.distributor.entity.DistributorSettlement;
+import com.seedcrm.crm.distributor.entity.DistributorWithdraw;
 import com.seedcrm.crm.distributor.mapper.DistributorMapper;
+import com.seedcrm.crm.distributor.mapper.DistributorIncomeDetailMapper;
+import com.seedcrm.crm.distributor.mapper.DistributorRuleMapper;
+import com.seedcrm.crm.distributor.mapper.DistributorSettlementMapper;
+import com.seedcrm.crm.distributor.mapper.DistributorWithdrawMapper;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
+import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,11 +40,25 @@ class DistributorServiceImplTest {
     @Mock
     private OrderMapper orderMapper;
 
+    @Mock
+    private DistributorRuleMapper distributorRuleMapper;
+
+    @Mock
+    private DistributorIncomeDetailMapper distributorIncomeDetailMapper;
+
+    @Mock
+    private DistributorSettlementMapper distributorSettlementMapper;
+
+    @Mock
+    private DistributorWithdrawMapper distributorWithdrawMapper;
+
     private DistributorServiceImpl distributorService;
 
     @BeforeEach
     void setUp() {
-        distributorService = new DistributorServiceImpl(distributorMapper, clueMapper, orderMapper);
+        distributorService = new DistributorServiceImpl(distributorMapper, clueMapper, orderMapper,
+                distributorRuleMapper, distributorIncomeDetailMapper, distributorSettlementMapper,
+                distributorWithdrawMapper);
     }
 
     @Test
@@ -83,6 +105,20 @@ class DistributorServiceImplTest {
         completedOrder.setSourceId(9L);
 
         when(orderMapper.selectList(any())).thenReturn(List.of(createdOrder, paidOrder, completedOrder));
+        DistributorIncomeDetail unsettled = new DistributorIncomeDetail();
+        unsettled.setDistributorId(9L);
+        unsettled.setIncomeAmount(new BigDecimal("50.00"));
+        DistributorIncomeDetail settled = new DistributorIncomeDetail();
+        settled.setDistributorId(9L);
+        settled.setSettlementId(66L);
+        settled.setIncomeAmount(new BigDecimal("30.00"));
+        when(distributorIncomeDetailMapper.selectList(any())).thenReturn(List.of(unsettled, settled));
+        DistributorSettlement settlement = new DistributorSettlement();
+        settlement.setTotalAmount(new BigDecimal("30.00"));
+        when(distributorSettlementMapper.selectList(any())).thenReturn(List.of(settlement));
+        DistributorWithdraw withdraw = new DistributorWithdraw();
+        withdraw.setAmount(new BigDecimal("10.00"));
+        when(distributorWithdrawMapper.selectList(any())).thenReturn(List.of(withdraw));
 
         DistributorStatsResponse stats = distributorService.getStats(9L);
 
@@ -90,5 +126,9 @@ class DistributorServiceImplTest {
         assertThat(stats.getClueCount()).isEqualTo(3L);
         assertThat(stats.getOrderCount()).isEqualTo(3L);
         assertThat(stats.getDealCustomerCount()).isEqualTo(1L);
+        assertThat(stats.getTotalIncome()).isEqualByComparingTo("80.00");
+        assertThat(stats.getSettledIncome()).isEqualByComparingTo("30.00");
+        assertThat(stats.getUnsettledIncome()).isEqualByComparingTo("50.00");
+        assertThat(stats.getWithdrawableAmount()).isEqualByComparingTo("20.00");
     }
 }

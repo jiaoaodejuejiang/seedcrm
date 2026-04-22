@@ -9,6 +9,7 @@ import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.customer.entity.Customer;
 import com.seedcrm.crm.customer.service.CustomerService;
 import com.seedcrm.crm.customer.service.CustomerTagService;
+import com.seedcrm.crm.distributor.service.DistributorIncomeService;
 import com.seedcrm.crm.order.dto.OrderActionDTO;
 import com.seedcrm.crm.order.dto.OrderAppointmentDTO;
 import com.seedcrm.crm.order.dto.OrderCreateDTO;
@@ -38,17 +39,20 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final CustomerService customerService;
     private final CustomerTagService customerTagService;
     private final PlanOrderMapper planOrderMapper;
+    private final DistributorIncomeService distributorIncomeService;
 
     public OrderServiceImpl(OrderMapper orderMapper,
                             ClueMapper clueMapper,
                             CustomerService customerService,
                             CustomerTagService customerTagService,
-                            PlanOrderMapper planOrderMapper) {
+                            PlanOrderMapper planOrderMapper,
+                            DistributorIncomeService distributorIncomeService) {
         this.orderMapper = orderMapper;
         this.clueMapper = clueMapper;
         this.customerService = customerService;
         this.customerTagService = customerTagService;
         this.planOrderMapper = planOrderMapper;
+        this.distributorIncomeService = distributorIncomeService;
     }
 
     @Override
@@ -148,6 +152,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setCompleteTime(LocalDateTime.now());
         updateRemark(order, orderActionDTO.getRemark());
         Order completedOrder = updateOrderStatus(order, OrderStatus.COMPLETED);
+        distributorIncomeService.calculate(completedOrder.getId());
         customerTagService.updateTag(completedOrder.getCustomerId());
         return completedOrder;
     }

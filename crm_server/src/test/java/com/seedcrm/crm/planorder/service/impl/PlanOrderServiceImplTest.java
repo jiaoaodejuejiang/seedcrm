@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.distributor.service.DistributorIncomeService;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
@@ -40,11 +41,15 @@ class PlanOrderServiceImplTest {
     @Mock
     private SalaryService salaryService;
 
+    @Mock
+    private DistributorIncomeService distributorIncomeService;
+
     private PlanOrderServiceImpl planOrderService;
 
     @BeforeEach
     void setUp() {
-        planOrderService = new PlanOrderServiceImpl(planOrderMapper, orderMapper, orderRoleRecordService, salaryService);
+        planOrderService = new PlanOrderServiceImpl(planOrderMapper, orderMapper, orderRoleRecordService,
+                salaryService, distributorIncomeService);
     }
 
     @Test
@@ -124,6 +129,7 @@ class PlanOrderServiceImplTest {
         assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED.name());
         assertThat(order.getCompleteTime()).isNotNull();
         verify(salaryService).calculateForPlanOrder(3L);
+        verify(distributorIncomeService).calculate(30L);
     }
 
     @Test

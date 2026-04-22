@@ -3,6 +3,7 @@ package com.seedcrm.crm.planorder.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.distributor.service.DistributorIncomeService;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
@@ -28,15 +29,18 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     private final OrderMapper orderMapper;
     private final OrderRoleRecordService orderRoleRecordService;
     private final SalaryService salaryService;
+    private final DistributorIncomeService distributorIncomeService;
 
     public PlanOrderServiceImpl(PlanOrderMapper planOrderMapper,
                                 OrderMapper orderMapper,
                                 OrderRoleRecordService orderRoleRecordService,
-                                SalaryService salaryService) {
+                                SalaryService salaryService,
+                                DistributorIncomeService distributorIncomeService) {
         this.planOrderMapper = planOrderMapper;
         this.orderMapper = orderMapper;
         this.orderRoleRecordService = orderRoleRecordService;
         this.salaryService = salaryService;
+        this.distributorIncomeService = distributorIncomeService;
     }
 
     @Override
@@ -124,6 +128,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         }
         touchOrder(order, true);
         salaryService.calculateForPlanOrder(planOrder.getId());
+        distributorIncomeService.calculate(order.getId());
         return planOrder;
     }
 

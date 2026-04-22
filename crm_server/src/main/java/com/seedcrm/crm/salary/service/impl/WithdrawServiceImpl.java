@@ -2,6 +2,12 @@ package com.seedcrm.crm.salary.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.finance.enums.AccountOwnerType;
+import com.seedcrm.crm.finance.service.FinanceService;
+import com.seedcrm.crm.risk.enums.IdempotentBizType;
+import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.risk.service.IdempotentService;
+import com.seedcrm.crm.risk.service.RiskControlService;
 import com.seedcrm.crm.salary.dto.WithdrawCreateRequest;
 import com.seedcrm.crm.salary.entity.SalarySettlement;
 import com.seedcrm.crm.salary.entity.WithdrawRecord;
@@ -21,11 +27,23 @@ public class WithdrawServiceImpl implements WithdrawService {
 
     private final SalarySettlementMapper salarySettlementMapper;
     private final WithdrawRecordMapper withdrawRecordMapper;
+    private final FinanceService financeService;
+    private final DbLockService dbLockService;
+    private final IdempotentService idempotentService;
+    private final RiskControlService riskControlService;
 
     public WithdrawServiceImpl(SalarySettlementMapper salarySettlementMapper,
-                               WithdrawRecordMapper withdrawRecordMapper) {
+                               WithdrawRecordMapper withdrawRecordMapper,
+                               FinanceService financeService,
+                               DbLockService dbLockService,
+                               IdempotentService idempotentService,
+                               RiskControlService riskControlService) {
         this.salarySettlementMapper = salarySettlementMapper;
         this.withdrawRecordMapper = withdrawRecordMapper;
+        this.financeService = financeService;
+        this.dbLockService = dbLockService;
+        this.idempotentService = idempotentService;
+        this.riskControlService = riskControlService;
     }
 
     @Override
@@ -52,11 +70,10 @@ public class WithdrawServiceImpl implements WithdrawService {
         if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException("withdraw amount must be greater than 0");
         }
+        dbLockService.lockAccount(AccountOwnerType.USER, request.getUserId());
         BigDecimal withdrawableAmount = getWithdrawableAmount(request.getUserId());
         BigDecimal requestAmount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
-        if (requestAmount.compareTo(withdrawableAmount) > 0) {
-            throw new BusinessException("withdraw amount exceeds withdrawable balance");
-        }
+        riskControlService.validateWithdrawAmountNotExceedBalance(requestAmount, withdrawableAmount);
 
         WithdrawRecord withdrawRecord = new WithdrawRecord();
         withdrawRecord.setUserId(request.getUserId());
@@ -81,18 +98,32 @@ public class WithdrawServiceImpl implements WithdrawService {
         if (targetStatus == WithdrawStatus.PENDING) {
             throw new BusinessException("withdraw status cannot be set back to PENDING");
         }
-        WithdrawRecord withdrawRecord = withdrawRecordMapper.selectById(withdrawId);
-        if (withdrawRecord == null) {
-            throw new BusinessException("withdraw record not found");
-        }
+        WithdrawRecord withdrawRecord = dbLockService.lockWithdrawRecord(withdrawId);
+        dbLockService.lockAccount(AccountOwnerType.USER, withdrawRecord.getUserId());
 
         WithdrawStatus currentStatus = WithdrawStatus.fromCode(withdrawRecord.getStatus());
         ensureStatusTransition(currentStatus, targetStatus);
-        withdrawRecord.setStatus(targetStatus.name());
-        if (withdrawRecordMapper.updateById(withdrawRecord) <= 0) {
-            throw new BusinessException("failed to update withdraw status");
+        String bizKey = "WITHDRAW_USER_" + withdrawId;
+        if ((targetStatus == WithdrawStatus.APPROVED || targetStatus == WithdrawStatus.PAID)
+                && !idempotentService.tryStart(bizKey, IdempotentBizType.WITHDRAW)) {
+            return withdrawRecord;
         }
-        return withdrawRecord;
+        withdrawRecord.setStatus(targetStatus.name());
+        try {
+            if (withdrawRecordMapper.updateById(withdrawRecord) <= 0) {
+                throw new BusinessException("failed to update withdraw status");
+            }
+            if (targetStatus == WithdrawStatus.APPROVED || targetStatus == WithdrawStatus.PAID) {
+                financeService.recordUserWithdraw(withdrawRecord);
+                idempotentService.markSuccess(bizKey);
+            }
+            return withdrawRecord;
+        } catch (RuntimeException exception) {
+            if (targetStatus == WithdrawStatus.APPROVED || targetStatus == WithdrawStatus.PAID) {
+                idempotentService.markFail(bizKey);
+            }
+            throw exception;
+        }
     }
 
     private void ensureStatusTransition(WithdrawStatus currentStatus, WithdrawStatus targetStatus) {

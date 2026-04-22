@@ -2,6 +2,8 @@ package com.seedcrm.crm.salary.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.finance.enums.LedgerBizType;
+import com.seedcrm.crm.finance.service.FinanceService;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.planorder.entity.OrderRoleRecord;
@@ -21,6 +23,10 @@ import com.seedcrm.crm.salary.mapper.SalaryRuleMapper;
 import com.seedcrm.crm.salary.mapper.SalarySettlementMapper;
 import com.seedcrm.crm.salary.mapper.WithdrawRecordMapper;
 import com.seedcrm.crm.salary.service.SalaryService;
+import com.seedcrm.crm.risk.enums.IdempotentBizType;
+import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.risk.service.IdempotentService;
+import com.seedcrm.crm.risk.service.RiskControlService;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
@@ -43,6 +49,10 @@ public class SalaryServiceImpl implements SalaryService {
     private final SalaryDetailMapper salaryDetailMapper;
     private final SalarySettlementMapper salarySettlementMapper;
     private final WithdrawRecordMapper withdrawRecordMapper;
+    private final FinanceService financeService;
+    private final DbLockService dbLockService;
+    private final IdempotentService idempotentService;
+    private final RiskControlService riskControlService;
 
     public SalaryServiceImpl(OrderRoleRecordMapper orderRoleRecordMapper,
                              PlanOrderMapper planOrderMapper,
@@ -50,7 +60,11 @@ public class SalaryServiceImpl implements SalaryService {
                              SalaryRuleMapper salaryRuleMapper,
                              SalaryDetailMapper salaryDetailMapper,
                              SalarySettlementMapper salarySettlementMapper,
-                             WithdrawRecordMapper withdrawRecordMapper) {
+                             WithdrawRecordMapper withdrawRecordMapper,
+                             FinanceService financeService,
+                             DbLockService dbLockService,
+                             IdempotentService idempotentService,
+                             RiskControlService riskControlService) {
         this.orderRoleRecordMapper = orderRoleRecordMapper;
         this.planOrderMapper = planOrderMapper;
         this.orderMapper = orderMapper;
@@ -58,6 +72,10 @@ public class SalaryServiceImpl implements SalaryService {
         this.salaryDetailMapper = salaryDetailMapper;
         this.salarySettlementMapper = salarySettlementMapper;
         this.withdrawRecordMapper = withdrawRecordMapper;
+        this.financeService = financeService;
+        this.dbLockService = dbLockService;
+        this.idempotentService = idempotentService;
+        this.riskControlService = riskControlService;
     }
 
     @Override
@@ -108,6 +126,9 @@ public class SalaryServiceImpl implements SalaryService {
             if (detail.getSettlementId() != null) {
                 throw new BusinessException("cannot recalculate salary after settlement");
             }
+            if (detail.getId() != null && financeService.hasLedgerRecord(LedgerBizType.SALARY, detail.getId())) {
+                throw new BusinessException("cannot recalculate salary after ledger posting");
+            }
         }
         if (!existingDetails.isEmpty()) {
             salaryDetailMapper.delete(new LambdaQueryWrapper<SalaryDetail>()
@@ -118,13 +139,18 @@ public class SalaryServiceImpl implements SalaryService {
 
     private List<SalaryDetail> calculateInternal(Long planOrderId, boolean reuseExisting) {
         validatePlanOrderId(planOrderId);
-        PlanOrder planOrder = getPlanOrder(planOrderId);
+        PlanOrder planOrder = dbLockService.lockPlanOrder(planOrderId);
         ensurePlanOrderFinished(planOrder);
+        String bizKey = "SALARY_" + planOrderId;
 
         List<SalaryDetail> existingDetails = salaryDetailMapper.selectList(new LambdaQueryWrapper<SalaryDetail>()
                 .eq(SalaryDetail::getPlanOrderId, planOrderId)
                 .orderByAsc(SalaryDetail::getCreateTime, SalaryDetail::getId));
+        if (!idempotentService.tryStart(bizKey, IdempotentBizType.SALARY)) {
+            return existingDetails;
+        }
         if (reuseExisting && !existingDetails.isEmpty()) {
+            idempotentService.markSuccess(bizKey);
             return existingDetails;
         }
 
@@ -144,30 +170,39 @@ public class SalaryServiceImpl implements SalaryService {
             throw new BusinessException("current role records are required before salary calculation");
         }
 
-        LocalDateTime now = LocalDateTime.now();
-        for (OrderRoleRecord roleRecord : roleRecords) {
-            SalaryRule rule = salaryRuleMapper.selectOne(new LambdaQueryWrapper<SalaryRule>()
-                    .eq(SalaryRule::getRoleCode, roleRecord.getRoleCode())
-                    .eq(SalaryRule::getIsActive, ACTIVE_FLAG)
-                    .last("LIMIT 1"));
-            if (rule == null) {
-                throw new BusinessException("active salary rule not found for role " + roleRecord.getRoleCode());
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            BigDecimal totalSalaryAmount = BigDecimal.ZERO;
+            for (OrderRoleRecord roleRecord : roleRecords) {
+                SalaryRule rule = salaryRuleMapper.selectOne(new LambdaQueryWrapper<SalaryRule>()
+                        .eq(SalaryRule::getRoleCode, roleRecord.getRoleCode())
+                        .eq(SalaryRule::getIsActive, ACTIVE_FLAG)
+                        .last("LIMIT 1"));
+                if (rule == null) {
+                    throw new BusinessException("active salary rule not found for role " + roleRecord.getRoleCode());
+                }
+                SalaryDetail detail = new SalaryDetail();
+                detail.setPlanOrderId(planOrderId);
+                detail.setUserId(roleRecord.getUserId());
+                detail.setRoleCode(roleRecord.getRoleCode());
+                detail.setOrderAmount(scaleMoney(order.getAmount()));
+                detail.setAmount(calculateAmount(order.getAmount(), rule));
+                detail.setCreateTime(now);
+                if (salaryDetailMapper.insert(detail) <= 0) {
+                    throw new BusinessException("failed to create salary detail");
+                }
+                totalSalaryAmount = totalSalaryAmount.add(detail.getAmount());
+                financeService.recordSalaryIncome(detail);
             }
-            SalaryDetail detail = new SalaryDetail();
-            detail.setPlanOrderId(planOrderId);
-            detail.setUserId(roleRecord.getUserId());
-            detail.setRoleCode(roleRecord.getRoleCode());
-            detail.setOrderAmount(scaleMoney(order.getAmount()));
-            detail.setAmount(calculateAmount(order.getAmount(), rule));
-            detail.setCreateTime(now);
-            if (salaryDetailMapper.insert(detail) <= 0) {
-                throw new BusinessException("failed to create salary detail");
-            }
+            riskControlService.validateSplitTotalNotExceedOrderAmount(order.getAmount(), totalSalaryAmount);
+            idempotentService.markSuccess(bizKey);
+            return salaryDetailMapper.selectList(new LambdaQueryWrapper<SalaryDetail>()
+                    .eq(SalaryDetail::getPlanOrderId, planOrderId)
+                    .orderByAsc(SalaryDetail::getCreateTime, SalaryDetail::getId));
+        } catch (RuntimeException exception) {
+            idempotentService.markFail(bizKey);
+            throw exception;
         }
-
-        return salaryDetailMapper.selectList(new LambdaQueryWrapper<SalaryDetail>()
-                .eq(SalaryDetail::getPlanOrderId, planOrderId)
-                .orderByAsc(SalaryDetail::getCreateTime, SalaryDetail::getId));
     }
 
     private PlanOrder getPlanOrder(Long planOrderId) {

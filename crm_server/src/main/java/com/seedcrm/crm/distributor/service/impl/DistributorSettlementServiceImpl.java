@@ -14,6 +14,12 @@ import com.seedcrm.crm.distributor.mapper.DistributorSettlementMapper;
 import com.seedcrm.crm.distributor.mapper.DistributorWithdrawMapper;
 import com.seedcrm.crm.distributor.service.DistributorService;
 import com.seedcrm.crm.distributor.service.DistributorSettlementService;
+import com.seedcrm.crm.finance.service.FinanceService;
+import com.seedcrm.crm.finance.enums.AccountOwnerType;
+import com.seedcrm.crm.risk.enums.IdempotentBizType;
+import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.risk.service.IdempotentService;
+import com.seedcrm.crm.risk.service.RiskControlService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
@@ -28,15 +34,27 @@ public class DistributorSettlementServiceImpl implements DistributorSettlementSe
     private final DistributorIncomeDetailMapper distributorIncomeDetailMapper;
     private final DistributorSettlementMapper distributorSettlementMapper;
     private final DistributorWithdrawMapper distributorWithdrawMapper;
+    private final FinanceService financeService;
+    private final DbLockService dbLockService;
+    private final IdempotentService idempotentService;
+    private final RiskControlService riskControlService;
 
     public DistributorSettlementServiceImpl(DistributorService distributorService,
                                             DistributorIncomeDetailMapper distributorIncomeDetailMapper,
                                             DistributorSettlementMapper distributorSettlementMapper,
-                                            DistributorWithdrawMapper distributorWithdrawMapper) {
+                                            DistributorWithdrawMapper distributorWithdrawMapper,
+                                            FinanceService financeService,
+                                            DbLockService dbLockService,
+                                            IdempotentService idempotentService,
+                                            RiskControlService riskControlService) {
         this.distributorService = distributorService;
         this.distributorIncomeDetailMapper = distributorIncomeDetailMapper;
         this.distributorSettlementMapper = distributorSettlementMapper;
         this.distributorWithdrawMapper = distributorWithdrawMapper;
+        this.financeService = financeService;
+        this.dbLockService = dbLockService;
+        this.idempotentService = idempotentService;
+        this.riskControlService = riskControlService;
     }
 
     @Override
@@ -45,13 +63,8 @@ public class DistributorSettlementServiceImpl implements DistributorSettlementSe
         validateSettlementRequest(request);
         distributorService.getByIdOrThrow(request.getDistributorId());
 
-        List<DistributorIncomeDetail> details = distributorIncomeDetailMapper.selectList(
-                new LambdaQueryWrapper<DistributorIncomeDetail>()
-                        .eq(DistributorIncomeDetail::getDistributorId, request.getDistributorId())
-                        .isNull(DistributorIncomeDetail::getSettlementId)
-                        .ge(DistributorIncomeDetail::getCreateTime, request.getStartTime())
-                        .le(DistributorIncomeDetail::getCreateTime, request.getEndTime())
-                        .orderByAsc(DistributorIncomeDetail::getCreateTime, DistributorIncomeDetail::getId));
+        List<DistributorIncomeDetail> details = dbLockService.lockUnsettledDistributorIncomeDetails(
+                request.getDistributorId(), request.getStartTime(), request.getEndTime());
         if (details.isEmpty()) {
             throw new BusinessException("no unsettled distributor income details found for settlement");
         }
@@ -87,10 +100,7 @@ public class DistributorSettlementServiceImpl implements DistributorSettlementSe
         if (targetStatus == null) {
             throw new BusinessException("target settlement status is required");
         }
-        DistributorSettlement settlement = distributorSettlementMapper.selectById(settlementId);
-        if (settlement == null) {
-            throw new BusinessException("distributor settlement not found");
-        }
+        DistributorSettlement settlement = dbLockService.lockDistributorSettlement(settlementId);
         ensureSettlementStatusTransition(
                 DistributorSettlementStatus.fromCode(settlement.getStatus()), targetStatus);
         settlement.setStatus(targetStatus.name());
@@ -132,11 +142,10 @@ public class DistributorSettlementServiceImpl implements DistributorSettlementSe
             throw new BusinessException("withdraw amount must be greater than 0");
         }
 
+        dbLockService.lockAccount(AccountOwnerType.DISTRIBUTOR, request.getDistributorId());
         BigDecimal withdrawableAmount = getWithdrawableAmount(request.getDistributorId());
         BigDecimal requestAmount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
-        if (requestAmount.compareTo(withdrawableAmount) > 0) {
-            throw new BusinessException("withdraw amount exceeds withdrawable balance");
-        }
+        riskControlService.validateWithdrawAmountNotExceedBalance(requestAmount, withdrawableAmount);
 
         DistributorWithdraw withdraw = new DistributorWithdraw();
         withdraw.setDistributorId(request.getDistributorId());
@@ -161,17 +170,31 @@ public class DistributorSettlementServiceImpl implements DistributorSettlementSe
         if (targetStatus == DistributorWithdrawStatus.PENDING) {
             throw new BusinessException("withdraw status cannot be set back to PENDING");
         }
-        DistributorWithdraw withdraw = distributorWithdrawMapper.selectById(withdrawId);
-        if (withdraw == null) {
-            throw new BusinessException("distributor withdraw record not found");
-        }
+        DistributorWithdraw withdraw = dbLockService.lockDistributorWithdraw(withdrawId);
+        dbLockService.lockAccount(AccountOwnerType.DISTRIBUTOR, withdraw.getDistributorId());
 
         ensureWithdrawStatusTransition(DistributorWithdrawStatus.fromCode(withdraw.getStatus()), targetStatus);
-        withdraw.setStatus(targetStatus.name());
-        if (distributorWithdrawMapper.updateById(withdraw) <= 0) {
-            throw new BusinessException("failed to update distributor withdraw status");
+        String bizKey = "WITHDRAW_DISTRIBUTOR_" + withdrawId;
+        if ((targetStatus == DistributorWithdrawStatus.APPROVED || targetStatus == DistributorWithdrawStatus.PAID)
+                && !idempotentService.tryStart(bizKey, IdempotentBizType.WITHDRAW)) {
+            return withdraw;
         }
-        return withdraw;
+        withdraw.setStatus(targetStatus.name());
+        try {
+            if (distributorWithdrawMapper.updateById(withdraw) <= 0) {
+                throw new BusinessException("failed to update distributor withdraw status");
+            }
+            if (targetStatus == DistributorWithdrawStatus.APPROVED || targetStatus == DistributorWithdrawStatus.PAID) {
+                financeService.recordDistributorWithdraw(withdraw);
+                idempotentService.markSuccess(bizKey);
+            }
+            return withdraw;
+        } catch (RuntimeException exception) {
+            if (targetStatus == DistributorWithdrawStatus.APPROVED || targetStatus == DistributorWithdrawStatus.PAID) {
+                idempotentService.markFail(bizKey);
+            }
+            throw exception;
+        }
     }
 
     private void validateSettlementRequest(DistributorSettlementCreateRequest request) {

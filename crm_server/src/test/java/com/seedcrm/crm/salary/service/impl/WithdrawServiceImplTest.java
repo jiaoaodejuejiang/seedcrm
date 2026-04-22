@@ -3,9 +3,16 @@ package com.seedcrm.crm.salary.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.finance.service.FinanceService;
+import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.risk.service.IdempotentService;
+import com.seedcrm.crm.risk.service.RiskControlService;
 import com.seedcrm.crm.salary.dto.WithdrawCreateRequest;
 import com.seedcrm.crm.salary.entity.SalarySettlement;
 import com.seedcrm.crm.salary.entity.WithdrawRecord;
@@ -29,11 +36,24 @@ class WithdrawServiceImplTest {
     @Mock
     private WithdrawRecordMapper withdrawRecordMapper;
 
+    @Mock
+    private FinanceService financeService;
+
+    @Mock
+    private DbLockService dbLockService;
+
+    @Mock
+    private IdempotentService idempotentService;
+
+    @Mock
+    private RiskControlService riskControlService;
+
     private WithdrawServiceImpl withdrawService;
 
     @BeforeEach
     void setUp() {
-        withdrawService = new WithdrawServiceImpl(salarySettlementMapper, withdrawRecordMapper);
+        withdrawService = new WithdrawServiceImpl(salarySettlementMapper, withdrawRecordMapper, financeService,
+                dbLockService, idempotentService, riskControlService);
     }
 
     @Test
@@ -58,13 +78,18 @@ class WithdrawServiceImplTest {
     void approveWithdrawShouldAllowPendingToPaid() {
         WithdrawRecord record = new WithdrawRecord();
         record.setId(3L);
+        record.setUserId(9L);
         record.setStatus(WithdrawStatus.PENDING.name());
-        when(withdrawRecordMapper.selectById(3L)).thenReturn(record);
+        when(dbLockService.lockWithdrawRecord(3L)).thenReturn(record);
+        when(idempotentService.tryStart("WITHDRAW_USER_3", com.seedcrm.crm.risk.enums.IdempotentBizType.WITHDRAW))
+                .thenReturn(true);
         when(withdrawRecordMapper.updateById(any(WithdrawRecord.class))).thenReturn(1);
 
         WithdrawRecord updated = withdrawService.approveWithdraw(3L, WithdrawStatus.PAID);
 
         assertThat(updated.getStatus()).isEqualTo(WithdrawStatus.PAID.name());
+        verify(financeService).recordUserWithdraw(record);
+        verify(idempotentService).markSuccess("WITHDRAW_USER_3");
     }
 
     @Test
@@ -77,6 +102,9 @@ class WithdrawServiceImplTest {
         WithdrawCreateRequest request = new WithdrawCreateRequest();
         request.setUserId(9L);
         request.setAmount(new BigDecimal("120.00"));
+        doThrow(new BusinessException("withdraw amount exceeds withdrawable balance"))
+                .when(riskControlService)
+                .validateWithdrawAmountNotExceedBalance(eq(new BigDecimal("120.00")), eq(new BigDecimal("100.00")));
 
         assertThatThrownBy(() -> withdrawService.createWithdraw(request))
                 .isInstanceOf(BusinessException.class)

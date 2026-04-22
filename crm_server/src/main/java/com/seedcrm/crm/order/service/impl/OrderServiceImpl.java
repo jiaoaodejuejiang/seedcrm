@@ -18,11 +18,13 @@ import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.enums.OrderType;
 import com.seedcrm.crm.order.mapper.OrderMapper;
+import com.seedcrm.crm.order.service.OrderSettlementService;
 import com.seedcrm.crm.order.service.OrderService;
 import com.seedcrm.crm.order.util.OrderNoGenerator;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
+import com.seedcrm.crm.risk.service.DbLockService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import lombok.extern.slf4j.Slf4j;
@@ -40,19 +42,25 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final CustomerTagService customerTagService;
     private final PlanOrderMapper planOrderMapper;
     private final DistributorIncomeService distributorIncomeService;
+    private final DbLockService dbLockService;
+    private final OrderSettlementService orderSettlementService;
 
     public OrderServiceImpl(OrderMapper orderMapper,
                             ClueMapper clueMapper,
                             CustomerService customerService,
                             CustomerTagService customerTagService,
                             PlanOrderMapper planOrderMapper,
-                            DistributorIncomeService distributorIncomeService) {
+                            DistributorIncomeService distributorIncomeService,
+                            DbLockService dbLockService,
+                            OrderSettlementService orderSettlementService) {
         this.orderMapper = orderMapper;
         this.clueMapper = clueMapper;
         this.customerService = customerService;
         this.customerTagService = customerTagService;
         this.planOrderMapper = planOrderMapper;
         this.distributorIncomeService = distributorIncomeService;
+        this.dbLockService = dbLockService;
+        this.orderSettlementService = orderSettlementService;
     }
 
     @Override
@@ -147,14 +155,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     @Transactional
     public Order complete(OrderActionDTO orderActionDTO) {
-        Order order = validateAndGetActionOrder(orderActionDTO, OrderStatus.COMPLETED);
+        validateOrderId(orderActionDTO == null ? null : orderActionDTO.getOrderId());
+        Order order = dbLockService.lockOrder(orderActionDTO.getOrderId());
+        ensureOrderCustomerBound(order);
+        if (OrderStatus.COMPLETED.name().equals(order.getStatus())) {
+            return orderSettlementService.settleCompletedOrder(order.getId());
+        }
+        assertNextStatus(order, OrderStatus.COMPLETED);
         ensurePlanOrderFinished(order.getId());
         order.setCompleteTime(LocalDateTime.now());
         updateRemark(order, orderActionDTO.getRemark());
-        Order completedOrder = updateOrderStatus(order, OrderStatus.COMPLETED);
-        distributorIncomeService.calculate(completedOrder.getId());
-        customerTagService.updateTag(completedOrder.getCustomerId());
-        return completedOrder;
+        updateOrderStatus(order, OrderStatus.COMPLETED);
+        return orderSettlementService.settleCompletedOrder(order.getId());
     }
 
     @Override

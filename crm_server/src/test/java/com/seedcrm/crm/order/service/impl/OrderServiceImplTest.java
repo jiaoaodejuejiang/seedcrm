@@ -22,9 +22,11 @@ import com.seedcrm.crm.order.dto.OrderPayDTO;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
+import com.seedcrm.crm.order.service.OrderSettlementService;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
+import com.seedcrm.crm.risk.service.DbLockService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,12 +56,18 @@ class OrderServiceImplTest {
     @Mock
     private DistributorIncomeService distributorIncomeService;
 
+    @Mock
+    private DbLockService dbLockService;
+
+    @Mock
+    private OrderSettlementService orderSettlementService;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
     void setUp() {
         orderService = new OrderServiceImpl(orderMapper, clueMapper, customerService, customerTagService,
-                planOrderMapper, distributorIncomeService);
+                planOrderMapper, distributorIncomeService, dbLockService, orderSettlementService);
     }
 
     @Test
@@ -167,7 +175,7 @@ class OrderServiceImplTest {
         order.setOrderNo("ORD202604211234567891");
         order.setCustomerId(202L);
         order.setStatus(OrderStatus.SERVING.name());
-        when(orderMapper.selectById(2L)).thenReturn(order);
+        when(dbLockService.lockOrder(2L)).thenReturn(order);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
         when(customerService.getByIdOrThrow(202L)).thenReturn(new Customer());
         PlanOrder planOrder = new PlanOrder();
@@ -175,6 +183,7 @@ class OrderServiceImplTest {
         planOrder.setOrderId(2L);
         planOrder.setStatus(PlanOrderStatus.FINISHED.name());
         when(planOrderMapper.selectOne(any())).thenReturn(planOrder);
+        when(orderSettlementService.settleCompletedOrder(2L)).thenReturn(order);
 
         OrderActionDTO dto = new OrderActionDTO();
         dto.setOrderId(2L);
@@ -186,8 +195,7 @@ class OrderServiceImplTest {
         assertThat(completedOrder.getCompleteTime()).isNotNull();
         verify(customerService, times(1)).getByIdOrThrow(202L);
         verify(customerService).refreshCustomerLifecycle(202L);
-        verify(distributorIncomeService).calculate(2L);
-        verify(customerTagService).updateTag(202L);
+        verify(orderSettlementService).settleCompletedOrder(2L);
     }
 
     @Test
@@ -197,7 +205,7 @@ class OrderServiceImplTest {
         order.setOrderNo("ORD202604211234567892");
         order.setCustomerId(203L);
         order.setStatus(OrderStatus.SERVING.name());
-        when(orderMapper.selectById(3L)).thenReturn(order);
+        when(dbLockService.lockOrder(3L)).thenReturn(order);
         when(customerService.getByIdOrThrow(203L)).thenReturn(new Customer());
         PlanOrder planOrder = new PlanOrder();
         planOrder.setId(10L);

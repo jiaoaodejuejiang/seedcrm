@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS salary_detail (
     settlement_id BIGINT,
     settlement_time DATETIME,
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_salary_detail_plan_user_role (plan_order_id, user_id, role_code),
     KEY idx_salary_detail_plan_order_id (plan_order_id),
     KEY idx_salary_detail_user_id (user_id),
     KEY idx_salary_detail_settlement_id (settlement_id)

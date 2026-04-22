@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS distributor_income_detail (
     settlement_id BIGINT,
     settlement_time DATETIME,
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_distributor_income_detail_order_id (order_id),
+    UNIQUE KEY uk_distributor_income_detail_order_distributor (order_id, distributor_id),
     KEY idx_distributor_income_detail_distributor_id (distributor_id),
     KEY idx_distributor_income_detail_settlement_id (settlement_id)
 );

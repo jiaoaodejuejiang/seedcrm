@@ -24,6 +24,8 @@ public class SalarySchemaInitializer {
         ensureTable("salary_detail", salaryDetailCreateSql(), salaryDetailColumns());
         ensureTable("salary_settlement", salarySettlementCreateSql(), salarySettlementColumns());
         ensureTable("withdraw_record", withdrawRecordCreateSql(), withdrawRecordColumns());
+        ensureIndex("salary_detail", "uk_salary_detail_plan_user_role",
+                "CREATE UNIQUE INDEX uk_salary_detail_plan_user_role ON salary_detail(plan_order_id, user_id, role_code)");
     }
 
     private void ensureTable(String tableName, String createSql, Map<String, String> expectedColumns) {
@@ -63,6 +65,20 @@ public class SalarySchemaInitializer {
                   AND COLUMN_NAME = ?
                 """, Integer.class, tableName, columnName);
         return count != null && count > 0;
+    }
+
+    private void ensureIndex(String tableName, String indexName, String createIndexSql) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = ?
+                  AND INDEX_NAME = ?
+                """, Integer.class, tableName, indexName);
+        if (count == null || count == 0) {
+            jdbcTemplate.execute(createIndexSql);
+            log.info("created index {} on {}", indexName, tableName);
+        }
     }
 
     private String salaryRuleCreateSql() {

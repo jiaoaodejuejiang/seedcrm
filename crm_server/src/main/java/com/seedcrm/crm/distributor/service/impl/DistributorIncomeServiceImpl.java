@@ -10,9 +10,14 @@ import com.seedcrm.crm.distributor.mapper.DistributorIncomeDetailMapper;
 import com.seedcrm.crm.distributor.mapper.DistributorRuleMapper;
 import com.seedcrm.crm.distributor.service.DistributorIncomeService;
 import com.seedcrm.crm.distributor.service.DistributorService;
+import com.seedcrm.crm.finance.service.FinanceService;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
+import com.seedcrm.crm.risk.enums.IdempotentBizType;
+import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.risk.service.IdempotentService;
+import com.seedcrm.crm.risk.service.RiskControlService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
@@ -28,22 +33,34 @@ public class DistributorIncomeServiceImpl implements DistributorIncomeService {
     private final DistributorRuleMapper distributorRuleMapper;
     private final DistributorIncomeDetailMapper distributorIncomeDetailMapper;
     private final DistributorService distributorService;
+    private final FinanceService financeService;
+    private final DbLockService dbLockService;
+    private final IdempotentService idempotentService;
+    private final RiskControlService riskControlService;
 
     public DistributorIncomeServiceImpl(OrderMapper orderMapper,
                                         DistributorRuleMapper distributorRuleMapper,
                                         DistributorIncomeDetailMapper distributorIncomeDetailMapper,
-                                        DistributorService distributorService) {
+                                        DistributorService distributorService,
+                                        FinanceService financeService,
+                                        DbLockService dbLockService,
+                                        IdempotentService idempotentService,
+                                        RiskControlService riskControlService) {
         this.orderMapper = orderMapper;
         this.distributorRuleMapper = distributorRuleMapper;
         this.distributorIncomeDetailMapper = distributorIncomeDetailMapper;
         this.distributorService = distributorService;
+        this.financeService = financeService;
+        this.dbLockService = dbLockService;
+        this.idempotentService = idempotentService;
+        this.riskControlService = riskControlService;
     }
 
     @Override
     @Transactional
     public DistributorIncomeDetail calculate(Long orderId) {
         validateOrderId(orderId);
-        Order order = orderMapper.selectById(orderId);
+        Order order = dbLockService.lockOrder(orderId);
         if (order == null) {
             throw new BusinessException("order not found");
         }
@@ -57,35 +74,45 @@ public class DistributorIncomeServiceImpl implements DistributorIncomeService {
             throw new BusinessException("order amount must be greater than 0");
         }
 
-        DistributorIncomeDetail existingDetail = distributorIncomeDetailMapper.selectOne(
-                new LambdaQueryWrapper<DistributorIncomeDetail>()
-                        .eq(DistributorIncomeDetail::getOrderId, orderId)
-                        .last("LIMIT 1"));
-        if (existingDetail != null) {
+        Long distributorId = order.getSourceId();
+        String bizKey = "DIST_" + orderId;
+        DistributorIncomeDetail existingDetail = distributorIncomeDetailMapper
+                .selectByOrderAndDistributor(orderId, distributorId);
+        if (!idempotentService.tryStart(bizKey, IdempotentBizType.DISTRIBUTOR)) {
             return existingDetail;
         }
-
-        Long distributorId = order.getSourceId();
         distributorService.getByIdOrThrow(distributorId);
-        DistributorRule rule = distributorRuleMapper.selectOne(new LambdaQueryWrapper<DistributorRule>()
-                .eq(DistributorRule::getDistributorId, distributorId)
-                .eq(DistributorRule::getIsActive, ACTIVE_FLAG)
-                .orderByDesc(DistributorRule::getCreateTime, DistributorRule::getId)
-                .last("LIMIT 1"));
-        if (rule == null) {
-            throw new BusinessException("active distributor rule not found");
+        if (existingDetail != null) {
+            idempotentService.markSuccess(bizKey);
+            return existingDetail;
         }
+        try {
+            DistributorRule rule = distributorRuleMapper.selectOne(new LambdaQueryWrapper<DistributorRule>()
+                    .eq(DistributorRule::getDistributorId, distributorId)
+                    .eq(DistributorRule::getIsActive, ACTIVE_FLAG)
+                    .orderByDesc(DistributorRule::getCreateTime, DistributorRule::getId)
+                    .last("LIMIT 1"));
+            if (rule == null) {
+                throw new BusinessException("active distributor rule not found");
+            }
 
-        DistributorIncomeDetail detail = new DistributorIncomeDetail();
-        detail.setDistributorId(distributorId);
-        detail.setOrderId(orderId);
-        detail.setOrderAmount(scaleMoney(order.getAmount()));
-        detail.setIncomeAmount(calculateIncome(order.getAmount(), rule));
-        detail.setCreateTime(LocalDateTime.now());
-        if (distributorIncomeDetailMapper.insert(detail) <= 0) {
-            throw new BusinessException("failed to create distributor income detail");
+            DistributorIncomeDetail detail = new DistributorIncomeDetail();
+            detail.setDistributorId(distributorId);
+            detail.setOrderId(orderId);
+            detail.setOrderAmount(scaleMoney(order.getAmount()));
+            detail.setIncomeAmount(calculateIncome(order.getAmount(), rule));
+            detail.setCreateTime(LocalDateTime.now());
+            riskControlService.validateSplitTotalNotExceedOrderAmount(order.getAmount(), detail.getIncomeAmount());
+            if (distributorIncomeDetailMapper.insert(detail) <= 0) {
+                throw new BusinessException("failed to create distributor income detail");
+            }
+            financeService.recordDistributorIncome(detail);
+            idempotentService.markSuccess(bizKey);
+            return detail;
+        } catch (RuntimeException exception) {
+            idempotentService.markFail(bizKey);
+            throw exception;
         }
-        return detail;
     }
 
     private BigDecimal calculateIncome(BigDecimal orderAmount, DistributorRule rule) {

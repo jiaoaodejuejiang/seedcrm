@@ -20,6 +20,10 @@ import com.seedcrm.crm.distributor.mapper.DistributorIncomeDetailMapper;
 import com.seedcrm.crm.distributor.mapper.DistributorSettlementMapper;
 import com.seedcrm.crm.distributor.mapper.DistributorWithdrawMapper;
 import com.seedcrm.crm.distributor.service.DistributorService;
+import com.seedcrm.crm.finance.service.FinanceService;
+import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.risk.service.IdempotentService;
+import com.seedcrm.crm.risk.service.RiskControlService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -45,12 +49,25 @@ class DistributorSettlementServiceImplTest {
     @Mock
     private DistributorWithdrawMapper distributorWithdrawMapper;
 
+    @Mock
+    private FinanceService financeService;
+
+    @Mock
+    private DbLockService dbLockService;
+
+    @Mock
+    private IdempotentService idempotentService;
+
+    @Mock
+    private RiskControlService riskControlService;
+
     private DistributorSettlementServiceImpl distributorSettlementService;
 
     @BeforeEach
     void setUp() {
         distributorSettlementService = new DistributorSettlementServiceImpl(distributorService,
-                distributorIncomeDetailMapper, distributorSettlementMapper, distributorWithdrawMapper);
+                distributorIncomeDetailMapper, distributorSettlementMapper, distributorWithdrawMapper, financeService,
+                dbLockService, idempotentService, riskControlService);
     }
 
     @Test
@@ -70,7 +87,8 @@ class DistributorSettlementServiceImplTest {
         DistributorIncomeDetail detail2 = new DistributorIncomeDetail();
         detail2.setId(2L);
         detail2.setIncomeAmount(new BigDecimal("60.00"));
-        when(distributorIncomeDetailMapper.selectList(any())).thenReturn(List.of(detail1, detail2));
+        when(dbLockService.lockUnsettledDistributorIncomeDetails(7L, request.getStartTime(), request.getEndTime()))
+                .thenReturn(List.of(detail1, detail2));
         when(distributorSettlementMapper.insert(any(DistributorSettlement.class))).thenAnswer(invocation -> {
             DistributorSettlement settlement = invocation.getArgument(0);
             settlement.setId(88L);
@@ -115,13 +133,18 @@ class DistributorSettlementServiceImplTest {
     void approveWithdrawShouldAllowPendingToPaid() {
         DistributorWithdraw withdraw = new DistributorWithdraw();
         withdraw.setId(6L);
+        withdraw.setDistributorId(7L);
         withdraw.setStatus(DistributorWithdrawStatus.PENDING.name());
-        when(distributorWithdrawMapper.selectById(6L)).thenReturn(withdraw);
+        when(dbLockService.lockDistributorWithdraw(6L)).thenReturn(withdraw);
+        when(idempotentService.tryStart("WITHDRAW_DISTRIBUTOR_6",
+                com.seedcrm.crm.risk.enums.IdempotentBizType.WITHDRAW)).thenReturn(true);
         when(distributorWithdrawMapper.updateById(any(DistributorWithdraw.class))).thenReturn(1);
 
         DistributorWithdraw updated = distributorSettlementService.approveWithdraw(6L, DistributorWithdrawStatus.PAID);
 
         assertThat(updated.getStatus()).isEqualTo(DistributorWithdrawStatus.PAID.name());
+        verify(financeService).recordDistributorWithdraw(withdraw);
+        verify(idempotentService).markSuccess("WITHDRAW_DISTRIBUTOR_6");
     }
 
     @Test
@@ -134,7 +157,8 @@ class DistributorSettlementServiceImplTest {
         request.setDistributorId(7L);
         request.setStartTime(LocalDateTime.of(2026, 4, 1, 0, 0));
         request.setEndTime(LocalDateTime.of(2026, 4, 30, 23, 59, 59));
-        when(distributorIncomeDetailMapper.selectList(any())).thenReturn(List.of());
+        when(dbLockService.lockUnsettledDistributorIncomeDetails(7L, request.getStartTime(), request.getEndTime()))
+                .thenReturn(List.of());
 
         assertThatThrownBy(() -> distributorSettlementService.createSettlement(request))
                 .isInstanceOf(BusinessException.class)

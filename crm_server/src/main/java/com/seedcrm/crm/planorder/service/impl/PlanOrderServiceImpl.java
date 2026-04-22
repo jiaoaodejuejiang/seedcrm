@@ -3,10 +3,10 @@ package com.seedcrm.crm.planorder.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.seedcrm.crm.common.exception.BusinessException;
-import com.seedcrm.crm.distributor.service.DistributorIncomeService;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
+import com.seedcrm.crm.order.service.OrderSettlementService;
 import com.seedcrm.crm.planorder.dto.PlanOrderActionDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderAssignRoleDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderCreateDTO;
@@ -17,7 +17,6 @@ import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.planorder.service.OrderRoleRecordService;
 import com.seedcrm.crm.planorder.service.PlanOrderService;
-import com.seedcrm.crm.salary.service.SalaryService;
 import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,19 +27,16 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     private final PlanOrderMapper planOrderMapper;
     private final OrderMapper orderMapper;
     private final OrderRoleRecordService orderRoleRecordService;
-    private final SalaryService salaryService;
-    private final DistributorIncomeService distributorIncomeService;
+    private final OrderSettlementService orderSettlementService;
 
     public PlanOrderServiceImpl(PlanOrderMapper planOrderMapper,
                                 OrderMapper orderMapper,
                                 OrderRoleRecordService orderRoleRecordService,
-                                SalaryService salaryService,
-                                DistributorIncomeService distributorIncomeService) {
+                                OrderSettlementService orderSettlementService) {
         this.planOrderMapper = planOrderMapper;
         this.orderMapper = orderMapper;
         this.orderRoleRecordService = orderRoleRecordService;
-        this.salaryService = salaryService;
-        this.distributorIncomeService = distributorIncomeService;
+        this.orderSettlementService = orderSettlementService;
     }
 
     @Override
@@ -127,8 +123,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
             order.setArriveTime(planOrder.getArriveTime());
         }
         touchOrder(order, true);
-        salaryService.calculateForPlanOrder(planOrder.getId());
-        distributorIncomeService.calculate(order.getId());
+        orderSettlementService.settleCompletedOrder(order.getId());
         return planOrder;
     }
 

@@ -8,10 +8,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.seedcrm.crm.common.exception.BusinessException;
-import com.seedcrm.crm.distributor.service.DistributorIncomeService;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
+import com.seedcrm.crm.order.service.OrderSettlementService;
 import com.seedcrm.crm.planorder.dto.PlanOrderActionDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderAssignRoleDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderCreateDTO;
@@ -19,7 +19,6 @@ import com.seedcrm.crm.planorder.entity.OrderRoleRecord;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
-import com.seedcrm.crm.salary.service.SalaryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,17 +38,14 @@ class PlanOrderServiceImplTest {
     private OrderRoleRecordServiceImpl orderRoleRecordService;
 
     @Mock
-    private SalaryService salaryService;
-
-    @Mock
-    private DistributorIncomeService distributorIncomeService;
+    private OrderSettlementService orderSettlementService;
 
     private PlanOrderServiceImpl planOrderService;
 
     @BeforeEach
     void setUp() {
         planOrderService = new PlanOrderServiceImpl(planOrderMapper, orderMapper, orderRoleRecordService,
-                salaryService, distributorIncomeService);
+                orderSettlementService);
     }
 
     @Test
@@ -128,8 +124,7 @@ class PlanOrderServiceImplTest {
         assertThat(finished.getFinishTime()).isNotNull();
         assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED.name());
         assertThat(order.getCompleteTime()).isNotNull();
-        verify(salaryService).calculateForPlanOrder(3L);
-        verify(distributorIncomeService).calculate(30L);
+        verify(orderSettlementService).settleCompletedOrder(30L);
     }
 
     @Test

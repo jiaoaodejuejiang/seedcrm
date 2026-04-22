@@ -24,8 +24,9 @@ public class DistributorBenefitSchemaInitializer {
         ensureTable("distributor_income_detail", createDistributorIncomeDetailSql(), distributorIncomeDetailColumns());
         ensureTable("distributor_settlement", createDistributorSettlementSql(), distributorSettlementColumns());
         ensureTable("distributor_withdraw", createDistributorWithdrawSql(), distributorWithdrawColumns());
-        ensureUniqueIndex("distributor_income_detail", "uk_distributor_income_detail_order_id",
-                "CREATE UNIQUE INDEX uk_distributor_income_detail_order_id ON distributor_income_detail(order_id)");
+        dropIndexIfExists("distributor_income_detail", "uk_distributor_income_detail_order_id");
+        ensureUniqueIndex("distributor_income_detail", "uk_distributor_income_detail_order_distributor",
+                "CREATE UNIQUE INDEX uk_distributor_income_detail_order_distributor ON distributor_income_detail(order_id, distributor_id)");
     }
 
     private void ensureTable(String tableName, String createSql, Map<String, String> expectedColumns) {
@@ -74,6 +75,20 @@ public class DistributorBenefitSchemaInitializer {
         if (count == null || count == 0) {
             jdbcTemplate.execute(createIndexSql);
             log.info("created index {} on {}", indexName, tableName);
+        }
+    }
+
+    private void dropIndexIfExists(String tableName, String indexName) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = ?
+                  AND INDEX_NAME = ?
+                """, Integer.class, tableName, indexName);
+        if (count != null && count > 0) {
+            jdbcTemplate.execute("DROP INDEX " + indexName + " ON " + tableName);
+            log.info("dropped index {} on {}", indexName, tableName);
         }
     }
 

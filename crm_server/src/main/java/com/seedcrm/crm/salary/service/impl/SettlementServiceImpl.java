@@ -8,6 +8,7 @@ import com.seedcrm.crm.salary.entity.SalarySettlement;
 import com.seedcrm.crm.salary.enums.SalarySettlementStatus;
 import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
 import com.seedcrm.crm.salary.mapper.SalarySettlementMapper;
+import com.seedcrm.crm.risk.service.DbLockService;
 import com.seedcrm.crm.salary.service.SettlementService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -20,23 +21,22 @@ public class SettlementServiceImpl implements SettlementService {
 
     private final SalaryDetailMapper salaryDetailMapper;
     private final SalarySettlementMapper salarySettlementMapper;
+    private final DbLockService dbLockService;
 
     public SettlementServiceImpl(SalaryDetailMapper salaryDetailMapper,
-                                 SalarySettlementMapper salarySettlementMapper) {
+                                 SalarySettlementMapper salarySettlementMapper,
+                                 DbLockService dbLockService) {
         this.salaryDetailMapper = salaryDetailMapper;
         this.salarySettlementMapper = salarySettlementMapper;
+        this.dbLockService = dbLockService;
     }
 
     @Override
     @Transactional
     public SalarySettlement createSettlement(SalarySettlementCreateRequest request) {
         validateCreateRequest(request);
-        List<SalaryDetail> details = salaryDetailMapper.selectList(new LambdaQueryWrapper<SalaryDetail>()
-                .eq(SalaryDetail::getUserId, request.getUserId())
-                .isNull(SalaryDetail::getSettlementId)
-                .ge(SalaryDetail::getCreateTime, request.getStartTime())
-                .le(SalaryDetail::getCreateTime, request.getEndTime())
-                .orderByAsc(SalaryDetail::getCreateTime, SalaryDetail::getId));
+        List<SalaryDetail> details = dbLockService.lockUnsettledSalaryDetails(
+                request.getUserId(), request.getStartTime(), request.getEndTime());
         if (details.isEmpty()) {
             throw new BusinessException("no unsettled salary details found for settlement");
         }
@@ -72,10 +72,7 @@ public class SettlementServiceImpl implements SettlementService {
         if (targetStatus == null) {
             throw new BusinessException("target settlement status is required");
         }
-        SalarySettlement settlement = salarySettlementMapper.selectById(settlementId);
-        if (settlement == null) {
-            throw new BusinessException("salary settlement not found");
-        }
+        SalarySettlement settlement = dbLockService.lockSalarySettlement(settlementId);
         SalarySettlementStatus currentStatus = SalarySettlementStatus.fromCode(settlement.getStatus());
         ensureStatusTransition(currentStatus, targetStatus);
         settlement.setStatus(targetStatus.name());

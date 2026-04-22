@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.finance.service.FinanceService;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.planorder.entity.OrderRoleRecord;
@@ -25,6 +26,9 @@ import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
 import com.seedcrm.crm.salary.mapper.SalaryRuleMapper;
 import com.seedcrm.crm.salary.mapper.SalarySettlementMapper;
 import com.seedcrm.crm.salary.mapper.WithdrawRecordMapper;
+import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.risk.service.IdempotentService;
+import com.seedcrm.crm.risk.service.RiskControlService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -60,12 +64,25 @@ class SalaryServiceImplTest {
     @Mock
     private WithdrawRecordMapper withdrawRecordMapper;
 
+    @Mock
+    private FinanceService financeService;
+
+    @Mock
+    private DbLockService dbLockService;
+
+    @Mock
+    private IdempotentService idempotentService;
+
+    @Mock
+    private RiskControlService riskControlService;
+
     private SalaryServiceImpl salaryService;
 
     @BeforeEach
     void setUp() {
         salaryService = new SalaryServiceImpl(orderRoleRecordMapper, planOrderMapper, orderMapper, salaryRuleMapper,
-                salaryDetailMapper, salarySettlementMapper, withdrawRecordMapper);
+                salaryDetailMapper, salarySettlementMapper, withdrawRecordMapper, financeService,
+                dbLockService, idempotentService, riskControlService);
     }
 
     @Test
@@ -91,7 +108,9 @@ class SalaryServiceImplTest {
         planOrder.setId(11L);
         planOrder.setOrderId(88L);
         planOrder.setStatus(PlanOrderStatus.FINISHED.name());
-        when(planOrderMapper.selectById(11L)).thenReturn(planOrder);
+        when(dbLockService.lockPlanOrder(11L)).thenReturn(planOrder);
+        when(idempotentService.tryStart("SALARY_11", com.seedcrm.crm.risk.enums.IdempotentBizType.SALARY))
+                .thenReturn(true);
 
         when(salaryDetailMapper.selectList(any())).thenReturn(List.of(), List.of(buildDetail(11L, 7L, "CONSULTANT", "100.00"),
                 buildDetail(11L, 8L, "DOCTOR", "200.00")));
@@ -133,8 +152,10 @@ class SalaryServiceImplTest {
         assertThat(response).hasSize(2);
         ArgumentCaptor<SalaryDetail> captor = ArgumentCaptor.forClass(SalaryDetail.class);
         verify(salaryDetailMapper, times(2)).insert(captor.capture());
+        verify(financeService, times(2)).recordSalaryIncome(any(SalaryDetail.class));
         assertThat(captor.getAllValues()).extracting(SalaryDetail::getAmount)
                 .containsExactly(new BigDecimal("100.00"), new BigDecimal("200.00"));
+        verify(idempotentService).markSuccess("SALARY_11");
     }
 
     @Test
@@ -153,6 +174,24 @@ class SalaryServiceImplTest {
         assertThatThrownBy(() -> salaryService.recalculateForPlanOrder(12L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("after settlement");
+    }
+
+    @Test
+    void recalculateShouldRejectWhenLedgerAlreadyPosted() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(12L);
+        planOrder.setOrderId(66L);
+        planOrder.setStatus(PlanOrderStatus.FINISHED.name());
+        when(planOrderMapper.selectById(12L)).thenReturn(planOrder);
+
+        SalaryDetail existingDetail = new SalaryDetail();
+        existingDetail.setId(3L);
+        when(salaryDetailMapper.selectList(any())).thenReturn(List.of(existingDetail));
+        when(financeService.hasLedgerRecord(any(), any())).thenReturn(true);
+
+        assertThatThrownBy(() -> salaryService.recalculateForPlanOrder(12L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("after ledger posting");
     }
 
     @Test

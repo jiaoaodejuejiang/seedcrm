@@ -16,6 +16,7 @@ import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.planorder.service.OrderRoleRecordService;
 import com.seedcrm.crm.planorder.service.PlanOrderService;
+import com.seedcrm.crm.salary.service.SalaryService;
 import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,13 +27,16 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     private final PlanOrderMapper planOrderMapper;
     private final OrderMapper orderMapper;
     private final OrderRoleRecordService orderRoleRecordService;
+    private final SalaryService salaryService;
 
     public PlanOrderServiceImpl(PlanOrderMapper planOrderMapper,
                                 OrderMapper orderMapper,
-                                OrderRoleRecordService orderRoleRecordService) {
+                                OrderRoleRecordService orderRoleRecordService,
+                                SalaryService salaryService) {
         this.planOrderMapper = planOrderMapper;
         this.orderMapper = orderMapper;
         this.orderRoleRecordService = orderRoleRecordService;
+        this.salaryService = salaryService;
     }
 
     @Override
@@ -119,6 +123,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
             order.setArriveTime(planOrder.getArriveTime());
         }
         touchOrder(order, true);
+        salaryService.calculateForPlanOrder(planOrder.getId());
         return planOrder;
     }
 

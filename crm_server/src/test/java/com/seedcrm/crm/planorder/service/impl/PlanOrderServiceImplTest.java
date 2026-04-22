@@ -18,6 +18,7 @@ import com.seedcrm.crm.planorder.entity.OrderRoleRecord;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
+import com.seedcrm.crm.salary.service.SalaryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,11 +37,14 @@ class PlanOrderServiceImplTest {
     @Mock
     private OrderRoleRecordServiceImpl orderRoleRecordService;
 
+    @Mock
+    private SalaryService salaryService;
+
     private PlanOrderServiceImpl planOrderService;
 
     @BeforeEach
     void setUp() {
-        planOrderService = new PlanOrderServiceImpl(planOrderMapper, orderMapper, orderRoleRecordService);
+        planOrderService = new PlanOrderServiceImpl(planOrderMapper, orderMapper, orderRoleRecordService, salaryService);
     }
 
     @Test
@@ -119,6 +123,7 @@ class PlanOrderServiceImplTest {
         assertThat(finished.getFinishTime()).isNotNull();
         assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED.name());
         assertThat(order.getCompleteTime()).isNotNull();
+        verify(salaryService).calculateForPlanOrder(3L);
     }
 
     @Test

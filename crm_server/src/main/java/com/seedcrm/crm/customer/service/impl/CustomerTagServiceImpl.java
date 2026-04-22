@@ -3,7 +3,9 @@ package com.seedcrm.crm.customer.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.customer.entity.Customer;
+import com.seedcrm.crm.customer.entity.CustomerTagDetail;
 import com.seedcrm.crm.customer.entity.CustomerTagRule;
+import com.seedcrm.crm.customer.mapper.CustomerTagDetailMapper;
 import com.seedcrm.crm.customer.mapper.CustomerMapper;
 import com.seedcrm.crm.customer.mapper.CustomerTagRuleMapper;
 import com.seedcrm.crm.customer.service.CustomerTagService;
@@ -38,15 +40,18 @@ public class CustomerTagServiceImpl implements CustomerTagService {
 
     private final CustomerMapper customerMapper;
     private final CustomerTagRuleMapper customerTagRuleMapper;
+    private final CustomerTagDetailMapper customerTagDetailMapper;
     private final OrderMapper orderMapper;
     private final WecomTouchService wecomTouchService;
 
     public CustomerTagServiceImpl(CustomerMapper customerMapper,
                                   CustomerTagRuleMapper customerTagRuleMapper,
+                                  CustomerTagDetailMapper customerTagDetailMapper,
                                   OrderMapper orderMapper,
                                   WecomTouchService wecomTouchService) {
         this.customerMapper = customerMapper;
         this.customerTagRuleMapper = customerTagRuleMapper;
+        this.customerTagDetailMapper = customerTagDetailMapper;
         this.orderMapper = orderMapper;
         this.wecomTouchService = wecomTouchService;
     }
@@ -82,6 +87,7 @@ public class CustomerTagServiceImpl implements CustomerTagService {
         if (customerMapper.updateById(customer) <= 0) {
             throw new BusinessException("failed to update customer tag");
         }
+        replaceTagDetails(customerId, customer.getTag());
 
         log.info("customer tag updated, customerId={}, tag={}", customerId, customer.getTag());
         if (!Objects.equals(previousTag, customer.getTag()) && StringUtils.hasText(customer.getTag())) {
@@ -188,6 +194,23 @@ public class CustomerTagServiceImpl implements CustomerTagService {
             return null;
         }
         return order.getCompleteTime() != null ? order.getCompleteTime() : order.getCreateTime();
+    }
+
+    private void replaceTagDetails(Long customerId, String tag) {
+        customerTagDetailMapper.delete(Wrappers.<CustomerTagDetail>lambdaQuery()
+                .eq(CustomerTagDetail::getCustomerId, customerId));
+        if (!StringUtils.hasText(tag)) {
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        CustomerTagDetail detail = new CustomerTagDetail();
+        detail.setCustomerId(customerId);
+        detail.setTagCode(tag);
+        detail.setTagName(tag);
+        detail.setCreateTime(now);
+        detail.setUpdateTime(now);
+        customerTagDetailMapper.insert(detail);
     }
 
     private record CustomerOrderStats(long orderCount,

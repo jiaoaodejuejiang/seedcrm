@@ -26,6 +26,12 @@ public class Clue {
     @TableField("source")
     private String source;
 
+    @TableField("source_channel")
+    private String sourceChannel;
+
+    @TableField("source_id")
+    private Long sourceId;
+
     @TableField("status")
     private String status;
 

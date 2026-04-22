@@ -9,6 +9,8 @@ public interface ClueService extends IService<Clue> {
 
     Clue addClue(Clue clue);
 
+    Clue createDistributorClue(Long distributorId, String phone, String name);
+
     IPage<Clue> pageClues(long page, long size, boolean publicOnly);
 
     Clue assignClue(Long clueId, Long userId);

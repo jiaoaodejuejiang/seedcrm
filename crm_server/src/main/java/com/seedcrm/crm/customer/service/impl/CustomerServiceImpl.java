@@ -1,20 +1,27 @@
 package com.seedcrm.crm.customer.service.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.seedcrm.crm.clue.enums.SourceChannel;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.customer.dto.CustomerExportDTO;
 import com.seedcrm.crm.customer.entity.Customer;
+import com.seedcrm.crm.customer.entity.CustomerTagDetail;
 import com.seedcrm.crm.customer.enums.CustomerStatus;
+import com.seedcrm.crm.customer.mapper.CustomerTagDetailMapper;
 import com.seedcrm.crm.customer.mapper.CustomerMapper;
 import com.seedcrm.crm.customer.service.CustomerService;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -24,10 +31,14 @@ public class CustomerServiceImpl extends ServiceImpl<CustomerMapper, Customer> i
 
     private final CustomerMapper customerMapper;
     private final OrderMapper orderMapper;
+    private final CustomerTagDetailMapper customerTagDetailMapper;
 
-    public CustomerServiceImpl(CustomerMapper customerMapper, OrderMapper orderMapper) {
+    public CustomerServiceImpl(CustomerMapper customerMapper,
+                               OrderMapper orderMapper,
+                               CustomerTagDetailMapper customerTagDetailMapper) {
         this.customerMapper = customerMapper;
         this.orderMapper = orderMapper;
+        this.customerTagDetailMapper = customerTagDetailMapper;
     }
 
     @Override
@@ -70,6 +81,8 @@ public class CustomerServiceImpl extends ServiceImpl<CustomerMapper, Customer> i
             customer.setPhone(clue.getPhone());
             customer.setWechat(clue.getWechat());
             customer.setSourceClueId(clue.getId());
+            customer.setSourceChannel(SourceChannel.resolveCode(clue.getSourceChannel(), clue.getSource()));
+            customer.setSourceId(clue.getSourceId());
             customer.setStatus(CustomerStatus.NEW.name());
             customer.setCreateTime(now);
             customer.setUpdateTime(now);
@@ -92,6 +105,14 @@ public class CustomerServiceImpl extends ServiceImpl<CustomerMapper, Customer> i
             customer.setSourceClueId(clue.getId());
             changed = true;
         }
+        if (!StringUtils.hasText(customer.getSourceChannel())) {
+            customer.setSourceChannel(SourceChannel.resolveCode(clue.getSourceChannel(), clue.getSource()));
+            changed = true;
+        }
+        if (customer.getSourceId() == null && clue.getSourceId() != null) {
+            customer.setSourceId(clue.getSourceId());
+            changed = true;
+        }
         if (!StringUtils.hasText(customer.getStatus())) {
             customer.setStatus(CustomerStatus.NEW.name());
             changed = true;
@@ -103,6 +124,44 @@ public class CustomerServiceImpl extends ServiceImpl<CustomerMapper, Customer> i
             }
         }
         return customer;
+    }
+
+    @Override
+    public List<CustomerExportDTO> exportCustomers() {
+        List<Customer> customers = customerMapper.selectList(Wrappers.<Customer>lambdaQuery()
+                .orderByDesc(Customer::getId));
+        if (customers.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> customerIds = customers.stream().map(Customer::getId).filter(Objects::nonNull).toList();
+        Map<Long, List<String>> tagMap = customerTagDetailMapper.selectList(Wrappers.<CustomerTagDetail>lambdaQuery()
+                        .in(CustomerTagDetail::getCustomerId, customerIds)
+                        .orderByAsc(CustomerTagDetail::getId))
+                .stream()
+                .collect(Collectors.groupingBy(
+                        CustomerTagDetail::getCustomerId,
+                        Collectors.mapping(CustomerTagDetail::getTagCode, Collectors.toList())));
+
+        return customers.stream().map(customer -> {
+            CustomerExportDTO exportDTO = new CustomerExportDTO();
+            exportDTO.setId(customer.getId());
+            exportDTO.setName(customer.getName());
+            exportDTO.setPhone(customer.getPhone());
+            exportDTO.setWechat(customer.getWechat());
+            exportDTO.setSourceClueId(customer.getSourceClueId());
+            exportDTO.setSourceChannel(customer.getSourceChannel());
+            exportDTO.setSourceId(customer.getSourceId());
+            exportDTO.setStatus(customer.getStatus());
+            exportDTO.setLevel(customer.getLevel());
+
+            List<String> tags = new ArrayList<>(tagMap.getOrDefault(customer.getId(), List.of()));
+            if (tags.isEmpty() && StringUtils.hasText(customer.getTag())) {
+                tags.add(customer.getTag());
+            }
+            exportDTO.setTags(tags);
+            return exportDTO;
+        }).toList();
     }
 
     @Override

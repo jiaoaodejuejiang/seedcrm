@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS distributor (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(128) NOT NULL,
+    contact_info VARCHAR(255),
+    status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE clue ADD COLUMN source_channel VARCHAR(32);
+ALTER TABLE clue ADD COLUMN source_id BIGINT;
+
+ALTER TABLE customer ADD COLUMN source_channel VARCHAR(32);
+ALTER TABLE customer ADD COLUMN source_id BIGINT;
+
+ALTER TABLE order_info ADD COLUMN source_channel VARCHAR(32);
+ALTER TABLE order_info ADD COLUMN source_id BIGINT;

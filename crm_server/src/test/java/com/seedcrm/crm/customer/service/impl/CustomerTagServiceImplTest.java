@@ -8,7 +8,9 @@ import static org.mockito.Mockito.when;
 
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.customer.entity.Customer;
+import com.seedcrm.crm.customer.entity.CustomerTagDetail;
 import com.seedcrm.crm.customer.entity.CustomerTagRule;
+import com.seedcrm.crm.customer.mapper.CustomerTagDetailMapper;
 import com.seedcrm.crm.customer.mapper.CustomerMapper;
 import com.seedcrm.crm.customer.mapper.CustomerTagRuleMapper;
 import com.seedcrm.crm.order.entity.Order;
@@ -37,6 +39,9 @@ class CustomerTagServiceImplTest {
     private OrderMapper orderMapper;
 
     @Mock
+    private CustomerTagDetailMapper customerTagDetailMapper;
+
+    @Mock
     private WecomTouchService wecomTouchService;
 
     private CustomerTagServiceImpl customerTagService;
@@ -44,7 +49,7 @@ class CustomerTagServiceImplTest {
     @BeforeEach
     void setUp() {
         customerTagService = new CustomerTagServiceImpl(
-                customerMapper, customerTagRuleMapper, orderMapper, wecomTouchService);
+                customerMapper, customerTagRuleMapper, customerTagDetailMapper, orderMapper, wecomTouchService);
     }
 
     @Test
@@ -67,6 +72,8 @@ class CustomerTagServiceImplTest {
 
         assertThat(updated.getTag()).isEqualTo("HIGH_VALUE");
         verify(customerMapper).updateById(customer);
+        verify(customerTagDetailMapper).delete(any());
+        verify(customerTagDetailMapper).insert(any(CustomerTagDetail.class));
         verify(wecomTouchService).autoTrigger(1L);
     }
 

@@ -69,6 +69,8 @@ public class OrderTableInitializer {
                     order_no VARCHAR(64) NOT NULL,
                     clue_id BIGINT,
                     customer_id BIGINT,
+                    source_channel VARCHAR(32),
+                    source_id BIGINT,
                     type INT NOT NULL,
                     amount DECIMAL(10,2),
                     deposit DECIMAL(10,2),
@@ -90,6 +92,8 @@ public class OrderTableInitializer {
         columns.put("order_no", "order_no VARCHAR(64) NOT NULL");
         columns.put("clue_id", "clue_id BIGINT");
         columns.put("customer_id", "customer_id BIGINT");
+        columns.put("source_channel", "source_channel VARCHAR(32)");
+        columns.put("source_id", "source_id BIGINT");
         columns.put("type", "type INT NOT NULL");
         columns.put("amount", "amount DECIMAL(10,2)");
         columns.put("deposit", "deposit DECIMAL(10,2)");

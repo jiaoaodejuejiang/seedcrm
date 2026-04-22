@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.seedcrm.crm.clue.entity.Clue;
+import com.seedcrm.crm.clue.enums.SourceChannel;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.customer.entity.Customer;
@@ -20,6 +21,9 @@ import com.seedcrm.crm.order.dto.OrderPayDTO;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
+import com.seedcrm.crm.planorder.entity.PlanOrder;
+import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
+import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,11 +47,15 @@ class OrderServiceImplTest {
     @Mock
     private CustomerTagService customerTagService;
 
+    @Mock
+    private PlanOrderMapper planOrderMapper;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderServiceImpl(orderMapper, clueMapper, customerService, customerTagService);
+        orderService = new OrderServiceImpl(orderMapper, clueMapper, customerService, customerTagService,
+                planOrderMapper);
     }
 
     @Test
@@ -57,6 +65,8 @@ class OrderServiceImplTest {
         clue.setPhone("13800138000");
         clue.setName("Alice");
         clue.setWechat("alice-wechat");
+        clue.setSourceChannel(SourceChannel.DISTRIBUTOR.name());
+        clue.setSourceId(900L);
         when(clueMapper.selectById(100L)).thenReturn(clue);
 
         Customer customer = new Customer();
@@ -82,6 +92,8 @@ class OrderServiceImplTest {
         assertThat(order.getId()).isEqualTo(1L);
         assertThat(order.getCustomerId()).isEqualTo(200L);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CREATED.name());
+        assertThat(order.getSourceChannel()).isEqualTo(SourceChannel.DISTRIBUTOR.name());
+        assertThat(order.getSourceId()).isEqualTo(900L);
         verify(customerService).getOrCreateByClue(clue);
         verify(customerService).refreshCustomerLifecycle(200L);
     }
@@ -154,6 +166,11 @@ class OrderServiceImplTest {
         when(orderMapper.selectById(2L)).thenReturn(order);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
         when(customerService.getByIdOrThrow(202L)).thenReturn(new Customer());
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(9L);
+        planOrder.setOrderId(2L);
+        planOrder.setStatus(PlanOrderStatus.FINISHED.name());
+        when(planOrderMapper.selectOne(any())).thenReturn(planOrder);
 
         OrderActionDTO dto = new OrderActionDTO();
         dto.setOrderId(2L);
@@ -166,5 +183,28 @@ class OrderServiceImplTest {
         verify(customerService, times(1)).getByIdOrThrow(202L);
         verify(customerService).refreshCustomerLifecycle(202L);
         verify(customerTagService).updateTag(202L);
+    }
+
+    @Test
+    void completeShouldRejectWhenPlanOrderNotFinished() {
+        Order order = new Order();
+        order.setId(3L);
+        order.setOrderNo("ORD202604211234567892");
+        order.setCustomerId(203L);
+        order.setStatus(OrderStatus.SERVING.name());
+        when(orderMapper.selectById(3L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(203L)).thenReturn(new Customer());
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(10L);
+        planOrder.setOrderId(3L);
+        planOrder.setStatus(PlanOrderStatus.SERVICING.name());
+        when(planOrderMapper.selectOne(any())).thenReturn(planOrder);
+
+        OrderActionDTO dto = new OrderActionDTO();
+        dto.setOrderId(3L);
+
+        assertThatThrownBy(() -> orderService.complete(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("plan order must be finished");
     }
 }

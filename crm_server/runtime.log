@@ -1,0 +1,41 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.9)
+
+2026-04-22T01:50:23.559+08:00  INFO 1648 --- [           main] com.seedcrm.crm.CrmApplication           : Starting CrmApplication v0.0.1-SNAPSHOT using Java 17.0.18 with PID 1648 (E:\studio\test\seedcrm\crm_server\target\crm_server-0.0.1-SNAPSHOT.jar started by Administrator in E:\studio\test\seedcrm\crm_server)
+2026-04-22T01:50:23.573+08:00  INFO 1648 --- [           main] com.seedcrm.crm.CrmApplication           : No active profile set, falling back to 1 default profile: "default"
+2026-04-22T01:50:27.284+08:00  INFO 1648 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-04-22T01:50:27.316+08:00  INFO 1648 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-04-22T01:50:27.316+08:00  INFO 1648 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.50]
+2026-04-22T01:50:27.398+08:00  INFO 1648 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-04-22T01:50:27.403+08:00  INFO 1648 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 3685 ms
+2026-04-22T01:50:27.707+08:00  INFO 1648 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-04-22T01:50:28.708+08:00  INFO 1648 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@5c18d6d4
+2026-04-22T01:50:28.720+08:00  INFO 1648 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-04-22T01:50:28.914+08:00  INFO 1648 --- [           main] c.s.c.clue.config.ClueTableInitializer   : added missing column clue.source_channel
+2026-04-22T01:50:28.947+08:00  INFO 1648 --- [           main] c.s.c.clue.config.ClueTableInitializer   : added missing column clue.source_id
+ _ _   |_  _ _|_. ___ _ |    _ 
+| | |\/|_)(_| | |_\  |_)||_|_\ 
+     /               |         
+                        3.5.15 
+2026-04-22T01:50:31.028+08:00  INFO 1648 --- [           main] s.c.c.c.CustomerEcomUserTableInitializer : created table customer_ecom_user
+2026-04-22T01:50:31.071+08:00  INFO 1648 --- [           main] c.s.c.c.config.CustomerTableInitializer  : added missing column customer.source_channel
+2026-04-22T01:50:31.101+08:00  INFO 1648 --- [           main] c.s.c.c.config.CustomerTableInitializer  : added missing column customer.source_id
+2026-04-22T01:50:31.159+08:00  INFO 1648 --- [           main] .c.c.c.CustomerTagDetailTableInitializer : created table customer_tag_detail
+2026-04-22T01:50:31.586+08:00  INFO 1648 --- [           main] c.s.c.d.c.DistributorTableInitializer    : created table distributor
+2026-04-22T01:50:31.634+08:00  INFO 1648 --- [           main] c.s.c.o.config.OrderTableInitializer     : added missing column order_info.source_channel
+2026-04-22T01:50:31.654+08:00  INFO 1648 --- [           main] c.s.c.o.config.OrderTableInitializer     : added missing column order_info.source_id
+2026-04-22T01:50:32.523+08:00  INFO 1648 --- [           main] m.e.s.MybatisPlusApplicationContextAware : Register ApplicationContext instances org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext@53de625d
+2026-04-22T01:50:32.793+08:00  INFO 1648 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-04-22T01:50:32.821+08:00  INFO 1648 --- [           main] com.seedcrm.crm.CrmApplication           : Started CrmApplication in 10.764 seconds (process running for 11.92)
+2026-04-22T01:51:37.881+08:00  INFO 1648 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-04-22T01:51:37.889+08:00  INFO 1648 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 6 ms
+2026-04-22T01:52:14.125+08:00  INFO 1648 --- [nio-8080-exec-7] c.s.c.o.service.impl.OrderServiceImpl    : order created, orderNo=ORD202604220152140604040, customerId=4, status=CREATED
+2026-04-22T08:02:09.498+08:00  INFO 1648 --- [nio-8080-exec-2] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604220152140604040, customerId=4, status=PAID_DEPOSIT
+2026-04-22T08:02:19.063+08:00  WARN 1648 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=6h9m50s209ms250?s800ns).

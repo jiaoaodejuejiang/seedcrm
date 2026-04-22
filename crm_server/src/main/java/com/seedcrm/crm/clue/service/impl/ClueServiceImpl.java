@@ -5,9 +5,11 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.seedcrm.crm.clue.enums.SourceChannel;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.clue.service.ClueService;
+import com.seedcrm.crm.distributor.service.DistributorService;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -18,9 +20,11 @@ import org.springframework.util.StringUtils;
 public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements ClueService {
 
     private final ClueMapper clueMapper;
+    private final DistributorService distributorService;
 
-    public ClueServiceImpl(ClueMapper clueMapper) {
+    public ClueServiceImpl(ClueMapper clueMapper, DistributorService distributorService) {
         this.clueMapper = clueMapper;
+        this.distributorService = distributorService;
     }
 
     @Override
@@ -34,11 +38,13 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
 
         Clue existingClue = findExistingClue(clue.getPhone(), clue.getWechat());
         if (existingClue != null) {
-            return existingClue;
+            return syncExistingClue(existingClue, clue);
         }
 
         LocalDateTime now = LocalDateTime.now();
-        clue.setSource(StringUtils.hasText(clue.getSource()) ? clue.getSource() : "douyin");
+        String sourceChannel = SourceChannel.resolveCode(clue.getSourceChannel(), clue.getSource());
+        clue.setSourceChannel(sourceChannel);
+        clue.setSource(SourceChannel.resolveLegacySource(sourceChannel, clue.getSource()));
         clue.setStatus("new");
         clue.setIsPublic(1);
         clue.setCurrentOwnerId(null);
@@ -46,6 +52,22 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
         clue.setUpdatedAt(now);
         clueMapper.insert(clue);
         return clue;
+    }
+
+    @Override
+    public Clue createDistributorClue(Long distributorId, String phone, String name) {
+        if (distributorId == null || distributorId <= 0) {
+            throw new IllegalArgumentException("distributorId is required");
+        }
+        distributorService.getByIdOrThrow(distributorId);
+
+        Clue clue = new Clue();
+        clue.setPhone(phone);
+        clue.setName(name);
+        clue.setSourceChannel(SourceChannel.DISTRIBUTOR.name());
+        clue.setSourceId(distributorId);
+        clue.setSource("distributor");
+        return addClue(clue);
     }
 
     @Override
@@ -105,5 +127,34 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
         }
 
         return phoneClue != null ? phoneClue : wechatClue;
+    }
+
+    private Clue syncExistingClue(Clue existingClue, Clue incomingClue) {
+        boolean changed = false;
+        if (!StringUtils.hasText(existingClue.getName()) && StringUtils.hasText(incomingClue.getName())) {
+            existingClue.setName(incomingClue.getName().trim());
+            changed = true;
+        }
+        if (!StringUtils.hasText(existingClue.getWechat()) && StringUtils.hasText(incomingClue.getWechat())) {
+            existingClue.setWechat(incomingClue.getWechat().trim());
+            changed = true;
+        }
+        if (!StringUtils.hasText(existingClue.getSourceChannel()) && StringUtils.hasText(incomingClue.getSourceChannel())) {
+            existingClue.setSourceChannel(SourceChannel.resolveCode(incomingClue.getSourceChannel(), incomingClue.getSource()));
+            changed = true;
+        }
+        if (!StringUtils.hasText(existingClue.getSource()) && StringUtils.hasText(incomingClue.getSource())) {
+            existingClue.setSource(incomingClue.getSource().trim());
+            changed = true;
+        }
+        if (existingClue.getSourceId() == null && incomingClue.getSourceId() != null) {
+            existingClue.setSourceId(incomingClue.getSourceId());
+            changed = true;
+        }
+        if (changed) {
+            existingClue.setUpdatedAt(LocalDateTime.now());
+            clueMapper.updateById(existingClue);
+        }
+        return existingClue;
     }
 }

@@ -25,6 +25,12 @@ public class Order {
     @TableField("customer_id")
     private Long customerId;
 
+    @TableField("source_channel")
+    private String sourceChannel;
+
+    @TableField("source_id")
+    private Long sourceId;
+
     @TableField("type")
     private Integer type;
 

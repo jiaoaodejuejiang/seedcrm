@@ -3,6 +3,8 @@ CREATE TABLE IF NOT EXISTS order_info (
     order_no VARCHAR(64) NOT NULL,
     clue_id BIGINT,
     customer_id BIGINT,
+    source_channel VARCHAR(32),
+    source_id BIGINT,
     type INT NOT NULL,
     amount DECIMAL(10,2),
     deposit DECIMAL(10,2),

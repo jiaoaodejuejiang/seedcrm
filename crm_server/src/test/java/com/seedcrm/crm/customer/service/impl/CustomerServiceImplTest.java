@@ -7,8 +7,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.seedcrm.crm.clue.entity.Clue;
+import com.seedcrm.crm.clue.enums.SourceChannel;
+import com.seedcrm.crm.customer.dto.CustomerExportDTO;
 import com.seedcrm.crm.customer.entity.Customer;
+import com.seedcrm.crm.customer.entity.CustomerTagDetail;
 import com.seedcrm.crm.customer.enums.CustomerStatus;
+import com.seedcrm.crm.customer.mapper.CustomerTagDetailMapper;
 import com.seedcrm.crm.customer.mapper.CustomerMapper;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
@@ -30,11 +34,14 @@ class CustomerServiceImplTest {
     @Mock
     private OrderMapper orderMapper;
 
+    @Mock
+    private CustomerTagDetailMapper customerTagDetailMapper;
+
     private CustomerServiceImpl customerService;
 
     @BeforeEach
     void setUp() {
-        customerService = new CustomerServiceImpl(customerMapper, orderMapper);
+        customerService = new CustomerServiceImpl(customerMapper, orderMapper, customerTagDetailMapper);
     }
 
     @Test
@@ -57,6 +64,7 @@ class CustomerServiceImplTest {
         assertThat(customer.getId()).isEqualTo(1L);
         assertThat(customer.getStatus()).isEqualTo(CustomerStatus.NEW.name());
         assertThat(customer.getPhone()).isEqualTo("13800138000");
+        assertThat(customer.getSourceChannel()).isEqualTo(SourceChannel.DOUYIN.name());
     }
 
     @Test
@@ -104,5 +112,34 @@ class CustomerServiceImplTest {
         assertThat(repeatCustomer.getLastOrderTime()).isEqualTo(secondOrder.getCreateTime());
 
         verify(customerMapper, times(3)).updateById(any(Customer.class));
+    }
+
+    @Test
+    void exportCustomersShouldIncludeTagDetailsAndSourceFields() {
+        Customer customer = new Customer();
+        customer.setId(8L);
+        customer.setName("Bob");
+        customer.setPhone("13800138008");
+        customer.setWechat("bob-wechat");
+        customer.setSourceClueId(18L);
+        customer.setSourceChannel(SourceChannel.DISTRIBUTOR.name());
+        customer.setSourceId(66L);
+        customer.setStatus(CustomerStatus.DEAL.name());
+        customer.setLevel("A");
+        customer.setTag("LEGACY");
+
+        CustomerTagDetail detail = new CustomerTagDetail();
+        detail.setCustomerId(8L);
+        detail.setTagCode("HIGH_VALUE");
+
+        when(customerMapper.selectList(any())).thenReturn(List.of(customer));
+        when(customerTagDetailMapper.selectList(any())).thenReturn(List.of(detail));
+
+        List<CustomerExportDTO> result = customerService.exportCustomers();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getSourceChannel()).isEqualTo(SourceChannel.DISTRIBUTOR.name());
+        assertThat(result.get(0).getSourceId()).isEqualTo(66L);
+        assertThat(result.get(0).getTags()).containsExactly("HIGH_VALUE");
     }
 }

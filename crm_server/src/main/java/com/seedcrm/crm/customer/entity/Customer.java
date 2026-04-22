@@ -27,6 +27,12 @@ public class Customer {
     @TableField("source_clue_id")
     private Long sourceClueId;
 
+    @TableField("source_channel")
+    private String sourceChannel;
+
+    @TableField("source_id")
+    private Long sourceId;
+
     @TableField("status")
     private String status;
 

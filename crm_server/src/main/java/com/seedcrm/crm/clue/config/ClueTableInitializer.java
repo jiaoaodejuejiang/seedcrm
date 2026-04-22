@@ -85,6 +85,8 @@ public class ClueTableInitializer {
                     wechat VARCHAR(64),
                     name VARCHAR(128),
                     source VARCHAR(64),
+                    source_channel VARCHAR(32),
+                    source_id BIGINT,
                     status VARCHAR(32),
                     current_owner_id BIGINT,
                     is_public TINYINT DEFAULT 1,
@@ -103,6 +105,8 @@ public class ClueTableInitializer {
         columns.put("wechat", "wechat VARCHAR(64)");
         columns.put("name", "name VARCHAR(128)");
         columns.put("source", "source VARCHAR(64)");
+        columns.put("source_channel", "source_channel VARCHAR(32)");
+        columns.put("source_id", "source_id BIGINT");
         columns.put("status", "status VARCHAR(32)");
         columns.put("current_owner_id", "current_owner_id BIGINT");
         columns.put("is_public", "is_public TINYINT DEFAULT 1");

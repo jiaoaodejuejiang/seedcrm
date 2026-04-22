@@ -1,7 +1,9 @@
 package com.seedcrm.crm.order.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.seedcrm.crm.clue.entity.Clue;
+import com.seedcrm.crm.clue.enums.SourceChannel;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.customer.entity.Customer;
@@ -17,6 +19,9 @@ import com.seedcrm.crm.order.enums.OrderType;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.order.service.OrderService;
 import com.seedcrm.crm.order.util.OrderNoGenerator;
+import com.seedcrm.crm.planorder.entity.PlanOrder;
+import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
+import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import lombok.extern.slf4j.Slf4j;
@@ -32,15 +37,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final ClueMapper clueMapper;
     private final CustomerService customerService;
     private final CustomerTagService customerTagService;
+    private final PlanOrderMapper planOrderMapper;
 
     public OrderServiceImpl(OrderMapper orderMapper,
                             ClueMapper clueMapper,
                             CustomerService customerService,
-                            CustomerTagService customerTagService) {
+                            CustomerTagService customerTagService,
+                            PlanOrderMapper planOrderMapper) {
         this.orderMapper = orderMapper;
         this.clueMapper = clueMapper;
         this.customerService = customerService;
         this.customerTagService = customerTagService;
+        this.planOrderMapper = planOrderMapper;
     }
 
     @Override
@@ -59,6 +67,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setOrderNo(OrderNoGenerator.generate());
         order.setClueId(orderCreateDTO.getClueId());
         order.setCustomerId(customer == null ? null : customer.getId());
+        inheritSource(order, clue, customer);
         order.setType(orderCreateDTO.getType());
         order.setAmount(orderCreateDTO.getAmount());
         order.setDeposit(defaultDeposit(orderCreateDTO.getDeposit()));
@@ -135,6 +144,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Transactional
     public Order complete(OrderActionDTO orderActionDTO) {
         Order order = validateAndGetActionOrder(orderActionDTO, OrderStatus.COMPLETED);
+        ensurePlanOrderFinished(order.getId());
         order.setCompleteTime(LocalDateTime.now());
         updateRemark(order, orderActionDTO.getRemark());
         Order completedOrder = updateOrderStatus(order, OrderStatus.COMPLETED);
@@ -265,6 +275,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         Clue clue = getClueIfPresent(order.getClueId());
         Customer customer = customerService.getOrCreateByClue(clue);
         order.setCustomerId(customer.getId());
+        inheritSource(order, clue, customer);
         markClueConverted(clue);
     }
 
@@ -284,6 +295,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             String expectedStatus = expectedNextStatus == null ? "no next status" : expectedNextStatus.name();
             throw new BusinessException("invalid order status transition: " + currentStatus.name()
                     + " -> " + targetStatus.name() + ", expected " + expectedStatus);
+        }
+    }
+
+    private void ensurePlanOrderFinished(Long orderId) {
+        PlanOrder planOrder = planOrderMapper.selectOne(new LambdaQueryWrapper<PlanOrder>()
+                .eq(PlanOrder::getOrderId, orderId)
+                .last("LIMIT 1"));
+        if (planOrder == null) {
+            throw new BusinessException("plan order must be finished before order completion");
+        }
+        if (!PlanOrderStatus.FINISHED.name().equals(planOrder.getStatus())) {
+            throw new BusinessException("plan order must be finished before order completion");
         }
     }
 
@@ -316,6 +339,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private void updateRemark(Order order, String remark) {
         if (StringUtils.hasText(remark)) {
             order.setRemark(remark);
+        }
+    }
+
+    private void inheritSource(Order order, Clue clue, Customer customer) {
+        if (clue != null) {
+            order.setSourceChannel(SourceChannel.resolveCode(clue.getSourceChannel(), clue.getSource()));
+            order.setSourceId(clue.getSourceId());
+            return;
+        }
+        if (customer != null) {
+            order.setSourceChannel(customer.getSourceChannel());
+            order.setSourceId(customer.getSourceId());
         }
     }
 }

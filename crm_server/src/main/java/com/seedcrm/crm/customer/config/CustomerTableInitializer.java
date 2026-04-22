@@ -84,6 +84,8 @@ public class CustomerTableInitializer {
                     phone VARCHAR(32) NOT NULL,
                     wechat VARCHAR(64),
                     source_clue_id BIGINT,
+                    source_channel VARCHAR(32),
+                    source_id BIGINT,
                     status VARCHAR(32) NOT NULL,
                     level VARCHAR(32),
                     tag VARCHAR(64),
@@ -103,6 +105,8 @@ public class CustomerTableInitializer {
         columns.put("phone", "phone VARCHAR(32) NOT NULL");
         columns.put("wechat", "wechat VARCHAR(64)");
         columns.put("source_clue_id", "source_clue_id BIGINT");
+        columns.put("source_channel", "source_channel VARCHAR(32)");
+        columns.put("source_id", "source_id BIGINT");
         columns.put("status", "status VARCHAR(32) NOT NULL DEFAULT 'NEW'");
         columns.put("level", "level VARCHAR(32)");
         columns.put("tag", "tag VARCHAR(64)");

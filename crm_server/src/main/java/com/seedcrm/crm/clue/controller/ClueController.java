@@ -1,6 +1,7 @@
 package com.seedcrm.crm.clue.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.seedcrm.crm.clue.dto.DistributorClueCreateRequest;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.service.ClueService;
 import java.util.List;
@@ -29,6 +30,18 @@ public class ClueController {
     public Clue add(@RequestBody(required = false) Clue clue) {
         try {
             return clueService.addClue(clue);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
+    }
+
+    @PostMapping("/distributor/add")
+    public Clue addDistributorClue(@RequestBody(required = false) DistributorClueCreateRequest request) {
+        try {
+            return clueService.createDistributorClue(
+                    request == null ? null : request.getDistributorId(),
+                    request == null ? null : request.getPhone(),
+                    request == null ? null : request.getName());
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         }

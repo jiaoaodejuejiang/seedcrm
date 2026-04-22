@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS customer (
     phone VARCHAR(32) NOT NULL,
     wechat VARCHAR(64),
     source_clue_id BIGINT,
+    source_channel VARCHAR(32),
+    source_id BIGINT,
     status VARCHAR(32) NOT NULL,
     level VARCHAR(32),
     tag VARCHAR(64),
@@ -12,6 +14,26 @@ CREATE TABLE IF NOT EXISTS customer (
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_customer_phone (phone)
+);
+
+CREATE TABLE IF NOT EXISTS customer_tag_detail (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    customer_id BIGINT NOT NULL,
+    tag_code VARCHAR(64) NOT NULL,
+    tag_name VARCHAR(128),
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_customer_tag_detail_customer_id (customer_id)
+);
+
+CREATE TABLE IF NOT EXISTS customer_ecom_user (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    customer_id BIGINT NOT NULL,
+    platform VARCHAR(64) NOT NULL,
+    ecom_user_id VARCHAR(128) NOT NULL,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_customer_ecom_user_platform (customer_id, platform, ecom_user_id)
 );
 
 CREATE TABLE IF NOT EXISTS customer_tag_rule (

@@ -12,4 +12,19 @@ public enum PlanOrderStatus {
             case FINISHED -> null;
         };
     }
+
+    public String getApiValue() {
+        return name().toLowerCase();
+    }
+
+    public static String toApiValue(String status) {
+        if (status == null) {
+            return null;
+        }
+        try {
+            return PlanOrderStatus.valueOf(status).getApiValue();
+        } catch (IllegalArgumentException exception) {
+            return status.toLowerCase();
+        }
+    }
 }

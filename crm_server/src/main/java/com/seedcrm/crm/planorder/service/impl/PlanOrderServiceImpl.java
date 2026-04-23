@@ -11,6 +11,7 @@ import com.seedcrm.crm.planorder.dto.PlanOrderActionDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderAssignRoleDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderCreateDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderDetailResponse;
+import com.seedcrm.crm.planorder.dto.PlanOrderResponse;
 import com.seedcrm.crm.planorder.entity.OrderRoleRecord;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
@@ -165,7 +166,8 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     public PlanOrderDetailResponse getDetail(Long planOrderId) {
         validatePlanOrderId(planOrderId);
         PlanOrder planOrder = getPlanOrderOrThrow(planOrderId);
-        return new PlanOrderDetailResponse(planOrder, orderRoleRecordService.listByPlanOrderId(planOrderId));
+        return new PlanOrderDetailResponse(PlanOrderResponse.from(planOrder),
+                orderRoleRecordService.listByPlanOrderId(planOrderId));
     }
 
     private void ensurePlanOrderNotExists(Long orderId) {
@@ -188,6 +190,9 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         OrderStatus status = parseOrderStatus(order.getStatus());
         if (status == OrderStatus.CANCELLED || status == OrderStatus.REFUNDED || status == OrderStatus.COMPLETED) {
             throw new BusinessException("order status does not support plan order creation");
+        }
+        if (!status.isPaidStage()) {
+            throw new BusinessException("order must be paid before plan order creation");
         }
     }
 

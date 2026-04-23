@@ -19,9 +19,12 @@ import com.seedcrm.crm.distributor.mapper.DistributorMapper;
 import com.seedcrm.crm.distributor.mapper.DistributorWithdrawMapper;
 import com.seedcrm.crm.distributor.service.DistributorService;
 import com.seedcrm.crm.order.entity.Order;
+import com.seedcrm.crm.order.enums.OrderStatus;
+import com.seedcrm.crm.order.enums.OrderType;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.planorder.entity.OrderRoleRecord;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
+import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.OrderRoleRecordMapper;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.salary.entity.SalaryDetail;
@@ -162,7 +165,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                     clue.getIsPublic(),
                     customer == null ? null : customer.getId(),
                     latestOrder == null ? null : latestOrder.getId(),
-                    latestOrder == null ? null : latestOrder.getStatus(),
+                    latestOrder == null ? null : OrderStatus.toApiValue(latestOrder.getStatus()),
                     (long) clueOrders.size(),
                     clue.getCreatedAt()));
         }
@@ -177,7 +180,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         String normalizedStatus = normalize(status);
         List<Order> filteredOrders = orders.stream()
                 .filter(order -> !StringUtils.hasText(normalizedStatus)
-                        || normalizedStatus.equals(normalize(order.getStatus())))
+                        || normalizedStatus.equals(normalize(OrderStatus.toApiValue(order.getStatus()))))
                 .toList();
         return buildOrderResponses(filteredOrders);
     }
@@ -190,7 +193,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         String normalizedStatus = normalize(status);
         List<PlanOrder> filteredPlanOrders = planOrders.stream()
                 .filter(planOrder -> !StringUtils.hasText(normalizedStatus)
-                        || normalizedStatus.equals(normalize(planOrder.getStatus())))
+                        || normalizedStatus.equals(normalize(PlanOrderStatus.toApiValue(planOrder.getStatus()))))
                 .toList();
         return buildPlanOrderSummaries(filteredPlanOrders);
     }
@@ -416,10 +419,10 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 order.getSourceChannel(),
                 scale(order.getAmount()),
                 scale(order.getDeposit()),
-                order.getType(),
-                order.getStatus(),
+                OrderType.toApiValue(order.getType()),
+                OrderStatus.toApiValue(order.getStatus()),
                 planOrderId,
-                planOrderStatus,
+                PlanOrderStatus.toApiValue(planOrderStatus),
                 order.getAppointmentTime(),
                 order.getArriveTime(),
                 order.getCompleteTime(),
@@ -461,10 +464,10 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                             ecomCountMap.getOrDefault(customer.getId(), 0));
                     return new PlanOrderItemResponse(
                             planOrder.getId(),
-                            planOrder.getStatus(),
+                            PlanOrderStatus.toApiValue(planOrder.getStatus()),
                             order == null ? null : order.getId(),
                             order == null ? null : order.getOrderNo(),
-                            order == null ? null : order.getStatus(),
+                            order == null ? null : OrderStatus.toApiValue(order.getStatus()),
                             order == null ? scale(null) : scale(order.getAmount()),
                             order == null ? null : order.getSourceChannel(),
                             customerSnapshot,

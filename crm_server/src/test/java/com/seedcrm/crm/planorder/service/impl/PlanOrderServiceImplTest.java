@@ -52,7 +52,7 @@ class PlanOrderServiceImplTest {
     void createPlanOrderShouldEnforceOneToOneOrderRelation() {
         Order order = new Order();
         order.setId(10L);
-        order.setStatus(OrderStatus.CREATED.name());
+        order.setStatus(OrderStatus.PAID_DEPOSIT.name());
         when(orderMapper.selectById(10L)).thenReturn(order);
         when(planOrderMapper.selectCount(any())).thenReturn(1L);
 
@@ -63,6 +63,21 @@ class PlanOrderServiceImplTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("plan order already exists");
         verify(planOrderMapper, never()).insert(any(PlanOrder.class));
+    }
+
+    @Test
+    void createPlanOrderShouldRequirePaidOrder() {
+        Order order = new Order();
+        order.setId(15L);
+        order.setStatus(OrderStatus.CREATED.name());
+        when(orderMapper.selectById(15L)).thenReturn(order);
+
+        PlanOrderCreateDTO dto = new PlanOrderCreateDTO();
+        dto.setOrderId(15L);
+
+        assertThatThrownBy(() -> planOrderService.createPlanOrder(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("order must be paid");
     }
 
     @Test

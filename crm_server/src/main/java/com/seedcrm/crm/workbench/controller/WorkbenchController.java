@@ -1,6 +1,10 @@
 package com.seedcrm.crm.workbench.controller;
 
 import com.seedcrm.crm.common.api.ApiResponse;
+import com.seedcrm.crm.permission.support.OrderPermissionGuard;
+import com.seedcrm.crm.permission.support.PermissionRequestContext;
+import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
+import com.seedcrm.crm.permission.support.PlanOrderPermissionGuard;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CustomerProfileResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.DistributorBoardItemResponse;
@@ -10,7 +14,9 @@ import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderWorkbenchResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StaffRoleOptionResponse;
 import com.seedcrm.crm.workbench.service.WorkbenchService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,9 +28,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class WorkbenchController {
 
     private final WorkbenchService workbenchService;
+    private final PermissionRequestContextResolver permissionRequestContextResolver;
+    private final OrderPermissionGuard orderPermissionGuard;
+    private final PlanOrderPermissionGuard planOrderPermissionGuard;
 
-    public WorkbenchController(WorkbenchService workbenchService) {
+    public WorkbenchController(WorkbenchService workbenchService,
+                               PermissionRequestContextResolver permissionRequestContextResolver,
+                               OrderPermissionGuard orderPermissionGuard,
+                               PlanOrderPermissionGuard planOrderPermissionGuard) {
         this.workbenchService = workbenchService;
+        this.permissionRequestContextResolver = permissionRequestContextResolver;
+        this.orderPermissionGuard = orderPermissionGuard;
+        this.planOrderPermissionGuard = planOrderPermissionGuard;
     }
 
     @GetMapping("/clues")
@@ -34,17 +49,30 @@ public class WorkbenchController {
     }
 
     @GetMapping("/orders")
-    public ApiResponse<List<OrderItemResponse>> orders(@RequestParam(required = false) String status) {
-        return ApiResponse.success(workbenchService.listOrders(status));
+    public ApiResponse<List<OrderItemResponse>> orders(@RequestParam(required = false) String status,
+                                                       HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        List<OrderItemResponse> orders = workbenchService.listOrders(status).stream()
+                .filter(order -> orderPermissionGuard.canView(context, order.getId()))
+                .collect(Collectors.toList());
+        return ApiResponse.success(orders);
     }
 
     @GetMapping("/plan-orders")
-    public ApiResponse<List<PlanOrderItemResponse>> planOrders(@RequestParam(required = false) String status) {
-        return ApiResponse.success(workbenchService.listPlanOrders(status));
+    public ApiResponse<List<PlanOrderItemResponse>> planOrders(@RequestParam(required = false) String status,
+                                                               HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        List<PlanOrderItemResponse> planOrders = workbenchService.listPlanOrders(status).stream()
+                .filter(planOrder -> planOrderPermissionGuard.canView(context, planOrder.getPlanOrderId()))
+                .collect(Collectors.toList());
+        return ApiResponse.success(planOrders);
     }
 
     @GetMapping("/plan-orders/{planOrderId}")
-    public ApiResponse<PlanOrderWorkbenchResponse> planOrderDetail(@PathVariable Long planOrderId) {
+    public ApiResponse<PlanOrderWorkbenchResponse> planOrderDetail(@PathVariable Long planOrderId,
+                                                                   HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        planOrderPermissionGuard.checkView(context, planOrderId);
         return ApiResponse.success(workbenchService.getPlanOrderWorkbench(planOrderId));
     }
 

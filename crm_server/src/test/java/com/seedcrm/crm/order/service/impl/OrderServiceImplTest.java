@@ -103,11 +103,34 @@ class OrderServiceImplTest {
 
         assertThat(order.getId()).isEqualTo(1L);
         assertThat(order.getCustomerId()).isEqualTo(200L);
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.CREATED.name());
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID_DEPOSIT.name());
         assertThat(order.getSourceChannel()).isEqualTo(SourceChannel.DISTRIBUTOR.name());
         assertThat(order.getSourceId()).isEqualTo(900L);
         verify(customerService).getOrCreateByClue(clue);
         verify(customerService).refreshCustomerLifecycle(200L);
+    }
+
+    @Test
+    void createOrderShouldNormalizeCouponTypeAndDefaultFullDeposit() {
+        Customer customer = new Customer();
+        customer.setId(301L);
+        when(customerService.getByIdOrThrow(301L)).thenReturn(customer);
+        when(orderMapper.insert(any(Order.class))).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            order.setId(11L);
+            return 1;
+        });
+
+        OrderCreateDTO dto = new OrderCreateDTO();
+        dto.setCustomerId(301L);
+        dto.setType(3);
+        dto.setAmount(new BigDecimal("1280.00"));
+
+        Order order = orderService.createOrder(dto);
+
+        assertThat(order.getType()).isEqualTo(2);
+        assertThat(order.getDeposit()).isEqualByComparingTo("1280.00");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID_DEPOSIT.name());
     }
 
     @Test

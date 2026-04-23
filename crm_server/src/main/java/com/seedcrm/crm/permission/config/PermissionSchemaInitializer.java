@@ -1,6 +1,7 @@
 package com.seedcrm.crm.permission.config;
 
 import jakarta.annotation.PostConstruct;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.sql.DataSource;
@@ -26,10 +27,11 @@ public class PermissionSchemaInitializer {
         if (!tableExists()) {
             jdbcTemplate.execute(createTableSql());
             log.info("created table {}", TABLE_NAME);
-            return;
+        } else {
+            ensureMissingColumns();
+            ensureUniqueIndex();
         }
-        ensureMissingColumns();
-        ensureUniqueIndex();
+        seedDefaults();
     }
 
     private boolean tableExists() {
@@ -106,5 +108,51 @@ public class PermissionSchemaInitializer {
         columns.put("created_at", "created_at DATETIME DEFAULT CURRENT_TIMESTAMP");
         columns.put("updated_at", "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
         return columns;
+    }
+
+    private void seedDefaults() {
+        seedPolicy("CLUE", "VIEW", "ONLINE_CUSTOMER_SERVICE", "SELF", null);
+        seedPolicy("CLUE", "VIEW", "ONLINE_CUSTOMER_SERVICE", "TEAM", null);
+        seedPolicy("CLUE", "ASSIGN", "CLUE_MANAGER", "ALL", "clue assign");
+        seedPolicy("CLUE", "RECYCLE", "CLUE_MANAGER", "ALL", "clue recycle");
+
+        seedPolicy("ORDER", "VIEW", "STORE_SERVICE", "STORE", null);
+        seedPolicy("ORDER", "UPDATE", "STORE_SERVICE", "STORE", null);
+        seedPolicy("ORDER", "FINISH", "STORE_SERVICE", "STORE", "order(status=finished)");
+
+        seedPolicy("PLANORDER", "CREATE", "STORE_SERVICE", "STORE", null);
+        seedPolicy("PLANORDER", "VIEW", "STORE_SERVICE", "STORE", null);
+        seedPolicy("PLANORDER", "UPDATE", "STORE_SERVICE", "STORE", null);
+        seedPolicy("PLANORDER", "ASSIGN_ROLE", "STORE_SERVICE", "STORE", null);
+
+        seedPolicy("PLANORDER", "VIEW", "PRIVATE_DOMAIN_SERVICE", "SELF", "bound customer");
+        seedPolicy("ORDER", "VIEW", "PRIVATE_DOMAIN_SERVICE", "SELF", "bound customer");
+        seedPolicy("ORDER", "FINISH", "FINANCE", "ALL", "order(status=finished)");
+
+        seedPolicy("PERMISSION", "VIEW", "ADMIN", "ALL", null);
+        seedPolicy("PERMISSION", "UPDATE", "ADMIN", "ALL", null);
+        seedPolicy("PERMISSION", "CHECK", "ADMIN", "ALL", null);
+    }
+
+    private void seedPolicy(String moduleCode,
+                            String actionCode,
+                            String roleCode,
+                            String dataScope,
+                            String conditionRule) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM permission_policy
+                WHERE module_code = ?
+                  AND action_code = ?
+                  AND role_code = ?
+                  AND data_scope = ?
+                """, Integer.class, moduleCode, actionCode, roleCode, dataScope);
+        if (count != null && count > 0) {
+            return;
+        }
+        jdbcTemplate.update("""
+                INSERT INTO permission_policy(module_code, action_code, role_code, data_scope, condition_rule, is_enabled, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+                """, moduleCode, actionCode, roleCode, dataScope, conditionRule, LocalDateTime.now(), LocalDateTime.now());
     }
 }

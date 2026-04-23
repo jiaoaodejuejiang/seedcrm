@@ -66,7 +66,7 @@ public final class WorkbenchResponses {
         private String sourceChannel;
         private BigDecimal amount;
         private BigDecimal deposit;
-        private Integer type;
+        private String type;
         private String status;
         private Long planOrderId;
         private String planOrderStatus;

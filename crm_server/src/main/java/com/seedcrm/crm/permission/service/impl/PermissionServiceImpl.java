@@ -79,6 +79,9 @@ public class PermissionServiceImpl implements PermissionService {
         String moduleCode = normalize(request.getModuleCode());
         String actionCode = normalize(request.getActionCode());
         String roleCode = normalize(request.getRoleCode());
+        if ("ADMIN".equals(roleCode)) {
+            return new PermissionCheckResponse(true, "ADMIN_BYPASS", "ALL", "admin bypass");
+        }
         String expectedScope = StringUtils.hasText(request.getDataScope()) ? normalize(request.getDataScope()) : null;
 
         List<PermissionPolicy> policies = permissionPolicyMapper.selectList(Wrappers.<PermissionPolicy>lambdaQuery()

@@ -10,6 +10,6 @@ import lombok.Data;
 @AllArgsConstructor
 public class PlanOrderDetailResponse {
 
-    private PlanOrder planOrder;
+    private PlanOrderResponse planOrder;
     private List<OrderRoleRecord> roleRecords;
 }

@@ -10,6 +10,10 @@ public enum OrderStatus {
     CANCELLED,
     REFUNDED;
 
+    public String getApiValue() {
+        return this == COMPLETED ? "used" : "paid";
+    }
+
     public OrderStatus nextNormalStatus() {
         return switch (this) {
             case CREATED -> PAID_DEPOSIT;
@@ -35,5 +39,24 @@ public enum OrderStatus {
                 || this == ARRIVED
                 || this == SERVING
                 || this == COMPLETED;
+    }
+
+    public boolean isPaidStage() {
+        return this == PAID_DEPOSIT
+                || this == APPOINTMENT
+                || this == ARRIVED
+                || this == SERVING
+                || this == COMPLETED;
+    }
+
+    public static String toApiValue(String status) {
+        if (status == null) {
+            return null;
+        }
+        try {
+            return OrderStatus.valueOf(status).getApiValue();
+        } catch (IllegalArgumentException exception) {
+            return status.toLowerCase();
+        }
     }
 }

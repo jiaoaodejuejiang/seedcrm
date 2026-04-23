@@ -80,10 +80,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setClueId(orderCreateDTO.getClueId());
         order.setCustomerId(customer == null ? null : customer.getId());
         inheritSource(order, clue, customer);
-        order.setType(orderCreateDTO.getType());
+        order.setType(OrderType.normalizeCode(orderCreateDTO.getType()));
         order.setAmount(orderCreateDTO.getAmount());
-        order.setDeposit(defaultDeposit(orderCreateDTO.getDeposit()));
-        order.setStatus(OrderStatus.CREATED.name());
+        order.setDeposit(defaultDeposit(orderCreateDTO));
+        order.setStatus(resolveInitialStatus(order).name());
         order.setRemark(orderCreateDTO.getRemark());
         order.setCreateTime(now);
         order.setUpdateTime(now);
@@ -255,8 +255,24 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         return customerService.getOrCreateByClue(clue);
     }
 
-    private BigDecimal defaultDeposit(BigDecimal deposit) {
-        return deposit == null ? BigDecimal.ZERO : deposit;
+    private BigDecimal defaultDeposit(OrderCreateDTO orderCreateDTO) {
+        if (orderCreateDTO == null) {
+            return BigDecimal.ZERO;
+        }
+        if (orderCreateDTO.getDeposit() != null) {
+            return orderCreateDTO.getDeposit();
+        }
+        Integer normalizedType = OrderType.normalizeCode(orderCreateDTO.getType());
+        if (normalizedType != null && normalizedType == OrderType.COUPON.getCode()) {
+            return orderCreateDTO.getAmount();
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private OrderStatus resolveInitialStatus(Order order) {
+        return order.getDeposit() != null && order.getDeposit().compareTo(BigDecimal.ZERO) > 0
+                ? OrderStatus.PAID_DEPOSIT
+                : OrderStatus.CREATED;
     }
 
     private Order validateAndGetActionOrder(OrderActionDTO orderActionDTO, OrderStatus targetStatus) {

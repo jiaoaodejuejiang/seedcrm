@@ -32,6 +32,9 @@ public class Clue {
     @TableField("source_id")
     private Long sourceId;
 
+    @TableField("raw_data")
+    private String rawData;
+
     @TableField("status")
     private String status;
 

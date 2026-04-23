@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS clue (
     source VARCHAR(64),
     source_channel VARCHAR(32),
     source_id BIGINT,
+    raw_data LONGTEXT,
     status VARCHAR(32),
     current_owner_id BIGINT,
     is_public TINYINT DEFAULT 1,

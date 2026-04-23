@@ -10,6 +10,9 @@ public enum SourceChannel {
     public static String resolveCode(String sourceChannel, String legacySource) {
         if (StringUtils.hasText(sourceChannel)) {
             String normalized = sourceChannel.trim().toUpperCase();
+            if ("DISTRIBUTION".equals(normalized)) {
+                return DISTRIBUTOR.name();
+            }
             for (SourceChannel value : values()) {
                 if (value.name().equals(normalized)) {
                     return value.name();
@@ -22,10 +25,10 @@ public enum SourceChannel {
         }
 
         String normalizedSource = legacySource.trim().toUpperCase();
-        if ("抖音".equals(legacySource.trim()) || normalizedSource.contains("DOUYIN")) {
+        if (normalizedSource.contains("DOUYIN")) {
             return DOUYIN.name();
         }
-        if ("分销".equals(legacySource.trim()) || normalizedSource.contains("DISTRIBUTOR")) {
+        if (normalizedSource.contains("DISTRIBUTOR") || normalizedSource.contains("DISTRIBUTION")) {
             return DISTRIBUTOR.name();
         }
         return OTHER.name();
@@ -33,11 +36,15 @@ public enum SourceChannel {
 
     public static String resolveLegacySource(String sourceChannel, String legacySource) {
         if (StringUtils.hasText(legacySource)) {
-            return legacySource.trim();
+            String normalized = legacySource.trim();
+            if ("distributor".equalsIgnoreCase(normalized)) {
+                return "distribution";
+            }
+            return normalized;
         }
 
         return switch (resolveCode(sourceChannel, legacySource)) {
-            case "DISTRIBUTOR" -> "distributor";
+            case "DISTRIBUTOR" -> "distribution";
             case "OTHER" -> "other";
             default -> "douyin";
         };

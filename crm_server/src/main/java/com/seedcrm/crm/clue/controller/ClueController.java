@@ -37,6 +37,11 @@ public class ClueController {
 
     @PostMapping("/distributor/add")
     public Clue addDistributorClue(@RequestBody(required = false) DistributorClueCreateRequest request) {
+        return addDistributionClue(request);
+    }
+
+    @PostMapping("/distribution/add")
+    public Clue addDistributionClue(@RequestBody(required = false) DistributorClueCreateRequest request) {
         try {
             return clueService.createDistributorClue(
                     request == null ? null : request.getDistributorId(),
@@ -83,6 +88,17 @@ public class ClueController {
     @GetMapping("/public")
     public List<Clue> publicList() {
         return clueService.listPublicClues();
+    }
+
+    @PostMapping("/recycle")
+    public Clue recycle(@RequestParam Long clueId) {
+        try {
+            return clueService.recycleClue(clueId);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        } catch (NoSuchElementException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
+        }
     }
 
     @GetMapping("/test")

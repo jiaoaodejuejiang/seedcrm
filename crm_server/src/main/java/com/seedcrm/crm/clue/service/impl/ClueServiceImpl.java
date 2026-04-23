@@ -45,6 +45,7 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
         String sourceChannel = SourceChannel.resolveCode(clue.getSourceChannel(), clue.getSource());
         clue.setSourceChannel(sourceChannel);
         clue.setSource(SourceChannel.resolveLegacySource(sourceChannel, clue.getSource()));
+        clue.setRawData(defaultRawData(clue.getRawData()));
         clue.setStatus("new");
         clue.setIsPublic(1);
         clue.setCurrentOwnerId(null);
@@ -66,7 +67,8 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
         clue.setName(name);
         clue.setSourceChannel(SourceChannel.DISTRIBUTOR.name());
         clue.setSourceId(distributorId);
-        clue.setSource("distributor");
+        clue.setSource("distribution");
+        clue.setRawData("{\"source\":\"distribution\"}");
         return addClue(clue);
     }
 
@@ -95,6 +97,23 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
         clue.setCurrentOwnerId(userId);
         clue.setIsPublic(0);
         clue.setStatus("assigned");
+        clue.setUpdatedAt(LocalDateTime.now());
+        clueMapper.updateById(clue);
+        return clue;
+    }
+
+    @Override
+    public Clue recycleClue(Long clueId) {
+        if (clueId == null || clueId <= 0) {
+            throw new IllegalArgumentException("clueId is required");
+        }
+        Clue clue = clueMapper.selectById(clueId);
+        if (clue == null) {
+            throw new NoSuchElementException("clue not found");
+        }
+        clue.setCurrentOwnerId(null);
+        clue.setIsPublic(1);
+        clue.setStatus("new");
         clue.setUpdatedAt(LocalDateTime.now());
         clueMapper.updateById(clue);
         return clue;
@@ -144,11 +163,15 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
             changed = true;
         }
         if (!StringUtils.hasText(existingClue.getSource()) && StringUtils.hasText(incomingClue.getSource())) {
-            existingClue.setSource(incomingClue.getSource().trim());
+            existingClue.setSource(SourceChannel.resolveLegacySource(incomingClue.getSourceChannel(), incomingClue.getSource()));
             changed = true;
         }
         if (existingClue.getSourceId() == null && incomingClue.getSourceId() != null) {
             existingClue.setSourceId(incomingClue.getSourceId());
+            changed = true;
+        }
+        if (!StringUtils.hasText(existingClue.getRawData()) && StringUtils.hasText(incomingClue.getRawData())) {
+            existingClue.setRawData(incomingClue.getRawData().trim());
             changed = true;
         }
         if (changed) {
@@ -156,5 +179,9 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
             clueMapper.updateById(existingClue);
         }
         return existingClue;
+    }
+
+    private String defaultRawData(String rawData) {
+        return StringUtils.hasText(rawData) ? rawData.trim() : "{}";
     }
 }

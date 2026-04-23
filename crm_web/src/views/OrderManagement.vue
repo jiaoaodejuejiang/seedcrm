@@ -29,7 +29,7 @@
         </div>
 
         <div class="action-group">
-          <span class="text-secondary">点击“确认单”可填写客户到店详细需求，并直接进入服务单履约。</span>
+          <span class="text-secondary">已预约订单可确认服务项目并进入服务单，已完成订单只查看确认单与服务结果。</span>
           <el-button @click="loadOrders">刷新列表</el-button>
         </div>
       </div>
@@ -85,9 +85,9 @@
         <el-table-column label="操作" min-width="300" fixed="right">
           <template #default="{ row }">
             <div class="action-group">
-              <el-button size="small" @click="openServiceDrawer(row)">确认单</el-button>
+              <el-button size="small" @click="openServiceDrawer(row)">{{ confirmationButtonLabel(row) }}</el-button>
               <el-button type="primary" size="small" @click="enterService(row)">
-                {{ row.planOrderId ? '打开服务单' : '创建服务单' }}
+                {{ serviceButtonLabel(row) }}
               </el-button>
               <el-button v-if="row.customerId" size="small" plain @click="router.push(`/customers/${row.customerId}`)">客户详情</el-button>
             </div>
@@ -96,7 +96,7 @@
       </el-table>
     </section>
 
-    <el-drawer v-model="serviceDrawerVisible" title="订单确认单" size="560px">
+    <el-drawer v-model="serviceDrawerVisible" :title="selectedOrderReadOnly ? '订单确认单查看' : '订单确认单确认'" size="560px">
       <template v-if="selectedOrder">
         <div class="stack-page">
           <section class="panel">
@@ -120,22 +120,23 @@
             <div class="panel-heading compact">
               <div>
                 <h3>到店详细需求</h3>
-                <p>此内容会作为门店确认单保存，支持后续服务人员继续补充。</p>
+                <p>{{ selectedOrderReadOnly ? '该订单已完成，当前仅支持查看确认单内容。' : '此内容会作为门店确认单保存，支持后续服务人员继续补充。' }}</p>
               </div>
             </div>
             <el-input
               v-model="serviceRequirementForm.serviceRequirement"
               type="textarea"
               :rows="8"
+              :readonly="selectedOrderReadOnly"
               placeholder="请输入客户到店需求、注意事项、服务偏好、禁忌项或到店确认内容"
             />
           </section>
 
           <div class="action-group flex-end">
             <el-button @click="serviceDrawerVisible = false">关闭</el-button>
-            <el-button type="primary" :loading="savingServiceRequirement" @click="saveCurrentOrderDetail">保存确认单</el-button>
+            <el-button v-if="!selectedOrderReadOnly" type="primary" :loading="savingServiceRequirement" @click="saveCurrentOrderDetail">保存确认单</el-button>
             <el-button type="success" @click="enterService(selectedOrder)">
-              {{ selectedOrder.planOrderId ? '进入服务单' : '创建并进入服务单' }}
+              {{ serviceButtonLabel(selectedOrder, true) }}
             </el-button>
           </div>
         </div>
@@ -167,6 +168,7 @@ const serviceRequirementForm = reactive({
 
 const appointmentCount = computed(() => orders.value.filter((item) => normalize(item.status) === 'APPOINTMENT').length)
 const completedCount = computed(() => orders.value.filter((item) => normalize(item.status) === 'COMPLETED').length)
+const selectedOrderReadOnly = computed(() => isCompletedOrder(selectedOrder.value))
 
 async function loadOrders() {
   loading.value = true
@@ -188,7 +190,7 @@ function openServiceDrawer(row) {
 }
 
 async function saveCurrentOrderDetail() {
-  if (!selectedOrder.value?.id) {
+  if (!selectedOrder.value?.id || selectedOrderReadOnly.value) {
     return
   }
   savingServiceRequirement.value = true
@@ -218,6 +220,22 @@ async function enterService(row) {
     await loadOrders()
   }
   await router.push(`/plan-orders/${planOrderId}`)
+}
+
+function isCompletedOrder(row) {
+  const status = normalize(row?.status)
+  return ['COMPLETED', 'USED', 'FINISHED'].includes(status)
+}
+
+function confirmationButtonLabel(row) {
+  return isCompletedOrder(row) ? '查看确认单' : '确认单'
+}
+
+function serviceButtonLabel(row, inDrawer = false) {
+  if (row?.planOrderId) {
+    return isCompletedOrder(row) ? '查看服务单' : '打开服务单'
+  }
+  return inDrawer ? '创建并进入服务单' : '创建服务单'
 }
 
 onMounted(loadOrders)

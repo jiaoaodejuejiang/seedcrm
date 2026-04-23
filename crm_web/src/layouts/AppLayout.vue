@@ -14,7 +14,25 @@
             <small>{{ group.description }}</small>
           </div>
 
-          <div class="nav-section__items">
+          <template v-if="group.sections?.length">
+            <div v-for="section in group.sections" :key="section.key" class="nav-subsection">
+              <div class="nav-subsection__title">{{ section.label }}</div>
+              <div class="nav-section__items">
+                <RouterLink
+                  v-for="item in section.items"
+                  :key="item.key"
+                  :to="item.to"
+                  class="nav-card"
+                  :class="{ 'is-active': isActive(item) }"
+                >
+                  <span class="nav-card__label">{{ item.label }}</span>
+                  <small>{{ item.description }}</small>
+                </RouterLink>
+              </div>
+            </div>
+          </template>
+
+          <div v-else class="nav-section__items">
             <RouterLink
               v-for="item in group.items"
               :key="item.key"
@@ -142,7 +160,7 @@ const navGroups = [
         key: 'store-service-orders',
         to: '/store-service/orders',
         label: '订单列表',
-        description: '查看全部、已预约、已完成订单，并填写确认单',
+        description: '已预约订单可确认服务项目，已完成订单可查看确认单',
         moduleCode: 'ORDER',
         roleCodes: ['STORE_SERVICE', 'ADMIN'],
         activePrefixes: ['/store-service/orders', '/orders', '/plan-orders', '/customers']
@@ -150,30 +168,116 @@ const navGroups = [
     ]
   },
   {
-    key: 'scheduler',
-    label: '调度中心',
-    description: '同步、队列和日志',
+    key: 'system-management',
+    label: '系统管理',
+    description: '管理员管理组织，部门负责人管理本部门成员',
     items: [
       {
-        key: 'scheduler',
-        to: '/scheduler',
-        label: '任务调度',
-        description: '管理外部调用、增量同步、失败重试和执行日志',
-        moduleCode: 'SCHEDULER'
+        key: 'system-departments',
+        to: '/system/departments',
+        label: '部门管理',
+        description: '设置组织架构和部门数据范围',
+        moduleCode: 'SYSTEM',
+        roleCodes: ['ADMIN']
+      },
+      {
+        key: 'system-employees',
+        to: '/system/employees',
+        label: '员工管理',
+        description: '添加、停用与调岗员工',
+        moduleCode: 'SYSTEM',
+        roleCodes: ['ADMIN', 'CLUE_MANAGER']
+      },
+      {
+        key: 'system-positions',
+        to: '/system/positions',
+        label: '岗位管理',
+        description: '维护岗位并在删除时转移员工',
+        moduleCode: 'SYSTEM',
+        roleCodes: ['ADMIN']
+      },
+      {
+        key: 'system-roles',
+        to: '/system/roles',
+        label: '角色管理',
+        description: '配置角色、人员和授权策略',
+        moduleCode: 'SYSTEM',
+        roleCodes: ['ADMIN']
       }
     ]
   },
   {
-    key: 'permission',
-    label: '权限中心',
-    description: 'RBAC / ABAC',
-    items: [
+    key: 'system-settings',
+    label: '系统设置',
+    description: '管理员维护菜单、调度、字典与参数',
+    sections: [
       {
-        key: 'permission',
-        to: '/permission',
-        label: '权限策略',
-        description: '维护模块权限、角色范围和实时校验规则',
-        moduleCode: 'PERMISSION'
+        key: 'system-setting-base',
+        label: '基础配置',
+        items: [
+          {
+            key: 'settings-menu',
+            to: '/settings/menu',
+            label: '菜单管理',
+            description: '编排页面入口并配置角色权限',
+            moduleCode: 'SETTING',
+            roleCodes: ['ADMIN']
+          },
+          {
+            key: 'settings-dictionaries',
+            to: '/settings/dictionaries',
+            label: '字典管理',
+            description: '维护编码和值的展示映射',
+            moduleCode: 'SETTING',
+            roleCodes: ['ADMIN']
+          },
+          {
+            key: 'settings-parameters',
+            to: '/settings/parameters',
+            label: '参数管理',
+            description: '统一维护系统参数键值',
+            moduleCode: 'SETTING',
+            roleCodes: ['ADMIN']
+          }
+        ]
+      },
+      {
+        key: 'system-setting-integration',
+        label: '调度中心',
+        items: [
+          {
+            key: 'settings-third-party',
+            to: '/settings/integration/third-party',
+            label: '三方接口',
+            description: '配置客资拉取等三方接口地址',
+            moduleCode: 'SETTING',
+            roleCodes: ['ADMIN']
+          },
+          {
+            key: 'settings-callback',
+            to: '/settings/integration/callback',
+            label: '回调接口',
+            description: '配置异步回调地址与验签方式',
+            moduleCode: 'SETTING',
+            roleCodes: ['ADMIN']
+          },
+          {
+            key: 'settings-jobs',
+            to: '/settings/integration/jobs',
+            label: '任务调度',
+            description: '配置定时任务、同步方式和失败重试',
+            moduleCode: 'SETTING',
+            roleCodes: ['ADMIN']
+          },
+          {
+            key: 'settings-public-api',
+            to: '/settings/integration/public-api',
+            label: '对外接口',
+            description: '配置对外查询结果、认证和缓存',
+            moduleCode: 'SETTING',
+            roleCodes: ['ADMIN']
+          }
+        ]
       }
     ]
   },
@@ -192,16 +296,17 @@ const navGroups = [
     ]
   },
   {
-    key: 'distributors',
-    label: '分销概览',
-    description: '渠道贡献与收益',
+    key: 'private-domain',
+    label: '私域客服',
+    description: '企业微信相关功能集中配置',
     items: [
       {
-        key: 'distributors',
-        to: '/distributors',
-        label: '分销数据',
-        description: '查看分销带来的客资、订单和收益表现',
-        moduleCode: 'DISTRIBUTOR'
+        key: 'private-domain-wecom',
+        to: '/private-domain/wecom',
+        label: '企业微信',
+        description: '配置企微联系人、触达规则和私域消息',
+        moduleCode: 'WECOM',
+        roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE']
       }
     ]
   },
@@ -223,11 +328,27 @@ const navGroups = [
 
 const visibleGroups = computed(() =>
   navGroups
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => hasAccess(item.moduleCode, item.roleCodes))
-    }))
-    .filter((group) => group.items.length)
+    .map((group) => {
+      if (group.sections?.length) {
+        const sections = group.sections
+          .map((section) => ({
+            ...section,
+            items: section.items.filter((item) => hasAccess(item.moduleCode, item.roleCodes))
+          }))
+          .filter((section) => section.items.length)
+        return {
+          ...group,
+          sections,
+          items: []
+        }
+      }
+      return {
+        ...group,
+        items: group.items.filter((item) => hasAccess(item.moduleCode, item.roleCodes)),
+        sections: []
+      }
+    })
+    .filter((group) => group.items.length || group.sections.length)
 )
 
 const currentRoleLabel = computed(() => formatRoleCode(currentUser.value?.roleCode))

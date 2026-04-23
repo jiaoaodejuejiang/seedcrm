@@ -7,11 +7,12 @@ const accessibleRoutes = [
   { path: '/clues', moduleCode: 'CLUE' },
   { path: '/clue-management/auto-assign', moduleCode: 'CLUE', roleCodes: ['CLUE_MANAGER', 'ADMIN'] },
   { path: '/store-service/orders', moduleCode: 'ORDER', roleCodes: ['STORE_SERVICE', 'ADMIN'] },
-  { path: '/plan-orders', moduleCode: 'PLANORDER' },
-  { path: '/scheduler', moduleCode: 'SCHEDULER' },
-  { path: '/permission', moduleCode: 'PERMISSION' },
+  { path: '/system/departments', moduleCode: 'SYSTEM', roleCodes: ['ADMIN'] },
+  { path: '/system/employees', moduleCode: 'SYSTEM', roleCodes: ['ADMIN', 'CLUE_MANAGER'] },
+  { path: '/settings/menu', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+  { path: '/private-domain/wecom', moduleCode: 'WECOM', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'] },
+  { path: '/plan-orders', moduleCode: 'PLANORDER', roleCodes: ['STORE_SERVICE', 'ADMIN'] },
   { path: '/salary', moduleCode: 'SALARY' },
-  { path: '/distributors', moduleCode: 'DISTRIBUTOR' },
   { path: '/finance', moduleCode: 'FINANCE' }
 ]
 
@@ -24,12 +25,12 @@ export const authState = reactive({
 export const currentUser = computed(() => authState.currentUser)
 
 export const demoAccounts = [
-  { username: 'admin', password: '123456', title: '管理员', description: '查看所有模块并维护系统规则与权限策略' },
-  { username: 'clue_manager', password: '123456', title: '客资主管', description: '管理客资中心、自动分配和值班客服配置' },
+  { username: 'admin', password: '123456', title: '管理员', description: '查看系统管理、系统设置、私域客服等全部后台模块' },
+  { username: 'clue_manager', password: '123456', title: '客资主管', description: '管理客资中心，并可管理本部门员工' },
   { username: 'online_cs', password: '123456', title: '在线客服', description: '查看分配给自己的客资并跟进转化' },
-  { username: 'store_service', password: '123456', title: '门店服务', description: '查看订单、填写确认单并推进门店履约' },
+  { username: 'store_service', password: '123456', title: '门店服务', description: '在订单列表里确认服务项目、查看确认单并进入服务单' },
   { username: 'finance', password: '123456', title: '财务', description: '查看财务与薪酬数据，处理结算与提现' },
-  { username: 'private_domain', password: '123456', title: '私域服务', description: '查看绑定客户的订单和服务记录' }
+  { username: 'private_domain', password: '123456', title: '私域服务', description: '使用企业微信触达绑定客户并维护私域规则' }
 ]
 
 export async function initializeAuth() {

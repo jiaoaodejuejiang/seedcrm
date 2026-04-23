@@ -4,15 +4,15 @@ import { getFirstAccessibleRoute, hasAccess, initializeAuth } from '../utils/aut
 import ClueManagement from '../views/ClueManagement.vue'
 import ClueAutoAssignmentView from '../views/ClueAutoAssignmentView.vue'
 import CustomerDetail from '../views/CustomerDetail.vue'
-import DistributorManagement from '../views/DistributorManagement.vue'
 import DutyCustomerServiceView from '../views/DutyCustomerServiceView.vue'
 import FinanceOverview from '../views/FinanceOverview.vue'
 import LoginView from '../views/LoginView.vue'
 import OrderManagement from '../views/OrderManagement.vue'
-import PermissionCenter from '../views/PermissionCenter.vue'
 import PlanOrderService from '../views/PlanOrderService.vue'
+import PrivateDomainServiceView from '../views/PrivateDomainServiceView.vue'
 import SalaryCenter from '../views/SalaryCenter.vue'
-import SchedulerCenter from '../views/SchedulerCenter.vue'
+import SystemOrganizationView from '../views/SystemOrganizationView.vue'
+import SystemSettingView from '../views/SystemSettingView.vue'
 
 const routes = [
   {
@@ -74,7 +74,7 @@ const routes = [
         meta: {
           title: '订单列表',
           sectionTitle: '门店服务',
-          description: '查看全部状态订单，切换已预约和已完成，并填写确认单与到店详细需求。',
+          description: '已预约订单可打开确认单进行服务项目确认，已完成订单可打开确认单查看历史内容。',
           moduleCode: 'ORDER',
           roleCodes: ['STORE_SERVICE', 'ADMIN'],
           navKey: 'store-service-orders'
@@ -91,8 +91,9 @@ const routes = [
         meta: {
           title: '服务单履约',
           sectionTitle: '门店服务',
-          description: '严格执行到店、服务中、已完成的服务单履约链路。',
+          description: '服务单已归并到订单列表链路中，从确认单或订单操作直接进入履约。',
           moduleCode: 'PLANORDER',
+          roleCodes: ['STORE_SERVICE', 'ADMIN'],
           navKey: 'store-service-orders'
         }
       },
@@ -102,34 +103,178 @@ const routes = [
         component: CustomerDetail,
         meta: {
           title: '客户详情',
-          sectionTitle: '客户档案',
+          sectionTitle: '门店服务',
           description: '查看客户资料、订单历史、企微绑定和最近触达记录。',
           moduleCode: 'ORDER',
+          roleCodes: ['STORE_SERVICE', 'ADMIN'],
           navKey: 'store-service-orders'
         }
       },
       {
-        path: 'scheduler',
-        name: 'scheduler',
-        component: SchedulerCenter,
+        path: 'system/departments',
+        name: 'system-departments',
+        component: SystemOrganizationView,
         meta: {
-          title: '调度中心',
-          sectionTitle: '调度中心',
-          description: '管理外部调用、增量同步、队列处理、失败重试与日志。',
-          moduleCode: 'SCHEDULER',
-          navKey: 'scheduler'
+          title: '部门管理',
+          sectionTitle: '系统管理',
+          description: '维护组织架构，并让各部门只处理本部门分配和有效的数据。',
+          moduleCode: 'SYSTEM',
+          roleCodes: ['ADMIN'],
+          navKey: 'system-departments',
+          orgMode: 'department'
         }
       },
       {
-        path: 'permission',
-        name: 'permission',
-        component: PermissionCenter,
+        path: 'system/employees',
+        name: 'system-employees',
+        component: SystemOrganizationView,
         meta: {
-          title: '权限中心',
-          sectionTitle: '权限中心',
-          description: '维护 RBAC 与 ABAC 策略，并使用当前登录用户实时校验权限。',
-          moduleCode: 'PERMISSION',
-          navKey: 'permission'
+          title: '员工管理',
+          sectionTitle: '系统管理',
+          description: '添加、停用和调岗员工；停用前必须先处理名下数据。',
+          moduleCode: 'SYSTEM',
+          roleCodes: ['ADMIN', 'CLUE_MANAGER'],
+          navKey: 'system-employees',
+          orgMode: 'employee'
+        }
+      },
+      {
+        path: 'system/positions',
+        name: 'system-positions',
+        component: SystemOrganizationView,
+        meta: {
+          title: '岗位管理',
+          sectionTitle: '系统管理',
+          description: '配置公司内部岗位，并在删除岗位时自动迁移名下员工。',
+          moduleCode: 'SYSTEM',
+          roleCodes: ['ADMIN'],
+          navKey: 'system-positions',
+          orgMode: 'position'
+        }
+      },
+      {
+        path: 'system/roles',
+        name: 'system-roles',
+        component: SystemOrganizationView,
+        meta: {
+          title: '角色管理',
+          sectionTitle: '系统管理',
+          description: '维护角色、配置人员和授权策略，原权限中心能力已融合到这里。',
+          moduleCode: 'SYSTEM',
+          roleCodes: ['ADMIN'],
+          navKey: 'system-roles',
+          orgMode: 'role'
+        }
+      },
+      {
+        path: 'settings/menu',
+        name: 'settings-menu',
+        component: SystemSettingView,
+        meta: {
+          title: '菜单管理',
+          sectionTitle: '系统设置',
+          description: '配置页面菜单、分配角色可见范围，并统一整理系统入口。',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-menu',
+          settingMode: 'menu'
+        }
+      },
+      {
+        path: 'settings/integration/third-party',
+        name: 'settings-third-party',
+        component: SystemSettingView,
+        meta: {
+          title: '三方接口',
+          sectionTitle: '系统设置 / 调度中心',
+          description: '配置三方 API 地址和拉取方式，客资中心当前数据来源于此。',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-third-party',
+          settingMode: 'third-party'
+        }
+      },
+      {
+        path: 'settings/integration/callback',
+        name: 'settings-callback',
+        component: SystemSettingView,
+        meta: {
+          title: '回调接口',
+          sectionTitle: '系统设置 / 调度中心',
+          description: '维护回调地址与签名方式，统一接收外部异步通知。',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-callback',
+          settingMode: 'callback'
+        }
+      },
+      {
+        path: 'settings/integration/jobs',
+        name: 'settings-jobs',
+        component: SystemSettingView,
+        meta: {
+          title: '任务调度',
+          sectionTitle: '系统设置 / 调度中心',
+          description: '参考任务调度中心方式管理三方调用、定时同步和失败重试。',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-jobs',
+          settingMode: 'jobs'
+        }
+      },
+      {
+        path: 'settings/integration/public-api',
+        name: 'settings-public-api',
+        component: SystemSettingView,
+        meta: {
+          title: '对外接口',
+          sectionTitle: '系统设置 / 调度中心',
+          description: '配置对外查询接口、字段映射、认证、限流和缓存策略。',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-public-api',
+          settingMode: 'public-api'
+        }
+      },
+      {
+        path: 'settings/dictionaries',
+        name: 'settings-dictionaries',
+        component: SystemSettingView,
+        meta: {
+          title: '字典管理',
+          sectionTitle: '系统设置',
+          description: '维护系统字典编码和值，让页面展示中文、字段存储编码。',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-dictionaries',
+          settingMode: 'dictionary'
+        }
+      },
+      {
+        path: 'settings/parameters',
+        name: 'settings-parameters',
+        component: SystemSettingView,
+        meta: {
+          title: '参数管理',
+          sectionTitle: '系统设置',
+          description: '统一维护系统参数键值，供各业务模块直接调用。',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-parameters',
+          settingMode: 'parameter'
+        }
+      },
+      {
+        path: 'private-domain/wecom',
+        name: 'private-domain-wecom',
+        component: PrivateDomainServiceView,
+        meta: {
+          title: '企业微信',
+          sectionTitle: '私域客服',
+          description: '配置企微联系人、触达规则，并支持手工发送客户消息。',
+          moduleCode: 'WECOM',
+          roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
+          navKey: 'private-domain-wecom'
         }
       },
       {
@@ -145,16 +290,16 @@ const routes = [
         }
       },
       {
+        path: 'scheduler',
+        redirect: '/settings/integration/jobs'
+      },
+      {
+        path: 'permission',
+        redirect: '/system/roles'
+      },
+      {
         path: 'distributors',
-        name: 'distributors',
-        component: DistributorManagement,
-        meta: {
-          title: '分销概览',
-          sectionTitle: '分销概览',
-          description: '查看分销线索贡献、订单转化和收益表现。',
-          moduleCode: 'DISTRIBUTOR',
-          navKey: 'distributors'
-        }
+        redirect: '/clues'
       },
       {
         path: 'finance',

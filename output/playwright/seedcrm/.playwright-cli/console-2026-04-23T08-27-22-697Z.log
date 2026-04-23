@@ -347,3 +347,6 @@
 [ 6481807ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4173/src/views/ClueAutoAssignmentView.vue?t=1776939324488:0
 [ 6481807ms] [ERROR] [vite] Failed to reload /src/views/ClueAutoAssignmentView.vue. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:509
 [ 6682233ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:4173/@vite/client:968
+[ 9982407ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4173/src/layouts/AppLayout.vue?t=1776942825075:0
+[ 9982408ms] [ERROR] [vite] Failed to reload /src/layouts/AppLayout.vue. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:509
+[12008665ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:4173/@vite/client:968

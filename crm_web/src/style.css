@@ -146,6 +146,19 @@ label > span {
   gap: 10px;
 }
 
+.nav-subsection {
+  display: grid;
+  gap: 8px;
+}
+
+.nav-subsection__title {
+  padding: 2px 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(246, 248, 251, 0.58);
+}
+
 .nav-card {
   display: flex;
   flex-direction: column;

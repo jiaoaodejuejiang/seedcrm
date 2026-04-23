@@ -19,10 +19,10 @@ public class AuthServiceImpl implements AuthService {
             "admin", new DemoAccount("admin", "123456", new AuthenticatedUser(
                     "admin", "系统管理员", "ADMIN", "管理员", "ALL", 1L, 10L,
                     List.of(1001L, 1002L, 2001L, 2002L, 3001L, 3002L), null,
-                    List.of("CLUE", "ORDER", "PLANORDER", "SCHEDULER", "PERMISSION", "SALARY", "DISTRIBUTOR", "FINANCE"))),
+                    List.of("CLUE", "ORDER", "PLANORDER", "SALARY", "FINANCE", "SYSTEM", "SETTING", "WECOM"))),
             "clue_manager", new DemoAccount("clue_manager", "123456", new AuthenticatedUser(
                     "clue_manager", "客资主管", "CLUE_MANAGER", "客资主管", "ALL", 5001L, 10L,
-                    List.of(1001L, 1002L), null, List.of("CLUE", "SCHEDULER"))),
+                    List.of(1001L, 1002L), null, List.of("CLUE", "SYSTEM"))),
             "online_cs", new DemoAccount("online_cs", "123456", new AuthenticatedUser(
                     "online_cs", "在线客服", "ONLINE_CUSTOMER_SERVICE", "在线客服", "TEAM", 1001L, 10L,
                     List.of(1001L, 1002L), null, List.of("CLUE"))),
@@ -34,7 +34,7 @@ public class AuthServiceImpl implements AuthService {
                     List.of(91001L), null, List.of("ORDER", "SALARY", "FINANCE"))),
             "private_domain", new DemoAccount("private_domain", "123456", new AuthenticatedUser(
                     "private_domain", "私域服务", "PRIVATE_DOMAIN_SERVICE", "私域服务", "SELF", 1001L, 10L,
-                    List.of(1001L), 1001L, List.of("ORDER", "PLANORDER"))));
+                    List.of(1001L), 1001L, List.of("WECOM"))));
 
     private final Map<String, AuthenticatedUser> sessions = new ConcurrentHashMap<>();
 

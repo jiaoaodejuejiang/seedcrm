@@ -1,0 +1,14 @@
+[  212172ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://127.0.0.1:4173/api/workbench/clues:0
+[  212189ms] [WARNING] Unhandled error during execution of mounted hook Proxy(Object) at <ClueManagement>
+at <RouterView>
+at <AppLayout>
+at <RouterView>
+at <App> [Object, Object, Object, Object, Object] @ http://127.0.0.1:4173/@vite/client:509
+[  212434ms] [ERROR] Failed to load resource: the server responded with a status of 502 (Bad Gateway) @ http://127.0.0.1:4173/api/workbench/staff-options:0
+[  212457ms] AxiosError: Request failed with status code 502
+    at settle (http://127.0.0.1:4173/node_modules/.vite/deps/axios.js?v=35d1432b:1665:14)
+    at XMLHttpRequest.onloadend (http://127.0.0.1:4173/node_modules/.vite/deps/axios.js?v=35d1432b:1998:4)
+    at Axios$1.request (http://127.0.0.1:4173/node_modules/.vite/deps/axios.js?v=35d1432b:2571:37)
+    at async loadClues (http://127.0.0.1:4173/src/views/ClueManagement.vue?t=1776913833679:67:19)
+    at async Promise.all (index 0)
+    at async http://127.0.0.1:4173/src/views/ClueManagement.vue?t=1776913833679:157:3

@@ -18,17 +18,17 @@ import org.springframework.util.StringUtils;
 public class StaffDirectoryService {
 
     private static final List<StaffMemberOption> DEFAULT_STAFF = List.of(
-            new StaffMemberOption(1001L, "王顾问", "CONSULTANT"),
-            new StaffMemberOption(1002L, "李顾问", "CONSULTANT"),
-            new StaffMemberOption(2001L, "张医生", "DOCTOR"),
-            new StaffMemberOption(2002L, "周医生", "DOCTOR"),
-            new StaffMemberOption(3001L, "陈助理", "ASSISTANT"),
-            new StaffMemberOption(3002L, "林助理", "ASSISTANT"));
+            new StaffMemberOption(1001L, "Wang Consultant", "CONSULTANT"),
+            new StaffMemberOption(1002L, "Li Consultant", "CONSULTANT"),
+            new StaffMemberOption(2001L, "Zhang Doctor", "DOCTOR"),
+            new StaffMemberOption(2002L, "Zhou Doctor", "DOCTOR"),
+            new StaffMemberOption(3001L, "Chen Assistant", "ASSISTANT"),
+            new StaffMemberOption(3002L, "Lin Assistant", "ASSISTANT"));
 
     private static final Map<String, String> DEFAULT_ROLE_NAMES = Map.of(
-            "CONSULTANT", "咨询师",
-            "DOCTOR", "医生",
-            "ASSISTANT", "助理");
+            "CONSULTANT", "Consultant",
+            "DOCTOR", "Doctor",
+            "ASSISTANT", "Assistant");
 
     private final RoleConfigService roleConfigService;
 
@@ -67,7 +67,7 @@ public class StaffDirectoryService {
                 .filter(item -> Objects.equals(item.getUserId(), userId))
                 .map(StaffMemberOption::getUserName)
                 .findFirst()
-                .orElse("员工#" + userId);
+                .orElse("Employee#" + userId);
     }
 
     private Map<String, String> buildRoleNameMap() {

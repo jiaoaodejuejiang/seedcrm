@@ -1,0 +1,14 @@
+C:\Users\Administrator\AppData\Local\npm-cache\_npx\31e32ef8478fbf80\node_modules\playwright-core\lib\tools\cli-client\session.js:185
+          reject(new Error(message));
+                 ^
+
+Error: Chromium distribution 'chrome' is not found at C:\Users\Administrator\AppData\Local\Google\Chrome\Application\chrome.exe
+Run "npx playwright install chrome"
+    at Socket.<anonymous> (C:\Users\Administrator\AppData\Local\npm-cache\_npx\31e32ef8478fbf80\node_modules\playwright-core\lib\tools\cli-client\session.js:185:18)
+    at Socket.emit (node:events:524:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:191:23)
+
+Node.js v20.20.0

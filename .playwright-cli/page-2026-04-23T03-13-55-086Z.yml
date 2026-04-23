@@ -1,0 +1,499 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Seed CRM
+      - heading "约束驱动的门店主链工作台" [level=1] [ref=e7]
+      - paragraph [ref=e8]: 严格围绕 Clue → Customer → Order → PlanOrder 主链，并把 Permission、Scheduler、Salary 一起接入前台。
+    - navigation [ref=e9]:
+      - link "线索 录入、分配、回收、转订单" [ref=e10] [cursor=pointer]:
+        - /url: /clues
+        - generic [ref=e11]: 线索
+        - generic [ref=e12]: 录入、分配、回收、转订单
+      - link "订单 paid / used 主链与到店入口" [ref=e13] [cursor=pointer]:
+        - /url: /orders
+        - generic [ref=e14]: 订单
+        - generic [ref=e15]: paid / used 主链与到店入口
+      - link "到店服务 状态流转与角色记录" [ref=e16] [cursor=pointer]:
+        - /url: /plan-orders
+        - generic [ref=e17]: 到店服务
+        - generic [ref=e18]: 状态流转与角色记录
+      - link "调度中心 队列、重试、日志" [ref=e19] [cursor=pointer]:
+        - /url: /scheduler
+        - generic [ref=e20]: 调度中心
+        - generic [ref=e21]: 队列、重试、日志
+      - link "权限 RBAC / ABAC 策略与校验" [ref=e22] [cursor=pointer]:
+        - /url: /permission
+        - generic [ref=e23]: 权限
+        - generic [ref=e24]: RBAC / ABAC 策略与校验
+      - link "薪酬 统计、重算、结算、提现" [ref=e25] [cursor=pointer]:
+        - /url: /salary
+        - generic [ref=e26]: 薪酬
+        - generic [ref=e27]: 统计、重算、结算、提现
+      - link "分销 带客与收益表现" [ref=e28] [cursor=pointer]:
+        - /url: /distributors
+        - generic [ref=e29]: 分销
+        - generic [ref=e30]: 带客与收益表现
+      - link "财务 收入与提现概览" [ref=e31] [cursor=pointer]:
+        - /url: /finance
+        - generic [ref=e32]: 财务
+        - generic [ref=e33]: 收入与提现概览
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - heading "权限上下文" [level=3] [ref=e37]
+          - paragraph [ref=e38]: 所有请求都会自动注入 RBAC / ABAC 请求头。
+        - button "重置" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: 重置
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: 角色
+          - generic [ref=e45] [cursor=pointer]:
+            - generic:
+              - combobox "角色 管理员" [ref=e47]
+              - generic [ref=e48]: 管理员
+            - img [ref=e51]
+        - generic [ref=e53]:
+          - generic [ref=e54]: 数据范围
+          - generic [ref=e56] [cursor=pointer]:
+            - generic:
+              - combobox "数据范围 all" [ref=e58]
+              - generic [ref=e59]: all
+            - img [ref=e62]
+        - generic [ref=e64]:
+          - generic [ref=e65]: 当前用户 ID
+          - generic [ref=e66]:
+            - button "decrease number" [ref=e67] [cursor=pointer]:
+              - img [ref=e69]
+            - button "increase number" [ref=e71] [cursor=pointer]:
+              - img [ref=e73]
+            - spinbutton "当前用户 ID decrease number increase number" [ref=e77]: "1001"
+        - generic [ref=e78]:
+          - generic [ref=e79]: 当前门店 ID
+          - generic [ref=e80]:
+            - button "decrease number" [ref=e81] [cursor=pointer]:
+              - img [ref=e83]
+            - button "increase number" [ref=e85] [cursor=pointer]:
+              - img [ref=e87]
+            - spinbutton "当前门店 ID decrease number increase number" [ref=e91]: "10"
+        - generic [ref=e92]:
+          - generic [ref=e93]: 资源门店 ID
+          - generic [ref=e94]:
+            - button "decrease number" [ref=e95] [cursor=pointer]:
+              - img [ref=e97]
+            - button "increase number" [ref=e99] [cursor=pointer]:
+              - img [ref=e101]
+            - spinbutton "资源门店 ID decrease number increase number" [ref=e105]: "10"
+        - generic [ref=e106]:
+          - generic [ref=e107]: 绑定客户用户 ID
+          - generic [ref=e108]:
+            - button "decrease number" [ref=e109] [cursor=pointer]:
+              - img [ref=e111]
+            - button "increase number" [ref=e113] [cursor=pointer]:
+              - img [ref=e115]
+            - spinbutton "绑定客户用户 ID decrease number increase number" [ref=e119]
+        - generic [ref=e120]:
+          - generic [ref=e121]: 团队成员 ID
+          - textbox "团队成员 ID" [ref=e124]:
+            - /placeholder: 例如 1001,1002
+            - text: 1001,1002
+  - main [ref=e125]:
+    - generic [ref=e126]:
+      - generic [ref=e127]:
+        - paragraph [ref=e128]: Constraint First
+        - heading "权限规则" [level=2] [ref=e129]
+        - paragraph [ref=e130]: 维护 RBAC / ABAC 策略并按当前上下文校验接口是否可访问。
+      - generic [ref=e131]:
+        - generic [ref=e132]: 角色：管理员
+        - generic [ref=e133]: 范围：ALL
+        - generic [ref=e134]: 主链：Clue → Customer → Order → PlanOrder
+    - generic [ref=e136]:
+      - generic [ref=e137]:
+        - article [ref=e138]:
+          - generic [ref=e139]: 当前角色
+          - strong [ref=e140]: 管理员
+          - text: 权限管理页面默认建议用 admin 调试。
+        - article [ref=e141]:
+          - generic [ref=e142]: 数据范围
+          - strong [ref=e143]: all
+          - text: RBAC + ABAC 请求头会自动随请求发送。
+        - article [ref=e144]:
+          - generic [ref=e145]: 策略数
+          - strong [ref=e146]: "17"
+          - text: 已加载的权限策略总量。
+      - generic [ref=e147]:
+        - generic [ref=e149]:
+          - heading "保存策略" [level=3] [ref=e150]
+          - paragraph [ref=e151]: 用于维护 module:action + role + scope 的固定规则。
+        - generic [ref=e152]:
+          - generic [ref=e153]:
+            - generic [ref=e154]: 模块
+            - textbox "模块" [ref=e157]:
+              - /placeholder: 例如 ORDER
+              - text: ORDER
+          - generic [ref=e158]:
+            - generic [ref=e159]: 动作
+            - textbox "动作" [ref=e162]:
+              - /placeholder: 例如 VIEW / UPDATE
+              - text: VIEW
+          - generic [ref=e163]:
+            - generic [ref=e164]: 角色
+            - generic [ref=e166] [cursor=pointer]:
+              - generic:
+                - combobox "角色 门店服务" [ref=e168]
+                - generic [ref=e169]: 门店服务
+              - img [ref=e172]
+          - generic [ref=e174]:
+            - generic [ref=e175]: 范围
+            - generic [ref=e177] [cursor=pointer]:
+              - generic:
+                - combobox "范围 store" [ref=e179]
+                - generic [ref=e180]: store
+              - img [ref=e183]
+          - generic [ref=e185]:
+            - generic [ref=e186]: 条件规则
+            - textbox "条件规则" [ref=e189]:
+              - /placeholder: 例如 order(status=finished)
+        - generic [ref=e190]:
+          - button "保存策略" [ref=e191] [cursor=pointer]:
+            - generic [ref=e192]: 保存策略
+          - button "刷新列表" [ref=e193] [cursor=pointer]:
+            - generic [ref=e194]: 刷新列表
+      - generic [ref=e195]:
+        - generic [ref=e196]:
+          - generic [ref=e197]:
+            - heading "权限校验" [level=3] [ref=e198]
+            - paragraph [ref=e199]: 用当前或自定义上下文调用 /permission/check，验证某个接口是否允许访问。
+          - button "同步当前上下文" [ref=e200] [cursor=pointer]:
+            - generic [ref=e201]: 同步当前上下文
+        - generic [ref=e202]:
+          - generic [ref=e203]:
+            - generic [ref=e204]: 模块
+            - textbox "模块" [ref=e207]:
+              - /placeholder: 例如 PLANORDER
+              - text: PLANORDER
+          - generic [ref=e208]:
+            - generic [ref=e209]: 动作
+            - textbox "动作" [ref=e212]:
+              - /placeholder: 例如 VIEW
+              - text: VIEW
+          - generic [ref=e213]:
+            - generic [ref=e214]: 角色
+            - textbox "角色" [ref=e217]: ADMIN
+          - generic [ref=e218]:
+            - generic [ref=e219]: 范围
+            - textbox "范围" [ref=e222]: ALL
+          - generic [ref=e223]:
+            - generic [ref=e224]: 当前用户 ID
+            - generic [ref=e225]:
+              - button "decrease number" [ref=e226] [cursor=pointer]:
+                - img [ref=e228]
+              - button "increase number" [ref=e230] [cursor=pointer]:
+                - img [ref=e232]
+              - spinbutton "当前用户 ID decrease number increase number" [ref=e236]: "1001"
+          - generic [ref=e237]:
+            - generic [ref=e238]: 资源负责人 ID
+            - generic [ref=e239]:
+              - button "decrease number" [ref=e240] [cursor=pointer]:
+                - img [ref=e242]
+              - button "increase number" [ref=e244] [cursor=pointer]:
+                - img [ref=e246]
+              - spinbutton "资源负责人 ID decrease number increase number" [ref=e250]
+          - generic [ref=e251]:
+            - generic [ref=e252]: 当前门店 ID
+            - generic [ref=e253]:
+              - button "decrease number" [ref=e254] [cursor=pointer]:
+                - img [ref=e256]
+              - button "increase number" [ref=e258] [cursor=pointer]:
+                - img [ref=e260]
+              - spinbutton "当前门店 ID decrease number increase number" [ref=e264]: "10"
+          - generic [ref=e265]:
+            - generic [ref=e266]: 资源门店 ID
+            - generic [ref=e267]:
+              - button "decrease number" [ref=e268] [cursor=pointer]:
+                - img [ref=e270]
+              - button "increase number" [ref=e272] [cursor=pointer]:
+                - img [ref=e274]
+              - spinbutton "资源门店 ID decrease number increase number" [ref=e278]: "10"
+          - generic [ref=e279]:
+            - generic [ref=e280]: 绑定客户用户 ID
+            - generic [ref=e281]:
+              - button "decrease number" [ref=e282] [cursor=pointer]:
+                - img [ref=e284]
+              - button "increase number" [ref=e286] [cursor=pointer]:
+                - img [ref=e288]
+              - spinbutton "绑定客户用户 ID decrease number increase number" [ref=e292]
+          - generic [ref=e293]:
+            - generic [ref=e294]: 团队成员 ID
+            - textbox "团队成员 ID" [ref=e297]:
+              - /placeholder: 例如 1001,1002
+              - text: 1001,1002
+        - button "执行校验" [ref=e299] [cursor=pointer]:
+          - generic [ref=e300]: 执行校验
+      - generic [ref=e301]:
+        - generic [ref=e303]:
+          - heading "策略列表" [level=3] [ref=e304]
+          - paragraph [ref=e305]: 文档主导，策略冲突时以后端返回为准。
+        - generic [ref=e306]:
+          - generic [ref=e307]:
+            - table [ref=e309]:
+              - rowgroup [ref=e317]:
+                - row "模块 动作 角色 范围 条件规则 启用" [ref=e318]:
+                  - columnheader "模块" [ref=e319]:
+                    - generic [ref=e320]: 模块
+                  - columnheader "动作" [ref=e321]:
+                    - generic [ref=e322]: 动作
+                  - columnheader "角色" [ref=e323]:
+                    - generic [ref=e324]: 角色
+                  - columnheader "范围" [ref=e325]:
+                    - generic [ref=e326]: 范围
+                  - columnheader "条件规则" [ref=e327]:
+                    - generic [ref=e328]: 条件规则
+                  - columnheader "启用" [ref=e329]:
+                    - generic [ref=e330]: 启用
+            - table [ref=e335]:
+              - rowgroup [ref=e343]:
+                - row "CLUE ASSIGN 线索主管 all clue assign 是" [ref=e344]:
+                  - cell "CLUE" [ref=e345]:
+                    - generic [ref=e346]: CLUE
+                  - cell "ASSIGN" [ref=e347]:
+                    - generic [ref=e348]: ASSIGN
+                  - cell "线索主管" [ref=e349]:
+                    - generic [ref=e350]: 线索主管
+                  - cell "all" [ref=e351]:
+                    - generic [ref=e352]: all
+                  - cell "clue assign" [ref=e353]:
+                    - generic [ref=e354]: clue assign
+                  - cell "是" [ref=e355]:
+                    - generic [ref=e356]:
+                      - generic:
+                        - generic: 是
+                - row "CLUE RECYCLE 线索主管 all clue recycle 是" [ref=e357]:
+                  - cell "CLUE" [ref=e358]:
+                    - generic [ref=e359]: CLUE
+                  - cell "RECYCLE" [ref=e360]:
+                    - generic [ref=e361]: RECYCLE
+                  - cell "线索主管" [ref=e362]:
+                    - generic [ref=e363]: 线索主管
+                  - cell "all" [ref=e364]:
+                    - generic [ref=e365]: all
+                  - cell "clue recycle" [ref=e366]:
+                    - generic [ref=e367]: clue recycle
+                  - cell "是" [ref=e368]:
+                    - generic [ref=e369]:
+                      - generic:
+                        - generic: 是
+                - row "CLUE VIEW 客服专员 self 是" [ref=e370]:
+                  - cell "CLUE" [ref=e371]:
+                    - generic [ref=e372]: CLUE
+                  - cell "VIEW" [ref=e373]:
+                    - generic [ref=e374]: VIEW
+                  - cell "客服专员" [ref=e375]:
+                    - generic [ref=e376]: 客服专员
+                  - cell "self" [ref=e377]:
+                    - generic [ref=e378]: self
+                  - cell [ref=e379]
+                  - cell "是" [ref=e380]:
+                    - generic [ref=e381]:
+                      - generic:
+                        - generic: 是
+                - row "CLUE VIEW 客服专员 team 是" [ref=e382]:
+                  - cell "CLUE" [ref=e383]:
+                    - generic [ref=e384]: CLUE
+                  - cell "VIEW" [ref=e385]:
+                    - generic [ref=e386]: VIEW
+                  - cell "客服专员" [ref=e387]:
+                    - generic [ref=e388]: 客服专员
+                  - cell "team" [ref=e389]:
+                    - generic [ref=e390]: team
+                  - cell [ref=e391]
+                  - cell "是" [ref=e392]:
+                    - generic [ref=e393]:
+                      - generic:
+                        - generic: 是
+                - row "ORDER FINISH 财务 all order(status=finished) 是" [ref=e394]:
+                  - cell "ORDER" [ref=e395]:
+                    - generic [ref=e396]: ORDER
+                  - cell "FINISH" [ref=e397]:
+                    - generic [ref=e398]: FINISH
+                  - cell "财务" [ref=e399]:
+                    - generic [ref=e400]: 财务
+                  - cell "all" [ref=e401]:
+                    - generic [ref=e402]: all
+                  - cell "order(status=finished)" [ref=e403]:
+                    - generic [ref=e404]: order(status=finished)
+                  - cell "是" [ref=e405]:
+                    - generic [ref=e406]:
+                      - generic:
+                        - generic: 是
+                - row "ORDER FINISH 门店服务 store order(status=finished) 是" [ref=e407]:
+                  - cell "ORDER" [ref=e408]:
+                    - generic [ref=e409]: ORDER
+                  - cell "FINISH" [ref=e410]:
+                    - generic [ref=e411]: FINISH
+                  - cell "门店服务" [ref=e412]:
+                    - generic [ref=e413]: 门店服务
+                  - cell "store" [ref=e414]:
+                    - generic [ref=e415]: store
+                  - cell "order(status=finished)" [ref=e416]:
+                    - generic [ref=e417]: order(status=finished)
+                  - cell "是" [ref=e418]:
+                    - generic [ref=e419]:
+                      - generic:
+                        - generic: 是
+                - row "ORDER UPDATE 门店服务 store 是" [ref=e420]:
+                  - cell "ORDER" [ref=e421]:
+                    - generic [ref=e422]: ORDER
+                  - cell "UPDATE" [ref=e423]:
+                    - generic [ref=e424]: UPDATE
+                  - cell "门店服务" [ref=e425]:
+                    - generic [ref=e426]: 门店服务
+                  - cell "store" [ref=e427]:
+                    - generic [ref=e428]: store
+                  - cell [ref=e429]
+                  - cell "是" [ref=e430]:
+                    - generic [ref=e431]:
+                      - generic:
+                        - generic: 是
+                - row "ORDER VIEW 私域服务 self bound customer 是" [ref=e432]:
+                  - cell "ORDER" [ref=e433]:
+                    - generic [ref=e434]: ORDER
+                  - cell "VIEW" [ref=e435]:
+                    - generic [ref=e436]: VIEW
+                  - cell "私域服务" [ref=e437]:
+                    - generic [ref=e438]: 私域服务
+                  - cell "self" [ref=e439]:
+                    - generic [ref=e440]: self
+                  - cell "bound customer" [ref=e441]:
+                    - generic [ref=e442]: bound customer
+                  - cell "是" [ref=e443]:
+                    - generic [ref=e444]:
+                      - generic:
+                        - generic: 是
+                - row "ORDER VIEW 门店服务 store 是" [ref=e445]:
+                  - cell "ORDER" [ref=e446]:
+                    - generic [ref=e447]: ORDER
+                  - cell "VIEW" [ref=e448]:
+                    - generic [ref=e449]: VIEW
+                  - cell "门店服务" [ref=e450]:
+                    - generic [ref=e451]: 门店服务
+                  - cell "store" [ref=e452]:
+                    - generic [ref=e453]: store
+                  - cell [ref=e454]
+                  - cell "是" [ref=e455]:
+                    - generic [ref=e456]:
+                      - generic:
+                        - generic: 是
+                - row "PERMISSION CHECK 管理员 all 是" [ref=e457]:
+                  - cell "PERMISSION" [ref=e458]:
+                    - generic [ref=e459]: PERMISSION
+                  - cell "CHECK" [ref=e460]:
+                    - generic [ref=e461]: CHECK
+                  - cell "管理员" [ref=e462]:
+                    - generic [ref=e463]: 管理员
+                  - cell "all" [ref=e464]:
+                    - generic [ref=e465]: all
+                  - cell [ref=e466]
+                  - cell "是" [ref=e467]:
+                    - generic [ref=e468]:
+                      - generic:
+                        - generic: 是
+                - row "PERMISSION UPDATE 管理员 all 是" [ref=e469]:
+                  - cell "PERMISSION" [ref=e470]:
+                    - generic [ref=e471]: PERMISSION
+                  - cell "UPDATE" [ref=e472]:
+                    - generic [ref=e473]: UPDATE
+                  - cell "管理员" [ref=e474]:
+                    - generic [ref=e475]: 管理员
+                  - cell "all" [ref=e476]:
+                    - generic [ref=e477]: all
+                  - cell [ref=e478]
+                  - cell "是" [ref=e479]:
+                    - generic [ref=e480]:
+                      - generic:
+                        - generic: 是
+                - row "PERMISSION VIEW 管理员 all 是" [ref=e481]:
+                  - cell "PERMISSION" [ref=e482]:
+                    - generic [ref=e483]: PERMISSION
+                  - cell "VIEW" [ref=e484]:
+                    - generic [ref=e485]: VIEW
+                  - cell "管理员" [ref=e486]:
+                    - generic [ref=e487]: 管理员
+                  - cell "all" [ref=e488]:
+                    - generic [ref=e489]: all
+                  - cell [ref=e490]
+                  - cell "是" [ref=e491]:
+                    - generic [ref=e492]:
+                      - generic:
+                        - generic: 是
+                - row "PLANORDER ASSIGN_ROLE 门店服务 store 是" [ref=e493]:
+                  - cell "PLANORDER" [ref=e494]:
+                    - generic [ref=e495]: PLANORDER
+                  - cell "ASSIGN_ROLE" [ref=e496]:
+                    - generic [ref=e497]: ASSIGN_ROLE
+                  - cell "门店服务" [ref=e498]:
+                    - generic [ref=e499]: 门店服务
+                  - cell "store" [ref=e500]:
+                    - generic [ref=e501]: store
+                  - cell [ref=e502]
+                  - cell "是" [ref=e503]:
+                    - generic [ref=e504]:
+                      - generic:
+                        - generic: 是
+                - row "PLANORDER CREATE 门店服务 store 是" [ref=e505]:
+                  - cell "PLANORDER" [ref=e506]:
+                    - generic [ref=e507]: PLANORDER
+                  - cell "CREATE" [ref=e508]:
+                    - generic [ref=e509]: CREATE
+                  - cell "门店服务" [ref=e510]:
+                    - generic [ref=e511]: 门店服务
+                  - cell "store" [ref=e512]:
+                    - generic [ref=e513]: store
+                  - cell [ref=e514]
+                  - cell "是" [ref=e515]:
+                    - generic [ref=e516]:
+                      - generic:
+                        - generic: 是
+                - row "PLANORDER UPDATE 门店服务 store 是" [ref=e517]:
+                  - cell "PLANORDER" [ref=e518]:
+                    - generic [ref=e519]: PLANORDER
+                  - cell "UPDATE" [ref=e520]:
+                    - generic [ref=e521]: UPDATE
+                  - cell "门店服务" [ref=e522]:
+                    - generic [ref=e523]: 门店服务
+                  - cell "store" [ref=e524]:
+                    - generic [ref=e525]: store
+                  - cell [ref=e526]
+                  - cell "是" [ref=e527]:
+                    - generic [ref=e528]:
+                      - generic:
+                        - generic: 是
+                - row "PLANORDER VIEW 私域服务 self bound customer 是" [ref=e529]:
+                  - cell "PLANORDER" [ref=e530]:
+                    - generic [ref=e531]: PLANORDER
+                  - cell "VIEW" [ref=e532]:
+                    - generic [ref=e533]: VIEW
+                  - cell "私域服务" [ref=e534]:
+                    - generic [ref=e535]: 私域服务
+                  - cell "self" [ref=e536]:
+                    - generic [ref=e537]: self
+                  - cell "bound customer" [ref=e538]:
+                    - generic [ref=e539]: bound customer
+                  - cell "是" [ref=e540]:
+                    - generic [ref=e541]:
+                      - generic:
+                        - generic: 是
+                - row "PLANORDER VIEW 门店服务 store 是" [ref=e542]:
+                  - cell "PLANORDER" [ref=e543]:
+                    - generic [ref=e544]: PLANORDER
+                  - cell "VIEW" [ref=e545]:
+                    - generic [ref=e546]: VIEW
+                  - cell "门店服务" [ref=e547]:
+                    - generic [ref=e548]: 门店服务
+                  - cell "store" [ref=e549]:
+                    - generic [ref=e550]: store
+                  - cell [ref=e551]
+                  - cell "是" [ref=e552]:
+                    - generic [ref=e553]:
+                      - generic:
+                        - generic: 是
+          - img [ref=e556]

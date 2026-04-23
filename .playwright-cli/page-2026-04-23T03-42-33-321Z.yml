@@ -1,0 +1,722 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Seed CRM
+      - heading "Constraint-Driven Main Chain Console" [level=1] [ref=e7]
+      - paragraph [ref=e8]: Keep the frontend aligned with Clue -> Customer -> Order -> PlanOrder, with Permission, Scheduler, and Salary wired in globally.
+    - navigation [ref=e9]:
+      - link "Clue Intake, assign, recycle, and convert to orders" [ref=e10] [cursor=pointer]:
+        - /url: /clues
+        - generic [ref=e11]: Clue
+        - generic [ref=e12]: Intake, assign, recycle, and convert to orders
+      - link "Order Paid and used orders linked to customers" [ref=e13] [cursor=pointer]:
+        - /url: /orders
+        - generic [ref=e14]: Order
+        - generic [ref=e15]: Paid and used orders linked to customers
+      - link "PlanOrder Service flow and role assignment records" [ref=e16] [cursor=pointer]:
+        - /url: /plan-orders
+        - generic [ref=e17]: PlanOrder
+        - generic [ref=e18]: Service flow and role assignment records
+      - link "Scheduler Jobs, queue, retry, and execution logs" [ref=e19] [cursor=pointer]:
+        - /url: /scheduler
+        - generic [ref=e20]: Scheduler
+        - generic [ref=e21]: Jobs, queue, retry, and execution logs
+      - link "Permission RBAC, ABAC, and live access checks" [ref=e22] [cursor=pointer]:
+        - /url: /permission
+        - generic [ref=e23]: Permission
+        - generic [ref=e24]: RBAC, ABAC, and live access checks
+      - link "Salary Stats, settlement, payout, and withdraw flow" [ref=e25] [cursor=pointer]:
+        - /url: /salary
+        - generic [ref=e26]: Salary
+        - generic [ref=e27]: Stats, settlement, payout, and withdraw flow
+      - link "Distributor Lead contribution and income overview" [ref=e28] [cursor=pointer]:
+        - /url: /distributors
+        - generic [ref=e29]: Distributor
+        - generic [ref=e30]: Lead contribution and income overview
+      - link "Finance Income and withdraw records overview" [ref=e31] [cursor=pointer]:
+        - /url: /finance
+        - generic [ref=e32]: Finance
+        - generic [ref=e33]: Income and withdraw records overview
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - heading "Permission Context" [level=3] [ref=e37]
+          - paragraph [ref=e38]: Every request automatically carries RBAC and ABAC headers from this shared context.
+        - button "Reset" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: Reset
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Role
+          - generic [ref=e45] [cursor=pointer]:
+            - generic:
+              - combobox "Role Admin" [ref=e47]
+              - generic [ref=e48]: Admin
+            - img [ref=e51]
+        - generic [ref=e53]:
+          - generic [ref=e54]: Data Scope
+          - generic [ref=e56] [cursor=pointer]:
+            - generic:
+              - combobox "Data Scope all" [ref=e58]
+              - generic [ref=e59]: all
+            - img [ref=e62]
+        - generic [ref=e64]:
+          - generic [ref=e65]: Current User ID
+          - generic [ref=e66]:
+            - button "decrease number" [ref=e67] [cursor=pointer]:
+              - img [ref=e69]
+            - button "increase number" [ref=e71] [cursor=pointer]:
+              - img [ref=e73]
+            - spinbutton "Current User ID decrease number increase number" [ref=e77]: "1001"
+        - generic [ref=e78]:
+          - generic [ref=e79]: Current Store ID
+          - generic [ref=e80]:
+            - button "decrease number" [ref=e81] [cursor=pointer]:
+              - img [ref=e83]
+            - button "increase number" [ref=e85] [cursor=pointer]:
+              - img [ref=e87]
+            - spinbutton "Current Store ID decrease number increase number" [ref=e91]: "10"
+        - generic [ref=e92]:
+          - generic [ref=e93]: Resource Store ID
+          - generic [ref=e94]:
+            - button "decrease number" [ref=e95] [cursor=pointer]:
+              - img [ref=e97]
+            - button "increase number" [ref=e99] [cursor=pointer]:
+              - img [ref=e101]
+            - spinbutton "Resource Store ID decrease number increase number" [ref=e105]: "10"
+        - generic [ref=e106]:
+          - generic [ref=e107]: Bound Customer User ID
+          - generic [ref=e108]:
+            - button "decrease number" [ref=e109] [cursor=pointer]:
+              - img [ref=e111]
+            - button "increase number" [ref=e113] [cursor=pointer]:
+              - img [ref=e115]
+            - spinbutton "Bound Customer User ID decrease number increase number" [ref=e119]
+        - generic [ref=e120]:
+          - generic [ref=e121]: Team Member IDs
+          - textbox "Team Member IDs" [ref=e124]:
+            - /placeholder: "For example: 1001,1002"
+            - text: 1001,1002
+  - main [ref=e125]:
+    - generic [ref=e126]:
+      - generic [ref=e127]:
+        - paragraph [ref=e128]: Constraint First
+        - heading "Order Management" [level=2] [ref=e129]
+        - paragraph [ref=e130]: Orders must stay bound to customers and follow the deposit or coupon model with paid and used states.
+      - generic [ref=e131]:
+        - generic [ref=e132]: "Role: Admin"
+        - generic [ref=e133]: "Scope: ALL"
+        - generic [ref=e134]: "Main Chain: Clue -> Customer -> Order -> PlanOrder"
+    - generic [ref=e136]:
+      - generic [ref=e137]:
+        - article [ref=e138]:
+          - generic [ref=e139]: Total Orders
+          - strong [ref=e140]: "21"
+          - text: Orders stay on the main chain and must be bound to a customer.
+        - article [ref=e141]:
+          - generic [ref=e142]: paid
+          - strong [ref=e143]: "7"
+          - text: Paid orders can continue into the PlanOrder stage.
+        - article [ref=e144]:
+          - generic [ref=e145]: used
+          - strong [ref=e146]: "14"
+          - text: Used orders have already completed the service loop.
+      - generic [ref=e147]:
+        - generic [ref=e149]:
+          - generic [ref=e151] [cursor=pointer]:
+            - generic:
+              - combobox [ref=e153]
+              - generic [ref=e154]: Order status
+            - img [ref=e157]
+          - button "Filter" [active] [ref=e159] [cursor=pointer]:
+            - generic [ref=e160]: Filter
+        - generic [ref=e162]:
+          - table [ref=e164]:
+            - rowgroup [ref=e175]:
+              - row "Order Customer Type Amount Deposit Status PlanOrder Created At Actions" [ref=e176]:
+                - columnheader "Order" [ref=e177]:
+                  - generic [ref=e178]: Order
+                - columnheader "Customer" [ref=e179]:
+                  - generic [ref=e180]: Customer
+                - columnheader "Type" [ref=e181]:
+                  - generic [ref=e182]: Type
+                - columnheader "Amount" [ref=e183]:
+                  - generic [ref=e184]: Amount
+                - columnheader "Deposit" [ref=e185]:
+                  - generic [ref=e186]: Deposit
+                - columnheader "Status" [ref=e187]:
+                  - generic [ref=e188]: Status
+                - columnheader "PlanOrder" [ref=e189]:
+                  - generic [ref=e190]: PlanOrder
+                - columnheader "Created At" [ref=e191]:
+                  - generic [ref=e192]: Created At
+                - columnheader "Actions" [ref=e193]:
+                  - generic [ref=e194]: Actions
+          - table [ref=e205]:
+            - rowgroup [ref=e216]:
+              - 'row "ORD202604231133105148457 #21 Codex Flow 13990009988 Deposit CNY 1,999.00 CNY 199.00 paid Not created 2026/4/23 11:33:11 Create PlanOrder Customer Detail" [ref=e217]':
+                - 'cell "ORD202604231133105148457 #21" [ref=e218]':
+                  - generic [ref=e220]:
+                    - strong [ref=e221]: ORD202604231133105148457
+                    - generic [ref=e222]: "#21"
+                - cell "Codex Flow 13990009988" [ref=e223]:
+                  - generic [ref=e225]:
+                    - strong [ref=e226]: Codex Flow
+                    - generic [ref=e227]: "13990009988"
+                - cell "Deposit" [ref=e228]:
+                  - generic [ref=e231]: Deposit
+                - cell "CNY 1,999.00" [ref=e232]:
+                  - generic [ref=e233]: CNY 1,999.00
+                - cell "CNY 199.00" [ref=e234]:
+                  - generic [ref=e235]: CNY 199.00
+                - cell "paid" [ref=e236]:
+                  - generic [ref=e239]: paid
+                - cell "Not created" [ref=e240]:
+                  - generic [ref=e241]: Not created
+                - cell "2026/4/23 11:33:11" [ref=e242]:
+                  - generic [ref=e243]: 2026/4/23 11:33:11
+                - cell "Create PlanOrder Customer Detail" [ref=e244]:
+                  - generic [ref=e246]:
+                    - button "Create PlanOrder" [ref=e247] [cursor=pointer]:
+                      - generic [ref=e248]: Create PlanOrder
+                    - button "Customer Detail" [ref=e249] [cursor=pointer]:
+                      - generic [ref=e250]: Customer Detail
+              - 'row "ORD202604221527370004335 #20 Rerun-42849368 13982849368 Deposit CNY 5,000.00 CNY 1,000.00 used #9 / Finished 2026/4/22 15:27:37 Open PlanOrder Customer Detail" [ref=e251]':
+                - 'cell "ORD202604221527370004335 #20" [ref=e252]':
+                  - generic [ref=e254]:
+                    - strong [ref=e255]: ORD202604221527370004335
+                    - generic [ref=e256]: "#20"
+                - cell "Rerun-42849368 13982849368" [ref=e257]:
+                  - generic [ref=e259]:
+                    - strong [ref=e260]: Rerun-42849368
+                    - generic [ref=e261]: "13982849368"
+                - cell "Deposit" [ref=e262]:
+                  - generic [ref=e265]: Deposit
+                - cell "CNY 5,000.00" [ref=e266]:
+                  - generic [ref=e267]: CNY 5,000.00
+                - cell "CNY 1,000.00" [ref=e268]:
+                  - generic [ref=e269]: CNY 1,000.00
+                - cell "used" [ref=e270]:
+                  - generic [ref=e273]: used
+                - cell "#9 / Finished" [ref=e274]:
+                  - generic [ref=e275]: "#9 / Finished"
+                - cell "2026/4/22 15:27:37" [ref=e276]:
+                  - generic [ref=e277]: 2026/4/22 15:27:37
+                - cell "Open PlanOrder Customer Detail" [ref=e278]:
+                  - generic [ref=e280]:
+                    - button "Open PlanOrder" [ref=e281] [cursor=pointer]:
+                      - generic [ref=e282]: Open PlanOrder
+                    - button "Customer Detail" [ref=e283] [cursor=pointer]:
+                      - generic [ref=e284]: Customer Detail
+              - 'row "ORD202604221526079412758 #19 Rerun-42761206 13982761206 Deposit CNY 5,000.00 CNY 1,000.00 used #8 / Finished 2026/4/22 15:26:08 Open PlanOrder Customer Detail" [ref=e285]':
+                - 'cell "ORD202604221526079412758 #19" [ref=e286]':
+                  - generic [ref=e288]:
+                    - strong [ref=e289]: ORD202604221526079412758
+                    - generic [ref=e290]: "#19"
+                - cell "Rerun-42761206 13982761206" [ref=e291]:
+                  - generic [ref=e293]:
+                    - strong [ref=e294]: Rerun-42761206
+                    - generic [ref=e295]: "13982761206"
+                - cell "Deposit" [ref=e296]:
+                  - generic [ref=e299]: Deposit
+                - cell "CNY 5,000.00" [ref=e300]:
+                  - generic [ref=e301]: CNY 5,000.00
+                - cell "CNY 1,000.00" [ref=e302]:
+                  - generic [ref=e303]: CNY 1,000.00
+                - cell "used" [ref=e304]:
+                  - generic [ref=e307]: used
+                - cell "#8 / Finished" [ref=e308]:
+                  - generic [ref=e309]: "#8 / Finished"
+                - cell "2026/4/22 15:26:08" [ref=e310]:
+                  - generic [ref=e311]: 2026/4/22 15:26:08
+                - cell "Open PlanOrder Customer Detail" [ref=e312]:
+                  - generic [ref=e314]:
+                    - button "Open PlanOrder" [ref=e315] [cursor=pointer]:
+                      - generic [ref=e316]: Open PlanOrder
+                    - button "Customer Detail" [ref=e317] [cursor=pointer]:
+                      - generic [ref=e318]: Customer Detail
+              - 'row "ORD202604221459347488361 #18 UI Auto Flow 13990005678 Deposit CNY 5,000.00 CNY 1,000.00 used #7 / Finished 2026/4/22 14:59:35 Open PlanOrder Customer Detail" [ref=e319]':
+                - 'cell "ORD202604221459347488361 #18" [ref=e320]':
+                  - generic [ref=e322]:
+                    - strong [ref=e323]: ORD202604221459347488361
+                    - generic [ref=e324]: "#18"
+                - cell "UI Auto Flow 13990005678" [ref=e325]:
+                  - generic [ref=e327]:
+                    - strong [ref=e328]: UI Auto Flow
+                    - generic [ref=e329]: "13990005678"
+                - cell "Deposit" [ref=e330]:
+                  - generic [ref=e333]: Deposit
+                - cell "CNY 5,000.00" [ref=e334]:
+                  - generic [ref=e335]: CNY 5,000.00
+                - cell "CNY 1,000.00" [ref=e336]:
+                  - generic [ref=e337]: CNY 1,000.00
+                - cell "used" [ref=e338]:
+                  - generic [ref=e341]: used
+                - cell "#7 / Finished" [ref=e342]:
+                  - generic [ref=e343]: "#7 / Finished"
+                - cell "2026/4/22 14:59:35" [ref=e344]:
+                  - generic [ref=e345]: 2026/4/22 14:59:35
+                - cell "Open PlanOrder Customer Detail" [ref=e346]:
+                  - generic [ref=e348]:
+                    - button "Open PlanOrder" [ref=e349] [cursor=pointer]:
+                      - generic [ref=e350]: Open PlanOrder
+                    - button "Customer Detail" [ref=e351] [cursor=pointer]:
+                      - generic [ref=e352]: Customer Detail
+              - 'row "ORD202604221239282975273 #17 FinanceClue-1776832767 1391001776832767 Deposit CNY 1,500.00 CNY 200.00 used #6 / Finished 2026/4/22 12:39:28 Open PlanOrder Customer Detail" [ref=e353]':
+                - 'cell "ORD202604221239282975273 #17" [ref=e354]':
+                  - generic [ref=e356]:
+                    - strong [ref=e357]: ORD202604221239282975273
+                    - generic [ref=e358]: "#17"
+                - cell "FinanceClue-1776832767 1391001776832767" [ref=e359]:
+                  - generic [ref=e361]:
+                    - strong [ref=e362]: FinanceClue-1776832767
+                    - generic [ref=e363]: "1391001776832767"
+                - cell "Deposit" [ref=e364]:
+                  - generic [ref=e367]: Deposit
+                - cell "CNY 1,500.00" [ref=e368]:
+                  - generic [ref=e369]: CNY 1,500.00
+                - cell "CNY 200.00" [ref=e370]:
+                  - generic [ref=e371]: CNY 200.00
+                - cell "used" [ref=e372]:
+                  - generic [ref=e375]: used
+                - cell "#6 / Finished" [ref=e376]:
+                  - generic [ref=e377]: "#6 / Finished"
+                - cell "2026/4/22 12:39:28" [ref=e378]:
+                  - generic [ref=e379]: 2026/4/22 12:39:28
+                - cell "Open PlanOrder Customer Detail" [ref=e380]:
+                  - generic [ref=e382]:
+                    - button "Open PlanOrder" [ref=e383] [cursor=pointer]:
+                      - generic [ref=e384]: Open PlanOrder
+                    - button "Customer Detail" [ref=e385] [cursor=pointer]:
+                      - generic [ref=e386]: Customer Detail
+              - 'row "ORD202604221232465408346 #16 FinanceClue-1776832364 1390001776832364 Deposit CNY 1,000.00 CNY 100.00 used #5 / Finished 2026/4/22 12:32:47 Open PlanOrder Customer Detail" [ref=e387]':
+                - 'cell "ORD202604221232465408346 #16" [ref=e388]':
+                  - generic [ref=e390]:
+                    - strong [ref=e391]: ORD202604221232465408346
+                    - generic [ref=e392]: "#16"
+                - cell "FinanceClue-1776832364 1390001776832364" [ref=e393]:
+                  - generic [ref=e395]:
+                    - strong [ref=e396]: FinanceClue-1776832364
+                    - generic [ref=e397]: "1390001776832364"
+                - cell "Deposit" [ref=e398]:
+                  - generic [ref=e401]: Deposit
+                - cell "CNY 1,000.00" [ref=e402]:
+                  - generic [ref=e403]: CNY 1,000.00
+                - cell "CNY 100.00" [ref=e404]:
+                  - generic [ref=e405]: CNY 100.00
+                - cell "used" [ref=e406]:
+                  - generic [ref=e409]: used
+                - cell "#5 / Finished" [ref=e410]:
+                  - generic [ref=e411]: "#5 / Finished"
+                - cell "2026/4/22 12:32:47" [ref=e412]:
+                  - generic [ref=e413]: 2026/4/22 12:32:47
+                - cell "Open PlanOrder Customer Detail" [ref=e414]:
+                  - generic [ref=e416]:
+                    - button "Open PlanOrder" [ref=e417] [cursor=pointer]:
+                      - generic [ref=e418]: Open PlanOrder
+                    - button "Customer Detail" [ref=e419] [cursor=pointer]:
+                      - generic [ref=e420]: Customer Detail
+              - 'row "ORD202604221126278822911 #15 lead-20260422112627 13813513464 Deposit CNY 1,000.00 CNY 100.00 used #4 / Finished 2026/4/22 11:26:28 Open PlanOrder Customer Detail" [ref=e421]':
+                - 'cell "ORD202604221126278822911 #15" [ref=e422]':
+                  - generic [ref=e424]:
+                    - strong [ref=e425]: ORD202604221126278822911
+                    - generic [ref=e426]: "#15"
+                - cell "lead-20260422112627 13813513464" [ref=e427]:
+                  - generic [ref=e429]:
+                    - strong [ref=e430]: lead-20260422112627
+                    - generic [ref=e431]: "13813513464"
+                - cell "Deposit" [ref=e432]:
+                  - generic [ref=e435]: Deposit
+                - cell "CNY 1,000.00" [ref=e436]:
+                  - generic [ref=e437]: CNY 1,000.00
+                - cell "CNY 100.00" [ref=e438]:
+                  - generic [ref=e439]: CNY 100.00
+                - cell "used" [ref=e440]:
+                  - generic [ref=e443]: used
+                - cell "#4 / Finished" [ref=e444]:
+                  - generic [ref=e445]: "#4 / Finished"
+                - cell "2026/4/22 11:26:28" [ref=e446]:
+                  - generic [ref=e447]: 2026/4/22 11:26:28
+                - cell "Open PlanOrder Customer Detail" [ref=e448]:
+                  - generic [ref=e450]:
+                    - button "Open PlanOrder" [ref=e451] [cursor=pointer]:
+                      - generic [ref=e452]: Open PlanOrder
+                    - button "Customer Detail" [ref=e453] [cursor=pointer]:
+                      - generic [ref=e454]: Customer Detail
+              - 'row "ORD202604221125206063802 #14 lead-20260422112519 13880822420 Deposit CNY 1,000.00 CNY 100.00 paid #3 / Servicing 2026/4/22 11:25:21 Open PlanOrder Customer Detail" [ref=e455]':
+                - 'cell "ORD202604221125206063802 #14" [ref=e456]':
+                  - generic [ref=e458]:
+                    - strong [ref=e459]: ORD202604221125206063802
+                    - generic [ref=e460]: "#14"
+                - cell "lead-20260422112519 13880822420" [ref=e461]:
+                  - generic [ref=e463]:
+                    - strong [ref=e464]: lead-20260422112519
+                    - generic [ref=e465]: "13880822420"
+                - cell "Deposit" [ref=e466]:
+                  - generic [ref=e469]: Deposit
+                - cell "CNY 1,000.00" [ref=e470]:
+                  - generic [ref=e471]: CNY 1,000.00
+                - cell "CNY 100.00" [ref=e472]:
+                  - generic [ref=e473]: CNY 100.00
+                - cell "paid" [ref=e474]:
+                  - generic [ref=e477]: paid
+                - cell "#3 / Servicing" [ref=e478]:
+                  - generic [ref=e479]: "#3 / Servicing"
+                - cell "2026/4/22 11:25:21" [ref=e480]:
+                  - generic [ref=e481]: 2026/4/22 11:25:21
+                - cell "Open PlanOrder Customer Detail" [ref=e482]:
+                  - generic [ref=e484]:
+                    - button "Open PlanOrder" [ref=e485] [cursor=pointer]:
+                      - generic [ref=e486]: Open PlanOrder
+                    - button "Customer Detail" [ref=e487] [cursor=pointer]:
+                      - generic [ref=e488]: Customer Detail
+              - 'row "ORD202604221025342021490 #13 Salary Demo 13973742437 Deposit CNY 1,000.00 CNY 100.00 used #2 / Finished 2026/4/22 10:25:34 Open PlanOrder Customer Detail" [ref=e489]':
+                - 'cell "ORD202604221025342021490 #13" [ref=e490]':
+                  - generic [ref=e492]:
+                    - strong [ref=e493]: ORD202604221025342021490
+                    - generic [ref=e494]: "#13"
+                - cell "Salary Demo 13973742437" [ref=e495]:
+                  - generic [ref=e497]:
+                    - strong [ref=e498]: Salary Demo
+                    - generic [ref=e499]: "13973742437"
+                - cell "Deposit" [ref=e500]:
+                  - generic [ref=e503]: Deposit
+                - cell "CNY 1,000.00" [ref=e504]:
+                  - generic [ref=e505]: CNY 1,000.00
+                - cell "CNY 100.00" [ref=e506]:
+                  - generic [ref=e507]: CNY 100.00
+                - cell "used" [ref=e508]:
+                  - generic [ref=e511]: used
+                - cell "#2 / Finished" [ref=e512]:
+                  - generic [ref=e513]: "#2 / Finished"
+                - cell "2026/4/22 10:25:34" [ref=e514]:
+                  - generic [ref=e515]: 2026/4/22 10:25:34
+                - cell "Open PlanOrder Customer Detail" [ref=e516]:
+                  - generic [ref=e518]:
+                    - button "Open PlanOrder" [ref=e519] [cursor=pointer]:
+                      - generic [ref=e520]: Open PlanOrder
+                    - button "Customer Detail" [ref=e521] [cursor=pointer]:
+                      - generic [ref=e522]: Customer Detail
+              - 'row "ORD202604220955338366259 #12 PlanOrder Auto Test 13900003173 Deposit CNY 1,280.00 CNY 200.00 used #1 / Finished 2026/4/22 09:55:34 Open PlanOrder Customer Detail" [ref=e523]':
+                - 'cell "ORD202604220955338366259 #12" [ref=e524]':
+                  - generic [ref=e526]:
+                    - strong [ref=e527]: ORD202604220955338366259
+                    - generic [ref=e528]: "#12"
+                - cell "PlanOrder Auto Test 13900003173" [ref=e529]:
+                  - generic [ref=e531]:
+                    - strong [ref=e532]: PlanOrder Auto Test
+                    - generic [ref=e533]: "13900003173"
+                - cell "Deposit" [ref=e534]:
+                  - generic [ref=e537]: Deposit
+                - cell "CNY 1,280.00" [ref=e538]:
+                  - generic [ref=e539]: CNY 1,280.00
+                - cell "CNY 200.00" [ref=e540]:
+                  - generic [ref=e541]: CNY 200.00
+                - cell "used" [ref=e542]:
+                  - generic [ref=e545]: used
+                - cell "#1 / Finished" [ref=e546]:
+                  - generic [ref=e547]: "#1 / Finished"
+                - cell "2026/4/22 09:55:34" [ref=e548]:
+                  - generic [ref=e549]: 2026/4/22 09:55:34
+                - cell "Open PlanOrder Customer Detail" [ref=e550]:
+                  - generic [ref=e552]:
+                    - button "Open PlanOrder" [ref=e553] [cursor=pointer]:
+                      - generic [ref=e554]: Open PlanOrder
+                    - button "Customer Detail" [ref=e555] [cursor=pointer]:
+                      - generic [ref=e556]: Customer Detail
+              - 'row "ORD202604220152140604040 #11 seed-user 13900002385 Deposit CNY 199.00 CNY 80.00 paid Not created 2026/4/22 01:52:14 Create PlanOrder Customer Detail" [ref=e557]':
+                - 'cell "ORD202604220152140604040 #11" [ref=e558]':
+                  - generic [ref=e560]:
+                    - strong [ref=e561]: ORD202604220152140604040
+                    - generic [ref=e562]: "#11"
+                - cell "seed-user 13900002385" [ref=e563]:
+                  - generic [ref=e565]:
+                    - strong [ref=e566]: seed-user
+                    - generic [ref=e567]: "13900002385"
+                - cell "Deposit" [ref=e568]:
+                  - generic [ref=e571]: Deposit
+                - cell "CNY 199.00" [ref=e572]:
+                  - generic [ref=e573]: CNY 199.00
+                - cell "CNY 80.00" [ref=e574]:
+                  - generic [ref=e575]: CNY 80.00
+                - cell "paid" [ref=e576]:
+                  - generic [ref=e579]: paid
+                - cell "Not created" [ref=e580]:
+                  - generic [ref=e581]: Not created
+                - cell "2026/4/22 01:52:14" [ref=e582]:
+                  - generic [ref=e583]: 2026/4/22 01:52:14
+                - cell "Create PlanOrder Customer Detail" [ref=e584]:
+                  - generic [ref=e586]:
+                    - button "Create PlanOrder" [ref=e587] [cursor=pointer]:
+                      - generic [ref=e588]: Create PlanOrder
+                    - button "Customer Detail" [ref=e589] [cursor=pointer]:
+                      - generic [ref=e590]: Customer Detail
+              - 'row "ORD202604220029267336866 #10 ?????? 1390422002925 Deposit CNY 299.00 CNY 29.90 used Not created 2026/4/22 00:29:27 Create PlanOrder Customer Detail" [ref=e591]':
+                - 'cell "ORD202604220029267336866 #10" [ref=e592]':
+                  - generic [ref=e594]:
+                    - strong [ref=e595]: ORD202604220029267336866
+                    - generic [ref=e596]: "#10"
+                - cell "?????? 1390422002925" [ref=e597]:
+                  - generic [ref=e599]:
+                    - strong [ref=e600]: "??????"
+                    - generic [ref=e601]: "1390422002925"
+                - cell "Deposit" [ref=e602]:
+                  - generic [ref=e605]: Deposit
+                - cell "CNY 299.00" [ref=e606]:
+                  - generic [ref=e607]: CNY 299.00
+                - cell "CNY 29.90" [ref=e608]:
+                  - generic [ref=e609]: CNY 29.90
+                - cell "used" [ref=e610]:
+                  - generic [ref=e613]: used
+                - cell "Not created" [ref=e614]:
+                  - generic [ref=e615]: Not created
+                - cell "2026/4/22 00:29:27" [ref=e616]:
+                  - generic [ref=e617]: 2026/4/22 00:29:27
+                - cell "Create PlanOrder Customer Detail" [ref=e618]:
+                  - generic [ref=e620]:
+                    - button "Create PlanOrder" [ref=e621] [cursor=pointer]:
+                      - generic [ref=e622]: Create PlanOrder
+                    - button "Customer Detail" [ref=e623] [cursor=pointer]:
+                      - generic [ref=e624]: Customer Detail
+              - 'row "ORD202604211849452699362 #9 Tag Test User 13800990001 Deposit CNY 300.00 CNY 60.00 used Not created 2026/4/21 18:49:45 Create PlanOrder Customer Detail" [ref=e625]':
+                - 'cell "ORD202604211849452699362 #9" [ref=e626]':
+                  - generic [ref=e628]:
+                    - strong [ref=e629]: ORD202604211849452699362
+                    - generic [ref=e630]: "#9"
+                - cell "Tag Test User 13800990001" [ref=e631]:
+                  - generic [ref=e633]:
+                    - strong [ref=e634]: Tag Test User
+                    - generic [ref=e635]: "13800990001"
+                - cell "Deposit" [ref=e636]:
+                  - generic [ref=e639]: Deposit
+                - cell "CNY 300.00" [ref=e640]:
+                  - generic [ref=e641]: CNY 300.00
+                - cell "CNY 60.00" [ref=e642]:
+                  - generic [ref=e643]: CNY 60.00
+                - cell "used" [ref=e644]:
+                  - generic [ref=e647]: used
+                - cell "Not created" [ref=e648]:
+                  - generic [ref=e649]: Not created
+                - cell "2026/4/21 18:49:45" [ref=e650]:
+                  - generic [ref=e651]: 2026/4/21 18:49:45
+                - cell "Create PlanOrder Customer Detail" [ref=e652]:
+                  - generic [ref=e654]:
+                    - button "Create PlanOrder" [ref=e655] [cursor=pointer]:
+                      - generic [ref=e656]: Create PlanOrder
+                    - button "Customer Detail" [ref=e657] [cursor=pointer]:
+                      - generic [ref=e658]: Customer Detail
+              - 'row "ORD202604211849297614158 #8 Tag Test User 13800990001 Deposit CNY 200.00 CNY 50.00 used Not created 2026/4/21 18:49:30 Create PlanOrder Customer Detail" [ref=e659]':
+                - 'cell "ORD202604211849297614158 #8" [ref=e660]':
+                  - generic [ref=e662]:
+                    - strong [ref=e663]: ORD202604211849297614158
+                    - generic [ref=e664]: "#8"
+                - cell "Tag Test User 13800990001" [ref=e665]:
+                  - generic [ref=e667]:
+                    - strong [ref=e668]: Tag Test User
+                    - generic [ref=e669]: "13800990001"
+                - cell "Deposit" [ref=e670]:
+                  - generic [ref=e673]: Deposit
+                - cell "CNY 200.00" [ref=e674]:
+                  - generic [ref=e675]: CNY 200.00
+                - cell "CNY 50.00" [ref=e676]:
+                  - generic [ref=e677]: CNY 50.00
+                - cell "used" [ref=e678]:
+                  - generic [ref=e681]: used
+                - cell "Not created" [ref=e682]:
+                  - generic [ref=e683]: Not created
+                - cell "2026/4/21 18:49:30" [ref=e684]:
+                  - generic [ref=e685]: 2026/4/21 18:49:30
+                - cell "Create PlanOrder Customer Detail" [ref=e686]:
+                  - generic [ref=e688]:
+                    - button "Create PlanOrder" [ref=e689] [cursor=pointer]:
+                      - generic [ref=e690]: Create PlanOrder
+                    - button "Customer Detail" [ref=e691] [cursor=pointer]:
+                      - generic [ref=e692]: Customer Detail
+              - 'row "ORD202604211848443075779 #7 Tag Test User 13800990001 Deposit CNY 600.00 CNY 100.00 used Not created 2026/4/21 18:48:44 Create PlanOrder Customer Detail" [ref=e693]':
+                - 'cell "ORD202604211848443075779 #7" [ref=e694]':
+                  - generic [ref=e696]:
+                    - strong [ref=e697]: ORD202604211848443075779
+                    - generic [ref=e698]: "#7"
+                - cell "Tag Test User 13800990001" [ref=e699]:
+                  - generic [ref=e701]:
+                    - strong [ref=e702]: Tag Test User
+                    - generic [ref=e703]: "13800990001"
+                - cell "Deposit" [ref=e704]:
+                  - generic [ref=e707]: Deposit
+                - cell "CNY 600.00" [ref=e708]:
+                  - generic [ref=e709]: CNY 600.00
+                - cell "CNY 100.00" [ref=e710]:
+                  - generic [ref=e711]: CNY 100.00
+                - cell "used" [ref=e712]:
+                  - generic [ref=e715]: used
+                - cell "Not created" [ref=e716]:
+                  - generic [ref=e717]: Not created
+                - cell "2026/4/21 18:48:44" [ref=e718]:
+                  - generic [ref=e719]: 2026/4/21 18:48:44
+                - cell "Create PlanOrder Customer Detail" [ref=e720]:
+                  - generic [ref=e722]:
+                    - button "Create PlanOrder" [ref=e723] [cursor=pointer]:
+                      - generic [ref=e724]: Create PlanOrder
+                    - button "Customer Detail" [ref=e725] [cursor=pointer]:
+                      - generic [ref=e726]: Customer Detail
+              - 'row "ORD202604211817015404304 #6 Closure Test 1390421181623 Coupon CNY 299.00 CNY 29.00 paid Not created 2026/4/21 18:17:02 Create PlanOrder Customer Detail" [ref=e727]':
+                - 'cell "ORD202604211817015404304 #6" [ref=e728]':
+                  - generic [ref=e730]:
+                    - strong [ref=e731]: ORD202604211817015404304
+                    - generic [ref=e732]: "#6"
+                - cell "Closure Test 1390421181623" [ref=e733]:
+                  - generic [ref=e735]:
+                    - strong [ref=e736]: Closure Test
+                    - generic [ref=e737]: "1390421181623"
+                - cell "Coupon" [ref=e738]:
+                  - generic [ref=e741]: Coupon
+                - cell "CNY 299.00" [ref=e742]:
+                  - generic [ref=e743]: CNY 299.00
+                - cell "CNY 29.00" [ref=e744]:
+                  - generic [ref=e745]: CNY 29.00
+                - cell "paid" [ref=e746]:
+                  - generic [ref=e749]: paid
+                - cell "Not created" [ref=e750]:
+                  - generic [ref=e751]: Not created
+                - cell "2026/4/21 18:17:02" [ref=e752]:
+                  - generic [ref=e753]: 2026/4/21 18:17:02
+                - cell "Create PlanOrder Customer Detail" [ref=e754]:
+                  - generic [ref=e756]:
+                    - button "Create PlanOrder" [ref=e757] [cursor=pointer]:
+                      - generic [ref=e758]: Create PlanOrder
+                    - button "Customer Detail" [ref=e759] [cursor=pointer]:
+                      - generic [ref=e760]: Customer Detail
+              - 'row "ORD202604211816244305202 #5 Closure Test 1390421181623 Coupon CNY 1,999.00 CNY 199.00 paid Not created 2026/4/21 18:16:24 Create PlanOrder Customer Detail" [ref=e761]':
+                - 'cell "ORD202604211816244305202 #5" [ref=e762]':
+                  - generic [ref=e764]:
+                    - strong [ref=e765]: ORD202604211816244305202
+                    - generic [ref=e766]: "#5"
+                - cell "Closure Test 1390421181623" [ref=e767]:
+                  - generic [ref=e769]:
+                    - strong [ref=e770]: Closure Test
+                    - generic [ref=e771]: "1390421181623"
+                - cell "Coupon" [ref=e772]:
+                  - generic [ref=e775]: Coupon
+                - cell "CNY 1,999.00" [ref=e776]:
+                  - generic [ref=e777]: CNY 1,999.00
+                - cell "CNY 199.00" [ref=e778]:
+                  - generic [ref=e779]: CNY 199.00
+                - cell "paid" [ref=e780]:
+                  - generic [ref=e783]: paid
+                - cell "Not created" [ref=e784]:
+                  - generic [ref=e785]: Not created
+                - cell "2026/4/21 18:16:24" [ref=e786]:
+                  - generic [ref=e787]: 2026/4/21 18:16:24
+                - cell "Create PlanOrder Customer Detail" [ref=e788]:
+                  - generic [ref=e790]:
+                    - button "Create PlanOrder" [ref=e791] [cursor=pointer]:
+                      - generic [ref=e792]: Create PlanOrder
+                    - button "Customer Detail" [ref=e793] [cursor=pointer]:
+                      - generic [ref=e794]: Customer Detail
+              - 'row "ORD202604211816241153678 #4 Closure Test 1390421181623 Deposit CNY 999.00 CNY 99.00 used Not created 2026/4/21 18:16:24 Create PlanOrder Customer Detail" [ref=e795]':
+                - 'cell "ORD202604211816241153678 #4" [ref=e796]':
+                  - generic [ref=e798]:
+                    - strong [ref=e799]: ORD202604211816241153678
+                    - generic [ref=e800]: "#4"
+                - cell "Closure Test 1390421181623" [ref=e801]:
+                  - generic [ref=e803]:
+                    - strong [ref=e804]: Closure Test
+                    - generic [ref=e805]: "1390421181623"
+                - cell "Deposit" [ref=e806]:
+                  - generic [ref=e809]: Deposit
+                - cell "CNY 999.00" [ref=e810]:
+                  - generic [ref=e811]: CNY 999.00
+                - cell "CNY 99.00" [ref=e812]:
+                  - generic [ref=e813]: CNY 99.00
+                - cell "used" [ref=e814]:
+                  - generic [ref=e817]: used
+                - cell "Not created" [ref=e818]:
+                  - generic [ref=e819]: Not created
+                - cell "2026/4/21 18:16:24" [ref=e820]:
+                  - generic [ref=e821]: 2026/4/21 18:16:24
+                - cell "Create PlanOrder Customer Detail" [ref=e822]:
+                  - generic [ref=e824]:
+                    - button "Create PlanOrder" [ref=e825] [cursor=pointer]:
+                      - generic [ref=e826]: Create PlanOrder
+                    - button "Customer Detail" [ref=e827] [cursor=pointer]:
+                      - generic [ref=e828]: Customer Detail
+              - 'row "ORD202604211659028991559 #3 Waiting for customer binding -- Deposit CNY 888.00 CNY 88.00 paid Not created 2026/4/21 16:59:03 Create PlanOrder Customer Detail" [ref=e829]':
+                - 'cell "ORD202604211659028991559 #3" [ref=e830]':
+                  - generic [ref=e832]:
+                    - strong [ref=e833]: ORD202604211659028991559
+                    - generic [ref=e834]: "#3"
+                - cell "Waiting for customer binding --" [ref=e835]:
+                  - generic [ref=e837]:
+                    - strong [ref=e838]: Waiting for customer binding
+                    - generic [ref=e839]: "--"
+                - cell "Deposit" [ref=e840]:
+                  - generic [ref=e843]: Deposit
+                - cell "CNY 888.00" [ref=e844]:
+                  - generic [ref=e845]: CNY 888.00
+                - cell "CNY 88.00" [ref=e846]:
+                  - generic [ref=e847]: CNY 88.00
+                - cell "paid" [ref=e848]:
+                  - generic [ref=e851]: paid
+                - cell "Not created" [ref=e852]:
+                  - generic [ref=e853]: Not created
+                - cell "2026/4/21 16:59:03" [ref=e854]:
+                  - generic [ref=e855]: 2026/4/21 16:59:03
+                - cell "Create PlanOrder Customer Detail" [ref=e856]:
+                  - generic [ref=e858]:
+                    - button "Create PlanOrder" [ref=e859] [cursor=pointer]:
+                      - generic [ref=e860]: Create PlanOrder
+                    - button "Customer Detail" [ref=e861] [cursor=pointer]:
+                      - generic [ref=e862]: Customer Detail
+              - 'row "ORD202604211658411069480 #2 Waiting for customer binding -- Deposit CNY 1,288.50 CNY 200.00 used Not created 2026/4/21 16:58:41 Create PlanOrder Customer Detail" [ref=e863]':
+                - 'cell "ORD202604211658411069480 #2" [ref=e864]':
+                  - generic [ref=e866]:
+                    - strong [ref=e867]: ORD202604211658411069480
+                    - generic [ref=e868]: "#2"
+                - cell "Waiting for customer binding --" [ref=e869]:
+                  - generic [ref=e871]:
+                    - strong [ref=e872]: Waiting for customer binding
+                    - generic [ref=e873]: "--"
+                - cell "Deposit" [ref=e874]:
+                  - generic [ref=e877]: Deposit
+                - cell "CNY 1,288.50" [ref=e878]:
+                  - generic [ref=e879]: CNY 1,288.50
+                - cell "CNY 200.00" [ref=e880]:
+                  - generic [ref=e881]: CNY 200.00
+                - cell "used" [ref=e882]:
+                  - generic [ref=e885]: used
+                - cell "Not created" [ref=e886]:
+                  - generic [ref=e887]: Not created
+                - cell "2026/4/21 16:58:41" [ref=e888]:
+                  - generic [ref=e889]: 2026/4/21 16:58:41
+                - cell "Create PlanOrder Customer Detail" [ref=e890]:
+                  - generic [ref=e892]:
+                    - button "Create PlanOrder" [ref=e893] [cursor=pointer]:
+                      - generic [ref=e894]: Create PlanOrder
+                    - button "Customer Detail" [ref=e895] [cursor=pointer]:
+                      - generic [ref=e896]: Customer Detail
+              - 'row "ORD202604211658188837110 #1 Waiting for customer binding -- Deposit CNY 999.99 CNY 0.00 paid Not created 2026/4/21 16:58:19 Create PlanOrder Customer Detail" [ref=e897]':
+                - 'cell "ORD202604211658188837110 #1" [ref=e898]':
+                  - generic [ref=e900]:
+                    - strong [ref=e901]: ORD202604211658188837110
+                    - generic [ref=e902]: "#1"
+                - cell "Waiting for customer binding --" [ref=e903]:
+                  - generic [ref=e905]:
+                    - strong [ref=e906]: Waiting for customer binding
+                    - generic [ref=e907]: "--"
+                - cell "Deposit" [ref=e908]:
+                  - generic [ref=e911]: Deposit
+                - cell "CNY 999.99" [ref=e912]:
+                  - generic [ref=e913]: CNY 999.99
+                - cell "CNY 0.00" [ref=e914]:
+                  - generic [ref=e915]: CNY 0.00
+                - cell "paid" [ref=e916]:
+                  - generic [ref=e919]: paid
+                - cell "Not created" [ref=e920]:
+                  - generic [ref=e921]: Not created
+                - cell "2026/4/21 16:58:19" [ref=e922]:
+                  - generic [ref=e923]: 2026/4/21 16:58:19
+                - cell "Create PlanOrder Customer Detail" [ref=e924]:
+                  - generic [ref=e926]:
+                    - button "Create PlanOrder" [ref=e927] [cursor=pointer]:
+                      - generic [ref=e928]: Create PlanOrder
+                    - button "Customer Detail" [ref=e929] [cursor=pointer]:
+                      - generic [ref=e930]: Customer Detail

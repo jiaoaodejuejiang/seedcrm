@@ -1,5 +1,6 @@
 package com.seedcrm.crm.permission.support;
 
+import com.seedcrm.crm.auth.service.AuthService;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
@@ -19,15 +20,18 @@ public class PlanOrderPermissionGuard {
     private final PlanOrderMapper planOrderMapper;
     private final OrderMapper orderMapper;
     private final ClueMapper clueMapper;
+    private final AuthService authService;
 
     public PlanOrderPermissionGuard(PermissionService permissionService,
                                     PlanOrderMapper planOrderMapper,
                                     OrderMapper orderMapper,
-                                    ClueMapper clueMapper) {
+                                    ClueMapper clueMapper,
+                                    AuthService authService) {
         this.permissionService = permissionService;
         this.planOrderMapper = planOrderMapper;
         this.orderMapper = orderMapper;
         this.clueMapper = clueMapper;
+        this.authService = authService;
     }
 
     public void checkCreate(PermissionRequestContext context, Long orderId) {
@@ -64,7 +68,7 @@ public class PlanOrderPermissionGuard {
         request.setDataScope(context.getDataScope());
         request.setCurrentUserId(context.getCurrentUserId());
         request.setCurrentStoreId(context.getCurrentStoreId());
-        request.setResourceStoreId(context.getResourceStoreId());
+        request.setResourceStoreId(authService.resolveStoreId(resourceOwnerId));
         request.setTeamMemberIds(context.getTeamMemberIds());
         request.setBoundCustomerUserId(context.getBoundCustomerUserId());
         request.setResourceOwnerId(resourceOwnerId);

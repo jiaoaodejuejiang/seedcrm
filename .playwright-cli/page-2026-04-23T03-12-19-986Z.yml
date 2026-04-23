@@ -1,0 +1,581 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Seed CRM
+      - heading "约束驱动的门店主链工作台" [level=1] [ref=e7]
+      - paragraph [ref=e8]: 严格围绕 Clue → Customer → Order → PlanOrder 主链，并把 Permission、Scheduler、Salary 一起接入前台。
+    - navigation [ref=e9]:
+      - link "线索 录入、分配、回收、转订单" [ref=e10] [cursor=pointer]:
+        - /url: /clues
+        - generic [ref=e11]: 线索
+        - generic [ref=e12]: 录入、分配、回收、转订单
+      - link "订单 paid / used 主链与到店入口" [ref=e13] [cursor=pointer]:
+        - /url: /orders
+        - generic [ref=e14]: 订单
+        - generic [ref=e15]: paid / used 主链与到店入口
+      - link "到店服务 状态流转与角色记录" [ref=e16] [cursor=pointer]:
+        - /url: /plan-orders
+        - generic [ref=e17]: 到店服务
+        - generic [ref=e18]: 状态流转与角色记录
+      - link "调度中心 队列、重试、日志" [ref=e19] [cursor=pointer]:
+        - /url: /scheduler
+        - generic [ref=e20]: 调度中心
+        - generic [ref=e21]: 队列、重试、日志
+      - link "权限 RBAC / ABAC 策略与校验" [ref=e22] [cursor=pointer]:
+        - /url: /permission
+        - generic [ref=e23]: 权限
+        - generic [ref=e24]: RBAC / ABAC 策略与校验
+      - link "薪酬 统计、重算、结算、提现" [ref=e25] [cursor=pointer]:
+        - /url: /salary
+        - generic [ref=e26]: 薪酬
+        - generic [ref=e27]: 统计、重算、结算、提现
+      - link "分销 带客与收益表现" [ref=e28] [cursor=pointer]:
+        - /url: /distributors
+        - generic [ref=e29]: 分销
+        - generic [ref=e30]: 带客与收益表现
+      - link "财务 收入与提现概览" [ref=e31] [cursor=pointer]:
+        - /url: /finance
+        - generic [ref=e32]: 财务
+        - generic [ref=e33]: 收入与提现概览
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - heading "权限上下文" [level=3] [ref=e37]
+          - paragraph [ref=e38]: 所有请求都会自动注入 RBAC / ABAC 请求头。
+        - button "重置" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: 重置
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: 角色
+          - generic [ref=e45] [cursor=pointer]:
+            - generic:
+              - combobox "角色 管理员" [ref=e47]
+              - generic [ref=e48]: 管理员
+            - img [ref=e51]
+        - generic [ref=e53]:
+          - generic [ref=e54]: 数据范围
+          - generic [ref=e56] [cursor=pointer]:
+            - generic:
+              - combobox "数据范围 all" [ref=e58]
+              - generic [ref=e59]: all
+            - img [ref=e62]
+        - generic [ref=e64]:
+          - generic [ref=e65]: 当前用户 ID
+          - generic [ref=e66]:
+            - button "decrease number" [ref=e67] [cursor=pointer]:
+              - img [ref=e69]
+            - button "increase number" [ref=e71] [cursor=pointer]:
+              - img [ref=e73]
+            - spinbutton "当前用户 ID decrease number increase number" [ref=e77]: "1001"
+        - generic [ref=e78]:
+          - generic [ref=e79]: 当前门店 ID
+          - generic [ref=e80]:
+            - button "decrease number" [ref=e81] [cursor=pointer]:
+              - img [ref=e83]
+            - button "increase number" [ref=e85] [cursor=pointer]:
+              - img [ref=e87]
+            - spinbutton "当前门店 ID decrease number increase number" [ref=e91]: "10"
+        - generic [ref=e92]:
+          - generic [ref=e93]: 资源门店 ID
+          - generic [ref=e94]:
+            - button "decrease number" [ref=e95] [cursor=pointer]:
+              - img [ref=e97]
+            - button "increase number" [ref=e99] [cursor=pointer]:
+              - img [ref=e101]
+            - spinbutton "资源门店 ID decrease number increase number" [ref=e105]: "10"
+        - generic [ref=e106]:
+          - generic [ref=e107]: 绑定客户用户 ID
+          - generic [ref=e108]:
+            - button "decrease number" [ref=e109] [cursor=pointer]:
+              - img [ref=e111]
+            - button "increase number" [ref=e113] [cursor=pointer]:
+              - img [ref=e115]
+            - spinbutton "绑定客户用户 ID decrease number increase number" [ref=e119]
+        - generic [ref=e120]:
+          - generic [ref=e121]: 团队成员 ID
+          - textbox "团队成员 ID" [ref=e124]:
+            - /placeholder: 例如 1001,1002
+            - text: 1001,1002
+  - main [ref=e125]:
+    - generic [ref=e126]:
+      - generic [ref=e127]:
+        - paragraph [ref=e128]: Constraint First
+        - heading "线索管理" [level=2] [ref=e129]
+        - paragraph [ref=e130]: 统一接收抖音与分销线索，完成分配、回收以及线索转订单。
+      - generic [ref=e131]:
+        - generic [ref=e132]: 角色：管理员
+        - generic [ref=e133]: 范围：ALL
+        - generic [ref=e134]: 主链：Clue → Customer → Order → PlanOrder
+    - generic [ref=e136]:
+      - generic [ref=e137]:
+        - article [ref=e138]:
+          - generic [ref=e139]: 线索总数
+          - strong [ref=e140]: "14"
+          - text: 统一入口接收抖音与分销线索。
+        - article [ref=e141]:
+          - generic [ref=e142]: 待分配
+          - strong [ref=e143]: "0"
+          - text: 尚未进入跟进与成交链路。
+        - article [ref=e144]:
+          - generic [ref=e145]: 已转订单
+          - strong [ref=e146]: "13"
+          - text: 已经触发 Customer 绑定与订单创建。
+      - generic [ref=e147]:
+        - generic [ref=e148]:
+          - generic [ref=e149]:
+            - generic [ref=e151] [cursor=pointer]:
+              - generic:
+                - combobox [ref=e153]
+                - generic [ref=e154]: 来源渠道
+              - img [ref=e157]
+            - generic [ref=e160] [cursor=pointer]:
+              - generic:
+                - combobox [ref=e162]
+                - generic [ref=e163]: 线索状态
+              - img [ref=e166]
+            - button "筛选" [ref=e168] [cursor=pointer]:
+              - generic [ref=e169]: 筛选
+          - button "新增线索" [ref=e170] [cursor=pointer]:
+            - generic [ref=e171]: 新增线索
+        - generic [ref=e172]:
+          - generic [ref=e173]:
+            - table [ref=e175]:
+              - rowgroup [ref=e184]:
+                - row "客户信息 来源 状态 当前负责人 最近订单 创建时间 操作" [ref=e185]:
+                  - columnheader "客户信息" [ref=e186]:
+                    - generic [ref=e187]: 客户信息
+                  - columnheader "来源" [ref=e188]:
+                    - generic [ref=e189]: 来源
+                  - columnheader "状态" [ref=e190]:
+                    - generic [ref=e191]: 状态
+                  - columnheader "当前负责人" [ref=e192]:
+                    - generic [ref=e193]: 当前负责人
+                  - columnheader "最近订单" [ref=e194]:
+                    - generic [ref=e195]: 最近订单
+                  - columnheader "创建时间" [ref=e196]:
+                    - generic [ref=e197]: 创建时间
+                  - columnheader "操作" [ref=e198]:
+                    - generic [ref=e199]: 操作
+            - table [ref=e204]:
+              - rowgroup [ref=e213]:
+                - 'row "Rerun-42849368 13982849368 抖音 已转订单 王顾问 #20 / 已核销 2026/4/22 15:27:34 分配 Toggle Dropdown 回收到公海 转订单" [ref=e214]':
+                  - cell "Rerun-42849368 13982849368" [ref=e215]:
+                    - generic [ref=e217]:
+                      - strong [ref=e218]: Rerun-42849368
+                      - generic [ref=e219]: "13982849368"
+                  - cell "抖音" [ref=e220]:
+                    - generic [ref=e221]:
+                      - generic:
+                        - generic: 抖音
+                  - cell "已转订单" [ref=e222]:
+                    - generic [ref=e223]:
+                      - generic:
+                        - generic: 已转订单
+                  - cell "王顾问" [ref=e224]:
+                    - generic [ref=e225]: 王顾问
+                  - cell "#20 / 已核销" [ref=e226]:
+                    - generic [ref=e227]: "#20 / 已核销"
+                  - cell "2026/4/22 15:27:34" [ref=e228]:
+                    - generic [ref=e229]: 2026/4/22 15:27:34
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e230]:
+                    - generic [ref=e232]:
+                      - generic [ref=e234]:
+                        - button "分配" [ref=e235] [cursor=pointer]:
+                          - generic [ref=e236]: 分配
+                        - button "Toggle Dropdown" [ref=e237] [cursor=pointer]:
+                          - img [ref=e240]
+                      - button "回收到公海" [ref=e242] [cursor=pointer]:
+                        - generic [ref=e243]: 回收到公海
+                      - button "转订单" [ref=e244] [cursor=pointer]:
+                        - generic [ref=e245]: 转订单
+                - 'row "Rerun-42761206 13982761206 抖音 已转订单 王顾问 #19 / 已核销 2026/4/22 15:26:05 分配 Toggle Dropdown 回收到公海 转订单" [ref=e246]':
+                  - cell "Rerun-42761206 13982761206" [ref=e247]:
+                    - generic [ref=e249]:
+                      - strong [ref=e250]: Rerun-42761206
+                      - generic [ref=e251]: "13982761206"
+                  - cell "抖音" [ref=e252]:
+                    - generic [ref=e253]:
+                      - generic:
+                        - generic: 抖音
+                  - cell "已转订单" [ref=e254]:
+                    - generic [ref=e255]:
+                      - generic:
+                        - generic: 已转订单
+                  - cell "王顾问" [ref=e256]:
+                    - generic [ref=e257]: 王顾问
+                  - cell "#19 / 已核销" [ref=e258]:
+                    - generic [ref=e259]: "#19 / 已核销"
+                  - cell "2026/4/22 15:26:05" [ref=e260]:
+                    - generic [ref=e261]: 2026/4/22 15:26:05
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e262]:
+                    - generic [ref=e264]:
+                      - generic [ref=e266]:
+                        - button "分配" [ref=e267] [cursor=pointer]:
+                          - generic [ref=e268]: 分配
+                        - button "Toggle Dropdown" [ref=e269] [cursor=pointer]:
+                          - img [ref=e272]
+                      - button "回收到公海" [ref=e274] [cursor=pointer]:
+                        - generic [ref=e275]: 回收到公海
+                      - button "转订单" [ref=e276] [cursor=pointer]:
+                        - generic [ref=e277]: 转订单
+                - 'row "UI Auto Flow 13990005678 抖音 已转订单 王顾问 #18 / 已核销 2026/4/22 14:57:44 分配 Toggle Dropdown 回收到公海 转订单" [ref=e278]':
+                  - cell "UI Auto Flow 13990005678" [ref=e279]:
+                    - generic [ref=e281]:
+                      - strong [ref=e282]: UI Auto Flow
+                      - generic [ref=e283]: "13990005678"
+                  - cell "抖音" [ref=e284]:
+                    - generic [ref=e285]:
+                      - generic:
+                        - generic: 抖音
+                  - cell "已转订单" [ref=e286]:
+                    - generic [ref=e287]:
+                      - generic:
+                        - generic: 已转订单
+                  - cell "王顾问" [ref=e288]:
+                    - generic [ref=e289]: 王顾问
+                  - cell "#18 / 已核销" [ref=e290]:
+                    - generic [ref=e291]: "#18 / 已核销"
+                  - cell "2026/4/22 14:57:44" [ref=e292]:
+                    - generic [ref=e293]: 2026/4/22 14:57:44
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e294]:
+                    - generic [ref=e296]:
+                      - generic [ref=e298]:
+                        - button "分配" [ref=e299] [cursor=pointer]:
+                          - generic [ref=e300]: 分配
+                        - button "Toggle Dropdown" [ref=e301] [cursor=pointer]:
+                          - img [ref=e304]
+                      - button "回收到公海" [ref=e306] [cursor=pointer]:
+                        - generic [ref=e307]: 回收到公海
+                      - button "转订单" [ref=e308] [cursor=pointer]:
+                        - generic [ref=e309]: 转订单
+                - 'row "FinanceClue-1776832767 1391001776832767 分销 已转订单 待分配 #17 / 已核销 2026/4/22 12:39:28 分配 Toggle Dropdown 回收到公海 转订单" [ref=e310]':
+                  - cell "FinanceClue-1776832767 1391001776832767" [ref=e311]:
+                    - generic [ref=e313]:
+                      - strong [ref=e314]: FinanceClue-1776832767
+                      - generic [ref=e315]: "1391001776832767"
+                  - cell "分销" [ref=e316]:
+                    - generic [ref=e317]:
+                      - generic:
+                        - generic: 分销
+                  - cell "已转订单" [ref=e318]:
+                    - generic [ref=e319]:
+                      - generic:
+                        - generic: 已转订单
+                  - cell "待分配" [ref=e320]:
+                    - generic [ref=e321]: 待分配
+                  - cell "#17 / 已核销" [ref=e322]:
+                    - generic [ref=e323]: "#17 / 已核销"
+                  - cell "2026/4/22 12:39:28" [ref=e324]:
+                    - generic [ref=e325]: 2026/4/22 12:39:28
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e326]:
+                    - generic [ref=e328]:
+                      - generic [ref=e330]:
+                        - button "分配" [ref=e331] [cursor=pointer]:
+                          - generic [ref=e332]: 分配
+                        - button "Toggle Dropdown" [ref=e333] [cursor=pointer]:
+                          - img [ref=e336]
+                      - button "回收到公海" [disabled] [ref=e338]:
+                        - generic [ref=e339]: 回收到公海
+                      - button "转订单" [ref=e340] [cursor=pointer]:
+                        - generic [ref=e341]: 转订单
+                - 'row "FinanceClue-1776832364 1390001776832364 分销 已转订单 待分配 #16 / 已核销 2026/4/22 12:32:47 分配 Toggle Dropdown 回收到公海 转订单" [ref=e342]':
+                  - cell "FinanceClue-1776832364 1390001776832364" [ref=e343]:
+                    - generic [ref=e345]:
+                      - strong [ref=e346]: FinanceClue-1776832364
+                      - generic [ref=e347]: "1390001776832364"
+                  - cell "分销" [ref=e348]:
+                    - generic [ref=e349]:
+                      - generic:
+                        - generic: 分销
+                  - cell "已转订单" [ref=e350]:
+                    - generic [ref=e351]:
+                      - generic:
+                        - generic: 已转订单
+                  - cell "待分配" [ref=e352]:
+                    - generic [ref=e353]: 待分配
+                  - cell "#16 / 已核销" [ref=e354]:
+                    - generic [ref=e355]: "#16 / 已核销"
+                  - cell "2026/4/22 12:32:47" [ref=e356]:
+                    - generic [ref=e357]: 2026/4/22 12:32:47
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e358]:
+                    - generic [ref=e360]:
+                      - generic [ref=e362]:
+                        - button "分配" [ref=e363] [cursor=pointer]:
+                          - generic [ref=e364]: 分配
+                        - button "Toggle Dropdown" [ref=e365] [cursor=pointer]:
+                          - img [ref=e368]
+                      - button "回收到公海" [disabled] [ref=e370]:
+                        - generic [ref=e371]: 回收到公海
+                      - button "转订单" [ref=e372] [cursor=pointer]:
+                        - generic [ref=e373]: 转订单
+                - 'row "lead-20260422112627 13813513464 分销 已转订单 待分配 #15 / 已核销 2026/4/22 11:26:28 分配 Toggle Dropdown 回收到公海 转订单" [ref=e374]':
+                  - cell "lead-20260422112627 13813513464" [ref=e375]:
+                    - generic [ref=e377]:
+                      - strong [ref=e378]: lead-20260422112627
+                      - generic [ref=e379]: "13813513464"
+                  - cell "分销" [ref=e380]:
+                    - generic [ref=e381]:
+                      - generic:
+                        - generic: 分销
+                  - cell "已转订单" [ref=e382]:
+                    - generic [ref=e383]:
+                      - generic:
+                        - generic: 已转订单
+                  - cell "待分配" [ref=e384]:
+                    - generic [ref=e385]: 待分配
+                  - cell "#15 / 已核销" [ref=e386]:
+                    - generic [ref=e387]: "#15 / 已核销"
+                  - cell "2026/4/22 11:26:28" [ref=e388]:
+                    - generic [ref=e389]: 2026/4/22 11:26:28
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e390]:
+                    - generic [ref=e392]:
+                      - generic [ref=e394]:
+                        - button "分配" [ref=e395] [cursor=pointer]:
+                          - generic [ref=e396]: 分配
+                        - button "Toggle Dropdown" [ref=e397] [cursor=pointer]:
+                          - img [ref=e400]
+                      - button "回收到公海" [disabled] [ref=e402]:
+                        - generic [ref=e403]: 回收到公海
+                      - button "转订单" [ref=e404] [cursor=pointer]:
+                        - generic [ref=e405]: 转订单
+                - 'row "lead-20260422112519 13880822420 分销 已转订单 待分配 #14 / 已付款 2026/4/22 11:25:21 分配 Toggle Dropdown 回收到公海 转订单" [ref=e406]':
+                  - cell "lead-20260422112519 13880822420" [ref=e407]:
+                    - generic [ref=e409]:
+                      - strong [ref=e410]: lead-20260422112519
+                      - generic [ref=e411]: "13880822420"
+                  - cell "分销" [ref=e412]:
+                    - generic [ref=e413]:
+                      - generic:
+                        - generic: 分销
+                  - cell "已转订单" [ref=e414]:
+                    - generic [ref=e415]:
+                      - generic:
+                        - generic: 已转订单
+                  - cell "待分配" [ref=e416]:
+                    - generic [ref=e417]: 待分配
+                  - cell "#14 / 已付款" [ref=e418]:
+                    - generic [ref=e419]: "#14 / 已付款"
+                  - cell "2026/4/22 11:25:21" [ref=e420]:
+                    - generic [ref=e421]: 2026/4/22 11:25:21
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e422]:
+                    - generic [ref=e424]:
+                      - generic [ref=e426]:
+                        - button "分配" [ref=e427] [cursor=pointer]:
+                          - generic [ref=e428]: 分配
+                        - button "Toggle Dropdown" [ref=e429] [cursor=pointer]:
+                          - img [ref=e432]
+                      - button "回收到公海" [disabled] [ref=e434]:
+                        - generic [ref=e435]: 回收到公海
+                      - button "转订单" [ref=e436] [cursor=pointer]:
+                        - generic [ref=e437]: 转订单
+                - 'row "Salary Demo 13973742437 抖音 已转订单 待分配 #13 / 已核销 2026/4/22 10:25:34 分配 Toggle Dropdown 回收到公海 转订单" [ref=e438]':
+                  - cell "Salary Demo 13973742437" [ref=e439]:
+                    - generic [ref=e441]:
+                      - strong [ref=e442]: Salary Demo
+                      - generic [ref=e443]: "13973742437"
+                  - cell "抖音" [ref=e444]:
+                    - generic [ref=e445]:
+                      - generic:
+                        - generic: 抖音
+                  - cell "已转订单" [ref=e446]:
+                    - generic [ref=e447]:
+                      - generic:
+                        - generic: 已转订单
+                  - cell "待分配" [ref=e448]:
+                    - generic [ref=e449]: 待分配
+                  - cell "#13 / 已核销" [ref=e450]:
+                    - generic [ref=e451]: "#13 / 已核销"
+                  - cell "2026/4/22 10:25:34" [ref=e452]:
+                    - generic [ref=e453]: 2026/4/22 10:25:34
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e454]:
+                    - generic [ref=e456]:
+                      - generic [ref=e458]:
+                        - button "分配" [ref=e459] [cursor=pointer]:
+                          - generic [ref=e460]: 分配
+                        - button "Toggle Dropdown" [ref=e461] [cursor=pointer]:
+                          - img [ref=e464]
+                      - button "回收到公海" [disabled] [ref=e466]:
+                        - generic [ref=e467]: 回收到公海
+                      - button "转订单" [ref=e468] [cursor=pointer]:
+                        - generic [ref=e469]: 转订单
+                - 'row "PlanOrder Auto Test 13900003173 抖音 已转订单 待分配 #12 / 已核销 2026/4/22 09:55:34 分配 Toggle Dropdown 回收到公海 转订单" [ref=e470]':
+                  - cell "PlanOrder Auto Test 13900003173" [ref=e471]:
+                    - generic [ref=e473]:
+                      - strong [ref=e474]: PlanOrder Auto Test
+                      - generic [ref=e475]: "13900003173"
+                  - cell "抖音" [ref=e476]:
+                    - generic [ref=e477]:
+                      - generic:
+                        - generic: 抖音
+                  - cell "已转订单" [ref=e478]:
+                    - generic [ref=e479]:
+                      - generic:
+                        - generic: 已转订单
+                  - cell "待分配" [ref=e480]:
+                    - generic [ref=e481]: 待分配
+                  - cell "#12 / 已核销" [ref=e482]:
+                    - generic [ref=e483]: "#12 / 已核销"
+                  - cell "2026/4/22 09:55:34" [ref=e484]:
+                    - generic [ref=e485]: 2026/4/22 09:55:34
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e486]:
+                    - generic [ref=e488]:
+                      - generic [ref=e490]:
+                        - button "分配" [ref=e491] [cursor=pointer]:
+                          - generic [ref=e492]: 分配
+                        - button "Toggle Dropdown" [ref=e493] [cursor=pointer]:
+                          - img [ref=e496]
+                      - button "回收到公海" [disabled] [ref=e498]:
+                        - generic [ref=e499]: 回收到公海
+                      - button "转订单" [ref=e500] [cursor=pointer]:
+                        - generic [ref=e501]: 转订单
+                - 'row "seed-user 13900002385 分销 已转订单 待分配 #11 / 已付款 2026/4/22 01:52:14 分配 Toggle Dropdown 回收到公海 转订单" [ref=e502]':
+                  - cell "seed-user 13900002385" [ref=e503]:
+                    - generic [ref=e505]:
+                      - strong [ref=e506]: seed-user
+                      - generic [ref=e507]: "13900002385"
+                  - cell "分销" [ref=e508]:
+                    - generic [ref=e509]:
+                      - generic:
+                        - generic: 分销
+                  - cell "已转订单" [ref=e510]:
+                    - generic [ref=e511]:
+                      - generic:
+                        - generic: 已转订单
+                  - cell "待分配" [ref=e512]:
+                    - generic [ref=e513]: 待分配
+                  - cell "#11 / 已付款" [ref=e514]:
+                    - generic [ref=e515]: "#11 / 已付款"
+                  - cell "2026/4/22 01:52:14" [ref=e516]:
+                    - generic [ref=e517]: 2026/4/22 01:52:14
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e518]:
+                    - generic [ref=e520]:
+                      - generic [ref=e522]:
+                        - button "分配" [ref=e523] [cursor=pointer]:
+                          - generic [ref=e524]: 分配
+                        - button "Toggle Dropdown" [ref=e525] [cursor=pointer]:
+                          - img [ref=e528]
+                      - button "回收到公海" [disabled] [ref=e530]:
+                        - generic [ref=e531]: 回收到公海
+                      - button "转订单" [ref=e532] [cursor=pointer]:
+                        - generic [ref=e533]: 转订单
+                - 'row "?????? 1390422002925 -- 已转订单 待分配 #10 / 已核销 2026/4/22 00:29:27 分配 Toggle Dropdown 回收到公海 转订单" [ref=e534]':
+                  - cell "?????? 1390422002925" [ref=e535]:
+                    - generic [ref=e537]:
+                      - strong [ref=e538]: "??????"
+                      - generic [ref=e539]: "1390422002925"
+                  - cell "--" [ref=e540]:
+                    - generic [ref=e541]:
+                      - generic:
+                        - generic: "--"
+                  - cell "已转订单" [ref=e542]:
+                    - generic [ref=e543]:
+                      - generic:
+                        - generic: 已转订单
+                  - cell "待分配" [ref=e544]:
+                    - generic [ref=e545]: 待分配
+                  - cell "#10 / 已核销" [ref=e546]:
+                    - generic [ref=e547]: "#10 / 已核销"
+                  - cell "2026/4/22 00:29:27" [ref=e548]:
+                    - generic [ref=e549]: 2026/4/22 00:29:27
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e550]:
+                    - generic [ref=e552]:
+                      - generic [ref=e554]:
+                        - button "分配" [ref=e555] [cursor=pointer]:
+                          - generic [ref=e556]: 分配
+                        - button "Toggle Dropdown" [ref=e557] [cursor=pointer]:
+                          - img [ref=e560]
+                      - button "回收到公海" [disabled] [ref=e562]:
+                        - generic [ref=e563]: 回收到公海
+                      - button "转订单" [ref=e564] [cursor=pointer]:
+                        - generic [ref=e565]: 转订单
+                - 'row "Tag Test User 13800990001 -- 已转订单 待分配 #7 / 已核销 2026/4/21 18:48:31 分配 Toggle Dropdown 回收到公海 转订单" [ref=e566]':
+                  - cell "Tag Test User 13800990001" [ref=e567]:
+                    - generic [ref=e569]:
+                      - strong [ref=e570]: Tag Test User
+                      - generic [ref=e571]: "13800990001"
+                  - cell "--" [ref=e572]:
+                    - generic [ref=e573]:
+                      - generic:
+                        - generic: "--"
+                  - cell "已转订单" [ref=e574]:
+                    - generic [ref=e575]:
+                      - generic:
+                        - generic: 已转订单
+                  - cell "待分配" [ref=e576]:
+                    - generic [ref=e577]: 待分配
+                  - cell "#7 / 已核销" [ref=e578]:
+                    - generic [ref=e579]: "#7 / 已核销"
+                  - cell "2026/4/21 18:48:31" [ref=e580]:
+                    - generic [ref=e581]: 2026/4/21 18:48:31
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e582]:
+                    - generic [ref=e584]:
+                      - generic [ref=e586]:
+                        - button "分配" [ref=e587] [cursor=pointer]:
+                          - generic [ref=e588]: 分配
+                        - button "Toggle Dropdown" [ref=e589] [cursor=pointer]:
+                          - img [ref=e592]
+                      - button "回收到公海" [disabled] [ref=e594]:
+                        - generic [ref=e595]: 回收到公海
+                      - button "转订单" [ref=e596] [cursor=pointer]:
+                        - generic [ref=e597]: 转订单
+                - 'row "Closure Test 1390421181623 -- 已转订单 待分配 #4 / 已核销 2026/4/21 18:16:24 分配 Toggle Dropdown 回收到公海 转订单" [ref=e598]':
+                  - cell "Closure Test 1390421181623" [ref=e599]:
+                    - generic [ref=e601]:
+                      - strong [ref=e602]: Closure Test
+                      - generic [ref=e603]: "1390421181623"
+                  - cell "--" [ref=e604]:
+                    - generic [ref=e605]:
+                      - generic:
+                        - generic: "--"
+                  - cell "已转订单" [ref=e606]:
+                    - generic [ref=e607]:
+                      - generic:
+                        - generic: 已转订单
+                  - cell "待分配" [ref=e608]:
+                    - generic [ref=e609]: 待分配
+                  - cell "#4 / 已核销" [ref=e610]:
+                    - generic [ref=e611]: "#4 / 已核销"
+                  - cell "2026/4/21 18:16:24" [ref=e612]:
+                    - generic [ref=e613]: 2026/4/21 18:16:24
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e614]:
+                    - generic [ref=e616]:
+                      - generic [ref=e618]:
+                        - button "分配" [ref=e619] [cursor=pointer]:
+                          - generic [ref=e620]: 分配
+                        - button "Toggle Dropdown" [ref=e621] [cursor=pointer]:
+                          - img [ref=e624]
+                      - button "回收到公海" [disabled] [ref=e626]:
+                        - generic [ref=e627]: 回收到公海
+                      - button "转订单" [ref=e628] [cursor=pointer]:
+                        - generic [ref=e629]: 转订单
+                - row "测试客户 13800000000 -- 已分配 王顾问 暂无订单 2026/4/21 12:50:32 分配 Toggle Dropdown 回收到公海 转订单" [ref=e630]:
+                  - cell "测试客户 13800000000" [ref=e631]:
+                    - generic [ref=e633]:
+                      - strong [ref=e634]: 测试客户
+                      - generic [ref=e635]: "13800000000"
+                  - cell "--" [ref=e636]:
+                    - generic [ref=e637]:
+                      - generic:
+                        - generic: "--"
+                  - cell "已分配" [ref=e638]:
+                    - generic [ref=e639]:
+                      - generic:
+                        - generic: 已分配
+                  - cell "王顾问" [ref=e640]:
+                    - generic [ref=e641]: 王顾问
+                  - cell "暂无订单" [ref=e642]:
+                    - generic [ref=e643]: 暂无订单
+                  - cell "2026/4/21 12:50:32" [ref=e644]:
+                    - generic [ref=e645]: 2026/4/21 12:50:32
+                  - cell "分配 Toggle Dropdown 回收到公海 转订单" [ref=e646]:
+                    - generic [ref=e648]:
+                      - generic [ref=e650]:
+                        - button "分配" [ref=e651] [cursor=pointer]:
+                          - generic [ref=e652]: 分配
+                        - button "Toggle Dropdown" [ref=e653] [cursor=pointer]:
+                          - img [ref=e656]
+                      - button "回收到公海" [ref=e658] [cursor=pointer]:
+                        - generic [ref=e659]: 回收到公海
+                      - button "转订单" [ref=e660] [cursor=pointer]:
+                        - generic [ref=e661]: 转订单
+          - img [ref=e664]

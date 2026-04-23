@@ -1,9 +1,21 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { clearAuthSession, getAuthToken } from '../utils/auth'
 
 const http = axios.create({
   baseURL: '/api',
   timeout: 20000
+})
+
+http.interceptors.request.use((config) => {
+  const token = getAuthToken()
+  config.headers = {
+    ...(config.headers || {})
+  }
+  if (token) {
+    config.headers['X-Auth-Token'] = token
+  }
+  return config
 })
 
 http.interceptors.response.use(
@@ -23,11 +35,17 @@ http.interceptors.response.use(
     return payload
   },
   (error) => {
+    if (error.response?.status === 401 || error.response?.data?.message?.includes('登录状态')) {
+      clearAuthSession()
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
+    }
     const message =
       error.response?.data?.message ||
       error.response?.data?.error ||
       error.message ||
-      '服务异常，请稍后重试'
+      '网络请求失败'
     ElMessage.error(message)
     return Promise.reject(error)
   }

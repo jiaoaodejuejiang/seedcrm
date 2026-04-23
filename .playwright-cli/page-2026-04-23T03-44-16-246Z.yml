@@ -1,0 +1,182 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Seed CRM
+      - heading "Constraint-Driven Main Chain Console" [level=1] [ref=e7]
+      - paragraph [ref=e8]: Keep the frontend aligned with Clue -> Customer -> Order -> PlanOrder, with Permission, Scheduler, and Salary wired in globally.
+    - navigation [ref=e9]:
+      - link "Clue Intake, assign, recycle, and convert to orders" [ref=e10] [cursor=pointer]:
+        - /url: /clues
+        - generic [ref=e11]: Clue
+        - generic [ref=e12]: Intake, assign, recycle, and convert to orders
+      - link "Order Paid and used orders linked to customers" [ref=e13] [cursor=pointer]:
+        - /url: /orders
+        - generic [ref=e14]: Order
+        - generic [ref=e15]: Paid and used orders linked to customers
+      - link "PlanOrder Service flow and role assignment records" [ref=e16] [cursor=pointer]:
+        - /url: /plan-orders
+        - generic [ref=e17]: PlanOrder
+        - generic [ref=e18]: Service flow and role assignment records
+      - link "Scheduler Jobs, queue, retry, and execution logs" [ref=e19] [cursor=pointer]:
+        - /url: /scheduler
+        - generic [ref=e20]: Scheduler
+        - generic [ref=e21]: Jobs, queue, retry, and execution logs
+      - link "Permission RBAC, ABAC, and live access checks" [ref=e22] [cursor=pointer]:
+        - /url: /permission
+        - generic [ref=e23]: Permission
+        - generic [ref=e24]: RBAC, ABAC, and live access checks
+      - link "Salary Stats, settlement, payout, and withdraw flow" [ref=e25] [cursor=pointer]:
+        - /url: /salary
+        - generic [ref=e26]: Salary
+        - generic [ref=e27]: Stats, settlement, payout, and withdraw flow
+      - link "Distributor Lead contribution and income overview" [ref=e28] [cursor=pointer]:
+        - /url: /distributors
+        - generic [ref=e29]: Distributor
+        - generic [ref=e30]: Lead contribution and income overview
+      - link "Finance Income and withdraw records overview" [ref=e31] [cursor=pointer]:
+        - /url: /finance
+        - generic [ref=e32]: Finance
+        - generic [ref=e33]: Income and withdraw records overview
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - heading "Permission Context" [level=3] [ref=e37]
+          - paragraph [ref=e38]: Every request automatically carries RBAC and ABAC headers from this shared context.
+        - button "Reset" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: Reset
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Role
+          - generic [ref=e45] [cursor=pointer]:
+            - generic:
+              - combobox "Role Admin" [ref=e47]
+              - generic [ref=e48]: Admin
+            - img [ref=e51]
+        - generic [ref=e53]:
+          - generic [ref=e54]: Data Scope
+          - generic [ref=e56] [cursor=pointer]:
+            - generic:
+              - combobox "Data Scope all" [ref=e58]
+              - generic [ref=e59]: all
+            - img [ref=e62]
+        - generic [ref=e64]:
+          - generic [ref=e65]: Current User ID
+          - generic [ref=e66]:
+            - button "decrease number" [ref=e67] [cursor=pointer]:
+              - img [ref=e69]
+            - button "increase number" [ref=e71] [cursor=pointer]:
+              - img [ref=e73]
+            - spinbutton "Current User ID decrease number increase number" [ref=e77]: "1001"
+        - generic [ref=e78]:
+          - generic [ref=e79]: Current Store ID
+          - generic [ref=e80]:
+            - button "decrease number" [ref=e81] [cursor=pointer]:
+              - img [ref=e83]
+            - button "increase number" [ref=e85] [cursor=pointer]:
+              - img [ref=e87]
+            - spinbutton "Current Store ID decrease number increase number" [ref=e91]: "10"
+        - generic [ref=e92]:
+          - generic [ref=e93]: Resource Store ID
+          - generic [ref=e94]:
+            - button "decrease number" [ref=e95] [cursor=pointer]:
+              - img [ref=e97]
+            - button "increase number" [ref=e99] [cursor=pointer]:
+              - img [ref=e101]
+            - spinbutton "Resource Store ID decrease number increase number" [ref=e105]: "10"
+        - generic [ref=e106]:
+          - generic [ref=e107]: Bound Customer User ID
+          - generic [ref=e108]:
+            - button "decrease number" [ref=e109] [cursor=pointer]:
+              - img [ref=e111]
+            - button "increase number" [ref=e113] [cursor=pointer]:
+              - img [ref=e115]
+            - spinbutton "Bound Customer User ID decrease number increase number" [ref=e119]
+        - generic [ref=e120]:
+          - generic [ref=e121]: Team Member IDs
+          - textbox "Team Member IDs" [ref=e124]:
+            - /placeholder: "For example: 1001,1002"
+            - text: 1001,1002
+  - main [ref=e125]:
+    - generic [ref=e126]:
+      - generic [ref=e127]:
+        - paragraph [ref=e128]: Constraint First
+        - heading "Customer Detail" [level=2] [ref=e1135]
+        - paragraph [ref=e130]: Read customer profile, order history, WeCom binding, and service closure information without bypassing creation rules.
+      - generic [ref=e131]:
+        - generic [ref=e132]: "Role: Admin"
+        - generic [ref=e133]: "Scope: ALL"
+        - generic [ref=e134]: "Main Chain: Clue -> Customer -> Order -> PlanOrder"
+    - generic [ref=e1136]:
+      - generic [ref=e1137]:
+        - article [ref=e1138]:
+          - generic [ref=e1139]: Customer
+          - strong [ref=e1140]: Codex Flow
+          - text: "13990009988"
+        - article [ref=e1141]:
+          - generic [ref=e1142]: Source
+          - strong [ref=e1143]: Douyin
+          - text: "Current status: PAID"
+        - article [ref=e1144]:
+          - generic [ref=e1145]: WeCom
+          - strong [ref=e1146]: Not bound
+          - text: "Binding count: 0"
+      - generic [ref=e1148]:
+        - article [ref=e1149]:
+          - heading "Basic Info" [level=3] [ref=e1150]
+          - paragraph [ref=e1151]: "Name: Codex Flow"
+          - paragraph [ref=e1152]: "Phone: 13990009988"
+          - paragraph [ref=e1153]: "WeChat: --"
+        - article [ref=e1154]:
+          - heading "Tags" [level=3] [ref=e1155]
+          - generic [ref=e1157]: No tags yet
+        - article [ref=e1158]:
+          - heading "WeCom Status" [level=3] [ref=e1159]
+          - paragraph [ref=e1160]: "External User ID: --"
+          - paragraph [ref=e1161]: "Staff User ID: --"
+          - button "Send WeCom Message" [disabled] [ref=e1162]:
+            - generic [ref=e1163]: Send WeCom Message
+      - generic [ref=e1164]:
+        - generic [ref=e1166]:
+          - heading "Order History" [level=3] [ref=e1167]
+          - paragraph [ref=e1168]: The customer view is read-only here and stays downstream from the clue conversion chain.
+        - generic [ref=e1170]:
+          - table [ref=e1172]:
+            - rowgroup [ref=e1180]:
+              - row "Order Type Amount Status PlanOrder Action" [ref=e1181]:
+                - columnheader "Order" [ref=e1182]:
+                  - generic [ref=e1183]: Order
+                - columnheader "Type" [ref=e1184]:
+                  - generic [ref=e1185]: Type
+                - columnheader "Amount" [ref=e1186]:
+                  - generic [ref=e1187]: Amount
+                - columnheader "Status" [ref=e1188]:
+                  - generic [ref=e1189]: Status
+                - columnheader "PlanOrder" [ref=e1190]:
+                  - generic [ref=e1191]: PlanOrder
+                - columnheader "Action" [ref=e1192]:
+                  - generic [ref=e1193]: Action
+          - table [ref=e1198]:
+            - rowgroup [ref=e1206]:
+              - 'row "ORD202604231133105148457 2026/4/23 11:33:11 Deposit CNY 1,999.00 paid #10 Open PlanOrder" [ref=e1207]':
+                - cell "ORD202604231133105148457 2026/4/23 11:33:11" [ref=e1208]:
+                  - generic [ref=e1210]:
+                    - strong [ref=e1211]: ORD202604231133105148457
+                    - generic [ref=e1212]: 2026/4/23 11:33:11
+                - cell "Deposit" [ref=e1213]:
+                  - generic [ref=e1216]: Deposit
+                - cell "CNY 1,999.00" [ref=e1217]:
+                  - generic [ref=e1218]: CNY 1,999.00
+                - cell "paid" [ref=e1219]:
+                  - generic [ref=e1222]: paid
+                - cell "#10" [ref=e1223]:
+                  - generic [ref=e1224]: "#10"
+                - cell "Open PlanOrder" [ref=e1225]:
+                  - button "Open PlanOrder" [ref=e1227] [cursor=pointer]:
+                    - generic [ref=e1228]: Open PlanOrder
+      - generic [ref=e1230]:
+        - article [ref=e1231]:
+          - heading "Ecom Bindings" [level=3] [ref=e1232]
+          - paragraph [ref=e1233]: No ecom account binding found
+        - article [ref=e1234]:
+          - heading "Recent WeCom Logs" [level=3] [ref=e1235]
+          - paragraph [ref=e1236]: No recent log

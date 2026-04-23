@@ -1,5 +1,7 @@
 package com.seedcrm.crm.permission.support;
 
+import com.seedcrm.crm.auth.model.AuthenticatedUser;
+import com.seedcrm.crm.auth.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Arrays;
 import java.util.List;
@@ -11,7 +13,25 @@ import org.springframework.util.StringUtils;
 @Component
 public class PermissionRequestContextResolver {
 
+    private final AuthService authService;
+
+    public PermissionRequestContextResolver(AuthService authService) {
+        this.authService = authService;
+    }
+
     public PermissionRequestContext resolve(HttpServletRequest request) {
+        AuthenticatedUser authenticatedUser = resolveAuthenticatedUser(request);
+        if (authenticatedUser != null) {
+            PermissionRequestContext context = new PermissionRequestContext();
+            context.setRoleCode(normalize(authenticatedUser.getRoleCode()));
+            context.setDataScope(normalize(authenticatedUser.getDataScope()));
+            context.setCurrentUserId(authenticatedUser.getUserId());
+            context.setCurrentStoreId(authenticatedUser.getStoreId());
+            context.setResourceStoreId(authenticatedUser.getStoreId());
+            context.setBoundCustomerUserId(authenticatedUser.getBoundCustomerUserId());
+            context.setTeamMemberIds(authenticatedUser.getTeamMemberIds() == null ? List.of() : authenticatedUser.getTeamMemberIds());
+            return context;
+        }
         PermissionRequestContext context = new PermissionRequestContext();
         context.setRoleCode(normalize(stringHeader(request, "X-Role-Code", "roleCode", "ADMIN")));
         context.setDataScope(normalize(stringHeader(request, "X-Data-Scope", "dataScope", null)));
@@ -21,6 +41,17 @@ public class PermissionRequestContextResolver {
         context.setBoundCustomerUserId(longHeader(request, "X-Bound-Customer-User-Id", "boundCustomerUserId"));
         context.setTeamMemberIds(parseLongList(stringHeader(request, "X-Team-Member-Ids", "teamMemberIds", null)));
         return context;
+    }
+
+    private AuthenticatedUser resolveAuthenticatedUser(HttpServletRequest request) {
+        String token = request.getHeader("X-Auth-Token");
+        if (!StringUtils.hasText(token)) {
+            token = request.getHeader("Authorization");
+            if (StringUtils.hasText(token) && token.startsWith("Bearer ")) {
+                token = token.substring(7);
+            }
+        }
+        return authService.resolve(token).orElse(null);
     }
 
     private String stringHeader(HttpServletRequest request, String headerName, String parameterName, String defaultValue) {

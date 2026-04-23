@@ -1,0 +1,499 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Seed CRM
+      - heading "Constraint-Driven Main Chain Console" [level=1] [ref=e7]
+      - paragraph [ref=e8]: Keep the frontend aligned with Clue -> Customer -> Order -> PlanOrder, with Permission, Scheduler, and Salary wired in globally.
+    - navigation [ref=e9]:
+      - link "Clue Intake, assign, recycle, and convert to orders" [ref=e10] [cursor=pointer]:
+        - /url: /clues
+        - generic [ref=e11]: Clue
+        - generic [ref=e12]: Intake, assign, recycle, and convert to orders
+      - link "Order Paid and used orders linked to customers" [ref=e13] [cursor=pointer]:
+        - /url: /orders
+        - generic [ref=e14]: Order
+        - generic [ref=e15]: Paid and used orders linked to customers
+      - link "PlanOrder Service flow and role assignment records" [ref=e16] [cursor=pointer]:
+        - /url: /plan-orders
+        - generic [ref=e17]: PlanOrder
+        - generic [ref=e18]: Service flow and role assignment records
+      - link "Scheduler Jobs, queue, retry, and execution logs" [ref=e19] [cursor=pointer]:
+        - /url: /scheduler
+        - generic [ref=e20]: Scheduler
+        - generic [ref=e21]: Jobs, queue, retry, and execution logs
+      - link "Permission RBAC, ABAC, and live access checks" [ref=e22] [cursor=pointer]:
+        - /url: /permission
+        - generic [ref=e23]: Permission
+        - generic [ref=e24]: RBAC, ABAC, and live access checks
+      - link "Salary Stats, settlement, payout, and withdraw flow" [ref=e25] [cursor=pointer]:
+        - /url: /salary
+        - generic [ref=e26]: Salary
+        - generic [ref=e27]: Stats, settlement, payout, and withdraw flow
+      - link "Distributor Lead contribution and income overview" [ref=e28] [cursor=pointer]:
+        - /url: /distributors
+        - generic [ref=e29]: Distributor
+        - generic [ref=e30]: Lead contribution and income overview
+      - link "Finance Income and withdraw records overview" [ref=e31] [cursor=pointer]:
+        - /url: /finance
+        - generic [ref=e32]: Finance
+        - generic [ref=e33]: Income and withdraw records overview
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - heading "Permission Context" [level=3] [ref=e37]
+          - paragraph [ref=e38]: Every request automatically carries RBAC and ABAC headers from this shared context.
+        - button "Reset" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: Reset
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Role
+          - generic [ref=e45] [cursor=pointer]:
+            - generic:
+              - combobox "Role Admin" [ref=e47]
+              - generic [ref=e48]: Admin
+            - img [ref=e51]
+        - generic [ref=e53]:
+          - generic [ref=e54]: Data Scope
+          - generic [ref=e56] [cursor=pointer]:
+            - generic:
+              - combobox "Data Scope all" [ref=e58]
+              - generic [ref=e59]: all
+            - img [ref=e62]
+        - generic [ref=e64]:
+          - generic [ref=e65]: Current User ID
+          - generic [ref=e66]:
+            - button "decrease number" [ref=e67] [cursor=pointer]:
+              - img [ref=e69]
+            - button "increase number" [ref=e71] [cursor=pointer]:
+              - img [ref=e73]
+            - spinbutton "Current User ID decrease number increase number" [ref=e77]: "1001"
+        - generic [ref=e78]:
+          - generic [ref=e79]: Current Store ID
+          - generic [ref=e80]:
+            - button "decrease number" [ref=e81] [cursor=pointer]:
+              - img [ref=e83]
+            - button "increase number" [ref=e85] [cursor=pointer]:
+              - img [ref=e87]
+            - spinbutton "Current Store ID decrease number increase number" [ref=e91]: "10"
+        - generic [ref=e92]:
+          - generic [ref=e93]: Resource Store ID
+          - generic [ref=e94]:
+            - button "decrease number" [ref=e95] [cursor=pointer]:
+              - img [ref=e97]
+            - button "increase number" [ref=e99] [cursor=pointer]:
+              - img [ref=e101]
+            - spinbutton "Resource Store ID decrease number increase number" [ref=e105]: "10"
+        - generic [ref=e106]:
+          - generic [ref=e107]: Bound Customer User ID
+          - generic [ref=e108]:
+            - button "decrease number" [ref=e109] [cursor=pointer]:
+              - img [ref=e111]
+            - button "increase number" [ref=e113] [cursor=pointer]:
+              - img [ref=e115]
+            - spinbutton "Bound Customer User ID decrease number increase number" [ref=e119]
+        - generic [ref=e120]:
+          - generic [ref=e121]: Team Member IDs
+          - textbox "Team Member IDs" [ref=e124]:
+            - /placeholder: "For example: 1001,1002"
+            - text: 1001,1002
+  - main [ref=e125]:
+    - generic [ref=e126]:
+      - generic [ref=e127]:
+        - paragraph [ref=e128]: Constraint First
+        - heading "Permission Center" [level=2] [ref=e129]
+        - paragraph [ref=e130]: Maintain RBAC and ABAC policies and validate real request access under the current permission context.
+      - generic [ref=e131]:
+        - generic [ref=e132]: "Role: Admin"
+        - generic [ref=e133]: "Scope: ALL"
+        - generic [ref=e134]: "Main Chain: Clue -> Customer -> Order -> PlanOrder"
+    - generic [ref=e136]:
+      - generic [ref=e137]:
+        - article [ref=e138]:
+          - generic [ref=e139]: Current Role
+          - strong [ref=e140]: Admin
+          - text: The shared request context defaults to admin for cross-module validation.
+        - article [ref=e141]:
+          - generic [ref=e142]: Current Scope
+          - strong [ref=e143]: all
+          - text: RBAC and ABAC headers are injected into every API request from the sidebar context.
+        - article [ref=e144]:
+          - generic [ref=e145]: Policies
+          - strong [ref=e146]: "17"
+          - text: Use the current policy list to confirm what the backend is enforcing.
+      - generic [ref=e147]:
+        - generic [ref=e149]:
+          - heading "Save Policy" [level=3] [ref=e150]
+          - paragraph [ref=e151]: Maintain module:action + role + scope entries as the source of access rules.
+        - generic [ref=e152]:
+          - generic [ref=e153]:
+            - generic [ref=e154]: Module
+            - textbox "Module" [ref=e157]:
+              - /placeholder: "For example: ORDER"
+              - text: ORDER
+          - generic [ref=e158]:
+            - generic [ref=e159]: Action
+            - textbox "Action" [ref=e162]:
+              - /placeholder: "For example: VIEW / UPDATE"
+              - text: VIEW
+          - generic [ref=e163]:
+            - generic [ref=e164]: Role
+            - generic [ref=e166] [cursor=pointer]:
+              - generic:
+                - combobox "Role Store Service" [ref=e168]
+                - generic [ref=e169]: Store Service
+              - img [ref=e172]
+          - generic [ref=e174]:
+            - generic [ref=e175]: Scope
+            - generic [ref=e177] [cursor=pointer]:
+              - generic:
+                - combobox "Scope store" [ref=e179]
+                - generic [ref=e180]: store
+              - img [ref=e183]
+          - generic [ref=e185]:
+            - generic [ref=e186]: Condition Rule
+            - textbox "Condition Rule" [ref=e189]:
+              - /placeholder: "For example: order(status=finished)"
+        - generic [ref=e190]:
+          - button "Save Policy" [ref=e191] [cursor=pointer]:
+            - generic [ref=e192]: Save Policy
+          - button "Refresh" [ref=e193] [cursor=pointer]:
+            - generic [ref=e194]: Refresh
+      - generic [ref=e195]:
+        - generic [ref=e196]:
+          - generic [ref=e197]:
+            - heading "Permission Check" [level=3] [ref=e198]
+            - paragraph [ref=e199]: "Use `/permission/check` with the current context to verify whether an interface is allowed for a concrete request."
+          - button "Sync Current Context" [ref=e200] [cursor=pointer]:
+            - generic [ref=e201]: Sync Current Context
+        - generic [ref=e202]:
+          - generic [ref=e203]:
+            - generic [ref=e204]: Module
+            - textbox "Module" [ref=e207]:
+              - /placeholder: "For example: PLANORDER"
+              - text: PLANORDER
+          - generic [ref=e208]:
+            - generic [ref=e209]: Action
+            - textbox "Action" [ref=e212]:
+              - /placeholder: "For example: VIEW"
+              - text: VIEW
+          - generic [ref=e213]:
+            - generic [ref=e214]: Role
+            - textbox "Role" [ref=e217]: ADMIN
+          - generic [ref=e218]:
+            - generic [ref=e219]: Scope
+            - textbox "Scope" [ref=e222]: ALL
+          - generic [ref=e223]:
+            - generic [ref=e224]: Current User ID
+            - generic [ref=e225]:
+              - button "decrease number" [ref=e226] [cursor=pointer]:
+                - img [ref=e228]
+              - button "increase number" [ref=e230] [cursor=pointer]:
+                - img [ref=e232]
+              - spinbutton "Current User ID decrease number increase number" [ref=e236]: "1001"
+          - generic [ref=e237]:
+            - generic [ref=e238]: Resource Owner ID
+            - generic [ref=e239]:
+              - button "decrease number" [ref=e240] [cursor=pointer]:
+                - img [ref=e242]
+              - button "increase number" [ref=e244] [cursor=pointer]:
+                - img [ref=e246]
+              - spinbutton "Resource Owner ID decrease number increase number" [ref=e250]
+          - generic [ref=e251]:
+            - generic [ref=e252]: Current Store ID
+            - generic [ref=e253]:
+              - button "decrease number" [ref=e254] [cursor=pointer]:
+                - img [ref=e256]
+              - button "increase number" [ref=e258] [cursor=pointer]:
+                - img [ref=e260]
+              - spinbutton "Current Store ID decrease number increase number" [ref=e264]: "10"
+          - generic [ref=e265]:
+            - generic [ref=e266]: Resource Store ID
+            - generic [ref=e267]:
+              - button "decrease number" [ref=e268] [cursor=pointer]:
+                - img [ref=e270]
+              - button "increase number" [ref=e272] [cursor=pointer]:
+                - img [ref=e274]
+              - spinbutton "Resource Store ID decrease number increase number" [ref=e278]: "10"
+          - generic [ref=e279]:
+            - generic [ref=e280]: Bound Customer User ID
+            - generic [ref=e281]:
+              - button "decrease number" [ref=e282] [cursor=pointer]:
+                - img [ref=e284]
+              - button "increase number" [ref=e286] [cursor=pointer]:
+                - img [ref=e288]
+              - spinbutton "Bound Customer User ID decrease number increase number" [ref=e292]
+          - generic [ref=e293]:
+            - generic [ref=e294]: Team Member IDs
+            - textbox "Team Member IDs" [ref=e297]:
+              - /placeholder: "For example: 1001,1002"
+              - text: 1001,1002
+        - button "Check Access" [ref=e299] [cursor=pointer]:
+          - generic [ref=e300]: Check Access
+      - generic [ref=e301]:
+        - generic [ref=e303]:
+          - heading "Policy List" [level=3] [ref=e304]
+          - paragraph [ref=e305]: Use the actual backend policy list to inspect conflicts and confirm enforcement behavior.
+        - generic [ref=e306]:
+          - generic [ref=e307]:
+            - table [ref=e309]:
+              - rowgroup [ref=e317]:
+                - row "Module Action Role Scope Condition Rule Enabled" [ref=e318]:
+                  - columnheader "Module" [ref=e319]:
+                    - generic [ref=e320]: Module
+                  - columnheader "Action" [ref=e321]:
+                    - generic [ref=e322]: Action
+                  - columnheader "Role" [ref=e323]:
+                    - generic [ref=e324]: Role
+                  - columnheader "Scope" [ref=e325]:
+                    - generic [ref=e326]: Scope
+                  - columnheader "Condition Rule" [ref=e327]:
+                    - generic [ref=e328]: Condition Rule
+                  - columnheader "Enabled" [ref=e329]:
+                    - generic [ref=e330]: Enabled
+            - table [ref=e335]:
+              - rowgroup [ref=e343]:
+                - row "CLUE ASSIGN Clue Manager all clue assign Yes" [ref=e344]:
+                  - cell "CLUE" [ref=e345]:
+                    - generic [ref=e346]: CLUE
+                  - cell "ASSIGN" [ref=e347]:
+                    - generic [ref=e348]: ASSIGN
+                  - cell "Clue Manager" [ref=e349]:
+                    - generic [ref=e350]: Clue Manager
+                  - cell "all" [ref=e351]:
+                    - generic [ref=e352]: all
+                  - cell "clue assign" [ref=e353]:
+                    - generic [ref=e354]: clue assign
+                  - cell "Yes" [ref=e355]:
+                    - generic [ref=e356]:
+                      - generic:
+                        - generic: "Yes"
+                - row "CLUE RECYCLE Clue Manager all clue recycle Yes" [ref=e357]:
+                  - cell "CLUE" [ref=e358]:
+                    - generic [ref=e359]: CLUE
+                  - cell "RECYCLE" [ref=e360]:
+                    - generic [ref=e361]: RECYCLE
+                  - cell "Clue Manager" [ref=e362]:
+                    - generic [ref=e363]: Clue Manager
+                  - cell "all" [ref=e364]:
+                    - generic [ref=e365]: all
+                  - cell "clue recycle" [ref=e366]:
+                    - generic [ref=e367]: clue recycle
+                  - cell "Yes" [ref=e368]:
+                    - generic [ref=e369]:
+                      - generic:
+                        - generic: "Yes"
+                - row "CLUE VIEW Online CS self Yes" [ref=e370]:
+                  - cell "CLUE" [ref=e371]:
+                    - generic [ref=e372]: CLUE
+                  - cell "VIEW" [ref=e373]:
+                    - generic [ref=e374]: VIEW
+                  - cell "Online CS" [ref=e375]:
+                    - generic [ref=e376]: Online CS
+                  - cell "self" [ref=e377]:
+                    - generic [ref=e378]: self
+                  - cell [ref=e379]
+                  - cell "Yes" [ref=e380]:
+                    - generic [ref=e381]:
+                      - generic:
+                        - generic: "Yes"
+                - row "CLUE VIEW Online CS team Yes" [ref=e382]:
+                  - cell "CLUE" [ref=e383]:
+                    - generic [ref=e384]: CLUE
+                  - cell "VIEW" [ref=e385]:
+                    - generic [ref=e386]: VIEW
+                  - cell "Online CS" [ref=e387]:
+                    - generic [ref=e388]: Online CS
+                  - cell "team" [ref=e389]:
+                    - generic [ref=e390]: team
+                  - cell [ref=e391]
+                  - cell "Yes" [ref=e392]:
+                    - generic [ref=e393]:
+                      - generic:
+                        - generic: "Yes"
+                - row "ORDER FINISH Finance all order(status=finished) Yes" [ref=e394]:
+                  - cell "ORDER" [ref=e395]:
+                    - generic [ref=e396]: ORDER
+                  - cell "FINISH" [ref=e397]:
+                    - generic [ref=e398]: FINISH
+                  - cell "Finance" [ref=e399]:
+                    - generic [ref=e400]: Finance
+                  - cell "all" [ref=e401]:
+                    - generic [ref=e402]: all
+                  - cell "order(status=finished)" [ref=e403]:
+                    - generic [ref=e404]: order(status=finished)
+                  - cell "Yes" [ref=e405]:
+                    - generic [ref=e406]:
+                      - generic:
+                        - generic: "Yes"
+                - row "ORDER FINISH Store Service store order(status=finished) Yes" [ref=e407]:
+                  - cell "ORDER" [ref=e408]:
+                    - generic [ref=e409]: ORDER
+                  - cell "FINISH" [ref=e410]:
+                    - generic [ref=e411]: FINISH
+                  - cell "Store Service" [ref=e412]:
+                    - generic [ref=e413]: Store Service
+                  - cell "store" [ref=e414]:
+                    - generic [ref=e415]: store
+                  - cell "order(status=finished)" [ref=e416]:
+                    - generic [ref=e417]: order(status=finished)
+                  - cell "Yes" [ref=e418]:
+                    - generic [ref=e419]:
+                      - generic:
+                        - generic: "Yes"
+                - row "ORDER UPDATE Store Service store Yes" [ref=e420]:
+                  - cell "ORDER" [ref=e421]:
+                    - generic [ref=e422]: ORDER
+                  - cell "UPDATE" [ref=e423]:
+                    - generic [ref=e424]: UPDATE
+                  - cell "Store Service" [ref=e425]:
+                    - generic [ref=e426]: Store Service
+                  - cell "store" [ref=e427]:
+                    - generic [ref=e428]: store
+                  - cell [ref=e429]
+                  - cell "Yes" [ref=e430]:
+                    - generic [ref=e431]:
+                      - generic:
+                        - generic: "Yes"
+                - row "ORDER VIEW Private Domain Service self bound customer Yes" [ref=e432]:
+                  - cell "ORDER" [ref=e433]:
+                    - generic [ref=e434]: ORDER
+                  - cell "VIEW" [ref=e435]:
+                    - generic [ref=e436]: VIEW
+                  - cell "Private Domain Service" [ref=e437]:
+                    - generic [ref=e438]: Private Domain Service
+                  - cell "self" [ref=e439]:
+                    - generic [ref=e440]: self
+                  - cell "bound customer" [ref=e441]:
+                    - generic [ref=e442]: bound customer
+                  - cell "Yes" [ref=e443]:
+                    - generic [ref=e444]:
+                      - generic:
+                        - generic: "Yes"
+                - row "ORDER VIEW Store Service store Yes" [ref=e445]:
+                  - cell "ORDER" [ref=e446]:
+                    - generic [ref=e447]: ORDER
+                  - cell "VIEW" [ref=e448]:
+                    - generic [ref=e449]: VIEW
+                  - cell "Store Service" [ref=e450]:
+                    - generic [ref=e451]: Store Service
+                  - cell "store" [ref=e452]:
+                    - generic [ref=e453]: store
+                  - cell [ref=e454]
+                  - cell "Yes" [ref=e455]:
+                    - generic [ref=e456]:
+                      - generic:
+                        - generic: "Yes"
+                - row "PERMISSION CHECK Admin all Yes" [ref=e457]:
+                  - cell "PERMISSION" [ref=e458]:
+                    - generic [ref=e459]: PERMISSION
+                  - cell "CHECK" [ref=e460]:
+                    - generic [ref=e461]: CHECK
+                  - cell "Admin" [ref=e462]:
+                    - generic [ref=e463]: Admin
+                  - cell "all" [ref=e464]:
+                    - generic [ref=e465]: all
+                  - cell [ref=e466]
+                  - cell "Yes" [ref=e467]:
+                    - generic [ref=e468]:
+                      - generic:
+                        - generic: "Yes"
+                - row "PERMISSION UPDATE Admin all Yes" [ref=e469]:
+                  - cell "PERMISSION" [ref=e470]:
+                    - generic [ref=e471]: PERMISSION
+                  - cell "UPDATE" [ref=e472]:
+                    - generic [ref=e473]: UPDATE
+                  - cell "Admin" [ref=e474]:
+                    - generic [ref=e475]: Admin
+                  - cell "all" [ref=e476]:
+                    - generic [ref=e477]: all
+                  - cell [ref=e478]
+                  - cell "Yes" [ref=e479]:
+                    - generic [ref=e480]:
+                      - generic:
+                        - generic: "Yes"
+                - row "PERMISSION VIEW Admin all Yes" [ref=e481]:
+                  - cell "PERMISSION" [ref=e482]:
+                    - generic [ref=e483]: PERMISSION
+                  - cell "VIEW" [ref=e484]:
+                    - generic [ref=e485]: VIEW
+                  - cell "Admin" [ref=e486]:
+                    - generic [ref=e487]: Admin
+                  - cell "all" [ref=e488]:
+                    - generic [ref=e489]: all
+                  - cell [ref=e490]
+                  - cell "Yes" [ref=e491]:
+                    - generic [ref=e492]:
+                      - generic:
+                        - generic: "Yes"
+                - row "PLANORDER ASSIGN_ROLE Store Service store Yes" [ref=e493]:
+                  - cell "PLANORDER" [ref=e494]:
+                    - generic [ref=e495]: PLANORDER
+                  - cell "ASSIGN_ROLE" [ref=e496]:
+                    - generic [ref=e497]: ASSIGN_ROLE
+                  - cell "Store Service" [ref=e498]:
+                    - generic [ref=e499]: Store Service
+                  - cell "store" [ref=e500]:
+                    - generic [ref=e501]: store
+                  - cell [ref=e502]
+                  - cell "Yes" [ref=e503]:
+                    - generic [ref=e504]:
+                      - generic:
+                        - generic: "Yes"
+                - row "PLANORDER CREATE Store Service store Yes" [ref=e505]:
+                  - cell "PLANORDER" [ref=e506]:
+                    - generic [ref=e507]: PLANORDER
+                  - cell "CREATE" [ref=e508]:
+                    - generic [ref=e509]: CREATE
+                  - cell "Store Service" [ref=e510]:
+                    - generic [ref=e511]: Store Service
+                  - cell "store" [ref=e512]:
+                    - generic [ref=e513]: store
+                  - cell [ref=e514]
+                  - cell "Yes" [ref=e515]:
+                    - generic [ref=e516]:
+                      - generic:
+                        - generic: "Yes"
+                - row "PLANORDER UPDATE Store Service store Yes" [ref=e517]:
+                  - cell "PLANORDER" [ref=e518]:
+                    - generic [ref=e519]: PLANORDER
+                  - cell "UPDATE" [ref=e520]:
+                    - generic [ref=e521]: UPDATE
+                  - cell "Store Service" [ref=e522]:
+                    - generic [ref=e523]: Store Service
+                  - cell "store" [ref=e524]:
+                    - generic [ref=e525]: store
+                  - cell [ref=e526]
+                  - cell "Yes" [ref=e527]:
+                    - generic [ref=e528]:
+                      - generic:
+                        - generic: "Yes"
+                - row "PLANORDER VIEW Private Domain Service self bound customer Yes" [ref=e529]:
+                  - cell "PLANORDER" [ref=e530]:
+                    - generic [ref=e531]: PLANORDER
+                  - cell "VIEW" [ref=e532]:
+                    - generic [ref=e533]: VIEW
+                  - cell "Private Domain Service" [ref=e534]:
+                    - generic [ref=e535]: Private Domain Service
+                  - cell "self" [ref=e536]:
+                    - generic [ref=e537]: self
+                  - cell "bound customer" [ref=e538]:
+                    - generic [ref=e539]: bound customer
+                  - cell "Yes" [ref=e540]:
+                    - generic [ref=e541]:
+                      - generic:
+                        - generic: "Yes"
+                - row "PLANORDER VIEW Store Service store Yes" [ref=e542]:
+                  - cell "PLANORDER" [ref=e543]:
+                    - generic [ref=e544]: PLANORDER
+                  - cell "VIEW" [ref=e545]:
+                    - generic [ref=e546]: VIEW
+                  - cell "Store Service" [ref=e547]:
+                    - generic [ref=e548]: Store Service
+                  - cell "store" [ref=e549]:
+                    - generic [ref=e550]: store
+                  - cell [ref=e551]
+                  - cell "Yes" [ref=e552]:
+                    - generic [ref=e553]:
+                      - generic:
+                        - generic: "Yes"
+          - img [ref=e556]

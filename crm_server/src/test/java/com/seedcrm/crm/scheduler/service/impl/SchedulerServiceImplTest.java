@@ -2,8 +2,10 @@ package com.seedcrm.crm.scheduler.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.seedcrm.crm.clue.service.DouyinClueSyncService;
 import com.seedcrm.crm.scheduler.dto.SchedulerJobUpsertRequest;
 import com.seedcrm.crm.scheduler.dto.SchedulerTriggerRequest;
 import com.seedcrm.crm.scheduler.entity.SchedulerJob;
@@ -26,11 +28,14 @@ class SchedulerServiceImplTest {
     @Mock
     private SchedulerJobLogMapper schedulerJobLogMapper;
 
+    @Mock
+    private DouyinClueSyncService douyinClueSyncService;
+
     private SchedulerServiceImpl schedulerService;
 
     @BeforeEach
     void setUp() {
-        schedulerService = new SchedulerServiceImpl(schedulerJobMapper, schedulerJobLogMapper);
+        schedulerService = new SchedulerServiceImpl(schedulerJobMapper, schedulerJobLogMapper, douyinClueSyncService);
     }
 
     @Test
@@ -67,6 +72,14 @@ class SchedulerServiceImplTest {
             log.setId(10L);
             return 1;
         });
+        when(schedulerJobLogMapper.selectById(10L)).thenAnswer(invocation -> {
+            SchedulerJobLog log = new SchedulerJobLog();
+            log.setId(10L);
+            log.setJobCode("DOUYIN_CLUE_SYNC");
+            log.setStatus("QUEUED");
+            log.setPayload("{\"cursor\":1}");
+            return log;
+        });
 
         SchedulerTriggerRequest request = new SchedulerTriggerRequest();
         request.setJobCode("douyin_clue_sync");
@@ -99,5 +112,24 @@ class SchedulerServiceImplTest {
         assertThat(logs).hasSize(1);
         assertThat(logs.get(0).getStatus()).isEqualTo("QUEUED");
         assertThat(logs.get(0).getRetryCount()).isEqualTo(2);
+    }
+
+    @Test
+    void shouldDispatchActiveJobsAndNormalizeStatus() {
+        SchedulerJob activeJob = new SchedulerJob();
+        activeJob.setId(1L);
+        activeJob.setJobCode("DOUYIN_CLUE_INCREMENTAL");
+        activeJob.setStatus("ACTIVE");
+        activeJob.setIntervalMinutes(1);
+
+        when(schedulerJobMapper.selectList(any())).thenReturn(List.of(activeJob));
+        when(schedulerJobLogMapper.selectCount(any())).thenReturn(0L);
+        when(schedulerJobLogMapper.insert(org.mockito.ArgumentMatchers.<SchedulerJobLog>any())).thenReturn(1);
+
+        schedulerService.dispatchDueJobs();
+
+        assertThat(activeJob.getStatus()).isEqualTo("ENABLED");
+        verify(schedulerJobMapper).updateById(activeJob);
+        verify(schedulerJobLogMapper).insert(any(SchedulerJobLog.class));
     }
 }

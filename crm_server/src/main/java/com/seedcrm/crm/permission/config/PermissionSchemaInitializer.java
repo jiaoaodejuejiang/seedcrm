@@ -113,6 +113,8 @@ public class PermissionSchemaInitializer {
     private void seedDefaults() {
         seedPolicy("CLUE", "VIEW", "ONLINE_CUSTOMER_SERVICE", "SELF", null);
         seedPolicy("CLUE", "VIEW", "ONLINE_CUSTOMER_SERVICE", "TEAM", null);
+        seedPolicy("CLUE", "VIEW", "CLUE_MANAGER", "ALL", null);
+        seedPolicy("CLUE", "CREATE", "CLUE_MANAGER", "ALL", "manual or auto intake");
         seedPolicy("CLUE", "ASSIGN", "CLUE_MANAGER", "ALL", "clue assign");
         seedPolicy("CLUE", "RECYCLE", "CLUE_MANAGER", "ALL", "clue recycle");
 
@@ -128,6 +130,10 @@ public class PermissionSchemaInitializer {
         seedPolicy("PLANORDER", "VIEW", "PRIVATE_DOMAIN_SERVICE", "SELF", "bound customer");
         seedPolicy("ORDER", "VIEW", "PRIVATE_DOMAIN_SERVICE", "SELF", "bound customer");
         seedPolicy("ORDER", "FINISH", "FINANCE", "ALL", "order(status=finished)");
+
+        seedPolicy("SCHEDULER", "VIEW", "CLUE_MANAGER", "ALL", "scheduler monitor");
+        seedPolicy("SCHEDULER", "UPDATE", "CLUE_MANAGER", "ALL", "scheduler config");
+        seedPolicy("SCHEDULER", "TRIGGER", "CLUE_MANAGER", "ALL", "scheduler trigger");
 
         seedPolicy("PERMISSION", "VIEW", "ADMIN", "ALL", null);
         seedPolicy("PERMISSION", "UPDATE", "ADMIN", "ALL", null);

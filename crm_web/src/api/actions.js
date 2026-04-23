@@ -4,8 +4,20 @@ export function createClue(payload) {
   return http.post('/clue/add', payload)
 }
 
+export function createDistributionClue(payload) {
+  return http.post('/clue/distribution/add', payload)
+}
+
 export function assignClue(payload) {
   return http.post('/clue/assign', payload)
+}
+
+export function recycleClue(clueId) {
+  return http.post('/clue/recycle', null, {
+    params: {
+      clueId
+    }
+  })
 }
 
 export function createOrder(payload) {

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.seedcrm.crm.auth.service.AuthService;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
@@ -34,11 +35,14 @@ class PlanOrderPermissionGuardTest {
     @Mock
     private ClueMapper clueMapper;
 
+    @Mock
+    private AuthService authService;
+
     private PlanOrderPermissionGuard guard;
 
     @BeforeEach
     void setUp() {
-        guard = new PlanOrderPermissionGuard(permissionService, planOrderMapper, orderMapper, clueMapper);
+        guard = new PlanOrderPermissionGuard(permissionService, planOrderMapper, orderMapper, clueMapper, authService);
     }
 
     @Test
@@ -55,6 +59,7 @@ class PlanOrderPermissionGuardTest {
         clue.setId(3L);
         clue.setCurrentOwnerId(1002L);
         when(clueMapper.selectById(3L)).thenReturn(clue);
+        when(authService.resolveStoreId(1002L)).thenReturn(11L);
         when(permissionService.check(any())).thenReturn(new PermissionCheckResponse(false, null, "SELF", "ABAC scope rejected"));
 
         PermissionRequestContext context = new PermissionRequestContext();
@@ -80,6 +85,7 @@ class PlanOrderPermissionGuardTest {
         clue.setId(3L);
         clue.setCurrentOwnerId(1001L);
         when(clueMapper.selectById(3L)).thenReturn(clue);
+        when(authService.resolveStoreId(1001L)).thenReturn(10L);
         when(permissionService.check(any())).thenReturn(new PermissionCheckResponse(true, "PLANORDER:ASSIGN_ROLE:STORE_SERVICE:STORE", "STORE", "allowed"));
 
         PermissionRequestContext context = new PermissionRequestContext();

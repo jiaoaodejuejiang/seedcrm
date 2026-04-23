@@ -1,0 +1,11 @@
+[ 1597380ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:4173/@vite/client:968
+[ 2572381ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:4173/@vite/client:968
+[ 5711479ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:4173/@vite/client:968
+[ 9698602ms] [ERROR] [vite] SyntaxError: The requested module '/src/utils/permission.js?t=1776928880430' does not provide an export named 'permissionContext' @ http://127.0.0.1:4173/@vite/client:509
+[ 9698603ms] [ERROR] [vite] Failed to reload /src/layouts/AppLayout.vue. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:509
+[ 9698638ms] [ERROR] [vite] SyntaxError: The requested module '/src/utils/permission.js?t=1776928880430' does not provide an export named 'permissionContext' @ http://127.0.0.1:4173/@vite/client:509
+[ 9698638ms] [ERROR] [vite] Failed to reload /src/views/PermissionCenter.vue. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:509
+[ 9698788ms] [ERROR] [vite] SyntaxError: The requested module '/src/utils/permission.js?t=1776928880430' does not provide an export named 'permissionContext' @ http://127.0.0.1:4173/@vite/client:509
+[ 9698789ms] [ERROR] [vite] Failed to reload /src/views/PermissionCenter.vue. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:509
+[ 9698966ms] The requested module '/src/utils/permission.js?t=1776928880430' does not provide an export named 'permissionContext'
+[10510608ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:4173/@vite/client:968

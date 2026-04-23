@@ -1,6 +1,7 @@
 package com.seedcrm.crm.scheduler.config;
 
 import jakarta.annotation.PostConstruct;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.sql.DataSource;
@@ -22,6 +23,7 @@ public class SchedulerSchemaInitializer {
     public void initialize() {
         ensureTable("scheduler_job", createSchedulerJobSql(), schedulerJobColumns());
         ensureTable("scheduler_job_log", createSchedulerLogSql(), schedulerLogColumns());
+        seedDefaultJob();
     }
 
     private void ensureTable(String tableName, String createSql, Map<String, String> columns) {
@@ -126,5 +128,23 @@ public class SchedulerSchemaInitializer {
         columns.put("next_retry_time", "next_retry_time DATETIME");
         columns.put("created_at", "created_at DATETIME DEFAULT CURRENT_TIMESTAMP");
         return columns;
+    }
+
+    private void seedDefaultJob() {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM scheduler_job
+                WHERE job_code = 'DOUYIN_CLUE_INCREMENTAL'
+                """, Integer.class);
+        if (count != null && count > 0) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        jdbcTemplate.update("""
+                INSERT INTO scheduler_job(job_code, module_code, sync_mode, interval_minutes, retry_limit, queue_name, endpoint, status, next_run_time, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                "DOUYIN_CLUE_INCREMENTAL", "CLUE", "INCREMENTAL", 1, 3, "douyin-clue-sync",
+                "/clue/add", "ENABLED", now.plusMinutes(1), now, now);
     }
 }

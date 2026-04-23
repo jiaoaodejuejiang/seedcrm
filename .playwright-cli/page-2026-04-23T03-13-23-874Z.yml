@@ -1,0 +1,124 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Seed CRM
+      - heading "约束驱动的门店主链工作台" [level=1] [ref=e7]
+      - paragraph [ref=e8]: 严格围绕 Clue → Customer → Order → PlanOrder 主链，并把 Permission、Scheduler、Salary 一起接入前台。
+    - navigation [ref=e9]:
+      - link "线索 录入、分配、回收、转订单" [ref=e10] [cursor=pointer]:
+        - /url: /clues
+        - generic [ref=e11]: 线索
+        - generic [ref=e12]: 录入、分配、回收、转订单
+      - link "订单 paid / used 主链与到店入口" [ref=e13] [cursor=pointer]:
+        - /url: /orders
+        - generic [ref=e14]: 订单
+        - generic [ref=e15]: paid / used 主链与到店入口
+      - link "到店服务 状态流转与角色记录" [ref=e16] [cursor=pointer]:
+        - /url: /plan-orders
+        - generic [ref=e17]: 到店服务
+        - generic [ref=e18]: 状态流转与角色记录
+      - link "调度中心 队列、重试、日志" [ref=e19] [cursor=pointer]:
+        - /url: /scheduler
+        - generic [ref=e20]: 调度中心
+        - generic [ref=e21]: 队列、重试、日志
+      - link "权限 RBAC / ABAC 策略与校验" [ref=e22] [cursor=pointer]:
+        - /url: /permission
+        - generic [ref=e23]: 权限
+        - generic [ref=e24]: RBAC / ABAC 策略与校验
+      - link "薪酬 统计、重算、结算、提现" [ref=e25] [cursor=pointer]:
+        - /url: /salary
+        - generic [ref=e26]: 薪酬
+        - generic [ref=e27]: 统计、重算、结算、提现
+      - link "分销 带客与收益表现" [ref=e28] [cursor=pointer]:
+        - /url: /distributors
+        - generic [ref=e29]: 分销
+        - generic [ref=e30]: 带客与收益表现
+      - link "财务 收入与提现概览" [ref=e31] [cursor=pointer]:
+        - /url: /finance
+        - generic [ref=e32]: 财务
+        - generic [ref=e33]: 收入与提现概览
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - heading "权限上下文" [level=3] [ref=e37]
+          - paragraph [ref=e38]: 所有请求都会自动注入 RBAC / ABAC 请求头。
+        - button "重置" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: 重置
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: 角色
+          - generic [ref=e45] [cursor=pointer]:
+            - generic:
+              - combobox "角色 管理员" [ref=e47]
+              - generic [ref=e48]: 管理员
+            - img [ref=e51]
+        - generic [ref=e53]:
+          - generic [ref=e54]: 数据范围
+          - generic [ref=e56] [cursor=pointer]:
+            - generic:
+              - combobox "数据范围 all" [ref=e58]
+              - generic [ref=e59]: all
+            - img [ref=e62]
+        - generic [ref=e64]:
+          - generic [ref=e65]: 当前用户 ID
+          - generic [ref=e66]:
+            - button "decrease number" [ref=e67] [cursor=pointer]:
+              - img [ref=e69]
+            - button "increase number" [ref=e71] [cursor=pointer]:
+              - img [ref=e73]
+            - spinbutton "当前用户 ID decrease number increase number" [ref=e77]: "1001"
+        - generic [ref=e78]:
+          - generic [ref=e79]: 当前门店 ID
+          - generic [ref=e80]:
+            - button "decrease number" [ref=e81] [cursor=pointer]:
+              - img [ref=e83]
+            - button "increase number" [ref=e85] [cursor=pointer]:
+              - img [ref=e87]
+            - spinbutton "当前门店 ID decrease number increase number" [ref=e91]: "10"
+        - generic [ref=e92]:
+          - generic [ref=e93]: 资源门店 ID
+          - generic [ref=e94]:
+            - button "decrease number" [ref=e95] [cursor=pointer]:
+              - img [ref=e97]
+            - button "increase number" [ref=e99] [cursor=pointer]:
+              - img [ref=e101]
+            - spinbutton "资源门店 ID decrease number increase number" [ref=e105]: "10"
+        - generic [ref=e106]:
+          - generic [ref=e107]: 绑定客户用户 ID
+          - generic [ref=e108]:
+            - button "decrease number" [ref=e109] [cursor=pointer]:
+              - img [ref=e111]
+            - button "increase number" [ref=e113] [cursor=pointer]:
+              - img [ref=e115]
+            - spinbutton "绑定客户用户 ID decrease number increase number" [ref=e119]
+        - generic [ref=e120]:
+          - generic [ref=e121]: 团队成员 ID
+          - textbox "团队成员 ID" [ref=e124]:
+            - /placeholder: 例如 1001,1002
+            - text: 1001,1002
+  - main [ref=e125]:
+    - generic [ref=e126]:
+      - generic [ref=e127]:
+        - paragraph [ref=e128]: Constraint First
+        - heading "到店服务" [level=2] [ref=e129]
+        - paragraph [ref=e130]: 基于 PlanOrder 执行 arrived → servicing → finished 状态流转，并记录角色轨迹。
+      - generic [ref=e131]:
+        - generic [ref=e132]: 角色：管理员
+        - generic [ref=e133]: 范围：ALL
+        - generic [ref=e134]: 主链：Clue → Customer → Order → PlanOrder
+    - generic [ref=e136]:
+      - generic [ref=e137]:
+        - generic [ref=e139]:
+          - heading "到店队列" [level=3] [ref=e140]
+          - paragraph [ref=e141]: 严格按 arrived → servicing → finished 推进。
+        - generic [ref=e144] [cursor=pointer]:
+          - generic:
+            - combobox [ref=e146]
+            - generic [ref=e147]: PlanOrder 状态
+          - img [ref=e150]
+        - img [ref=e153]
+      - generic [ref=e155]:
+        - generic [ref=e157]:
+          - img [ref=e159]
+          - paragraph [ref=e176]: 暂无到店单，请先从订单页面进入到店服务。
+        - img [ref=e179]

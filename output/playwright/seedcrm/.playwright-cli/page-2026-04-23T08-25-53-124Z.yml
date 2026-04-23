@@ -1,0 +1,701 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - paragraph [ref=e6]: Seed CRM
+        - heading "约束驱动主链控制台" [level=1] [ref=e7]
+        - paragraph [ref=e8]: 前台与后端统一围绕“线索 -> 客户 -> 订单 -> 服务单”主链运行，登录、权限与调度全局生效。
+      - navigation [ref=e9]:
+        - link "线索 统一接入、分配、回收与转订单" [ref=e10] [cursor=pointer]:
+          - /url: /clues
+          - generic [ref=e11]: 线索
+          - generic [ref=e12]: 统一接入、分配、回收与转订单
+        - link "订单 已支付与已使用订单链路" [ref=e13] [cursor=pointer]:
+          - /url: /orders
+          - generic [ref=e14]: 订单
+          - generic [ref=e15]: 已支付与已使用订单链路
+        - link "服务单 服务履约与角色记录" [ref=e16] [cursor=pointer]:
+          - /url: /plan-orders
+          - generic [ref=e17]: 服务单
+          - generic [ref=e18]: 服务履约与角色记录
+        - link "调度 任务、队列、重试与日志" [ref=e19] [cursor=pointer]:
+          - /url: /scheduler
+          - generic [ref=e20]: 调度
+          - generic [ref=e21]: 任务、队列、重试与日志
+        - link "权限 RBAC、ABAC 与实时校验" [ref=e22] [cursor=pointer]:
+          - /url: /permission
+          - generic [ref=e23]: 权限
+          - generic [ref=e24]: RBAC、ABAC 与实时校验
+        - link "薪酬 统计、结算、打款与提现" [ref=e25] [cursor=pointer]:
+          - /url: /salary
+          - generic [ref=e26]: 薪酬
+          - generic [ref=e27]: 统计、结算、打款与提现
+        - link "分销 线索贡献与收益概览" [ref=e28] [cursor=pointer]:
+          - /url: /distributors
+          - generic [ref=e29]: 分销
+          - generic [ref=e30]: 线索贡献与收益概览
+        - link "财务 收入与提现记录总览" [ref=e31] [cursor=pointer]:
+          - /url: /finance
+          - generic [ref=e32]: 财务
+          - generic [ref=e33]: 收入与提现记录总览
+      - generic [ref=e34]:
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - heading "当前登录" [level=3] [ref=e37]
+            - paragraph [ref=e38]: 登录后系统会自动注入角色、数据范围与权限上下文。
+          - button "退出" [ref=e39] [cursor=pointer]:
+            - generic [ref=e40]: 退出
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - generic [ref=e43]: 姓名
+            - strong [ref=e44]: 系统管理员
+          - generic [ref=e45]:
+            - generic [ref=e46]: 角色
+            - strong [ref=e47]: 管理员
+          - generic [ref=e48]:
+            - generic [ref=e49]: 数据范围
+            - strong [ref=e50]: 全部
+          - generic [ref=e51]:
+            - generic [ref=e52]: 门店 ID
+            - strong [ref=e53]: "10"
+          - generic [ref=e54]:
+            - generic [ref=e55]: 账号
+            - strong [ref=e56]: admin
+    - main [ref=e57]:
+      - generic [ref=e58]:
+        - generic [ref=e59]:
+          - paragraph [ref=e60]: 约束优先
+          - heading "订单管理" [level=2] [ref=e2056]
+          - paragraph [ref=e62]: 订单必须绑定客户，且仅允许定金、卡券与已支付/已使用状态。
+        - generic [ref=e63]:
+          - generic [ref=e64]: 角色：管理员
+          - generic [ref=e65]: 范围：全部
+          - generic [ref=e66]: 主链：线索 -> 客户 -> 订单 -> 服务单
+      - generic [ref=e2057]:
+        - generic [ref=e2058]:
+          - article [ref=e2059]:
+            - generic [ref=e2060]: 订单总数
+            - strong [ref=e2061]: "21"
+            - text: 订单必须停留在主链里，并且始终绑定到客户。
+          - article [ref=e2062]:
+            - generic [ref=e2063]: 已支付
+            - strong [ref=e2064]: "7"
+            - text: 已支付订单才允许继续创建服务单。
+          - article [ref=e2065]:
+            - generic [ref=e2066]: 已使用
+            - strong [ref=e2067]: "14"
+            - text: 已使用订单代表履约闭环已经结束。
+        - generic [ref=e2068]:
+          - generic [ref=e2070]:
+            - generic [ref=e2072] [cursor=pointer]:
+              - generic:
+                - combobox [ref=e2074]
+                - generic [ref=e2075]: 订单状态
+              - img [ref=e2078]
+            - button "筛选" [ref=e2080] [cursor=pointer]:
+              - generic [ref=e2081]: 筛选
+          - generic [ref=e2083]:
+            - table [ref=e2085]:
+              - rowgroup [ref=e2096]:
+                - row "订单 客户 类型 金额 定金 状态 服务单 创建时间 操作" [ref=e2097]:
+                  - columnheader "订单" [ref=e2098]:
+                    - generic [ref=e2099]: 订单
+                  - columnheader "客户" [ref=e2100]:
+                    - generic [ref=e2101]: 客户
+                  - columnheader "类型" [ref=e2102]:
+                    - generic [ref=e2103]: 类型
+                  - columnheader "金额" [ref=e2104]:
+                    - generic [ref=e2105]: 金额
+                  - columnheader "定金" [ref=e2106]:
+                    - generic [ref=e2107]: 定金
+                  - columnheader "状态" [ref=e2108]:
+                    - generic [ref=e2109]: 状态
+                  - columnheader "服务单" [ref=e2110]:
+                    - generic [ref=e2111]: 服务单
+                  - columnheader "创建时间" [ref=e2112]:
+                    - generic [ref=e2113]: 创建时间
+                  - columnheader "操作" [ref=e2114]:
+                    - generic [ref=e2115]: 操作
+            - table [ref=e2120]:
+              - rowgroup [ref=e2131]:
+                - 'row "ORD202604231133105148457 #21 Codex Flow 13990009988 定金 ¥ 1,999.00 ¥ 199.00 已支付 #10 / 服务中 2026/4/23 11:33:11 打开服务单 客户详情" [ref=e2132]':
+                  - 'cell "ORD202604231133105148457 #21" [ref=e2133]':
+                    - generic [ref=e2135]:
+                      - strong [ref=e2136]: ORD202604231133105148457
+                      - generic [ref=e2137]: "#21"
+                  - cell "Codex Flow 13990009988" [ref=e2138]:
+                    - generic [ref=e2140]:
+                      - strong [ref=e2141]: Codex Flow
+                      - generic [ref=e2142]: "13990009988"
+                  - cell "定金" [ref=e2143]:
+                    - generic [ref=e2146]: 定金
+                  - cell "¥ 1,999.00" [ref=e2147]:
+                    - generic [ref=e2148]: ¥ 1,999.00
+                  - cell "¥ 199.00" [ref=e2149]:
+                    - generic [ref=e2150]: ¥ 199.00
+                  - cell "已支付" [ref=e2151]:
+                    - generic [ref=e2154]: 已支付
+                  - cell "#10 / 服务中" [ref=e2155]:
+                    - generic [ref=e2156]: "#10 / 服务中"
+                  - cell "2026/4/23 11:33:11" [ref=e2157]:
+                    - generic [ref=e2158]: 2026/4/23 11:33:11
+                  - cell "打开服务单 客户详情" [ref=e2159]:
+                    - generic [ref=e2161]:
+                      - button "打开服务单" [ref=e2162] [cursor=pointer]:
+                        - generic [ref=e2163]: 打开服务单
+                      - button "客户详情" [ref=e2164] [cursor=pointer]:
+                        - generic [ref=e2165]: 客户详情
+                - 'row "ORD202604221527370004335 #20 Rerun-42849368 13982849368 定金 ¥ 5,000.00 ¥ 1,000.00 已使用 #9 / 已完成 2026/4/22 15:27:37 打开服务单 客户详情" [ref=e2166]':
+                  - 'cell "ORD202604221527370004335 #20" [ref=e2167]':
+                    - generic [ref=e2169]:
+                      - strong [ref=e2170]: ORD202604221527370004335
+                      - generic [ref=e2171]: "#20"
+                  - cell "Rerun-42849368 13982849368" [ref=e2172]:
+                    - generic [ref=e2174]:
+                      - strong [ref=e2175]: Rerun-42849368
+                      - generic [ref=e2176]: "13982849368"
+                  - cell "定金" [ref=e2177]:
+                    - generic [ref=e2180]: 定金
+                  - cell "¥ 5,000.00" [ref=e2181]:
+                    - generic [ref=e2182]: ¥ 5,000.00
+                  - cell "¥ 1,000.00" [ref=e2183]:
+                    - generic [ref=e2184]: ¥ 1,000.00
+                  - cell "已使用" [ref=e2185]:
+                    - generic [ref=e2188]: 已使用
+                  - cell "#9 / 已完成" [ref=e2189]:
+                    - generic [ref=e2190]: "#9 / 已完成"
+                  - cell "2026/4/22 15:27:37" [ref=e2191]:
+                    - generic [ref=e2192]: 2026/4/22 15:27:37
+                  - cell "打开服务单 客户详情" [ref=e2193]:
+                    - generic [ref=e2195]:
+                      - button "打开服务单" [ref=e2196] [cursor=pointer]:
+                        - generic [ref=e2197]: 打开服务单
+                      - button "客户详情" [ref=e2198] [cursor=pointer]:
+                        - generic [ref=e2199]: 客户详情
+                - 'row "ORD202604221526079412758 #19 Rerun-42761206 13982761206 定金 ¥ 5,000.00 ¥ 1,000.00 已使用 #8 / 已完成 2026/4/22 15:26:08 打开服务单 客户详情" [ref=e2200]':
+                  - 'cell "ORD202604221526079412758 #19" [ref=e2201]':
+                    - generic [ref=e2203]:
+                      - strong [ref=e2204]: ORD202604221526079412758
+                      - generic [ref=e2205]: "#19"
+                  - cell "Rerun-42761206 13982761206" [ref=e2206]:
+                    - generic [ref=e2208]:
+                      - strong [ref=e2209]: Rerun-42761206
+                      - generic [ref=e2210]: "13982761206"
+                  - cell "定金" [ref=e2211]:
+                    - generic [ref=e2214]: 定金
+                  - cell "¥ 5,000.00" [ref=e2215]:
+                    - generic [ref=e2216]: ¥ 5,000.00
+                  - cell "¥ 1,000.00" [ref=e2217]:
+                    - generic [ref=e2218]: ¥ 1,000.00
+                  - cell "已使用" [ref=e2219]:
+                    - generic [ref=e2222]: 已使用
+                  - cell "#8 / 已完成" [ref=e2223]:
+                    - generic [ref=e2224]: "#8 / 已完成"
+                  - cell "2026/4/22 15:26:08" [ref=e2225]:
+                    - generic [ref=e2226]: 2026/4/22 15:26:08
+                  - cell "打开服务单 客户详情" [ref=e2227]:
+                    - generic [ref=e2229]:
+                      - button "打开服务单" [ref=e2230] [cursor=pointer]:
+                        - generic [ref=e2231]: 打开服务单
+                      - button "客户详情" [ref=e2232] [cursor=pointer]:
+                        - generic [ref=e2233]: 客户详情
+                - 'row "ORD202604221459347488361 #18 UI Auto Flow 13990005678 定金 ¥ 5,000.00 ¥ 1,000.00 已使用 #7 / 已完成 2026/4/22 14:59:35 打开服务单 客户详情" [ref=e2234]':
+                  - 'cell "ORD202604221459347488361 #18" [ref=e2235]':
+                    - generic [ref=e2237]:
+                      - strong [ref=e2238]: ORD202604221459347488361
+                      - generic [ref=e2239]: "#18"
+                  - cell "UI Auto Flow 13990005678" [ref=e2240]:
+                    - generic [ref=e2242]:
+                      - strong [ref=e2243]: UI Auto Flow
+                      - generic [ref=e2244]: "13990005678"
+                  - cell "定金" [ref=e2245]:
+                    - generic [ref=e2248]: 定金
+                  - cell "¥ 5,000.00" [ref=e2249]:
+                    - generic [ref=e2250]: ¥ 5,000.00
+                  - cell "¥ 1,000.00" [ref=e2251]:
+                    - generic [ref=e2252]: ¥ 1,000.00
+                  - cell "已使用" [ref=e2253]:
+                    - generic [ref=e2256]: 已使用
+                  - cell "#7 / 已完成" [ref=e2257]:
+                    - generic [ref=e2258]: "#7 / 已完成"
+                  - cell "2026/4/22 14:59:35" [ref=e2259]:
+                    - generic [ref=e2260]: 2026/4/22 14:59:35
+                  - cell "打开服务单 客户详情" [ref=e2261]:
+                    - generic [ref=e2263]:
+                      - button "打开服务单" [ref=e2264] [cursor=pointer]:
+                        - generic [ref=e2265]: 打开服务单
+                      - button "客户详情" [ref=e2266] [cursor=pointer]:
+                        - generic [ref=e2267]: 客户详情
+                - 'row "ORD202604221239282975273 #17 FinanceClue-1776832767 1391001776832767 定金 ¥ 1,500.00 ¥ 200.00 已使用 #6 / 已完成 2026/4/22 12:39:28 打开服务单 客户详情" [ref=e2268]':
+                  - 'cell "ORD202604221239282975273 #17" [ref=e2269]':
+                    - generic [ref=e2271]:
+                      - strong [ref=e2272]: ORD202604221239282975273
+                      - generic [ref=e2273]: "#17"
+                  - cell "FinanceClue-1776832767 1391001776832767" [ref=e2274]:
+                    - generic [ref=e2276]:
+                      - strong [ref=e2277]: FinanceClue-1776832767
+                      - generic [ref=e2278]: "1391001776832767"
+                  - cell "定金" [ref=e2279]:
+                    - generic [ref=e2282]: 定金
+                  - cell "¥ 1,500.00" [ref=e2283]:
+                    - generic [ref=e2284]: ¥ 1,500.00
+                  - cell "¥ 200.00" [ref=e2285]:
+                    - generic [ref=e2286]: ¥ 200.00
+                  - cell "已使用" [ref=e2287]:
+                    - generic [ref=e2290]: 已使用
+                  - cell "#6 / 已完成" [ref=e2291]:
+                    - generic [ref=e2292]: "#6 / 已完成"
+                  - cell "2026/4/22 12:39:28" [ref=e2293]:
+                    - generic [ref=e2294]: 2026/4/22 12:39:28
+                  - cell "打开服务单 客户详情" [ref=e2295]:
+                    - generic [ref=e2297]:
+                      - button "打开服务单" [ref=e2298] [cursor=pointer]:
+                        - generic [ref=e2299]: 打开服务单
+                      - button "客户详情" [ref=e2300] [cursor=pointer]:
+                        - generic [ref=e2301]: 客户详情
+                - 'row "ORD202604221232465408346 #16 FinanceClue-1776832364 1390001776832364 定金 ¥ 1,000.00 ¥ 100.00 已使用 #5 / 已完成 2026/4/22 12:32:47 打开服务单 客户详情" [ref=e2302]':
+                  - 'cell "ORD202604221232465408346 #16" [ref=e2303]':
+                    - generic [ref=e2305]:
+                      - strong [ref=e2306]: ORD202604221232465408346
+                      - generic [ref=e2307]: "#16"
+                  - cell "FinanceClue-1776832364 1390001776832364" [ref=e2308]:
+                    - generic [ref=e2310]:
+                      - strong [ref=e2311]: FinanceClue-1776832364
+                      - generic [ref=e2312]: "1390001776832364"
+                  - cell "定金" [ref=e2313]:
+                    - generic [ref=e2316]: 定金
+                  - cell "¥ 1,000.00" [ref=e2317]:
+                    - generic [ref=e2318]: ¥ 1,000.00
+                  - cell "¥ 100.00" [ref=e2319]:
+                    - generic [ref=e2320]: ¥ 100.00
+                  - cell "已使用" [ref=e2321]:
+                    - generic [ref=e2324]: 已使用
+                  - cell "#5 / 已完成" [ref=e2325]:
+                    - generic [ref=e2326]: "#5 / 已完成"
+                  - cell "2026/4/22 12:32:47" [ref=e2327]:
+                    - generic [ref=e2328]: 2026/4/22 12:32:47
+                  - cell "打开服务单 客户详情" [ref=e2329]:
+                    - generic [ref=e2331]:
+                      - button "打开服务单" [ref=e2332] [cursor=pointer]:
+                        - generic [ref=e2333]: 打开服务单
+                      - button "客户详情" [ref=e2334] [cursor=pointer]:
+                        - generic [ref=e2335]: 客户详情
+                - 'row "ORD202604221126278822911 #15 lead-20260422112627 13813513464 定金 ¥ 1,000.00 ¥ 100.00 已使用 #4 / 已完成 2026/4/22 11:26:28 打开服务单 客户详情" [ref=e2336]':
+                  - 'cell "ORD202604221126278822911 #15" [ref=e2337]':
+                    - generic [ref=e2339]:
+                      - strong [ref=e2340]: ORD202604221126278822911
+                      - generic [ref=e2341]: "#15"
+                  - cell "lead-20260422112627 13813513464" [ref=e2342]:
+                    - generic [ref=e2344]:
+                      - strong [ref=e2345]: lead-20260422112627
+                      - generic [ref=e2346]: "13813513464"
+                  - cell "定金" [ref=e2347]:
+                    - generic [ref=e2350]: 定金
+                  - cell "¥ 1,000.00" [ref=e2351]:
+                    - generic [ref=e2352]: ¥ 1,000.00
+                  - cell "¥ 100.00" [ref=e2353]:
+                    - generic [ref=e2354]: ¥ 100.00
+                  - cell "已使用" [ref=e2355]:
+                    - generic [ref=e2358]: 已使用
+                  - cell "#4 / 已完成" [ref=e2359]:
+                    - generic [ref=e2360]: "#4 / 已完成"
+                  - cell "2026/4/22 11:26:28" [ref=e2361]:
+                    - generic [ref=e2362]: 2026/4/22 11:26:28
+                  - cell "打开服务单 客户详情" [ref=e2363]:
+                    - generic [ref=e2365]:
+                      - button "打开服务单" [ref=e2366] [cursor=pointer]:
+                        - generic [ref=e2367]: 打开服务单
+                      - button "客户详情" [ref=e2368] [cursor=pointer]:
+                        - generic [ref=e2369]: 客户详情
+                - 'row "ORD202604221125206063802 #14 lead-20260422112519 13880822420 定金 ¥ 1,000.00 ¥ 100.00 已支付 #3 / 服务中 2026/4/22 11:25:21 打开服务单 客户详情" [ref=e2370]':
+                  - 'cell "ORD202604221125206063802 #14" [ref=e2371]':
+                    - generic [ref=e2373]:
+                      - strong [ref=e2374]: ORD202604221125206063802
+                      - generic [ref=e2375]: "#14"
+                  - cell "lead-20260422112519 13880822420" [ref=e2376]:
+                    - generic [ref=e2378]:
+                      - strong [ref=e2379]: lead-20260422112519
+                      - generic [ref=e2380]: "13880822420"
+                  - cell "定金" [ref=e2381]:
+                    - generic [ref=e2384]: 定金
+                  - cell "¥ 1,000.00" [ref=e2385]:
+                    - generic [ref=e2386]: ¥ 1,000.00
+                  - cell "¥ 100.00" [ref=e2387]:
+                    - generic [ref=e2388]: ¥ 100.00
+                  - cell "已支付" [ref=e2389]:
+                    - generic [ref=e2392]: 已支付
+                  - cell "#3 / 服务中" [ref=e2393]:
+                    - generic [ref=e2394]: "#3 / 服务中"
+                  - cell "2026/4/22 11:25:21" [ref=e2395]:
+                    - generic [ref=e2396]: 2026/4/22 11:25:21
+                  - cell "打开服务单 客户详情" [ref=e2397]:
+                    - generic [ref=e2399]:
+                      - button "打开服务单" [ref=e2400] [cursor=pointer]:
+                        - generic [ref=e2401]: 打开服务单
+                      - button "客户详情" [ref=e2402] [cursor=pointer]:
+                        - generic [ref=e2403]: 客户详情
+                - 'row "ORD202604221025342021490 #13 Salary Demo 13973742437 定金 ¥ 1,000.00 ¥ 100.00 已使用 #2 / 已完成 2026/4/22 10:25:34 打开服务单 客户详情" [ref=e2404]':
+                  - 'cell "ORD202604221025342021490 #13" [ref=e2405]':
+                    - generic [ref=e2407]:
+                      - strong [ref=e2408]: ORD202604221025342021490
+                      - generic [ref=e2409]: "#13"
+                  - cell "Salary Demo 13973742437" [ref=e2410]:
+                    - generic [ref=e2412]:
+                      - strong [ref=e2413]: Salary Demo
+                      - generic [ref=e2414]: "13973742437"
+                  - cell "定金" [ref=e2415]:
+                    - generic [ref=e2418]: 定金
+                  - cell "¥ 1,000.00" [ref=e2419]:
+                    - generic [ref=e2420]: ¥ 1,000.00
+                  - cell "¥ 100.00" [ref=e2421]:
+                    - generic [ref=e2422]: ¥ 100.00
+                  - cell "已使用" [ref=e2423]:
+                    - generic [ref=e2426]: 已使用
+                  - cell "#2 / 已完成" [ref=e2427]:
+                    - generic [ref=e2428]: "#2 / 已完成"
+                  - cell "2026/4/22 10:25:34" [ref=e2429]:
+                    - generic [ref=e2430]: 2026/4/22 10:25:34
+                  - cell "打开服务单 客户详情" [ref=e2431]:
+                    - generic [ref=e2433]:
+                      - button "打开服务单" [ref=e2434] [cursor=pointer]:
+                        - generic [ref=e2435]: 打开服务单
+                      - button "客户详情" [ref=e2436] [cursor=pointer]:
+                        - generic [ref=e2437]: 客户详情
+                - 'row "ORD202604220955338366259 #12 PlanOrder Auto Test 13900003173 定金 ¥ 1,280.00 ¥ 200.00 已使用 #1 / 已完成 2026/4/22 09:55:34 打开服务单 客户详情" [ref=e2438]':
+                  - 'cell "ORD202604220955338366259 #12" [ref=e2439]':
+                    - generic [ref=e2441]:
+                      - strong [ref=e2442]: ORD202604220955338366259
+                      - generic [ref=e2443]: "#12"
+                  - cell "PlanOrder Auto Test 13900003173" [ref=e2444]:
+                    - generic [ref=e2446]:
+                      - strong [ref=e2447]: PlanOrder Auto Test
+                      - generic [ref=e2448]: "13900003173"
+                  - cell "定金" [ref=e2449]:
+                    - generic [ref=e2452]: 定金
+                  - cell "¥ 1,280.00" [ref=e2453]:
+                    - generic [ref=e2454]: ¥ 1,280.00
+                  - cell "¥ 200.00" [ref=e2455]:
+                    - generic [ref=e2456]: ¥ 200.00
+                  - cell "已使用" [ref=e2457]:
+                    - generic [ref=e2460]: 已使用
+                  - cell "#1 / 已完成" [ref=e2461]:
+                    - generic [ref=e2462]: "#1 / 已完成"
+                  - cell "2026/4/22 09:55:34" [ref=e2463]:
+                    - generic [ref=e2464]: 2026/4/22 09:55:34
+                  - cell "打开服务单 客户详情" [ref=e2465]:
+                    - generic [ref=e2467]:
+                      - button "打开服务单" [ref=e2468] [cursor=pointer]:
+                        - generic [ref=e2469]: 打开服务单
+                      - button "客户详情" [ref=e2470] [cursor=pointer]:
+                        - generic [ref=e2471]: 客户详情
+                - 'row "ORD202604220152140604040 #11 seed-user 13900002385 定金 ¥ 199.00 ¥ 80.00 已支付 未创建 2026/4/22 01:52:14 创建服务单 客户详情" [ref=e2472]':
+                  - 'cell "ORD202604220152140604040 #11" [ref=e2473]':
+                    - generic [ref=e2475]:
+                      - strong [ref=e2476]: ORD202604220152140604040
+                      - generic [ref=e2477]: "#11"
+                  - cell "seed-user 13900002385" [ref=e2478]:
+                    - generic [ref=e2480]:
+                      - strong [ref=e2481]: seed-user
+                      - generic [ref=e2482]: "13900002385"
+                  - cell "定金" [ref=e2483]:
+                    - generic [ref=e2486]: 定金
+                  - cell "¥ 199.00" [ref=e2487]:
+                    - generic [ref=e2488]: ¥ 199.00
+                  - cell "¥ 80.00" [ref=e2489]:
+                    - generic [ref=e2490]: ¥ 80.00
+                  - cell "已支付" [ref=e2491]:
+                    - generic [ref=e2494]: 已支付
+                  - cell "未创建" [ref=e2495]:
+                    - generic [ref=e2496]: 未创建
+                  - cell "2026/4/22 01:52:14" [ref=e2497]:
+                    - generic [ref=e2498]: 2026/4/22 01:52:14
+                  - cell "创建服务单 客户详情" [ref=e2499]:
+                    - generic [ref=e2501]:
+                      - button "创建服务单" [ref=e2502] [cursor=pointer]:
+                        - generic [ref=e2503]: 创建服务单
+                      - button "客户详情" [ref=e2504] [cursor=pointer]:
+                        - generic [ref=e2505]: 客户详情
+                - 'row "ORD202604220029267336866 #10 测试 1390422002925 定金 ¥ 299.00 ¥ 29.90 已使用 未创建 2026/4/22 00:29:27 创建服务单 客户详情" [ref=e2506]':
+                  - 'cell "ORD202604220029267336866 #10" [ref=e2507]':
+                    - generic [ref=e2509]:
+                      - strong [ref=e2510]: ORD202604220029267336866
+                      - generic [ref=e2511]: "#10"
+                  - cell "测试 1390422002925" [ref=e2512]:
+                    - generic [ref=e2514]:
+                      - strong [ref=e2515]: 测试
+                      - generic [ref=e2516]: "1390422002925"
+                  - cell "定金" [ref=e2517]:
+                    - generic [ref=e2520]: 定金
+                  - cell "¥ 299.00" [ref=e2521]:
+                    - generic [ref=e2522]: ¥ 299.00
+                  - cell "¥ 29.90" [ref=e2523]:
+                    - generic [ref=e2524]: ¥ 29.90
+                  - cell "已使用" [ref=e2525]:
+                    - generic [ref=e2528]: 已使用
+                  - cell "未创建" [ref=e2529]:
+                    - generic [ref=e2530]: 未创建
+                  - cell "2026/4/22 00:29:27" [ref=e2531]:
+                    - generic [ref=e2532]: 2026/4/22 00:29:27
+                  - cell "创建服务单 客户详情" [ref=e2533]:
+                    - generic [ref=e2535]:
+                      - button "创建服务单" [ref=e2536] [cursor=pointer]:
+                        - generic [ref=e2537]: 创建服务单
+                      - button "客户详情" [ref=e2538] [cursor=pointer]:
+                        - generic [ref=e2539]: 客户详情
+                - 'row "ORD202604211849452699362 #9 Tag Test User 13800990001 定金 ¥ 300.00 ¥ 60.00 已使用 未创建 2026/4/21 18:49:45 创建服务单 客户详情" [ref=e2540]':
+                  - 'cell "ORD202604211849452699362 #9" [ref=e2541]':
+                    - generic [ref=e2543]:
+                      - strong [ref=e2544]: ORD202604211849452699362
+                      - generic [ref=e2545]: "#9"
+                  - cell "Tag Test User 13800990001" [ref=e2546]:
+                    - generic [ref=e2548]:
+                      - strong [ref=e2549]: Tag Test User
+                      - generic [ref=e2550]: "13800990001"
+                  - cell "定金" [ref=e2551]:
+                    - generic [ref=e2554]: 定金
+                  - cell "¥ 300.00" [ref=e2555]:
+                    - generic [ref=e2556]: ¥ 300.00
+                  - cell "¥ 60.00" [ref=e2557]:
+                    - generic [ref=e2558]: ¥ 60.00
+                  - cell "已使用" [ref=e2559]:
+                    - generic [ref=e2562]: 已使用
+                  - cell "未创建" [ref=e2563]:
+                    - generic [ref=e2564]: 未创建
+                  - cell "2026/4/21 18:49:45" [ref=e2565]:
+                    - generic [ref=e2566]: 2026/4/21 18:49:45
+                  - cell "创建服务单 客户详情" [ref=e2567]:
+                    - generic [ref=e2569]:
+                      - button "创建服务单" [ref=e2570] [cursor=pointer]:
+                        - generic [ref=e2571]: 创建服务单
+                      - button "客户详情" [ref=e2572] [cursor=pointer]:
+                        - generic [ref=e2573]: 客户详情
+                - 'row "ORD202604211849297614158 #8 Tag Test User 13800990001 定金 ¥ 200.00 ¥ 50.00 已使用 未创建 2026/4/21 18:49:30 创建服务单 客户详情" [ref=e2574]':
+                  - 'cell "ORD202604211849297614158 #8" [ref=e2575]':
+                    - generic [ref=e2577]:
+                      - strong [ref=e2578]: ORD202604211849297614158
+                      - generic [ref=e2579]: "#8"
+                  - cell "Tag Test User 13800990001" [ref=e2580]:
+                    - generic [ref=e2582]:
+                      - strong [ref=e2583]: Tag Test User
+                      - generic [ref=e2584]: "13800990001"
+                  - cell "定金" [ref=e2585]:
+                    - generic [ref=e2588]: 定金
+                  - cell "¥ 200.00" [ref=e2589]:
+                    - generic [ref=e2590]: ¥ 200.00
+                  - cell "¥ 50.00" [ref=e2591]:
+                    - generic [ref=e2592]: ¥ 50.00
+                  - cell "已使用" [ref=e2593]:
+                    - generic [ref=e2596]: 已使用
+                  - cell "未创建" [ref=e2597]:
+                    - generic [ref=e2598]: 未创建
+                  - cell "2026/4/21 18:49:30" [ref=e2599]:
+                    - generic [ref=e2600]: 2026/4/21 18:49:30
+                  - cell "创建服务单 客户详情" [ref=e2601]:
+                    - generic [ref=e2603]:
+                      - button "创建服务单" [ref=e2604] [cursor=pointer]:
+                        - generic [ref=e2605]: 创建服务单
+                      - button "客户详情" [ref=e2606] [cursor=pointer]:
+                        - generic [ref=e2607]: 客户详情
+                - 'row "ORD202604211848443075779 #7 Tag Test User 13800990001 定金 ¥ 600.00 ¥ 100.00 已使用 未创建 2026/4/21 18:48:44 创建服务单 客户详情" [ref=e2608]':
+                  - 'cell "ORD202604211848443075779 #7" [ref=e2609]':
+                    - generic [ref=e2611]:
+                      - strong [ref=e2612]: ORD202604211848443075779
+                      - generic [ref=e2613]: "#7"
+                  - cell "Tag Test User 13800990001" [ref=e2614]:
+                    - generic [ref=e2616]:
+                      - strong [ref=e2617]: Tag Test User
+                      - generic [ref=e2618]: "13800990001"
+                  - cell "定金" [ref=e2619]:
+                    - generic [ref=e2622]: 定金
+                  - cell "¥ 600.00" [ref=e2623]:
+                    - generic [ref=e2624]: ¥ 600.00
+                  - cell "¥ 100.00" [ref=e2625]:
+                    - generic [ref=e2626]: ¥ 100.00
+                  - cell "已使用" [ref=e2627]:
+                    - generic [ref=e2630]: 已使用
+                  - cell "未创建" [ref=e2631]:
+                    - generic [ref=e2632]: 未创建
+                  - cell "2026/4/21 18:48:44" [ref=e2633]:
+                    - generic [ref=e2634]: 2026/4/21 18:48:44
+                  - cell "创建服务单 客户详情" [ref=e2635]:
+                    - generic [ref=e2637]:
+                      - button "创建服务单" [ref=e2638] [cursor=pointer]:
+                        - generic [ref=e2639]: 创建服务单
+                      - button "客户详情" [ref=e2640] [cursor=pointer]:
+                        - generic [ref=e2641]: 客户详情
+                - 'row "ORD202604211817015404304 #6 Closure Test 1390421181623 卡券 ¥ 299.00 ¥ 29.00 已支付 未创建 2026/4/21 18:17:02 创建服务单 客户详情" [ref=e2642]':
+                  - 'cell "ORD202604211817015404304 #6" [ref=e2643]':
+                    - generic [ref=e2645]:
+                      - strong [ref=e2646]: ORD202604211817015404304
+                      - generic [ref=e2647]: "#6"
+                  - cell "Closure Test 1390421181623" [ref=e2648]:
+                    - generic [ref=e2650]:
+                      - strong [ref=e2651]: Closure Test
+                      - generic [ref=e2652]: "1390421181623"
+                  - cell "卡券" [ref=e2653]:
+                    - generic [ref=e2656]: 卡券
+                  - cell "¥ 299.00" [ref=e2657]:
+                    - generic [ref=e2658]: ¥ 299.00
+                  - cell "¥ 29.00" [ref=e2659]:
+                    - generic [ref=e2660]: ¥ 29.00
+                  - cell "已支付" [ref=e2661]:
+                    - generic [ref=e2664]: 已支付
+                  - cell "未创建" [ref=e2665]:
+                    - generic [ref=e2666]: 未创建
+                  - cell "2026/4/21 18:17:02" [ref=e2667]:
+                    - generic [ref=e2668]: 2026/4/21 18:17:02
+                  - cell "创建服务单 客户详情" [ref=e2669]:
+                    - generic [ref=e2671]:
+                      - button "创建服务单" [ref=e2672] [cursor=pointer]:
+                        - generic [ref=e2673]: 创建服务单
+                      - button "客户详情" [ref=e2674] [cursor=pointer]:
+                        - generic [ref=e2675]: 客户详情
+                - 'row "ORD202604211816244305202 #5 Closure Test 1390421181623 卡券 ¥ 1,999.00 ¥ 199.00 已支付 未创建 2026/4/21 18:16:24 创建服务单 客户详情" [ref=e2676]':
+                  - 'cell "ORD202604211816244305202 #5" [ref=e2677]':
+                    - generic [ref=e2679]:
+                      - strong [ref=e2680]: ORD202604211816244305202
+                      - generic [ref=e2681]: "#5"
+                  - cell "Closure Test 1390421181623" [ref=e2682]:
+                    - generic [ref=e2684]:
+                      - strong [ref=e2685]: Closure Test
+                      - generic [ref=e2686]: "1390421181623"
+                  - cell "卡券" [ref=e2687]:
+                    - generic [ref=e2690]: 卡券
+                  - cell "¥ 1,999.00" [ref=e2691]:
+                    - generic [ref=e2692]: ¥ 1,999.00
+                  - cell "¥ 199.00" [ref=e2693]:
+                    - generic [ref=e2694]: ¥ 199.00
+                  - cell "已支付" [ref=e2695]:
+                    - generic [ref=e2698]: 已支付
+                  - cell "未创建" [ref=e2699]:
+                    - generic [ref=e2700]: 未创建
+                  - cell "2026/4/21 18:16:24" [ref=e2701]:
+                    - generic [ref=e2702]: 2026/4/21 18:16:24
+                  - cell "创建服务单 客户详情" [ref=e2703]:
+                    - generic [ref=e2705]:
+                      - button "创建服务单" [ref=e2706] [cursor=pointer]:
+                        - generic [ref=e2707]: 创建服务单
+                      - button "客户详情" [ref=e2708] [cursor=pointer]:
+                        - generic [ref=e2709]: 客户详情
+                - 'row "ORD202604211816241153678 #4 Closure Test 1390421181623 定金 ¥ 999.00 ¥ 99.00 已使用 未创建 2026/4/21 18:16:24 创建服务单 客户详情" [ref=e2710]':
+                  - 'cell "ORD202604211816241153678 #4" [ref=e2711]':
+                    - generic [ref=e2713]:
+                      - strong [ref=e2714]: ORD202604211816241153678
+                      - generic [ref=e2715]: "#4"
+                  - cell "Closure Test 1390421181623" [ref=e2716]:
+                    - generic [ref=e2718]:
+                      - strong [ref=e2719]: Closure Test
+                      - generic [ref=e2720]: "1390421181623"
+                  - cell "定金" [ref=e2721]:
+                    - generic [ref=e2724]: 定金
+                  - cell "¥ 999.00" [ref=e2725]:
+                    - generic [ref=e2726]: ¥ 999.00
+                  - cell "¥ 99.00" [ref=e2727]:
+                    - generic [ref=e2728]: ¥ 99.00
+                  - cell "已使用" [ref=e2729]:
+                    - generic [ref=e2732]: 已使用
+                  - cell "未创建" [ref=e2733]:
+                    - generic [ref=e2734]: 未创建
+                  - cell "2026/4/21 18:16:24" [ref=e2735]:
+                    - generic [ref=e2736]: 2026/4/21 18:16:24
+                  - cell "创建服务单 客户详情" [ref=e2737]:
+                    - generic [ref=e2739]:
+                      - button "创建服务单" [ref=e2740] [cursor=pointer]:
+                        - generic [ref=e2741]: 创建服务单
+                      - button "客户详情" [ref=e2742] [cursor=pointer]:
+                        - generic [ref=e2743]: 客户详情
+                - 'row "ORD202604211659028991559 #3 待绑定客户 -- 定金 ¥ 888.00 ¥ 88.00 已支付 未创建 2026/4/21 16:59:03 创建服务单 客户详情" [ref=e2744]':
+                  - 'cell "ORD202604211659028991559 #3" [ref=e2745]':
+                    - generic [ref=e2747]:
+                      - strong [ref=e2748]: ORD202604211659028991559
+                      - generic [ref=e2749]: "#3"
+                  - cell "待绑定客户 --" [ref=e2750]:
+                    - generic [ref=e2752]:
+                      - strong [ref=e2753]: 待绑定客户
+                      - generic [ref=e2754]: "--"
+                  - cell "定金" [ref=e2755]:
+                    - generic [ref=e2758]: 定金
+                  - cell "¥ 888.00" [ref=e2759]:
+                    - generic [ref=e2760]: ¥ 888.00
+                  - cell "¥ 88.00" [ref=e2761]:
+                    - generic [ref=e2762]: ¥ 88.00
+                  - cell "已支付" [ref=e2763]:
+                    - generic [ref=e2766]: 已支付
+                  - cell "未创建" [ref=e2767]:
+                    - generic [ref=e2768]: 未创建
+                  - cell "2026/4/21 16:59:03" [ref=e2769]:
+                    - generic [ref=e2770]: 2026/4/21 16:59:03
+                  - cell "创建服务单 客户详情" [ref=e2771]:
+                    - generic [ref=e2773]:
+                      - button "创建服务单" [ref=e2774] [cursor=pointer]:
+                        - generic [ref=e2775]: 创建服务单
+                      - button "客户详情" [ref=e2776] [cursor=pointer]:
+                        - generic [ref=e2777]: 客户详情
+                - 'row "ORD202604211658411069480 #2 待绑定客户 -- 定金 ¥ 1,288.50 ¥ 200.00 已使用 未创建 2026/4/21 16:58:41 创建服务单 客户详情" [ref=e2778]':
+                  - 'cell "ORD202604211658411069480 #2" [ref=e2779]':
+                    - generic [ref=e2781]:
+                      - strong [ref=e2782]: ORD202604211658411069480
+                      - generic [ref=e2783]: "#2"
+                  - cell "待绑定客户 --" [ref=e2784]:
+                    - generic [ref=e2786]:
+                      - strong [ref=e2787]: 待绑定客户
+                      - generic [ref=e2788]: "--"
+                  - cell "定金" [ref=e2789]:
+                    - generic [ref=e2792]: 定金
+                  - cell "¥ 1,288.50" [ref=e2793]:
+                    - generic [ref=e2794]: ¥ 1,288.50
+                  - cell "¥ 200.00" [ref=e2795]:
+                    - generic [ref=e2796]: ¥ 200.00
+                  - cell "已使用" [ref=e2797]:
+                    - generic [ref=e2800]: 已使用
+                  - cell "未创建" [ref=e2801]:
+                    - generic [ref=e2802]: 未创建
+                  - cell "2026/4/21 16:58:41" [ref=e2803]:
+                    - generic [ref=e2804]: 2026/4/21 16:58:41
+                  - cell "创建服务单 客户详情" [ref=e2805]:
+                    - generic [ref=e2807]:
+                      - button "创建服务单" [ref=e2808] [cursor=pointer]:
+                        - generic [ref=e2809]: 创建服务单
+                      - button "客户详情" [ref=e2810] [cursor=pointer]:
+                        - generic [ref=e2811]: 客户详情
+                - 'row "ORD202604211658188837110 #1 待绑定客户 -- 定金 ¥ 999.99 ¥ 0.00 已支付 未创建 2026/4/21 16:58:19 创建服务单 客户详情" [ref=e2812]':
+                  - 'cell "ORD202604211658188837110 #1" [ref=e2813]':
+                    - generic [ref=e2815]:
+                      - strong [ref=e2816]: ORD202604211658188837110
+                      - generic [ref=e2817]: "#1"
+                  - cell "待绑定客户 --" [ref=e2818]:
+                    - generic [ref=e2820]:
+                      - strong [ref=e2821]: 待绑定客户
+                      - generic [ref=e2822]: "--"
+                  - cell "定金" [ref=e2823]:
+                    - generic [ref=e2826]: 定金
+                  - cell "¥ 999.99" [ref=e2827]:
+                    - generic [ref=e2828]: ¥ 999.99
+                  - cell "¥ 0.00" [ref=e2829]:
+                    - generic [ref=e2830]: ¥ 0.00
+                  - cell "已支付" [ref=e2831]:
+                    - generic [ref=e2834]: 已支付
+                  - cell "未创建" [ref=e2835]:
+                    - generic [ref=e2836]: 未创建
+                  - cell "2026/4/21 16:58:19" [ref=e2837]:
+                    - generic [ref=e2838]: 2026/4/21 16:58:19
+                  - cell "创建服务单 客户详情" [ref=e2839]:
+                    - generic [ref=e2841]:
+                      - button "创建服务单" [ref=e2842] [cursor=pointer]:
+                        - generic [ref=e2843]: 创建服务单
+                      - button "客户详情" [ref=e2844] [cursor=pointer]:
+                        - generic [ref=e2845]: 客户详情
+  - dialog "退出登录" [ref=e2847]:
+    - generic [ref=e2848]:
+      - generic [ref=e2849]:
+        - generic [ref=e2850]: 退出登录
+        - button "Close this dialog" [ref=e2851] [cursor=pointer]:
+          - img [ref=e2853]
+      - generic [ref=e2856]:
+        - img [ref=e2858]
+        - paragraph [ref=e2861]: 退出后需要重新登录才能继续操作，是否确认退出？
+      - generic [ref=e2862]:
+        - button "取消" [ref=e2863] [cursor=pointer]:
+          - generic [ref=e2864]: 取消
+        - button "确认退出" [active] [ref=e2865] [cursor=pointer]:
+          - generic [ref=e2866]: 确认退出

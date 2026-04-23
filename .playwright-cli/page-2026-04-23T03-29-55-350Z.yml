@@ -1,0 +1,581 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Seed CRM
+      - heading "Constraint-Driven Main Chain Console" [level=1] [ref=e7]
+      - paragraph [ref=e8]: Keep the frontend aligned with Clue -> Customer -> Order -> PlanOrder, with Permission, Scheduler, and Salary wired in globally.
+    - navigation [ref=e9]:
+      - link "Clue Intake, assign, recycle, and convert to orders" [ref=e10] [cursor=pointer]:
+        - /url: /clues
+        - generic [ref=e11]: Clue
+        - generic [ref=e12]: Intake, assign, recycle, and convert to orders
+      - link "Order Paid and used orders linked to customers" [ref=e13] [cursor=pointer]:
+        - /url: /orders
+        - generic [ref=e14]: Order
+        - generic [ref=e15]: Paid and used orders linked to customers
+      - link "PlanOrder Service flow and role assignment records" [ref=e16] [cursor=pointer]:
+        - /url: /plan-orders
+        - generic [ref=e17]: PlanOrder
+        - generic [ref=e18]: Service flow and role assignment records
+      - link "Scheduler Jobs, queue, retry, and execution logs" [ref=e19] [cursor=pointer]:
+        - /url: /scheduler
+        - generic [ref=e20]: Scheduler
+        - generic [ref=e21]: Jobs, queue, retry, and execution logs
+      - link "Permission RBAC, ABAC, and live access checks" [ref=e22] [cursor=pointer]:
+        - /url: /permission
+        - generic [ref=e23]: Permission
+        - generic [ref=e24]: RBAC, ABAC, and live access checks
+      - link "Salary Stats, settlement, payout, and withdraw flow" [ref=e25] [cursor=pointer]:
+        - /url: /salary
+        - generic [ref=e26]: Salary
+        - generic [ref=e27]: Stats, settlement, payout, and withdraw flow
+      - link "Distributor Lead contribution and income overview" [ref=e28] [cursor=pointer]:
+        - /url: /distributors
+        - generic [ref=e29]: Distributor
+        - generic [ref=e30]: Lead contribution and income overview
+      - link "Finance Income and withdraw records overview" [ref=e31] [cursor=pointer]:
+        - /url: /finance
+        - generic [ref=e32]: Finance
+        - generic [ref=e33]: Income and withdraw records overview
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - heading "Permission Context" [level=3] [ref=e37]
+          - paragraph [ref=e38]: Every request automatically carries RBAC and ABAC headers from this shared context.
+        - button "Reset" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: Reset
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Role
+          - generic [ref=e45] [cursor=pointer]:
+            - generic:
+              - combobox "Role Admin" [ref=e47]
+              - generic [ref=e48]: Admin
+            - img [ref=e51]
+        - generic [ref=e53]:
+          - generic [ref=e54]: Data Scope
+          - generic [ref=e56] [cursor=pointer]:
+            - generic:
+              - combobox "Data Scope all" [ref=e58]
+              - generic [ref=e59]: all
+            - img [ref=e62]
+        - generic [ref=e64]:
+          - generic [ref=e65]: Current User ID
+          - generic [ref=e66]:
+            - button "decrease number" [ref=e67] [cursor=pointer]:
+              - img [ref=e69]
+            - button "increase number" [ref=e71] [cursor=pointer]:
+              - img [ref=e73]
+            - spinbutton "Current User ID decrease number increase number" [ref=e77]: "1001"
+        - generic [ref=e78]:
+          - generic [ref=e79]: Current Store ID
+          - generic [ref=e80]:
+            - button "decrease number" [ref=e81] [cursor=pointer]:
+              - img [ref=e83]
+            - button "increase number" [ref=e85] [cursor=pointer]:
+              - img [ref=e87]
+            - spinbutton "Current Store ID decrease number increase number" [ref=e91]: "10"
+        - generic [ref=e92]:
+          - generic [ref=e93]: Resource Store ID
+          - generic [ref=e94]:
+            - button "decrease number" [ref=e95] [cursor=pointer]:
+              - img [ref=e97]
+            - button "increase number" [ref=e99] [cursor=pointer]:
+              - img [ref=e101]
+            - spinbutton "Resource Store ID decrease number increase number" [ref=e105]: "10"
+        - generic [ref=e106]:
+          - generic [ref=e107]: Bound Customer User ID
+          - generic [ref=e108]:
+            - button "decrease number" [ref=e109] [cursor=pointer]:
+              - img [ref=e111]
+            - button "increase number" [ref=e113] [cursor=pointer]:
+              - img [ref=e115]
+            - spinbutton "Bound Customer User ID decrease number increase number" [ref=e119]
+        - generic [ref=e120]:
+          - generic [ref=e121]: Team Member IDs
+          - textbox "Team Member IDs" [ref=e124]:
+            - /placeholder: "For example: 1001,1002"
+            - text: 1001,1002
+  - main [ref=e125]:
+    - generic [ref=e126]:
+      - generic [ref=e127]:
+        - paragraph [ref=e128]: Constraint First
+        - heading "Clue Management" [level=2] [ref=e129]
+        - paragraph [ref=e130]: One intake entry for Douyin and distribution clues, with assign, recycle, and order conversion actions.
+      - generic [ref=e131]:
+        - generic [ref=e132]: "Role: Admin"
+        - generic [ref=e133]: "Scope: ALL"
+        - generic [ref=e134]: "Main Chain: Clue -> Customer -> Order -> PlanOrder"
+    - generic [ref=e136]:
+      - generic [ref=e137]:
+        - article [ref=e138]:
+          - generic [ref=e139]: Total Clues
+          - strong [ref=e140]: "14"
+          - text: Clues come through one intake entry and keep raw input for later traceability.
+        - article [ref=e141]:
+          - generic [ref=e142]: New
+          - strong [ref=e143]: "0"
+          - text: These clues still need assignment or follow-up.
+        - article [ref=e144]:
+          - generic [ref=e145]: Converted
+          - strong [ref=e146]: "13"
+          - text: Converted clues have already moved into the customer and order chain.
+      - generic [ref=e147]:
+        - generic [ref=e148]:
+          - generic [ref=e149]:
+            - generic [ref=e151] [cursor=pointer]:
+              - generic:
+                - combobox [ref=e153]
+                - generic [ref=e154]: Source
+              - img [ref=e157]
+            - generic [ref=e160] [cursor=pointer]:
+              - generic:
+                - combobox [ref=e162]
+                - generic [ref=e163]: Clue status
+              - img [ref=e166]
+            - button "Filter" [ref=e168] [cursor=pointer]:
+              - generic [ref=e169]: Filter
+          - button "Create Clue" [ref=e170] [cursor=pointer]:
+            - generic [ref=e171]: Create Clue
+        - generic [ref=e172]:
+          - generic [ref=e173]:
+            - table [ref=e175]:
+              - rowgroup [ref=e184]:
+                - row "Lead Info Source Status Owner Latest Order Created At Actions" [ref=e185]:
+                  - columnheader "Lead Info" [ref=e186]:
+                    - generic [ref=e187]: Lead Info
+                  - columnheader "Source" [ref=e188]:
+                    - generic [ref=e189]: Source
+                  - columnheader "Status" [ref=e190]:
+                    - generic [ref=e191]: Status
+                  - columnheader "Owner" [ref=e192]:
+                    - generic [ref=e193]: Owner
+                  - columnheader "Latest Order" [ref=e194]:
+                    - generic [ref=e195]: Latest Order
+                  - columnheader "Created At" [ref=e196]:
+                    - generic [ref=e197]: Created At
+                  - columnheader "Actions" [ref=e198]:
+                    - generic [ref=e199]: Actions
+            - table [ref=e204]:
+              - rowgroup [ref=e213]:
+                - 'row "Rerun-42849368 13982849368 Douyin Converted 王顾问 #20 / Closed 2026/4/22 15:27:34 Assign Toggle Dropdown Recycle Create Order" [ref=e214]':
+                  - cell "Rerun-42849368 13982849368" [ref=e215]:
+                    - generic [ref=e217]:
+                      - strong [ref=e218]: Rerun-42849368
+                      - generic [ref=e219]: "13982849368"
+                  - cell "Douyin" [ref=e220]:
+                    - generic [ref=e221]:
+                      - generic:
+                        - generic: Douyin
+                  - cell "Converted" [ref=e222]:
+                    - generic [ref=e223]:
+                      - generic:
+                        - generic: Converted
+                  - cell "王顾问" [ref=e224]:
+                    - generic [ref=e225]: 王顾问
+                  - cell "#20 / Closed" [ref=e226]:
+                    - generic [ref=e227]: "#20 / Closed"
+                  - cell "2026/4/22 15:27:34" [ref=e228]:
+                    - generic [ref=e229]: 2026/4/22 15:27:34
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e230]:
+                    - generic [ref=e232]:
+                      - generic [ref=e234]:
+                        - button "Assign" [ref=e235] [cursor=pointer]:
+                          - generic [ref=e236]: Assign
+                        - button "Toggle Dropdown" [ref=e237] [cursor=pointer]:
+                          - img [ref=e240]
+                      - button "Recycle" [ref=e242] [cursor=pointer]:
+                        - generic [ref=e243]: Recycle
+                      - button "Create Order" [ref=e244] [cursor=pointer]:
+                        - generic [ref=e245]: Create Order
+                - 'row "Rerun-42761206 13982761206 Douyin Converted 王顾问 #19 / Closed 2026/4/22 15:26:05 Assign Toggle Dropdown Recycle Create Order" [ref=e246]':
+                  - cell "Rerun-42761206 13982761206" [ref=e247]:
+                    - generic [ref=e249]:
+                      - strong [ref=e250]: Rerun-42761206
+                      - generic [ref=e251]: "13982761206"
+                  - cell "Douyin" [ref=e252]:
+                    - generic [ref=e253]:
+                      - generic:
+                        - generic: Douyin
+                  - cell "Converted" [ref=e254]:
+                    - generic [ref=e255]:
+                      - generic:
+                        - generic: Converted
+                  - cell "王顾问" [ref=e256]:
+                    - generic [ref=e257]: 王顾问
+                  - cell "#19 / Closed" [ref=e258]:
+                    - generic [ref=e259]: "#19 / Closed"
+                  - cell "2026/4/22 15:26:05" [ref=e260]:
+                    - generic [ref=e261]: 2026/4/22 15:26:05
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e262]:
+                    - generic [ref=e264]:
+                      - generic [ref=e266]:
+                        - button "Assign" [ref=e267] [cursor=pointer]:
+                          - generic [ref=e268]: Assign
+                        - button "Toggle Dropdown" [ref=e269] [cursor=pointer]:
+                          - img [ref=e272]
+                      - button "Recycle" [ref=e274] [cursor=pointer]:
+                        - generic [ref=e275]: Recycle
+                      - button "Create Order" [ref=e276] [cursor=pointer]:
+                        - generic [ref=e277]: Create Order
+                - 'row "UI Auto Flow 13990005678 Douyin Converted 王顾问 #18 / Closed 2026/4/22 14:57:44 Assign Toggle Dropdown Recycle Create Order" [ref=e278]':
+                  - cell "UI Auto Flow 13990005678" [ref=e279]:
+                    - generic [ref=e281]:
+                      - strong [ref=e282]: UI Auto Flow
+                      - generic [ref=e283]: "13990005678"
+                  - cell "Douyin" [ref=e284]:
+                    - generic [ref=e285]:
+                      - generic:
+                        - generic: Douyin
+                  - cell "Converted" [ref=e286]:
+                    - generic [ref=e287]:
+                      - generic:
+                        - generic: Converted
+                  - cell "王顾问" [ref=e288]:
+                    - generic [ref=e289]: 王顾问
+                  - cell "#18 / Closed" [ref=e290]:
+                    - generic [ref=e291]: "#18 / Closed"
+                  - cell "2026/4/22 14:57:44" [ref=e292]:
+                    - generic [ref=e293]: 2026/4/22 14:57:44
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e294]:
+                    - generic [ref=e296]:
+                      - generic [ref=e298]:
+                        - button "Assign" [ref=e299] [cursor=pointer]:
+                          - generic [ref=e300]: Assign
+                        - button "Toggle Dropdown" [ref=e301] [cursor=pointer]:
+                          - img [ref=e304]
+                      - button "Recycle" [ref=e306] [cursor=pointer]:
+                        - generic [ref=e307]: Recycle
+                      - button "Create Order" [ref=e308] [cursor=pointer]:
+                        - generic [ref=e309]: Create Order
+                - 'row "FinanceClue-1776832767 1391001776832767 Distributor Converted Public pool #17 / Closed 2026/4/22 12:39:28 Assign Toggle Dropdown Recycle Create Order" [ref=e310]':
+                  - cell "FinanceClue-1776832767 1391001776832767" [ref=e311]:
+                    - generic [ref=e313]:
+                      - strong [ref=e314]: FinanceClue-1776832767
+                      - generic [ref=e315]: "1391001776832767"
+                  - cell "Distributor" [ref=e316]:
+                    - generic [ref=e317]:
+                      - generic:
+                        - generic: Distributor
+                  - cell "Converted" [ref=e318]:
+                    - generic [ref=e319]:
+                      - generic:
+                        - generic: Converted
+                  - cell "Public pool" [ref=e320]:
+                    - generic [ref=e321]: Public pool
+                  - cell "#17 / Closed" [ref=e322]:
+                    - generic [ref=e323]: "#17 / Closed"
+                  - cell "2026/4/22 12:39:28" [ref=e324]:
+                    - generic [ref=e325]: 2026/4/22 12:39:28
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e326]:
+                    - generic [ref=e328]:
+                      - generic [ref=e330]:
+                        - button "Assign" [ref=e331] [cursor=pointer]:
+                          - generic [ref=e332]: Assign
+                        - button "Toggle Dropdown" [ref=e333] [cursor=pointer]:
+                          - img [ref=e336]
+                      - button "Recycle" [disabled] [ref=e338]:
+                        - generic [ref=e339]: Recycle
+                      - button "Create Order" [ref=e340] [cursor=pointer]:
+                        - generic [ref=e341]: Create Order
+                - 'row "FinanceClue-1776832364 1390001776832364 Distributor Converted Public pool #16 / Closed 2026/4/22 12:32:47 Assign Toggle Dropdown Recycle Create Order" [ref=e342]':
+                  - cell "FinanceClue-1776832364 1390001776832364" [ref=e343]:
+                    - generic [ref=e345]:
+                      - strong [ref=e346]: FinanceClue-1776832364
+                      - generic [ref=e347]: "1390001776832364"
+                  - cell "Distributor" [ref=e348]:
+                    - generic [ref=e349]:
+                      - generic:
+                        - generic: Distributor
+                  - cell "Converted" [ref=e350]:
+                    - generic [ref=e351]:
+                      - generic:
+                        - generic: Converted
+                  - cell "Public pool" [ref=e352]:
+                    - generic [ref=e353]: Public pool
+                  - cell "#16 / Closed" [ref=e354]:
+                    - generic [ref=e355]: "#16 / Closed"
+                  - cell "2026/4/22 12:32:47" [ref=e356]:
+                    - generic [ref=e357]: 2026/4/22 12:32:47
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e358]:
+                    - generic [ref=e360]:
+                      - generic [ref=e362]:
+                        - button "Assign" [ref=e363] [cursor=pointer]:
+                          - generic [ref=e364]: Assign
+                        - button "Toggle Dropdown" [ref=e365] [cursor=pointer]:
+                          - img [ref=e368]
+                      - button "Recycle" [disabled] [ref=e370]:
+                        - generic [ref=e371]: Recycle
+                      - button "Create Order" [ref=e372] [cursor=pointer]:
+                        - generic [ref=e373]: Create Order
+                - 'row "lead-20260422112627 13813513464 Distributor Converted Public pool #15 / Closed 2026/4/22 11:26:28 Assign Toggle Dropdown Recycle Create Order" [ref=e374]':
+                  - cell "lead-20260422112627 13813513464" [ref=e375]:
+                    - generic [ref=e377]:
+                      - strong [ref=e378]: lead-20260422112627
+                      - generic [ref=e379]: "13813513464"
+                  - cell "Distributor" [ref=e380]:
+                    - generic [ref=e381]:
+                      - generic:
+                        - generic: Distributor
+                  - cell "Converted" [ref=e382]:
+                    - generic [ref=e383]:
+                      - generic:
+                        - generic: Converted
+                  - cell "Public pool" [ref=e384]:
+                    - generic [ref=e385]: Public pool
+                  - cell "#15 / Closed" [ref=e386]:
+                    - generic [ref=e387]: "#15 / Closed"
+                  - cell "2026/4/22 11:26:28" [ref=e388]:
+                    - generic [ref=e389]: 2026/4/22 11:26:28
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e390]:
+                    - generic [ref=e392]:
+                      - generic [ref=e394]:
+                        - button "Assign" [ref=e395] [cursor=pointer]:
+                          - generic [ref=e396]: Assign
+                        - button "Toggle Dropdown" [ref=e397] [cursor=pointer]:
+                          - img [ref=e400]
+                      - button "Recycle" [disabled] [ref=e402]:
+                        - generic [ref=e403]: Recycle
+                      - button "Create Order" [ref=e404] [cursor=pointer]:
+                        - generic [ref=e405]: Create Order
+                - 'row "lead-20260422112519 13880822420 Distributor Converted Public pool #14 / Open 2026/4/22 11:25:21 Assign Toggle Dropdown Recycle Create Order" [ref=e406]':
+                  - cell "lead-20260422112519 13880822420" [ref=e407]:
+                    - generic [ref=e409]:
+                      - strong [ref=e410]: lead-20260422112519
+                      - generic [ref=e411]: "13880822420"
+                  - cell "Distributor" [ref=e412]:
+                    - generic [ref=e413]:
+                      - generic:
+                        - generic: Distributor
+                  - cell "Converted" [ref=e414]:
+                    - generic [ref=e415]:
+                      - generic:
+                        - generic: Converted
+                  - cell "Public pool" [ref=e416]:
+                    - generic [ref=e417]: Public pool
+                  - cell "#14 / Open" [ref=e418]:
+                    - generic [ref=e419]: "#14 / Open"
+                  - cell "2026/4/22 11:25:21" [ref=e420]:
+                    - generic [ref=e421]: 2026/4/22 11:25:21
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e422]:
+                    - generic [ref=e424]:
+                      - generic [ref=e426]:
+                        - button "Assign" [ref=e427] [cursor=pointer]:
+                          - generic [ref=e428]: Assign
+                        - button "Toggle Dropdown" [ref=e429] [cursor=pointer]:
+                          - img [ref=e432]
+                      - button "Recycle" [disabled] [ref=e434]:
+                        - generic [ref=e435]: Recycle
+                      - button "Create Order" [ref=e436] [cursor=pointer]:
+                        - generic [ref=e437]: Create Order
+                - 'row "Salary Demo 13973742437 Douyin Converted Public pool #13 / Closed 2026/4/22 10:25:34 Assign Toggle Dropdown Recycle Create Order" [ref=e438]':
+                  - cell "Salary Demo 13973742437" [ref=e439]:
+                    - generic [ref=e441]:
+                      - strong [ref=e442]: Salary Demo
+                      - generic [ref=e443]: "13973742437"
+                  - cell "Douyin" [ref=e444]:
+                    - generic [ref=e445]:
+                      - generic:
+                        - generic: Douyin
+                  - cell "Converted" [ref=e446]:
+                    - generic [ref=e447]:
+                      - generic:
+                        - generic: Converted
+                  - cell "Public pool" [ref=e448]:
+                    - generic [ref=e449]: Public pool
+                  - cell "#13 / Closed" [ref=e450]:
+                    - generic [ref=e451]: "#13 / Closed"
+                  - cell "2026/4/22 10:25:34" [ref=e452]:
+                    - generic [ref=e453]: 2026/4/22 10:25:34
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e454]:
+                    - generic [ref=e456]:
+                      - generic [ref=e458]:
+                        - button "Assign" [ref=e459] [cursor=pointer]:
+                          - generic [ref=e460]: Assign
+                        - button "Toggle Dropdown" [ref=e461] [cursor=pointer]:
+                          - img [ref=e464]
+                      - button "Recycle" [disabled] [ref=e466]:
+                        - generic [ref=e467]: Recycle
+                      - button "Create Order" [ref=e468] [cursor=pointer]:
+                        - generic [ref=e469]: Create Order
+                - 'row "PlanOrder Auto Test 13900003173 Douyin Converted Public pool #12 / Closed 2026/4/22 09:55:34 Assign Toggle Dropdown Recycle Create Order" [ref=e470]':
+                  - cell "PlanOrder Auto Test 13900003173" [ref=e471]:
+                    - generic [ref=e473]:
+                      - strong [ref=e474]: PlanOrder Auto Test
+                      - generic [ref=e475]: "13900003173"
+                  - cell "Douyin" [ref=e476]:
+                    - generic [ref=e477]:
+                      - generic:
+                        - generic: Douyin
+                  - cell "Converted" [ref=e478]:
+                    - generic [ref=e479]:
+                      - generic:
+                        - generic: Converted
+                  - cell "Public pool" [ref=e480]:
+                    - generic [ref=e481]: Public pool
+                  - cell "#12 / Closed" [ref=e482]:
+                    - generic [ref=e483]: "#12 / Closed"
+                  - cell "2026/4/22 09:55:34" [ref=e484]:
+                    - generic [ref=e485]: 2026/4/22 09:55:34
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e486]:
+                    - generic [ref=e488]:
+                      - generic [ref=e490]:
+                        - button "Assign" [ref=e491] [cursor=pointer]:
+                          - generic [ref=e492]: Assign
+                        - button "Toggle Dropdown" [ref=e493] [cursor=pointer]:
+                          - img [ref=e496]
+                      - button "Recycle" [disabled] [ref=e498]:
+                        - generic [ref=e499]: Recycle
+                      - button "Create Order" [ref=e500] [cursor=pointer]:
+                        - generic [ref=e501]: Create Order
+                - 'row "seed-user 13900002385 Distributor Converted Public pool #11 / Open 2026/4/22 01:52:14 Assign Toggle Dropdown Recycle Create Order" [ref=e502]':
+                  - cell "seed-user 13900002385" [ref=e503]:
+                    - generic [ref=e505]:
+                      - strong [ref=e506]: seed-user
+                      - generic [ref=e507]: "13900002385"
+                  - cell "Distributor" [ref=e508]:
+                    - generic [ref=e509]:
+                      - generic:
+                        - generic: Distributor
+                  - cell "Converted" [ref=e510]:
+                    - generic [ref=e511]:
+                      - generic:
+                        - generic: Converted
+                  - cell "Public pool" [ref=e512]:
+                    - generic [ref=e513]: Public pool
+                  - cell "#11 / Open" [ref=e514]:
+                    - generic [ref=e515]: "#11 / Open"
+                  - cell "2026/4/22 01:52:14" [ref=e516]:
+                    - generic [ref=e517]: 2026/4/22 01:52:14
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e518]:
+                    - generic [ref=e520]:
+                      - generic [ref=e522]:
+                        - button "Assign" [ref=e523] [cursor=pointer]:
+                          - generic [ref=e524]: Assign
+                        - button "Toggle Dropdown" [ref=e525] [cursor=pointer]:
+                          - img [ref=e528]
+                      - button "Recycle" [disabled] [ref=e530]:
+                        - generic [ref=e531]: Recycle
+                      - button "Create Order" [ref=e532] [cursor=pointer]:
+                        - generic [ref=e533]: Create Order
+                - 'row "?????? 1390422002925 -- Converted Public pool #10 / Closed 2026/4/22 00:29:27 Assign Toggle Dropdown Recycle Create Order" [ref=e534]':
+                  - cell "?????? 1390422002925" [ref=e535]:
+                    - generic [ref=e537]:
+                      - strong [ref=e538]: "??????"
+                      - generic [ref=e539]: "1390422002925"
+                  - cell "--" [ref=e540]:
+                    - generic [ref=e541]:
+                      - generic:
+                        - generic: "--"
+                  - cell "Converted" [ref=e542]:
+                    - generic [ref=e543]:
+                      - generic:
+                        - generic: Converted
+                  - cell "Public pool" [ref=e544]:
+                    - generic [ref=e545]: Public pool
+                  - cell "#10 / Closed" [ref=e546]:
+                    - generic [ref=e547]: "#10 / Closed"
+                  - cell "2026/4/22 00:29:27" [ref=e548]:
+                    - generic [ref=e549]: 2026/4/22 00:29:27
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e550]:
+                    - generic [ref=e552]:
+                      - generic [ref=e554]:
+                        - button "Assign" [ref=e555] [cursor=pointer]:
+                          - generic [ref=e556]: Assign
+                        - button "Toggle Dropdown" [ref=e557] [cursor=pointer]:
+                          - img [ref=e560]
+                      - button "Recycle" [disabled] [ref=e562]:
+                        - generic [ref=e563]: Recycle
+                      - button "Create Order" [ref=e564] [cursor=pointer]:
+                        - generic [ref=e565]: Create Order
+                - 'row "Tag Test User 13800990001 -- Converted Public pool #7 / Closed 2026/4/21 18:48:31 Assign Toggle Dropdown Recycle Create Order" [ref=e566]':
+                  - cell "Tag Test User 13800990001" [ref=e567]:
+                    - generic [ref=e569]:
+                      - strong [ref=e570]: Tag Test User
+                      - generic [ref=e571]: "13800990001"
+                  - cell "--" [ref=e572]:
+                    - generic [ref=e573]:
+                      - generic:
+                        - generic: "--"
+                  - cell "Converted" [ref=e574]:
+                    - generic [ref=e575]:
+                      - generic:
+                        - generic: Converted
+                  - cell "Public pool" [ref=e576]:
+                    - generic [ref=e577]: Public pool
+                  - cell "#7 / Closed" [ref=e578]:
+                    - generic [ref=e579]: "#7 / Closed"
+                  - cell "2026/4/21 18:48:31" [ref=e580]:
+                    - generic [ref=e581]: 2026/4/21 18:48:31
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e582]:
+                    - generic [ref=e584]:
+                      - generic [ref=e586]:
+                        - button "Assign" [ref=e587] [cursor=pointer]:
+                          - generic [ref=e588]: Assign
+                        - button "Toggle Dropdown" [ref=e589] [cursor=pointer]:
+                          - img [ref=e592]
+                      - button "Recycle" [disabled] [ref=e594]:
+                        - generic [ref=e595]: Recycle
+                      - button "Create Order" [ref=e596] [cursor=pointer]:
+                        - generic [ref=e597]: Create Order
+                - 'row "Closure Test 1390421181623 -- Converted Public pool #4 / Closed 2026/4/21 18:16:24 Assign Toggle Dropdown Recycle Create Order" [ref=e598]':
+                  - cell "Closure Test 1390421181623" [ref=e599]:
+                    - generic [ref=e601]:
+                      - strong [ref=e602]: Closure Test
+                      - generic [ref=e603]: "1390421181623"
+                  - cell "--" [ref=e604]:
+                    - generic [ref=e605]:
+                      - generic:
+                        - generic: "--"
+                  - cell "Converted" [ref=e606]:
+                    - generic [ref=e607]:
+                      - generic:
+                        - generic: Converted
+                  - cell "Public pool" [ref=e608]:
+                    - generic [ref=e609]: Public pool
+                  - cell "#4 / Closed" [ref=e610]:
+                    - generic [ref=e611]: "#4 / Closed"
+                  - cell "2026/4/21 18:16:24" [ref=e612]:
+                    - generic [ref=e613]: 2026/4/21 18:16:24
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e614]:
+                    - generic [ref=e616]:
+                      - generic [ref=e618]:
+                        - button "Assign" [ref=e619] [cursor=pointer]:
+                          - generic [ref=e620]: Assign
+                        - button "Toggle Dropdown" [ref=e621] [cursor=pointer]:
+                          - img [ref=e624]
+                      - button "Recycle" [disabled] [ref=e626]:
+                        - generic [ref=e627]: Recycle
+                      - button "Create Order" [ref=e628] [cursor=pointer]:
+                        - generic [ref=e629]: Create Order
+                - row "测试客户 13800000000 -- Assigned 王顾问 Not converted yet 2026/4/21 12:50:32 Assign Toggle Dropdown Recycle Create Order" [ref=e630]:
+                  - cell "测试客户 13800000000" [ref=e631]:
+                    - generic [ref=e633]:
+                      - strong [ref=e634]: 测试客户
+                      - generic [ref=e635]: "13800000000"
+                  - cell "--" [ref=e636]:
+                    - generic [ref=e637]:
+                      - generic:
+                        - generic: "--"
+                  - cell "Assigned" [ref=e638]:
+                    - generic [ref=e639]:
+                      - generic:
+                        - generic: Assigned
+                  - cell "王顾问" [ref=e640]:
+                    - generic [ref=e641]: 王顾问
+                  - cell "Not converted yet" [ref=e642]:
+                    - generic [ref=e643]: Not converted yet
+                  - cell "2026/4/21 12:50:32" [ref=e644]:
+                    - generic [ref=e645]: 2026/4/21 12:50:32
+                  - cell "Assign Toggle Dropdown Recycle Create Order" [ref=e646]:
+                    - generic [ref=e648]:
+                      - generic [ref=e650]:
+                        - button "Assign" [ref=e651] [cursor=pointer]:
+                          - generic [ref=e652]: Assign
+                        - button "Toggle Dropdown" [ref=e653] [cursor=pointer]:
+                          - img [ref=e656]
+                      - button "Recycle" [ref=e658] [cursor=pointer]:
+                        - generic [ref=e659]: Recycle
+                      - button "Create Order" [ref=e660] [cursor=pointer]:
+                        - generic [ref=e661]: Create Order
+          - img [ref=e664]

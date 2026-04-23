@@ -1,0 +1,50 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Seed CRM
+      - heading "中文业务控制台登录" [level=1] [ref=e7]
+      - paragraph [ref=e8]: 登录后自动注入角色、数据范围与权限，不再手工切换上下文。
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e11]: 账号
+        - textbox "账号" [ref=e15]:
+          - /placeholder: 请输入账号
+          - text: admin
+      - generic [ref=e16]:
+        - generic [ref=e17]: 密码
+        - generic [ref=e20]:
+          - textbox "密码" [ref=e21]:
+            - /placeholder: 请输入密码
+            - text: "123456"
+          - img [ref=e24] [cursor=pointer]
+      - button "登录系统" [ref=e27] [cursor=pointer]:
+        - generic [ref=e28]: 登录系统
+  - generic [ref=e29]:
+    - generic [ref=e31]:
+      - heading "演示账号" [level=3] [ref=e32]
+      - paragraph [ref=e33]: 点击即可自动填充，统一密码均为 123456。
+    - generic [ref=e34]:
+      - button "管理员 admin 可查看全部模块并维护权限策略。" [ref=e35] [cursor=pointer]:
+        - strong [ref=e36]: 管理员
+        - generic [ref=e37]: admin
+        - generic [ref=e38]: 可查看全部模块并维护权限策略。
+      - button "线索主管 clue_manager 可查看线索池和调度同步。" [ref=e39] [cursor=pointer]:
+        - strong [ref=e40]: 线索主管
+        - generic [ref=e41]: clue_manager
+        - generic [ref=e42]: 可查看线索池和调度同步。
+      - button "在线客服 online_cs 仅查看本人或团队已分配线索。" [ref=e43] [cursor=pointer]:
+        - strong [ref=e44]: 在线客服
+        - generic [ref=e45]: online_cs
+        - generic [ref=e46]: 仅查看本人或团队已分配线索。
+      - button "门店服务 store_service 处理订单与服务单主链。" [ref=e47] [cursor=pointer]:
+        - strong [ref=e48]: 门店服务
+        - generic [ref=e49]: store_service
+        - generic [ref=e50]: 处理订单与服务单主链。
+      - button "财务 finance 查看财务、薪酬和订单完结权限。" [ref=e51] [cursor=pointer]:
+        - strong [ref=e52]: 财务
+        - generic [ref=e53]: finance
+        - generic [ref=e54]: 查看财务、薪酬和订单完结权限。
+      - button "私域服务 private_domain 查看绑定客户的订单与服务单。" [ref=e55] [cursor=pointer]:
+        - strong [ref=e56]: 私域服务
+        - generic [ref=e57]: private_domain
+        - generic [ref=e58]: 查看绑定客户的订单与服务单。

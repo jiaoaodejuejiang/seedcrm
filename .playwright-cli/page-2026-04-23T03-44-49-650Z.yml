@@ -1,0 +1,246 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Seed CRM
+      - heading "Constraint-Driven Main Chain Console" [level=1] [ref=e7]
+      - paragraph [ref=e8]: Keep the frontend aligned with Clue -> Customer -> Order -> PlanOrder, with Permission, Scheduler, and Salary wired in globally.
+    - navigation [ref=e9]:
+      - link "Clue Intake, assign, recycle, and convert to orders" [ref=e10] [cursor=pointer]:
+        - /url: /clues
+        - generic [ref=e11]: Clue
+        - generic [ref=e12]: Intake, assign, recycle, and convert to orders
+      - link "Order Paid and used orders linked to customers" [ref=e13] [cursor=pointer]:
+        - /url: /orders
+        - generic [ref=e14]: Order
+        - generic [ref=e15]: Paid and used orders linked to customers
+      - link "PlanOrder Service flow and role assignment records" [ref=e16] [cursor=pointer]:
+        - /url: /plan-orders
+        - generic [ref=e17]: PlanOrder
+        - generic [ref=e18]: Service flow and role assignment records
+      - link "Scheduler Jobs, queue, retry, and execution logs" [ref=e19] [cursor=pointer]:
+        - /url: /scheduler
+        - generic [ref=e20]: Scheduler
+        - generic [ref=e21]: Jobs, queue, retry, and execution logs
+      - link "Permission RBAC, ABAC, and live access checks" [ref=e22] [cursor=pointer]:
+        - /url: /permission
+        - generic [ref=e23]: Permission
+        - generic [ref=e24]: RBAC, ABAC, and live access checks
+      - link "Salary Stats, settlement, payout, and withdraw flow" [ref=e25] [cursor=pointer]:
+        - /url: /salary
+        - generic [ref=e26]: Salary
+        - generic [ref=e27]: Stats, settlement, payout, and withdraw flow
+      - link "Distributor Lead contribution and income overview" [ref=e28] [cursor=pointer]:
+        - /url: /distributors
+        - generic [ref=e29]: Distributor
+        - generic [ref=e30]: Lead contribution and income overview
+      - link "Finance Income and withdraw records overview" [ref=e31] [cursor=pointer]:
+        - /url: /finance
+        - generic [ref=e32]: Finance
+        - generic [ref=e33]: Income and withdraw records overview
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - heading "Permission Context" [level=3] [ref=e37]
+          - paragraph [ref=e38]: Every request automatically carries RBAC and ABAC headers from this shared context.
+        - button "Reset" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: Reset
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Role
+          - generic [ref=e45] [cursor=pointer]:
+            - generic:
+              - combobox "Role Admin" [ref=e47]
+              - generic [ref=e48]: Admin
+            - img [ref=e51]
+        - generic [ref=e53]:
+          - generic [ref=e54]: Data Scope
+          - generic [ref=e56] [cursor=pointer]:
+            - generic:
+              - combobox "Data Scope all" [ref=e58]
+              - generic [ref=e59]: all
+            - img [ref=e62]
+        - generic [ref=e64]:
+          - generic [ref=e65]: Current User ID
+          - generic [ref=e66]:
+            - button "decrease number" [ref=e67] [cursor=pointer]:
+              - img [ref=e69]
+            - button "increase number" [ref=e71] [cursor=pointer]:
+              - img [ref=e73]
+            - spinbutton "Current User ID decrease number increase number" [ref=e77]: "1001"
+        - generic [ref=e78]:
+          - generic [ref=e79]: Current Store ID
+          - generic [ref=e80]:
+            - button "decrease number" [ref=e81] [cursor=pointer]:
+              - img [ref=e83]
+            - button "increase number" [ref=e85] [cursor=pointer]:
+              - img [ref=e87]
+            - spinbutton "Current Store ID decrease number increase number" [ref=e91]: "10"
+        - generic [ref=e92]:
+          - generic [ref=e93]: Resource Store ID
+          - generic [ref=e94]:
+            - button "decrease number" [ref=e95] [cursor=pointer]:
+              - img [ref=e97]
+            - button "increase number" [ref=e99] [cursor=pointer]:
+              - img [ref=e101]
+            - spinbutton "Resource Store ID decrease number increase number" [ref=e105]: "10"
+        - generic [ref=e106]:
+          - generic [ref=e107]: Bound Customer User ID
+          - generic [ref=e108]:
+            - button "decrease number" [ref=e109] [cursor=pointer]:
+              - img [ref=e111]
+            - button "increase number" [ref=e113] [cursor=pointer]:
+              - img [ref=e115]
+            - spinbutton "Bound Customer User ID decrease number increase number" [ref=e119]
+        - generic [ref=e120]:
+          - generic [ref=e121]: Team Member IDs
+          - textbox "Team Member IDs" [ref=e124]:
+            - /placeholder: "For example: 1001,1002"
+            - text: 1001,1002
+  - main [ref=e125]:
+    - generic [ref=e126]:
+      - generic [ref=e127]:
+        - paragraph [ref=e128]: Constraint First
+        - heading "Finance Overview" [level=2] [ref=e129]
+        - paragraph [ref=e130]: Read daily income and withdraw records across employees and distributors.
+      - generic [ref=e131]:
+        - generic [ref=e132]: "Role: Admin"
+        - generic [ref=e133]: "Scope: ALL"
+        - generic [ref=e134]: "Main Chain: Clue -> Customer -> Order -> PlanOrder"
+    - generic [ref=e136]:
+      - generic [ref=e137]:
+        - article [ref=e138]:
+          - generic [ref=e139]: Today Income
+          - strong [ref=e140]: CNY 0.00
+          - text: Current daily income snapshot from the backend overview.
+        - article [ref=e141]:
+          - generic [ref=e142]: Employee Income
+          - strong [ref=e143]: CNY 3,630.00
+          - text: Income attributed to employee role records.
+        - article [ref=e144]:
+          - generic [ref=e145]: Distributor Income
+          - strong [ref=e146]: CNY 520.00
+          - text: Income attributed to distributor-side contribution.
+      - generic [ref=e147]:
+        - generic [ref=e149]:
+          - heading "Withdraw Records" [level=3] [ref=e150]
+          - paragraph [ref=e151]: Read withdraw records for employees and distributors together, including current review status.
+        - generic [ref=e152]:
+          - generic [ref=e153]:
+            - table [ref=e155]:
+              - rowgroup [ref=e162]:
+                - row "Owner Type Owner Amount Status Created At" [ref=e163]:
+                  - columnheader "Owner Type" [ref=e164]:
+                    - generic [ref=e165]: Owner Type
+                  - columnheader "Owner" [ref=e166]:
+                    - generic [ref=e167]: Owner
+                  - columnheader "Amount" [ref=e168]:
+                    - generic [ref=e169]: Amount
+                  - columnheader "Status" [ref=e170]:
+                    - generic [ref=e171]: Status
+                  - columnheader "Created At" [ref=e172]:
+                    - generic [ref=e173]: Created At
+            - table [ref=e178]:
+              - rowgroup [ref=e185]:
+                - 'row "Employee 员工#91001 ID: 91001 CNY 40.00 APPROVED 2026/4/22 12:39:29" [ref=e186]':
+                  - cell "Employee" [ref=e187]:
+                    - generic [ref=e188]:
+                      - generic:
+                        - generic: Employee
+                  - 'cell "员工#91001 ID: 91001" [ref=e189]':
+                    - generic [ref=e191]:
+                      - strong [ref=e192]: 员工#91001
+                      - generic [ref=e193]: "ID: 91001"
+                  - cell "CNY 40.00" [ref=e194]:
+                    - generic [ref=e195]: CNY 40.00
+                  - cell "APPROVED" [ref=e196]:
+                    - generic [ref=e197]:
+                      - generic:
+                        - generic: APPROVED
+                  - cell "2026/4/22 12:39:29" [ref=e198]:
+                    - generic [ref=e199]: 2026/4/22 12:39:29
+                - 'row "Distributor FinanceDist-1776832767 ID: 5 CNY 70.00 APPROVED 2026/4/22 12:39:29" [ref=e200]':
+                  - cell "Distributor" [ref=e201]:
+                    - generic [ref=e202]:
+                      - generic:
+                        - generic: Distributor
+                  - 'cell "FinanceDist-1776832767 ID: 5" [ref=e203]':
+                    - generic [ref=e205]:
+                      - strong [ref=e206]: FinanceDist-1776832767
+                      - generic [ref=e207]: "ID: 5"
+                  - cell "CNY 70.00" [ref=e208]:
+                    - generic [ref=e209]: CNY 70.00
+                  - cell "APPROVED" [ref=e210]:
+                    - generic [ref=e211]:
+                      - generic:
+                        - generic: APPROVED
+                  - cell "2026/4/22 12:39:29" [ref=e212]:
+                    - generic [ref=e213]: 2026/4/22 12:39:29
+                - 'row "Employee 员工#90001 ID: 90001 CNY 30.00 APPROVED 2026/4/22 12:32:47" [ref=e214]':
+                  - cell "Employee" [ref=e215]:
+                    - generic [ref=e216]:
+                      - generic:
+                        - generic: Employee
+                  - 'cell "员工#90001 ID: 90001" [ref=e217]':
+                    - generic [ref=e219]:
+                      - strong [ref=e220]: 员工#90001
+                      - generic [ref=e221]: "ID: 90001"
+                  - cell "CNY 30.00" [ref=e222]:
+                    - generic [ref=e223]: CNY 30.00
+                  - cell "APPROVED" [ref=e224]:
+                    - generic [ref=e225]:
+                      - generic:
+                        - generic: APPROVED
+                  - cell "2026/4/22 12:32:47" [ref=e226]:
+                    - generic [ref=e227]: 2026/4/22 12:32:47
+                - 'row "Distributor FinanceDist-1776832364 ID: 4 CNY 50.00 APPROVED 2026/4/22 12:32:47" [ref=e228]':
+                  - cell "Distributor" [ref=e229]:
+                    - generic [ref=e230]:
+                      - generic:
+                        - generic: Distributor
+                  - 'cell "FinanceDist-1776832364 ID: 4" [ref=e231]':
+                    - generic [ref=e233]:
+                      - strong [ref=e234]: FinanceDist-1776832364
+                      - generic [ref=e235]: "ID: 4"
+                  - cell "CNY 50.00" [ref=e236]:
+                    - generic [ref=e237]: CNY 50.00
+                  - cell "APPROVED" [ref=e238]:
+                    - generic [ref=e239]:
+                      - generic:
+                        - generic: APPROVED
+                  - cell "2026/4/22 12:32:47" [ref=e240]:
+                    - generic [ref=e241]: 2026/4/22 12:32:47
+                - 'row "Distributor dist-20260422112627 ID: 3 CNY 100.00 APPROVED 2026/4/22 11:26:28" [ref=e242]':
+                  - cell "Distributor" [ref=e243]:
+                    - generic [ref=e244]:
+                      - generic:
+                        - generic: Distributor
+                  - 'cell "dist-20260422112627 ID: 3" [ref=e245]':
+                    - generic [ref=e247]:
+                      - strong [ref=e248]: dist-20260422112627
+                      - generic [ref=e249]: "ID: 3"
+                  - cell "CNY 100.00" [ref=e250]:
+                    - generic [ref=e251]: CNY 100.00
+                  - cell "APPROVED" [ref=e252]:
+                    - generic [ref=e253]:
+                      - generic:
+                        - generic: APPROVED
+                  - cell "2026/4/22 11:26:28" [ref=e254]:
+                    - generic [ref=e255]: 2026/4/22 11:26:28
+                - 'row "Employee 员工#9001 ID: 9001 CNY 50.00 APPROVED 2026/4/22 10:25:34" [ref=e256]':
+                  - cell "Employee" [ref=e257]:
+                    - generic [ref=e258]:
+                      - generic:
+                        - generic: Employee
+                  - 'cell "员工#9001 ID: 9001" [ref=e259]':
+                    - generic [ref=e261]:
+                      - strong [ref=e262]: 员工#9001
+                      - generic [ref=e263]: "ID: 9001"
+                  - cell "CNY 50.00" [ref=e264]:
+                    - generic [ref=e265]: CNY 50.00
+                  - cell "APPROVED" [ref=e266]:
+                    - generic [ref=e267]:
+                      - generic:
+                        - generic: APPROVED
+                  - cell "2026/4/22 10:25:34" [ref=e268]:
+                    - generic [ref=e269]: 2026/4/22 10:25:34
+          - img [ref=e272]

@@ -1,0 +1,221 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Seed CRM
+      - heading "Constraint-Driven Main Chain Console" [level=1] [ref=e7]
+      - paragraph [ref=e8]: Keep the frontend aligned with Clue -> Customer -> Order -> PlanOrder, with Permission, Scheduler, and Salary wired in globally.
+    - navigation [ref=e9]:
+      - link "Clue Intake, assign, recycle, and convert to orders" [ref=e10] [cursor=pointer]:
+        - /url: /clues
+        - generic [ref=e11]: Clue
+        - generic [ref=e12]: Intake, assign, recycle, and convert to orders
+      - link "Order Paid and used orders linked to customers" [ref=e13] [cursor=pointer]:
+        - /url: /orders
+        - generic [ref=e14]: Order
+        - generic [ref=e15]: Paid and used orders linked to customers
+      - link "PlanOrder Service flow and role assignment records" [ref=e16] [cursor=pointer]:
+        - /url: /plan-orders
+        - generic [ref=e17]: PlanOrder
+        - generic [ref=e18]: Service flow and role assignment records
+      - link "Scheduler Jobs, queue, retry, and execution logs" [ref=e19] [cursor=pointer]:
+        - /url: /scheduler
+        - generic [ref=e20]: Scheduler
+        - generic [ref=e21]: Jobs, queue, retry, and execution logs
+      - link "Permission RBAC, ABAC, and live access checks" [ref=e22] [cursor=pointer]:
+        - /url: /permission
+        - generic [ref=e23]: Permission
+        - generic [ref=e24]: RBAC, ABAC, and live access checks
+      - link "Salary Stats, settlement, payout, and withdraw flow" [ref=e25] [cursor=pointer]:
+        - /url: /salary
+        - generic [ref=e26]: Salary
+        - generic [ref=e27]: Stats, settlement, payout, and withdraw flow
+      - link "Distributor Lead contribution and income overview" [ref=e28] [cursor=pointer]:
+        - /url: /distributors
+        - generic [ref=e29]: Distributor
+        - generic [ref=e30]: Lead contribution and income overview
+      - link "Finance Income and withdraw records overview" [ref=e31] [cursor=pointer]:
+        - /url: /finance
+        - generic [ref=e32]: Finance
+        - generic [ref=e33]: Income and withdraw records overview
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - heading "Permission Context" [level=3] [ref=e37]
+          - paragraph [ref=e38]: Every request automatically carries RBAC and ABAC headers from this shared context.
+        - button "Reset" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: Reset
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Role
+          - generic [ref=e45] [cursor=pointer]:
+            - generic:
+              - combobox "Role Admin" [ref=e47]
+              - generic [ref=e48]: Admin
+            - img [ref=e51]
+        - generic [ref=e53]:
+          - generic [ref=e54]: Data Scope
+          - generic [ref=e56] [cursor=pointer]:
+            - generic:
+              - combobox "Data Scope all" [ref=e58]
+              - generic [ref=e59]: all
+            - img [ref=e62]
+        - generic [ref=e64]:
+          - generic [ref=e65]: Current User ID
+          - generic [ref=e66]:
+            - button "decrease number" [ref=e67] [cursor=pointer]:
+              - img [ref=e69]
+            - button "increase number" [ref=e71] [cursor=pointer]:
+              - img [ref=e73]
+            - spinbutton "Current User ID decrease number increase number" [ref=e77]: "1001"
+        - generic [ref=e78]:
+          - generic [ref=e79]: Current Store ID
+          - generic [ref=e80]:
+            - button "decrease number" [ref=e81] [cursor=pointer]:
+              - img [ref=e83]
+            - button "increase number" [ref=e85] [cursor=pointer]:
+              - img [ref=e87]
+            - spinbutton "Current Store ID decrease number increase number" [ref=e91]: "10"
+        - generic [ref=e92]:
+          - generic [ref=e93]: Resource Store ID
+          - generic [ref=e94]:
+            - button "decrease number" [ref=e95] [cursor=pointer]:
+              - img [ref=e97]
+            - button "increase number" [ref=e99] [cursor=pointer]:
+              - img [ref=e101]
+            - spinbutton "Resource Store ID decrease number increase number" [ref=e105]: "10"
+        - generic [ref=e106]:
+          - generic [ref=e107]: Bound Customer User ID
+          - generic [ref=e108]:
+            - button "decrease number" [ref=e109] [cursor=pointer]:
+              - img [ref=e111]
+            - button "increase number" [ref=e113] [cursor=pointer]:
+              - img [ref=e115]
+            - spinbutton "Bound Customer User ID decrease number increase number" [ref=e119]
+        - generic [ref=e120]:
+          - generic [ref=e121]: Team Member IDs
+          - textbox "Team Member IDs" [ref=e124]:
+            - /placeholder: "For example: 1001,1002"
+            - text: 1001,1002
+  - main [ref=e125]:
+    - generic [ref=e126]:
+      - generic [ref=e127]:
+        - paragraph [ref=e128]: Constraint First
+        - heading "PlanOrder Service" [level=2] [ref=e129]
+        - paragraph [ref=e130]: Run the arrived -> servicing -> finished chain and keep order role records complete through the service flow.
+      - generic [ref=e131]:
+        - generic [ref=e132]: "Role: Admin"
+        - generic [ref=e133]: "Scope: ALL"
+        - generic [ref=e134]: "Main Chain: Clue -> Customer -> Order -> PlanOrder"
+    - generic [ref=e136]:
+      - generic [ref=e137]:
+        - generic [ref=e139]:
+          - heading "PlanOrder Queue" [level=3] [ref=e140]
+          - paragraph [ref=e141]: Keep the service flow on arrived -> servicing -> finished.
+        - generic [ref=e144] [cursor=pointer]:
+          - generic:
+            - combobox [ref=e146]
+            - generic [ref=e147]: PlanOrder status
+          - img [ref=e150]
+        - img [ref=e153]
+      - generic [ref=e155]:
+        - generic [ref=e156]:
+          - generic [ref=e157]:
+            - article [ref=e158]:
+              - generic [ref=e159]: Customer
+              - strong [ref=e160]: lead-20260422112519
+              - text: "13880822420"
+            - article [ref=e161]:
+              - generic [ref=e162]: Order
+              - strong [ref=e163]: CNY 1,000.00
+              - text: Deposit / paid
+            - article [ref=e164]:
+              - generic [ref=e165]: PlanOrder Status
+              - strong [ref=e166]: servicing
+              - text: "Role records: 0"
+          - generic [ref=e167]:
+            - generic [ref=e168]:
+              - generic [ref=e169]:
+                - heading "Service Actions" [level=3] [ref=e170]
+                - paragraph [ref=e171]: Drive the status flow and close the order back to used when service finishes.
+              - generic [ref=e172]:
+                - button "Arrive" [disabled] [ref=e173]:
+                  - generic [ref=e174]: Arrive
+                - button "Start" [disabled] [ref=e175]:
+                  - generic [ref=e176]: Start
+                - button "Finish" [ref=e177] [cursor=pointer]:
+                  - generic [ref=e178]: Finish
+                - button "Customer Detail" [ref=e179] [cursor=pointer]:
+                  - generic [ref=e180]: Customer Detail
+            - generic [ref=e181]:
+              - generic [ref=e182]:
+                - generic [ref=e183]: Arrive Time
+                - strong [ref=e184]: 2026/4/22 11:25:21
+              - generic [ref=e185]:
+                - generic [ref=e186]: Start Time
+                - strong [ref=e187]: 2026/4/22 11:25:21
+              - generic [ref=e188]:
+                - generic [ref=e189]: Finish Time
+                - strong [ref=e190]: "--"
+          - generic [ref=e191]:
+            - generic [ref=e193]:
+              - heading "Current Role Assignment" [level=3] [ref=e194]
+              - paragraph [ref=e195]: order_role_record must stay complete, and the same role cannot overlap at the same time.
+            - generic [ref=e196]:
+              - article [ref=e197]:
+                - generic [ref=e198]:
+                  - strong [ref=e199]: 医生
+                  - generic [ref=e200]: Unassigned
+                - generic [ref=e201]:
+                  - button "张医生" [ref=e202] [cursor=pointer]:
+                    - generic [ref=e203]: 张医生
+                  - button "周医生" [ref=e204] [cursor=pointer]:
+                    - generic [ref=e205]: 周医生
+              - article [ref=e206]:
+                - generic [ref=e207]:
+                  - strong [ref=e208]: 咨询师
+                  - generic [ref=e209]: Unassigned
+                - generic [ref=e210]:
+                  - button "王顾问" [ref=e211] [cursor=pointer]:
+                    - generic [ref=e212]: 王顾问
+                  - button "李顾问" [ref=e213] [cursor=pointer]:
+                    - generic [ref=e214]: 李顾问
+              - article [ref=e215]:
+                - generic [ref=e216]:
+                  - strong [ref=e217]: 助理
+                  - generic [ref=e218]: Unassigned
+                - generic [ref=e219]:
+                  - button "陈助理" [ref=e220] [cursor=pointer]:
+                    - generic [ref=e221]: 陈助理
+                  - button "林助理" [ref=e222] [cursor=pointer]:
+                    - generic [ref=e223]: 林助理
+              - article [ref=e224]:
+                - generic [ref=e225]:
+                  - strong [ref=e226]: Finance QA Role
+                  - generic [ref=e227]: Unassigned
+              - article [ref=e228]:
+                - generic [ref=e229]:
+                  - strong [ref=e230]: Finance QA Role 2
+                  - generic [ref=e231]: Unassigned
+          - generic [ref=e232]:
+            - generic [ref=e234]:
+              - heading "Role History" [level=3] [ref=e235]
+              - paragraph [ref=e236]: Show the shift history so salary and ownership can be audited across the service timeline.
+            - generic [ref=e238]:
+              - table [ref=e240]:
+                - rowgroup [ref=e247]:
+                  - row "Role User Start Time End Time Current" [ref=e248]:
+                    - columnheader "Role" [ref=e249]:
+                      - generic [ref=e250]: Role
+                    - columnheader "User" [ref=e251]:
+                      - generic [ref=e252]: User
+                    - columnheader "Start Time" [ref=e253]:
+                      - generic [ref=e254]: Start Time
+                    - columnheader "End Time" [ref=e255]:
+                      - generic [ref=e256]: End Time
+                    - columnheader "Current" [ref=e257]:
+                      - generic [ref=e258]: Current
+              - generic [ref=e262]:
+                - table:
+                  - rowgroup
+                - generic [ref=e264]: No Data
+        - img [ref=e267]

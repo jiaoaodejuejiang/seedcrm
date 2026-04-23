@@ -4,6 +4,10 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.seedcrm.crm.clue.dto.DistributorClueCreateRequest;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.service.ClueService;
+import com.seedcrm.crm.permission.support.CluePermissionGuard;
+import com.seedcrm.crm.permission.support.PermissionRequestContext;
+import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -21,14 +25,22 @@ import org.springframework.web.server.ResponseStatusException;
 public class ClueController {
 
     private final ClueService clueService;
+    private final PermissionRequestContextResolver permissionRequestContextResolver;
+    private final CluePermissionGuard cluePermissionGuard;
 
-    public ClueController(ClueService clueService) {
+    public ClueController(ClueService clueService,
+                          PermissionRequestContextResolver permissionRequestContextResolver,
+                          CluePermissionGuard cluePermissionGuard) {
         this.clueService = clueService;
+        this.permissionRequestContextResolver = permissionRequestContextResolver;
+        this.cluePermissionGuard = cluePermissionGuard;
     }
 
     @PostMapping("/add")
-    public Clue add(@RequestBody(required = false) Clue clue) {
+    public Clue add(@RequestBody(required = false) Clue clue, HttpServletRequest request) {
         try {
+            PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+            cluePermissionGuard.checkCreate(context);
             return clueService.addClue(clue);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
@@ -36,13 +48,17 @@ public class ClueController {
     }
 
     @PostMapping("/distributor/add")
-    public Clue addDistributorClue(@RequestBody(required = false) DistributorClueCreateRequest request) {
-        return addDistributionClue(request);
+    public Clue addDistributorClue(@RequestBody(required = false) DistributorClueCreateRequest request,
+                                   HttpServletRequest httpServletRequest) {
+        return addDistributionClue(request, httpServletRequest);
     }
 
     @PostMapping("/distribution/add")
-    public Clue addDistributionClue(@RequestBody(required = false) DistributorClueCreateRequest request) {
+    public Clue addDistributionClue(@RequestBody(required = false) DistributorClueCreateRequest request,
+                                    HttpServletRequest httpServletRequest) {
         try {
+            PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
+            cluePermissionGuard.checkCreate(context);
             return clueService.createDistributorClue(
                     request == null ? null : request.getDistributorId(),
                     request == null ? null : request.getPhone(),
@@ -55,17 +71,21 @@ public class ClueController {
     @GetMapping("/list")
     public IPage<Clue> list(@RequestParam(defaultValue = "1") long page,
                             @RequestParam(defaultValue = "10") long size,
-                            @RequestParam(defaultValue = "false") boolean publicOnly) {
+                            @RequestParam(defaultValue = "false") boolean publicOnly,
+                            HttpServletRequest request) {
         if (page < 1 || size < 1) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page and size must be greater than 0");
         }
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        cluePermissionGuard.checkView(context, null);
         return clueService.pageClues(page, size, publicOnly);
     }
 
     @PostMapping("/assign")
     public Clue assign(@RequestBody(required = false) Map<String, Long> requestBody,
                        @RequestParam(required = false) Long clueId,
-                       @RequestParam(required = false) Long userId) {
+                       @RequestParam(required = false) Long userId,
+                       HttpServletRequest request) {
         Long finalClueId = clueId;
         Long finalUserId = userId;
         if (requestBody != null) {
@@ -77,6 +97,8 @@ public class ClueController {
             }
         }
         try {
+            PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+            cluePermissionGuard.checkAssign(context, finalClueId);
             return clueService.assignClue(finalClueId, finalUserId);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
@@ -86,13 +108,17 @@ public class ClueController {
     }
 
     @GetMapping("/public")
-    public List<Clue> publicList() {
+    public List<Clue> publicList(HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        cluePermissionGuard.checkView(context, null);
         return clueService.listPublicClues();
     }
 
     @PostMapping("/recycle")
-    public Clue recycle(@RequestParam Long clueId) {
+    public Clue recycle(@RequestParam Long clueId, HttpServletRequest request) {
         try {
+            PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+            cluePermissionGuard.checkRecycle(context, clueId);
             return clueService.recycleClue(clueId);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);

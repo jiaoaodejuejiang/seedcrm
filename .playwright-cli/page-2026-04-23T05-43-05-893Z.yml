@@ -1,0 +1,210 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Seed CRM
+      - heading "Constraint-Driven Main Chain Console" [level=1] [ref=e7]
+      - paragraph [ref=e8]: Keep the frontend aligned with Clue -> Customer -> Order -> PlanOrder, with Permission, Scheduler, and Salary wired in globally.
+    - navigation [ref=e9]:
+      - link "Clue Intake, assign, recycle, and convert to orders" [ref=e10] [cursor=pointer]:
+        - /url: /clues
+        - generic [ref=e11]: Clue
+        - generic [ref=e12]: Intake, assign, recycle, and convert to orders
+      - link "Order Paid and used orders linked to customers" [ref=e13] [cursor=pointer]:
+        - /url: /orders
+        - generic [ref=e14]: Order
+        - generic [ref=e15]: Paid and used orders linked to customers
+      - link "PlanOrder Service flow and role assignment records" [ref=e16] [cursor=pointer]:
+        - /url: /plan-orders
+        - generic [ref=e17]: PlanOrder
+        - generic [ref=e18]: Service flow and role assignment records
+      - link "Scheduler Jobs, queue, retry, and execution logs" [ref=e19] [cursor=pointer]:
+        - /url: /scheduler
+        - generic [ref=e20]: Scheduler
+        - generic [ref=e21]: Jobs, queue, retry, and execution logs
+      - link "Permission RBAC, ABAC, and live access checks" [ref=e22] [cursor=pointer]:
+        - /url: /permission
+        - generic [ref=e23]: Permission
+        - generic [ref=e24]: RBAC, ABAC, and live access checks
+      - link "Salary Stats, settlement, payout, and withdraw flow" [ref=e25] [cursor=pointer]:
+        - /url: /salary
+        - generic [ref=e26]: Salary
+        - generic [ref=e27]: Stats, settlement, payout, and withdraw flow
+      - link "Distributor Lead contribution and income overview" [ref=e28] [cursor=pointer]:
+        - /url: /distributors
+        - generic [ref=e29]: Distributor
+        - generic [ref=e30]: Lead contribution and income overview
+      - link "Finance Income and withdraw records overview" [ref=e31] [cursor=pointer]:
+        - /url: /finance
+        - generic [ref=e32]: Finance
+        - generic [ref=e33]: Income and withdraw records overview
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - heading "Permission Context" [level=3] [ref=e37]
+          - paragraph [ref=e38]: Every request automatically carries RBAC and ABAC headers from this shared context.
+        - button "Reset" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: Reset
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Role
+          - generic [ref=e45] [cursor=pointer]:
+            - generic:
+              - combobox "Role Admin" [ref=e47]
+              - generic [ref=e48]: Admin
+            - img [ref=e51]
+        - generic [ref=e53]:
+          - generic [ref=e54]: Data Scope
+          - generic [ref=e56] [cursor=pointer]:
+            - generic:
+              - combobox "Data Scope all" [ref=e58]
+              - generic [ref=e59]: all
+            - img [ref=e62]
+        - generic [ref=e64]:
+          - generic [ref=e65]: Current User ID
+          - generic [ref=e66]:
+            - button "decrease number" [ref=e67] [cursor=pointer]:
+              - img [ref=e69]
+            - button "increase number" [ref=e71] [cursor=pointer]:
+              - img [ref=e73]
+            - spinbutton "Current User ID decrease number increase number" [ref=e77]: "1001"
+        - generic [ref=e78]:
+          - generic [ref=e79]: Current Store ID
+          - generic [ref=e80]:
+            - button "decrease number" [ref=e81] [cursor=pointer]:
+              - img [ref=e83]
+            - button "increase number" [ref=e85] [cursor=pointer]:
+              - img [ref=e87]
+            - spinbutton "Current Store ID decrease number increase number" [ref=e91]: "10"
+        - generic [ref=e92]:
+          - generic [ref=e93]: Resource Store ID
+          - generic [ref=e94]:
+            - button "decrease number" [ref=e95] [cursor=pointer]:
+              - img [ref=e97]
+            - button "increase number" [ref=e99] [cursor=pointer]:
+              - img [ref=e101]
+            - spinbutton "Resource Store ID decrease number increase number" [ref=e105]: "10"
+        - generic [ref=e106]:
+          - generic [ref=e107]: Bound Customer User ID
+          - generic [ref=e108]:
+            - button "decrease number" [ref=e109] [cursor=pointer]:
+              - img [ref=e111]
+            - button "increase number" [ref=e113] [cursor=pointer]:
+              - img [ref=e115]
+            - spinbutton "Bound Customer User ID decrease number increase number" [ref=e119]
+        - generic [ref=e120]:
+          - generic [ref=e121]: Team Member IDs
+          - textbox "Team Member IDs" [ref=e124]:
+            - /placeholder: "For example: 1001,1002"
+            - text: 1001,1002
+  - main [ref=e125]:
+    - generic [ref=e126]:
+      - generic [ref=e127]:
+        - paragraph [ref=e128]: Constraint First
+        - heading "Salary Center" [level=2] [ref=e129]
+        - paragraph [ref=e130]: Calculate salary from order_role_record with stats, settlement, payout, and withdraw actions.
+      - generic [ref=e131]:
+        - generic [ref=e132]: "Role: Admin"
+        - generic [ref=e133]: "Scope: ALL"
+        - generic [ref=e134]: "Main Chain: Clue -> Customer -> Order -> PlanOrder"
+    - generic [ref=e136]:
+      - generic [ref=e137]:
+        - generic [ref=e138]:
+          - generic [ref=e139]:
+            - heading "Salary Dashboard" [level=3] [ref=e140]
+            - paragraph [ref=e141]: Calculate salary from order_role_record instead of hard-coded business logic.
+          - generic [ref=e142]:
+            - generic [ref=e144] [cursor=pointer]:
+              - generic:
+                - combobox [ref=e146]
+                - generic [ref=e147]: Wang Consultant / Consultant
+              - img [ref=e150]
+            - button "Refresh" [ref=e152] [cursor=pointer]:
+              - generic [ref=e153]: Refresh
+        - generic [ref=e154]:
+          - article [ref=e155]:
+            - generic [ref=e156]: Related Orders
+            - strong [ref=e157]: "0"
+            - text: Orders this user joined through the full role-record trail.
+          - article [ref=e158]:
+            - generic [ref=e159]: Service Count
+            - strong [ref=e160]: "0"
+            - text: Total finished service count for this user.
+          - article [ref=e161]:
+            - generic [ref=e162]: Withdrawable
+            - strong [ref=e163]: CNY 0.00
+            - text: Current amount that can move into withdraw flow.
+      - generic [ref=e165]:
+        - article [ref=e166]:
+          - heading "Balance" [level=3] [ref=e167]
+          - paragraph [ref=e168]: "Unsettled: CNY 0.00"
+          - paragraph [ref=e169]: "Settled: CNY 0.00"
+          - paragraph [ref=e170]: "Withdrawn: CNY 0.00"
+          - paragraph [ref=e171]: "Withdrawable: CNY 0.00"
+        - article [ref=e172]:
+          - heading "Role Distribution" [level=3] [ref=e173]
+          - paragraph [ref=e175]: No role distribution data yet.
+        - article [ref=e176]:
+          - heading "Recalculate Salary" [level=3] [ref=e177]
+          - generic [ref=e178]:
+            - button "decrease number" [ref=e179] [cursor=pointer]:
+              - img [ref=e181]
+            - button "increase number" [ref=e183] [cursor=pointer]:
+              - img [ref=e185]
+            - spinbutton [ref=e189]
+          - generic [ref=e190]: Run recalculation for one PlanOrder to validate the salary pipeline against the current role records.
+          - button "Run Recalculate" [ref=e191] [cursor=pointer]:
+            - generic [ref=e192]: Run Recalculate
+      - generic [ref=e193]:
+        - generic [ref=e195]:
+          - heading "Settlement and Withdraw" [level=3] [ref=e196]
+          - paragraph [ref=e197]: Create settlement, confirm or pay it, then open and approve withdraw requests from the same page.
+        - generic [ref=e198]:
+          - generic [ref=e199]:
+            - generic [ref=e200]: Settlement Time Range
+            - generic [ref=e201]:
+              - img [ref=e203]
+              - combobox "Settlement Time Range -" [ref=e207]
+              - generic [ref=e208]: "-"
+              - combobox "End time" [ref=e209]
+          - generic [ref=e210]:
+            - generic [ref=e211]: Settlement ID
+            - generic [ref=e212]:
+              - button "decrease number" [ref=e213] [cursor=pointer]:
+                - img [ref=e215]
+              - button "increase number" [ref=e217] [cursor=pointer]:
+                - img [ref=e219]
+              - spinbutton "Settlement ID decrease number increase number" [ref=e223]
+          - generic [ref=e224]:
+            - generic [ref=e225]: Withdraw Amount
+            - generic [ref=e226]:
+              - button "decrease number" [ref=e227]:
+                - img [ref=e229]
+              - button "increase number" [ref=e231] [cursor=pointer]:
+                - img [ref=e233]
+              - spinbutton "Withdraw Amount decrease number increase number" [ref=e237]: "0.00"
+          - generic [ref=e238]:
+            - generic [ref=e239]: Withdraw ID
+            - generic [ref=e240]:
+              - button "decrease number" [ref=e241] [cursor=pointer]:
+                - img [ref=e243]
+              - button "increase number" [ref=e245] [cursor=pointer]:
+                - img [ref=e247]
+              - spinbutton "Withdraw ID decrease number increase number" [ref=e251]
+          - generic [ref=e252]:
+            - generic [ref=e253]: Withdraw Status
+            - generic [ref=e255] [cursor=pointer]:
+              - generic:
+                - combobox "Withdraw Status APPROVED" [ref=e257]
+                - generic [ref=e258]: APPROVED
+              - img [ref=e261]
+        - generic [ref=e263]:
+          - button "Create Settlement" [ref=e264] [cursor=pointer]:
+            - generic [ref=e265]: Create Settlement
+          - button "Confirm Settlement" [ref=e266] [cursor=pointer]:
+            - generic [ref=e267]: Confirm Settlement
+          - button "Pay Settlement" [ref=e268] [cursor=pointer]:
+            - generic [ref=e269]: Pay Settlement
+          - button "Create Withdraw" [ref=e270] [cursor=pointer]:
+            - generic [ref=e271]: Create Withdraw
+          - button "Update Withdraw" [ref=e272] [cursor=pointer]:
+            - generic [ref=e273]: Update Withdraw

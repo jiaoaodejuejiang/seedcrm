@@ -4,17 +4,17 @@
       <article class="metric-card">
         <span>今日收入</span>
         <strong>{{ formatMoney(overview?.todayIncome) }}</strong>
-        <small>按今日完成订单累计</small>
+        <small>来自后端财务总览的当前日收入快照。</small>
       </article>
       <article class="metric-card">
-        <span>员工收益</span>
+        <span>员工收入</span>
         <strong>{{ formatMoney(overview?.employeeIncome) }}</strong>
-        <small>服务角色累计收益</small>
+        <small>归因到员工角色记录的收入汇总。</small>
       </article>
       <article class="metric-card">
-        <span>分销收益</span>
+        <span>分销收入</span>
         <strong>{{ formatMoney(overview?.distributorIncome) }}</strong>
-        <small>分销带客累计收益</small>
+        <small>归因到分销转化链路的收入汇总。</small>
       </article>
     </section>
 
@@ -22,17 +22,17 @@
       <div class="panel-heading">
         <div>
           <h3>提现记录</h3>
-          <p>门店日常只看最近记录，避免复杂报表干扰决策。</p>
+          <p>统一查看员工与分销两侧的提现记录及当前审核状态。</p>
         </div>
       </div>
 
       <el-table v-loading="loading" :data="overview?.withdrawRecords || []" stripe>
-        <el-table-column label="类型" width="120">
+        <el-table-column label="归属类型" width="140">
           <template #default="{ row }">
-            <el-tag>{{ row.ownerType === 'EMPLOYEE' ? '员工提现' : '分销提现' }}</el-tag>
+            <el-tag>{{ row.ownerType === 'EMPLOYEE' ? '员工' : '分销商' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="主体" min-width="180">
+        <el-table-column label="归属对象" min-width="180">
           <template #default="{ row }">
             <div class="table-primary">
               <strong>{{ row.ownerName }}</strong>
@@ -50,7 +50,7 @@
             <el-tag :type="statusTagType(row.status)">{{ row.status }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="时间" min-width="170">
+        <el-table-column label="创建时间" min-width="180">
           <template #default="{ row }">
             {{ formatDateTime(row.createTime) }}
           </template>
@@ -65,13 +65,15 @@ import { onMounted, ref } from 'vue'
 import { fetchFinanceOverview } from '../api/workbench'
 import { formatDateTime, formatMoney, statusTagType } from '../utils/format'
 
-const loading = ref(false)
+const loading = ref(true)
 const overview = ref(null)
 
 async function loadOverview() {
   loading.value = true
   try {
     overview.value = await fetchFinanceOverview()
+  } catch {
+    overview.value = null
   } finally {
     loading.value = false
   }

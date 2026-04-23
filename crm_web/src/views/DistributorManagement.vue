@@ -4,17 +4,17 @@
       <article class="metric-card">
         <span>分销商数</span>
         <strong>{{ distributors.length }}</strong>
-        <small>当前系统已纳入统计的分销伙伴</small>
+        <small>当前已经接入 CRM 后端的分销商记录数量。</small>
       </article>
       <article class="metric-card">
-        <span>带来线索</span>
+        <span>线索贡献</span>
         <strong>{{ totalClues }}</strong>
-        <small>按分销来源沉淀的线索量</small>
+        <small>来自分销渠道的累计线索贡献量。</small>
       </article>
       <article class="metric-card">
-        <span>总收益</span>
+        <span>累计收益</span>
         <strong>{{ formatMoney(totalIncome) }}</strong>
-        <small>累计分销收益，不做复杂报表</small>
+        <small>当前归因到分销转化链路的总收益。</small>
       </article>
     </section>
 
@@ -28,15 +28,15 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="带来线索" width="110" prop="clueCount" />
-        <el-table-column label="成单客户" width="110" prop="dealCustomerCount" />
+        <el-table-column label="线索数" width="110" prop="clueCount" />
+        <el-table-column label="成交客户" width="120" prop="dealCustomerCount" />
         <el-table-column label="订单数" width="100" prop="orderCount" />
-        <el-table-column label="累计收益" width="140">
+        <el-table-column label="总收益" width="140">
           <template #default="{ row }">
             {{ formatMoney(row.totalIncome) }}
           </template>
         </el-table-column>
-        <el-table-column label="待结算" width="140">
+        <el-table-column label="未结算" width="140">
           <template #default="{ row }">
             {{ formatMoney(row.unsettledIncome) }}
           </template>
@@ -61,7 +61,7 @@ import { computed, onMounted, ref } from 'vue'
 import { fetchDistributors } from '../api/workbench'
 import { formatMoney, statusTagType } from '../utils/format'
 
-const loading = ref(false)
+const loading = ref(true)
 const distributors = ref([])
 
 const totalClues = computed(() => distributors.value.reduce((sum, item) => sum + Number(item.clueCount || 0), 0))
@@ -71,6 +71,8 @@ async function loadDistributors() {
   loading.value = true
   try {
     distributors.value = await fetchDistributors()
+  } catch {
+    distributors.value = []
   } finally {
     loading.value = false
   }

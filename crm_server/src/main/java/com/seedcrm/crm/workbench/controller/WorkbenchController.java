@@ -1,6 +1,7 @@
 package com.seedcrm.crm.workbench.controller;
 
 import com.seedcrm.crm.common.api.ApiResponse;
+import com.seedcrm.crm.permission.support.CluePermissionGuard;
 import com.seedcrm.crm.permission.support.OrderPermissionGuard;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
@@ -29,23 +30,31 @@ public class WorkbenchController {
 
     private final WorkbenchService workbenchService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
+    private final CluePermissionGuard cluePermissionGuard;
     private final OrderPermissionGuard orderPermissionGuard;
     private final PlanOrderPermissionGuard planOrderPermissionGuard;
 
     public WorkbenchController(WorkbenchService workbenchService,
                                PermissionRequestContextResolver permissionRequestContextResolver,
+                               CluePermissionGuard cluePermissionGuard,
                                OrderPermissionGuard orderPermissionGuard,
                                PlanOrderPermissionGuard planOrderPermissionGuard) {
         this.workbenchService = workbenchService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
+        this.cluePermissionGuard = cluePermissionGuard;
         this.orderPermissionGuard = orderPermissionGuard;
         this.planOrderPermissionGuard = planOrderPermissionGuard;
     }
 
     @GetMapping("/clues")
     public ApiResponse<List<ClueItemResponse>> clues(@RequestParam(required = false) String sourceChannel,
-                                                     @RequestParam(required = false) String status) {
-        return ApiResponse.success(workbenchService.listClues(sourceChannel, status));
+                                                     @RequestParam(required = false) String status,
+                                                     HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        List<ClueItemResponse> clues = workbenchService.listClues(sourceChannel, status).stream()
+                .filter(clue -> cluePermissionGuard.canView(context, clue.getId()))
+                .collect(Collectors.toList());
+        return ApiResponse.success(clues);
     }
 
     @GetMapping("/orders")

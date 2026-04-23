@@ -1,0 +1,273 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - paragraph [ref=e6]: Seed CRM
+        - heading "Constraint-Driven Main Chain Console" [level=1] [ref=e7]
+        - paragraph [ref=e8]: Keep the frontend aligned with Clue -> Customer -> Order -> PlanOrder, with Permission, Scheduler, and Salary wired in globally.
+      - navigation [ref=e9]:
+        - link "Clue Intake, assign, recycle, and convert to orders" [ref=e10] [cursor=pointer]:
+          - /url: /clues
+          - generic [ref=e11]: Clue
+          - generic [ref=e12]: Intake, assign, recycle, and convert to orders
+        - link "Order Paid and used orders linked to customers" [ref=e13] [cursor=pointer]:
+          - /url: /orders
+          - generic [ref=e14]: Order
+          - generic [ref=e15]: Paid and used orders linked to customers
+        - link "PlanOrder Service flow and role assignment records" [ref=e16] [cursor=pointer]:
+          - /url: /plan-orders
+          - generic [ref=e17]: PlanOrder
+          - generic [ref=e18]: Service flow and role assignment records
+        - link "Scheduler Jobs, queue, retry, and execution logs" [ref=e19] [cursor=pointer]:
+          - /url: /scheduler
+          - generic [ref=e20]: Scheduler
+          - generic [ref=e21]: Jobs, queue, retry, and execution logs
+        - link "Permission RBAC, ABAC, and live access checks" [ref=e22] [cursor=pointer]:
+          - /url: /permission
+          - generic [ref=e23]: Permission
+          - generic [ref=e24]: RBAC, ABAC, and live access checks
+        - link "Salary Stats, settlement, payout, and withdraw flow" [ref=e25] [cursor=pointer]:
+          - /url: /salary
+          - generic [ref=e26]: Salary
+          - generic [ref=e27]: Stats, settlement, payout, and withdraw flow
+        - link "Distributor Lead contribution and income overview" [ref=e28] [cursor=pointer]:
+          - /url: /distributors
+          - generic [ref=e29]: Distributor
+          - generic [ref=e30]: Lead contribution and income overview
+        - link "Finance Income and withdraw records overview" [ref=e31] [cursor=pointer]:
+          - /url: /finance
+          - generic [ref=e32]: Finance
+          - generic [ref=e33]: Income and withdraw records overview
+      - generic [ref=e34]:
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - heading "Permission Context" [level=3] [ref=e37]
+            - paragraph [ref=e38]: Every request automatically carries RBAC and ABAC headers from this shared context.
+          - button "Reset" [ref=e39] [cursor=pointer]:
+            - generic [ref=e40]: Reset
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - generic [ref=e43]: Role
+            - generic [ref=e45] [cursor=pointer]:
+              - generic:
+                - combobox "Role Admin" [ref=e47]
+                - generic [ref=e48]: Admin
+              - img [ref=e51]
+          - generic [ref=e53]:
+            - generic [ref=e54]: Data Scope
+            - generic [ref=e56] [cursor=pointer]:
+              - generic:
+                - combobox "Data Scope all" [ref=e58]
+                - generic [ref=e59]: all
+              - img [ref=e62]
+          - generic [ref=e64]:
+            - generic [ref=e65]: Current User ID
+            - generic [ref=e66]:
+              - button "decrease number" [ref=e67] [cursor=pointer]:
+                - img [ref=e69]
+              - button "increase number" [ref=e71] [cursor=pointer]:
+                - img [ref=e73]
+              - spinbutton "Current User ID decrease number increase number" [ref=e77]: "1001"
+          - generic [ref=e78]:
+            - generic [ref=e79]: Current Store ID
+            - generic [ref=e80]:
+              - button "decrease number" [ref=e81] [cursor=pointer]:
+                - img [ref=e83]
+              - button "increase number" [ref=e85] [cursor=pointer]:
+                - img [ref=e87]
+              - spinbutton "Current Store ID decrease number increase number" [ref=e91]: "10"
+          - generic [ref=e92]:
+            - generic [ref=e93]: Resource Store ID
+            - generic [ref=e94]:
+              - button "decrease number" [ref=e95] [cursor=pointer]:
+                - img [ref=e97]
+              - button "increase number" [ref=e99] [cursor=pointer]:
+                - img [ref=e101]
+              - spinbutton "Resource Store ID decrease number increase number" [ref=e105]: "10"
+          - generic [ref=e106]:
+            - generic [ref=e107]: Bound Customer User ID
+            - generic [ref=e108]:
+              - button "decrease number" [ref=e109] [cursor=pointer]:
+                - img [ref=e111]
+              - button "increase number" [ref=e113] [cursor=pointer]:
+                - img [ref=e115]
+              - spinbutton "Bound Customer User ID decrease number increase number" [ref=e119]
+          - generic [ref=e120]:
+            - generic [ref=e121]: Team Member IDs
+            - textbox "Team Member IDs" [ref=e124]:
+              - /placeholder: "For example: 1001,1002"
+              - text: 1001,1002
+    - main [ref=e125]:
+      - generic [ref=e126]:
+        - generic [ref=e127]:
+          - paragraph [ref=e128]: Constraint First
+          - heading "PlanOrder Service" [level=2] [ref=e931]
+          - paragraph [ref=e130]: Run the arrived -> servicing -> finished chain and keep order role records complete through the service flow.
+        - generic [ref=e131]:
+          - generic [ref=e132]: "Role: Admin"
+          - generic [ref=e133]: "Scope: ALL"
+          - generic [ref=e134]: "Main Chain: Clue -> Customer -> Order -> PlanOrder"
+      - generic [ref=e932]:
+        - generic [ref=e933]:
+          - generic [ref=e935]:
+            - heading "PlanOrder Queue" [level=3] [ref=e936]
+            - paragraph [ref=e937]: Keep the service flow on arrived -> servicing -> finished.
+          - generic [ref=e940] [cursor=pointer]:
+            - generic:
+              - combobox [ref=e942]
+              - generic [ref=e943]: PlanOrder status
+            - img [ref=e946]
+          - generic [ref=e948]:
+            - 'button "Codex Flow #10 / ORD202604231133105148457 arrived" [ref=e949] [cursor=pointer]':
+              - generic [ref=e950]:
+                - strong [ref=e951]: Codex Flow
+                - paragraph [ref=e952]: "#10 / ORD202604231133105148457"
+              - generic [ref=e954]: arrived
+            - 'button "Rerun-42849368 #9 / ORD202604221527370004335 finished" [ref=e955] [cursor=pointer]':
+              - generic [ref=e956]:
+                - strong [ref=e957]: Rerun-42849368
+                - paragraph [ref=e958]: "#9 / ORD202604221527370004335"
+              - generic [ref=e960]: finished
+            - 'button "Rerun-42761206 #8 / ORD202604221526079412758 finished" [ref=e961] [cursor=pointer]':
+              - generic [ref=e962]:
+                - strong [ref=e963]: Rerun-42761206
+                - paragraph [ref=e964]: "#8 / ORD202604221526079412758"
+              - generic [ref=e966]: finished
+            - 'button "UI Auto Flow #7 / ORD202604221459347488361 finished" [ref=e967] [cursor=pointer]':
+              - generic [ref=e968]:
+                - strong [ref=e969]: UI Auto Flow
+                - paragraph [ref=e970]: "#7 / ORD202604221459347488361"
+              - generic [ref=e972]: finished
+            - 'button "FinanceClue-1776832767 #6 / ORD202604221239282975273 finished" [ref=e973] [cursor=pointer]':
+              - generic [ref=e974]:
+                - strong [ref=e975]: FinanceClue-1776832767
+                - paragraph [ref=e976]: "#6 / ORD202604221239282975273"
+              - generic [ref=e978]: finished
+            - 'button "FinanceClue-1776832364 #5 / ORD202604221232465408346 finished" [ref=e979] [cursor=pointer]':
+              - generic [ref=e980]:
+                - strong [ref=e981]: FinanceClue-1776832364
+                - paragraph [ref=e982]: "#5 / ORD202604221232465408346"
+              - generic [ref=e984]: finished
+            - 'button "lead-20260422112627 #4 / ORD202604221126278822911 finished" [ref=e985] [cursor=pointer]':
+              - generic [ref=e986]:
+                - strong [ref=e987]: lead-20260422112627
+                - paragraph [ref=e988]: "#4 / ORD202604221126278822911"
+              - generic [ref=e990]: finished
+            - 'button "lead-20260422112519 #3 / ORD202604221125206063802 servicing" [ref=e991] [cursor=pointer]':
+              - generic [ref=e992]:
+                - strong [ref=e993]: lead-20260422112519
+                - paragraph [ref=e994]: "#3 / ORD202604221125206063802"
+              - generic [ref=e996]: servicing
+            - 'button "Salary Demo #2 / ORD202604221025342021490 finished" [ref=e997] [cursor=pointer]':
+              - generic [ref=e998]:
+                - strong [ref=e999]: Salary Demo
+                - paragraph [ref=e1000]: "#2 / ORD202604221025342021490"
+              - generic [ref=e1002]: finished
+            - 'button "PlanOrder Auto Test #1 / ORD202604220955338366259 finished" [ref=e1003] [cursor=pointer]':
+              - generic [ref=e1004]:
+                - strong [ref=e1005]: PlanOrder Auto Test
+                - paragraph [ref=e1006]: "#1 / ORD202604220955338366259"
+              - generic [ref=e1008]: finished
+        - generic [ref=e1010]:
+          - generic [ref=e1011]:
+            - article [ref=e1012]:
+              - generic [ref=e1013]: Customer
+              - strong [ref=e1014]: Codex Flow
+              - text: "13990009988"
+            - article [ref=e1015]:
+              - generic [ref=e1016]: Order
+              - strong [ref=e1017]: CNY 1,999.00
+              - text: Deposit / paid
+            - article [ref=e1018]:
+              - generic [ref=e1019]: PlanOrder Status
+              - strong [ref=e1020]: arrived
+              - text: "Role records: 0"
+          - generic [ref=e1021]:
+            - generic [ref=e1022]:
+              - generic [ref=e1023]:
+                - heading "Service Actions" [level=3] [ref=e1024]
+                - paragraph [ref=e1025]: Drive the status flow and close the order back to used when service finishes.
+              - generic [ref=e1026]:
+                - button "Arrive" [disabled] [ref=e1027]:
+                  - generic [ref=e1028]: Arrive
+                - button "Start" [ref=e1029] [cursor=pointer]:
+                  - generic [ref=e1030]: Start
+                - button "Finish" [disabled] [ref=e1031]:
+                  - generic [ref=e1032]: Finish
+                - button "Customer Detail" [ref=e1033] [cursor=pointer]:
+                  - generic [ref=e1034]: Customer Detail
+            - generic [ref=e1035]:
+              - generic [ref=e1036]:
+                - generic [ref=e1037]: Arrive Time
+                - strong [ref=e1038]: 2026/4/23 11:43:24
+              - generic [ref=e1039]:
+                - generic [ref=e1040]: Start Time
+                - strong [ref=e1041]: "--"
+              - generic [ref=e1042]:
+                - generic [ref=e1043]: Finish Time
+                - strong [ref=e1044]: "--"
+          - generic [ref=e1045]:
+            - generic [ref=e1047]:
+              - heading "Current Role Assignment" [level=3] [ref=e1048]
+              - paragraph [ref=e1049]: order_role_record must stay complete, and the same role cannot overlap at the same time.
+            - generic [ref=e1050]:
+              - article [ref=e1051]:
+                - generic [ref=e1052]:
+                  - strong [ref=e1053]: 医生
+                  - generic [ref=e1054]: Unassigned
+                - generic [ref=e1055]:
+                  - button "张医生" [ref=e1056] [cursor=pointer]:
+                    - generic [ref=e1057]: 张医生
+                  - button "周医生" [ref=e1058] [cursor=pointer]:
+                    - generic [ref=e1059]: 周医生
+              - article [ref=e1060]:
+                - generic [ref=e1061]:
+                  - strong [ref=e1062]: 咨询师
+                  - generic [ref=e1063]: Unassigned
+                - generic [ref=e1064]:
+                  - button "王顾问" [ref=e1065] [cursor=pointer]:
+                    - generic [ref=e1066]: 王顾问
+                  - button "李顾问" [ref=e1067] [cursor=pointer]:
+                    - generic [ref=e1068]: 李顾问
+              - article [ref=e1069]:
+                - generic [ref=e1070]:
+                  - strong [ref=e1071]: 助理
+                  - generic [ref=e1072]: Unassigned
+                - generic [ref=e1073]:
+                  - button "陈助理" [ref=e1074] [cursor=pointer]:
+                    - generic [ref=e1075]: 陈助理
+                  - button "林助理" [ref=e1076] [cursor=pointer]:
+                    - generic [ref=e1077]: 林助理
+              - article [ref=e1078]:
+                - generic [ref=e1079]:
+                  - strong [ref=e1080]: Finance QA Role
+                  - generic [ref=e1081]: Unassigned
+              - article [ref=e1082]:
+                - generic [ref=e1083]:
+                  - strong [ref=e1084]: Finance QA Role 2
+                  - generic [ref=e1085]: Unassigned
+          - generic [ref=e1086]:
+            - generic [ref=e1088]:
+              - heading "Role History" [level=3] [ref=e1089]
+              - paragraph [ref=e1090]: Show the shift history so salary and ownership can be audited across the service timeline.
+            - generic [ref=e1092]:
+              - table [ref=e1094]:
+                - rowgroup [ref=e1101]:
+                  - row "Role User Start Time End Time Current" [ref=e1102]:
+                    - columnheader "Role" [ref=e1103]:
+                      - generic [ref=e1104]: Role
+                    - columnheader "User" [ref=e1105]:
+                      - generic [ref=e1106]: User
+                    - columnheader "Start Time" [ref=e1107]:
+                      - generic [ref=e1108]: Start Time
+                    - columnheader "End Time" [ref=e1109]:
+                      - generic [ref=e1110]: End Time
+                    - columnheader "Current" [ref=e1111]:
+                      - generic [ref=e1112]: Current
+              - generic [ref=e1116]:
+                - table:
+                  - rowgroup
+                - generic [ref=e1118]: No Data
+  - alert [ref=e1124]:
+    - img [ref=e1126]
+    - paragraph [ref=e1128]: PlanOrder status updated.

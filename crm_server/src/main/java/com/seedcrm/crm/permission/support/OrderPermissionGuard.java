@@ -1,5 +1,6 @@
 package com.seedcrm.crm.permission.support;
 
+import com.seedcrm.crm.auth.service.AuthService;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
@@ -17,13 +18,16 @@ public class OrderPermissionGuard {
     private final PermissionService permissionService;
     private final OrderMapper orderMapper;
     private final ClueMapper clueMapper;
+    private final AuthService authService;
 
     public OrderPermissionGuard(PermissionService permissionService,
                                 OrderMapper orderMapper,
-                                ClueMapper clueMapper) {
+                                ClueMapper clueMapper,
+                                AuthService authService) {
         this.permissionService = permissionService;
         this.orderMapper = orderMapper;
         this.clueMapper = clueMapper;
+        this.authService = authService;
     }
 
     public void checkCreate(PermissionRequestContext context, OrderCreateDTO request) {
@@ -63,7 +67,7 @@ public class OrderPermissionGuard {
         request.setDataScope(context.getDataScope());
         request.setCurrentUserId(context.getCurrentUserId());
         request.setCurrentStoreId(context.getCurrentStoreId());
-        request.setResourceStoreId(context.getResourceStoreId());
+        request.setResourceStoreId(authService.resolveStoreId(resourceOwnerId));
         request.setTeamMemberIds(context.getTeamMemberIds());
         request.setBoundCustomerUserId(context.getBoundCustomerUserId());
         request.setResourceOwnerId(resourceOwnerId);

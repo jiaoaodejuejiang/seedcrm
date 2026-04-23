@@ -1,0 +1,180 @@
+- generic [ref=e8656]:
+  - complementary [ref=e8657]:
+    - generic [ref=e8658]:
+      - paragraph [ref=e8659]: Seed CRM
+      - heading "约束驱动的中文 CRM 控制台" [level=1] [ref=e8660]
+      - paragraph [ref=e8661]: 围绕“客资 -> 客户 -> 订单 -> 服务单”主链工作，登录、角色与权限在整个系统中统一生效。
+    - navigation [ref=e8662]:
+      - generic [ref=e8663]:
+        - generic [ref=e8664]:
+          - strong [ref=e8665]: 门店服务
+          - generic [ref=e8666]: 门店服务人员工入口
+        - link "订单列表 查看全部、已预约、已完成订单，并填写确认单" [ref=e8668] [cursor=pointer]:
+          - /url: /store-service/orders
+          - generic [ref=e8669]: 订单列表
+          - generic [ref=e8670]: 查看全部、已预约、已完成订单，并填写确认单
+    - generic [ref=e8671]:
+      - generic [ref=e8672]:
+        - generic [ref=e8673]:
+          - heading "当前登录" [level=3] [ref=e8674]
+          - paragraph [ref=e8675]: 系统会自动带入角色、门店范围与模块权限，无需手动切换上下文。
+        - button "退出" [ref=e8676] [cursor=pointer]:
+          - generic [ref=e8677]: 退出
+      - generic [ref=e8678]:
+        - generic [ref=e8679]:
+          - generic [ref=e8680]: 姓名
+          - strong [ref=e8681]: 门店服务
+        - generic [ref=e8682]:
+          - generic [ref=e8683]: 角色
+          - strong [ref=e8684]: 门店服务
+        - generic [ref=e8685]:
+          - generic [ref=e8686]: 数据范围
+          - strong [ref=e8687]: 门店
+        - generic [ref=e8688]:
+          - generic [ref=e8689]: 门店 ID
+          - strong [ref=e8690]: "10"
+        - generic [ref=e8691]:
+          - generic [ref=e8692]: 账号
+          - strong [ref=e8693]: store_service
+  - main [ref=e8694]:
+    - generic [ref=e8695]:
+      - generic [ref=e8696]:
+        - paragraph [ref=e8697]: 门店服务
+        - heading "服务单履约" [level=2] [ref=e9135]
+        - paragraph [ref=e8699]: 严格执行到店、服务中、已完成的服务单履约链路。
+      - generic [ref=e8700]:
+        - generic [ref=e8701]: 角色：门店服务
+        - generic [ref=e8702]: 范围：门店
+        - generic [ref=e8703]: 主链：客资 → 客户 → 订单 → 服务单
+    - generic [ref=e9136]:
+      - generic [ref=e9137]:
+        - generic [ref=e9139]:
+          - heading "服务单队列" [level=3] [ref=e9140]
+          - paragraph [ref=e9141]: 严格按照“已到店 -> 服务中 -> 已完成”的顺序履约。
+        - generic [ref=e9144] [cursor=pointer]:
+          - generic:
+            - combobox [ref=e9146]
+            - generic [ref=e9147]: 服务单状态
+          - img [ref=e9150]
+        - generic [ref=e9152]:
+          - 'button "Codex Flow #10 / ORD202604231133105148457 服务中" [ref=e9153] [cursor=pointer]':
+            - generic [ref=e9154]:
+              - strong [ref=e9155]: Codex Flow
+              - paragraph [ref=e9156]: "#10 / ORD202604231133105148457"
+            - generic [ref=e9158]: 服务中
+          - 'button "Rerun-42849368 #9 / ORD202604221527370004335 已完成" [ref=e9159] [cursor=pointer]':
+            - generic [ref=e9160]:
+              - strong [ref=e9161]: Rerun-42849368
+              - paragraph [ref=e9162]: "#9 / ORD202604221527370004335"
+            - generic [ref=e9164]: 已完成
+          - 'button "Rerun-42761206 #8 / ORD202604221526079412758 已完成" [ref=e9165] [cursor=pointer]':
+            - generic [ref=e9166]:
+              - strong [ref=e9167]: Rerun-42761206
+              - paragraph [ref=e9168]: "#8 / ORD202604221526079412758"
+            - generic [ref=e9170]: 已完成
+          - 'button "UI Auto Flow #7 / ORD202604221459347488361 已完成" [ref=e9171] [cursor=pointer]':
+            - generic [ref=e9172]:
+              - strong [ref=e9173]: UI Auto Flow
+              - paragraph [ref=e9174]: "#7 / ORD202604221459347488361"
+            - generic [ref=e9176]: 已完成
+      - generic [ref=e9178]:
+        - generic [ref=e9179]:
+          - article [ref=e9180]:
+            - generic [ref=e9181]: 客户
+            - strong [ref=e9182]: Codex Flow
+            - text: "13990009988"
+          - article [ref=e9183]:
+            - generic [ref=e9184]: 订单
+            - strong [ref=e9185]: ¥1,999.00
+            - text: 定金 / 服务中
+          - article [ref=e9186]:
+            - generic [ref=e9187]: 服务单状态
+            - strong [ref=e9188]: 服务中
+            - text: 角色记录数：0
+        - generic [ref=e9189]:
+          - generic [ref=e9190]:
+            - generic [ref=e9191]:
+              - heading "履约动作" [level=3] [ref=e9192]
+              - paragraph [ref=e9193]: 推动服务单流转，并在完成后把订单回写为“已完成”。
+            - generic [ref=e9194]:
+              - button "到店" [disabled] [ref=e9195]:
+                - generic [ref=e9196]: 到店
+              - button "开始服务" [disabled] [ref=e9197]:
+                - generic [ref=e9198]: 开始服务
+              - button "完成服务" [disabled] [ref=e9199]:
+                - generic [ref=e9200]: 完成服务
+              - button "客户详情" [ref=e9201] [cursor=pointer]:
+                - generic [ref=e9202]: 客户详情
+          - paragraph [ref=e9203]: 当前服务单还没有“当前角色记录”，因此不能直接完成服务。
+          - generic [ref=e9204]:
+            - generic [ref=e9205]:
+              - generic [ref=e9206]: 到店时间
+              - strong [ref=e9207]: 2026/4/23 11:43:24
+            - generic [ref=e9208]:
+              - generic [ref=e9209]: 开始时间
+              - strong [ref=e9210]: 2026/4/23 11:43:49
+            - generic [ref=e9211]:
+              - generic [ref=e9212]: 完成时间
+              - strong [ref=e9213]: "--"
+        - generic [ref=e9214]:
+          - generic [ref=e9216]:
+            - heading "当前角色分配" [level=3] [ref=e9217]
+            - paragraph [ref=e9218]: order_role_record 必须完整记录，且同角色同时间不可重叠。
+          - generic [ref=e9219]:
+            - article [ref=e9220]:
+              - generic [ref=e9221]:
+                - strong [ref=e9222]: 顾问
+                - generic [ref=e9223]: 未分配
+              - generic [ref=e9224]:
+                - button "顾问A" [ref=e9225] [cursor=pointer]:
+                  - generic [ref=e9226]: 顾问A
+                - button "顾问B" [ref=e9227] [cursor=pointer]:
+                  - generic [ref=e9228]: 顾问B
+            - article [ref=e9229]:
+              - generic [ref=e9230]:
+                - strong [ref=e9231]: 助理
+                - generic [ref=e9232]: 未分配
+              - generic [ref=e9233]:
+                - button "助理A" [ref=e9234] [cursor=pointer]:
+                  - generic [ref=e9235]: 助理A
+                - button "助理B" [ref=e9236] [cursor=pointer]:
+                  - generic [ref=e9237]: 助理B
+            - article [ref=e9238]:
+              - generic [ref=e9239]:
+                - strong [ref=e9240]: 医生
+                - generic [ref=e9241]: 未分配
+              - generic [ref=e9242]:
+                - button "医生A" [ref=e9243] [cursor=pointer]:
+                  - generic [ref=e9244]: 医生A
+                - button "医生B" [ref=e9245] [cursor=pointer]:
+                  - generic [ref=e9246]: 医生B
+            - article [ref=e9247]:
+              - generic [ref=e9248]:
+                - strong [ref=e9249]: FIN_ROLE_1776832364
+                - generic [ref=e9250]: 未分配
+            - article [ref=e9251]:
+              - generic [ref=e9252]:
+                - strong [ref=e9253]: FIN_ROLE_1776832767
+                - generic [ref=e9254]: 未分配
+        - generic [ref=e9255]:
+          - generic [ref=e9257]:
+            - heading "角色历史" [level=3] [ref=e9258]
+            - paragraph [ref=e9259]: 展示轮转历史，便于后续薪酬结算和履约审计。
+          - generic [ref=e9261]:
+            - table [ref=e9263]:
+              - rowgroup [ref=e9270]:
+                - row "角色 人员 开始时间 结束时间 是否当前" [ref=e9271]:
+                  - columnheader "角色" [ref=e9272]:
+                    - generic [ref=e9273]: 角色
+                  - columnheader "人员" [ref=e9274]:
+                    - generic [ref=e9275]: 人员
+                  - columnheader "开始时间" [ref=e9276]:
+                    - generic [ref=e9277]: 开始时间
+                  - columnheader "结束时间" [ref=e9278]:
+                    - generic [ref=e9279]: 结束时间
+                  - columnheader "是否当前" [ref=e9280]:
+                    - generic [ref=e9281]: 是否当前
+            - generic [ref=e9285]:
+              - table:
+                - rowgroup
+              - generic [ref=e9287]: 暂无数据

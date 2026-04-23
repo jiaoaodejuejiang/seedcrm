@@ -1,0 +1,50 @@
+- generic [ref=e8600]:
+  - generic [ref=e8601]:
+    - generic [ref=e8602]:
+      - paragraph [ref=e8603]: Seed CRM
+      - heading "中文 CRM 控制台登录" [level=1] [ref=e8604]
+      - paragraph [ref=e8605]: 登录后系统会自动注入角色、数据范围和菜单权限，整个前后台保持统一约束。
+    - generic [ref=e8606]:
+      - generic [ref=e8607]:
+        - generic [ref=e8608]: 账号
+        - textbox "账号" [ref=e8612]:
+          - /placeholder: 请输入账号
+          - text: store_service
+      - generic [ref=e8613]:
+        - generic [ref=e8614]: 密码
+        - generic [ref=e8617]:
+          - textbox "密码" [ref=e8618]:
+            - /placeholder: 请输入密码
+            - text: "123456"
+          - img [ref=e8621] [cursor=pointer]
+      - button "登录系统" [ref=e8624] [cursor=pointer]:
+        - generic [ref=e8625]: 登录系统
+  - generic [ref=e8626]:
+    - generic [ref=e8628]:
+      - heading "演示账号" [level=3] [ref=e8629]
+      - paragraph [ref=e8630]: "点击即可自动填充，统一密码均为 `123456`。"
+    - generic [ref=e8631]:
+      - button "管理员 admin 查看所有模块并维护系统规则与权限策略" [ref=e8632] [cursor=pointer]:
+        - strong [ref=e8633]: 管理员
+        - generic [ref=e8634]: admin
+        - generic [ref=e8635]: 查看所有模块并维护系统规则与权限策略
+      - button "客资主管 clue_manager 管理客资中心、自动分配和值班客服配置" [ref=e8636] [cursor=pointer]:
+        - strong [ref=e8637]: 客资主管
+        - generic [ref=e8638]: clue_manager
+        - generic [ref=e8639]: 管理客资中心、自动分配和值班客服配置
+      - button "在线客服 online_cs 查看分配给自己的客资并跟进转化" [ref=e8640] [cursor=pointer]:
+        - strong [ref=e8641]: 在线客服
+        - generic [ref=e8642]: online_cs
+        - generic [ref=e8643]: 查看分配给自己的客资并跟进转化
+      - button "门店服务 store_service 查看订单、填写确认单并推进门店履约" [active] [ref=e8644] [cursor=pointer]:
+        - strong [ref=e8645]: 门店服务
+        - generic [ref=e8646]: store_service
+        - generic [ref=e8647]: 查看订单、填写确认单并推进门店履约
+      - button "财务 finance 查看财务与薪酬数据，处理结算与提现" [ref=e8648] [cursor=pointer]:
+        - strong [ref=e8649]: 财务
+        - generic [ref=e8650]: finance
+        - generic [ref=e8651]: 查看财务与薪酬数据，处理结算与提现
+      - button "私域服务 private_domain 查看绑定客户的订单和服务记录" [ref=e8652] [cursor=pointer]:
+        - strong [ref=e8653]: 私域服务
+        - generic [ref=e8654]: private_domain
+        - generic [ref=e8655]: 查看绑定客户的订单和服务记录

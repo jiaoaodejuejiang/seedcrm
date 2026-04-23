@@ -2,19 +2,19 @@
   <div class="stack-page">
     <section class="metrics-row">
       <article class="metric-card">
-        <span>线索总数</span>
+        <span>客资总数</span>
         <strong>{{ clues.length }}</strong>
-        <small>线索统一从一个入口进入系统，并保留上游原始数据便于追溯。</small>
+        <small>客资统一从同一入口进入系统，并保留原始数据便于追溯。</small>
       </article>
       <article class="metric-card">
-        <span>新线索</span>
+        <span>待分配</span>
         <strong>{{ pendingCount }}</strong>
-        <small>这些线索还未分配或尚未进入后续跟进。</small>
+        <small>这些客资仍在公海或尚未进入后续跟进环节。</small>
       </article>
       <article class="metric-card">
         <span>已转化</span>
         <strong>{{ convertedCount }}</strong>
-        <small>已转化线索会继续进入客户、订单和服务单主链。</small>
+        <small>已转化客资会继续进入客户、订单和服务单主链。</small>
       </article>
     </section>
 
@@ -25,17 +25,18 @@
             <el-option label="抖音" value="DOUYIN" />
             <el-option label="分销" value="DISTRIBUTION" />
           </el-select>
-          <el-select v-model="filters.status" clearable placeholder="线索状态" style="width: 160px">
-            <el-option label="新线索" value="NEW" />
+          <el-select v-model="filters.status" clearable placeholder="客资状态" style="width: 160px">
+            <el-option label="新客资" value="NEW" />
             <el-option label="已分配" value="ASSIGNED" />
             <el-option label="跟进中" value="FOLLOWING" />
             <el-option label="已转化" value="CONVERTED" />
           </el-select>
           <el-button @click="loadClues">筛选</el-button>
         </div>
+
         <div class="action-group">
-          <span class="text-secondary">系统已开启自动客资拉取，本页每 15 秒刷新一次列表</span>
-          <el-button v-if="canCreateClue" type="primary" @click="createDialogVisible = true">新增线索</el-button>
+          <span class="text-secondary">系统已接入自动拉取客资，本页每 15 秒自动刷新一次。</span>
+          <el-button v-if="canCreateClue" type="primary" @click="createDialogVisible = true">新增客资</el-button>
         </div>
       </div>
 
@@ -43,7 +44,7 @@
         <el-table-column label="客户信息" min-width="220">
           <template #default="{ row }">
             <div class="table-primary">
-              <strong>{{ row.name || '未命名线索' }}</strong>
+              <strong>{{ row.name || '未命名客资' }}</strong>
               <span>{{ row.phone || row.wechat || '--' }}</span>
             </div>
           </template>
@@ -58,7 +59,7 @@
             <el-tag :type="statusTagType(row.status)">{{ formatClueStatus(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="当前负责人" min-width="140">
+        <el-table-column label="当前负责人" min-width="160">
           <template #default="{ row }">
             <span>{{ row.currentOwnerName || '公海池' }}</span>
           </template>
@@ -82,7 +83,7 @@
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item
-                      v-for="staff in consultantOptions"
+                      v-for="staff in assignableStaff"
                       :key="staff.userId"
                       @click="handleAssign(row, staff.userId)"
                     >
@@ -91,7 +92,7 @@
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
-              <el-button v-if="canRecycleClue" size="small" plain @click="handleRecycle(row)" :disabled="!row.currentOwnerId">
+              <el-button v-if="canRecycleClue" size="small" plain :disabled="!row.currentOwnerId" @click="handleRecycle(row)">
                 回收
               </el-button>
               <el-button v-if="canCreateOrderFromClue" size="small" type="success" @click="openOrderDialog(row)">转订单</el-button>
@@ -102,7 +103,7 @@
       </el-table>
     </section>
 
-    <el-dialog v-model="createDialogVisible" title="新增线索" width="560px">
+    <el-dialog v-model="createDialogVisible" title="新增客资" width="560px">
       <el-form :model="clueForm" label-width="92px">
         <el-form-item label="姓名">
           <el-input v-model="clueForm.name" placeholder="可选" />
@@ -127,7 +128,7 @@
             v-model="clueForm.rawData"
             type="textarea"
             :rows="4"
-            placeholder="保留上游原始载荷，建议直接保存 JSON 文本。"
+            placeholder="建议保留上游返回的 JSON 文本，便于后续追溯。"
           />
         </el-form-item>
       </el-form>
@@ -137,10 +138,10 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="assignDialogVisible" title="选择分配人员" width="480px">
+    <el-dialog v-model="assignDialogVisible" title="选择分配客服" width="520px">
       <div class="quick-button-row">
         <el-button
-          v-for="staff in consultantOptions"
+          v-for="staff in assignableStaff"
           :key="staff.userId"
           type="primary"
           plain
@@ -154,9 +155,9 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="orderDialogVisible" title="从线索创建订单" width="560px">
+    <el-dialog v-model="orderDialogVisible" title="从客资创建订单" width="560px">
       <el-form :model="orderForm" label-width="92px">
-        <el-form-item label="线索">
+        <el-form-item label="客资">
           <el-input :model-value="selectedClueLabel" disabled />
         </el-form-item>
         <el-form-item label="订单类型">
@@ -176,10 +177,10 @@
             :disabled="orderForm.type === 2"
             style="width: 100%"
           />
-          <div class="table-note">卡券订单会忽略定金字段；定金订单在服务开始前保持“已支付”状态。</div>
+          <div class="table-note">卡券订单会自动按全款处理；定金订单可继续进入预约和服务主链。</div>
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="orderForm.remark" type="textarea" :rows="3" placeholder="填写转化说明或服务备注。" />
+          <el-input v-model="orderForm.remark" type="textarea" :rows="3" placeholder="填写转化说明或订单备注" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -194,20 +195,14 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { assignClue, createClue, createOrder, recycleClue } from '../api/actions'
-import { fetchClues, fetchStaffOptions } from '../api/workbench'
+import { fetchDutyCustomerServices } from '../api/clueManagement'
+import { fetchClues } from '../api/workbench'
 import { currentUser, hasAccess } from '../utils/auth'
-import {
-  formatChannel,
-  formatClueStatus,
-  formatDateTime,
-  normalize,
-  formatOrderStage,
-  statusTagType
-} from '../utils/format'
+import { formatChannel, formatClueStatus, formatDateTime, formatOrderStage, normalize, statusTagType } from '../utils/format'
 
 const loading = ref(true)
 const clues = ref([])
-const staffOptions = ref([])
+const dutyStaff = ref([])
 const createDialogVisible = ref(false)
 const assignDialogVisible = ref(false)
 const orderDialogVisible = ref(false)
@@ -236,11 +231,8 @@ const orderForm = reactive({
   remark: ''
 })
 
-const consultantOptions = computed(() => {
-  return staffOptions.value.find((item) => item.roleCode === 'CONSULTANT')?.staffOptions || []
-})
-
 const roleCode = computed(() => currentUser.value?.roleCode || '')
+const assignableStaff = computed(() => dutyStaff.value.filter((item) => item.onLeave !== 1))
 const canCreateClue = computed(() => ['ADMIN', 'CLUE_MANAGER'].includes(roleCode.value))
 const canAssignClue = computed(() => ['ADMIN', 'CLUE_MANAGER'].includes(roleCode.value))
 const canRecycleClue = computed(() => ['ADMIN', 'CLUE_MANAGER'].includes(roleCode.value))
@@ -252,7 +244,7 @@ const selectedClueLabel = computed(() => {
   if (!selectedClue.value) {
     return ''
   }
-  return `${selectedClue.value.name || '未命名线索'} / ${selectedClue.value.phone || selectedClue.value.wechat || '--'}`
+  return `${selectedClue.value.name || '未命名客资'} / ${selectedClue.value.phone || selectedClue.value.wechat || '--'}`
 })
 
 async function loadClues() {
@@ -269,38 +261,34 @@ async function loadClues() {
   }
 }
 
-async function loadStaffOptions() {
+async function loadDutyStaff() {
   try {
-    staffOptions.value = await fetchStaffOptions()
+    dutyStaff.value = await fetchDutyCustomerServices()
   } catch {
-    staffOptions.value = []
+    dutyStaff.value = []
   }
 }
 
 async function handleCreateClue() {
-  try {
-    await createClue({
-      name: clueForm.name || undefined,
-      phone: clueForm.phone || undefined,
-      wechat: clueForm.wechat || undefined,
-      sourceChannel: clueForm.sourceChannel,
-      sourceId: clueForm.sourceId ? Number(clueForm.sourceId) : undefined,
-      rawData: clueForm.rawData || undefined
-    })
-    ElMessage.success('线索已创建')
-    createDialogVisible.value = false
-    Object.assign(clueForm, {
-      name: '',
-      phone: '',
-      wechat: '',
-      sourceChannel: 'DOUYIN',
-      sourceId: '',
-      rawData: ''
-    })
-    await loadClues()
-  } catch {
-    // HTTP 层统一处理错误提示。
-  }
+  await createClue({
+    name: clueForm.name || undefined,
+    phone: clueForm.phone || undefined,
+    wechat: clueForm.wechat || undefined,
+    sourceChannel: clueForm.sourceChannel,
+    sourceId: clueForm.sourceId ? Number(clueForm.sourceId) : undefined,
+    rawData: clueForm.rawData || undefined
+  })
+  ElMessage.success('客资已创建')
+  createDialogVisible.value = false
+  Object.assign(clueForm, {
+    name: '',
+    phone: '',
+    wechat: '',
+    sourceChannel: 'DOUYIN',
+    sourceId: '',
+    rawData: ''
+  })
+  await loadClues()
 }
 
 function openAssignDialog(row) {
@@ -312,27 +300,19 @@ async function handleAssign(row, userId) {
   if (!row?.id) {
     return
   }
-  try {
-    await assignClue({
-      clueId: row.id,
-      userId
-    })
-    assignDialogVisible.value = false
-    ElMessage.success('线索已分配')
-    await loadClues()
-  } catch {
-    // HTTP 层统一处理错误提示。
-  }
+  await assignClue({
+    clueId: row.id,
+    userId
+  })
+  assignDialogVisible.value = false
+  ElMessage.success('客资已分配')
+  await loadClues()
 }
 
 async function handleRecycle(row) {
-  try {
-    await recycleClue(row.id)
-    ElMessage.success('线索已回收到公海')
-    await loadClues()
-  } catch {
-    // HTTP 层统一处理错误提示。
-  }
+  await recycleClue(row.id)
+  ElMessage.success('客资已回收到公海')
+  await loadClues()
 }
 
 function openOrderDialog(row) {
@@ -349,28 +329,24 @@ async function handleCreateOrder() {
     return
   }
 
-  try {
-    const payload = {
-      clueId: selectedClue.value.id,
-      type: orderForm.type,
-      amount: orderForm.amount,
-      remark: orderForm.remark || undefined
-    }
-    if (orderForm.type === 1) {
-      payload.deposit = orderForm.deposit
-    }
-
-    const order = await createOrder(payload)
-    ElMessage.success(`订单已创建：${order.orderNo}`)
-    orderDialogVisible.value = false
-    await loadClues()
-  } catch {
-    // HTTP 层统一处理错误提示。
+  const payload = {
+    clueId: selectedClue.value.id,
+    type: orderForm.type,
+    amount: orderForm.amount,
+    remark: orderForm.remark || undefined
   }
+  if (orderForm.type === 1) {
+    payload.deposit = orderForm.deposit
+  }
+
+  const order = await createOrder(payload)
+  ElMessage.success(`订单已创建：${order.orderNo}`)
+  orderDialogVisible.value = false
+  await loadClues()
 }
 
 onMounted(async () => {
-  await Promise.all([loadClues(), loadStaffOptions()])
+  await Promise.all([loadClues(), loadDutyStaff()])
   refreshTimer = window.setInterval(loadClues, 15000)
 })
 

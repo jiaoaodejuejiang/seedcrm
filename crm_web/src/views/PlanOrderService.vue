@@ -4,7 +4,7 @@
       <div class="panel-heading">
         <div>
           <h3>服务单队列</h3>
-          <p>严格按照“已到店 -> 服务中 -> 已完成”顺序履约。</p>
+          <p>严格按照“已到店 -> 服务中 -> 已完成”的顺序履约。</p>
         </div>
       </div>
 
@@ -57,7 +57,7 @@
           <div class="panel-heading">
             <div>
               <h3>履约动作</h3>
-              <p>推动服务单流转，并在完成后把订单回写为“已使用”。</p>
+              <p>推动服务单流转，并在完成后把订单回写为“已完成”。</p>
             </div>
             <div class="action-group">
               <el-button type="primary" :disabled="!canArrive" @click="handlePlanAction('arrive')">到店</el-button>
@@ -151,7 +151,7 @@
       </div>
 
       <section v-else class="panel empty-panel">
-        <el-empty description="请先从左侧选择一个服务单，或先在订单页创建服务单。" />
+        <el-empty description="请先从左侧选择一个服务单，或先在订单列表里创建服务单。" />
       </section>
     </section>
   </div>
@@ -264,36 +264,28 @@ async function reloadAll() {
 }
 
 async function handlePlanAction(action) {
-  try {
-    const payload = {
-      planOrderId: Number(route.params.id)
-    }
-    if (action === 'arrive') {
-      await arrivePlanOrder(payload)
-    } else if (action === 'start') {
-      await startPlanOrder(payload)
-    } else if (action === 'finish') {
-      await finishPlanOrder(payload)
-    }
-    ElMessage.success('服务单状态已更新')
-    await reloadAll()
-  } catch {
-    // HTTP 层统一处理错误提示。
+  const payload = {
+    planOrderId: Number(route.params.id)
   }
+  if (action === 'arrive') {
+    await arrivePlanOrder(payload)
+  } else if (action === 'start') {
+    await startPlanOrder(payload)
+  } else if (action === 'finish') {
+    await finishPlanOrder(payload)
+  }
+  ElMessage.success('服务单状态已更新')
+  await reloadAll()
 }
 
 async function handleAssignRole(roleCode, userId) {
-  try {
-    await assignPlanOrderRole({
-      planOrderId: Number(route.params.id),
-      roleCode,
-      userId
-    })
-    ElMessage.success('角色分配已更新')
-    await reloadAll()
-  } catch {
-    // HTTP 层统一处理错误提示。
-  }
+  await assignPlanOrderRole({
+    planOrderId: Number(route.params.id),
+    roleCode,
+    userId
+  })
+  ElMessage.success('角色分配已更新')
+  await reloadAll()
 }
 
 watch(statusFilter, loadPlanOrders)

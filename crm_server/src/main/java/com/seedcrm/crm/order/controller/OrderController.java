@@ -6,6 +6,7 @@ import com.seedcrm.crm.order.dto.OrderAppointmentDTO;
 import com.seedcrm.crm.order.dto.OrderCreateDTO;
 import com.seedcrm.crm.order.dto.OrderPayDTO;
 import com.seedcrm.crm.order.dto.OrderResponse;
+import com.seedcrm.crm.order.dto.OrderServiceDetailDTO;
 import com.seedcrm.crm.order.service.OrderService;
 import com.seedcrm.crm.permission.support.OrderPermissionGuard;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
@@ -86,5 +87,13 @@ public class OrderController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         orderPermissionGuard.checkUpdate(context, orderActionDTO == null ? null : orderActionDTO.getOrderId());
         return ApiResponse.success(OrderResponse.from(orderService.refund(orderActionDTO)));
+    }
+
+    @PostMapping("/service-detail")
+    public ApiResponse<OrderResponse> updateServiceDetail(@RequestBody OrderServiceDetailDTO orderServiceDetailDTO,
+                                                          HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        orderPermissionGuard.checkUpdate(context, orderServiceDetailDTO == null ? null : orderServiceDetailDTO.getOrderId());
+        return ApiResponse.success(OrderResponse.from(orderService.updateServiceDetail(orderServiceDetailDTO)));
     }
 }

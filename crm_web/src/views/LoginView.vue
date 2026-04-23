@@ -3,8 +3,8 @@
     <section class="login-card">
       <div class="login-hero">
         <p class="brand-mark">Seed CRM</p>
-        <h1>中文业务控制台登录</h1>
-        <p>登录后自动注入角色、数据范围与权限，不再手工切换上下文。</p>
+        <h1>中文 CRM 控制台登录</h1>
+        <p>登录后系统会自动注入角色、数据范围和菜单权限，整个前后台保持统一约束。</p>
       </div>
 
       <el-form :model="form" label-position="top" @submit.prevent="handleLogin">
@@ -22,7 +22,7 @@
       <div class="panel-heading compact">
         <div>
           <h3>演示账号</h3>
-          <p>点击即可自动填充，统一密码均为 123456。</p>
+          <p>点击即可自动填充，统一密码均为 `123456`。</p>
         </div>
       </div>
 
@@ -72,8 +72,6 @@ async function handleLogin() {
     })
     ElMessage.success('登录成功')
     await router.replace(route.query.redirect || getFirstAccessibleRoute())
-  } catch {
-    // HTTP 层统一处理错误提示。
   } finally {
     loading.value = false
   }

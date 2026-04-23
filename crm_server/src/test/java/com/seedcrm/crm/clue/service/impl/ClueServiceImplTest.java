@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.enums.SourceChannel;
+import com.seedcrm.crm.clue.management.service.ClueManagementService;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.distributor.service.DistributorService;
 import java.time.LocalDateTime;
@@ -25,11 +26,14 @@ class ClueServiceImplTest {
     @Mock
     private DistributorService distributorService;
 
+    @Mock
+    private ClueManagementService clueManagementService;
+
     private ClueServiceImpl clueService;
 
     @BeforeEach
     void setUp() {
-        clueService = new ClueServiceImpl(clueMapper, distributorService);
+        clueService = new ClueServiceImpl(clueMapper, distributorService, clueManagementService);
     }
 
     @Test
@@ -39,6 +43,7 @@ class ClueServiceImplTest {
             clue.setId(1L);
             return 1;
         });
+        when(clueManagementService.autoAssignIfEnabled(any(Clue.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Clue request = new Clue();
         request.setPhone("13800138000");
@@ -59,6 +64,7 @@ class ClueServiceImplTest {
             clue.setId(2L);
             return 1;
         });
+        when(clueManagementService.autoAssignIfEnabled(any(Clue.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Clue created = clueService.createDistributorClue(99L, "13800138001", "Alice");
 
@@ -84,5 +90,31 @@ class ClueServiceImplTest {
         assertThat(recycled.getCurrentOwnerId()).isNull();
         assertThat(recycled.getIsPublic()).isEqualTo(1);
         assertThat(recycled.getStatus()).isEqualTo("new");
+    }
+
+    @Test
+    void addClueShouldInvokeAutoAssignmentWhenEnabled() {
+        when(clueMapper.insert(any(Clue.class))).thenAnswer(invocation -> {
+            Clue clue = invocation.getArgument(0);
+            clue.setId(8L);
+            return 1;
+        });
+        when(clueManagementService.autoAssignIfEnabled(any(Clue.class))).thenAnswer(invocation -> {
+            Clue clue = invocation.getArgument(0);
+            clue.setCurrentOwnerId(1001L);
+            clue.setStatus("assigned");
+            clue.setIsPublic(0);
+            return clue;
+        });
+
+        Clue request = new Clue();
+        request.setPhone("13800138088");
+        request.setSourceChannel("DOUYIN");
+
+        Clue created = clueService.addClue(request);
+
+        assertThat(created.getCurrentOwnerId()).isEqualTo(1001L);
+        assertThat(created.getStatus()).isEqualTo("assigned");
+        verify(clueManagementService).autoAssignIfEnabled(any(Clue.class));
     }
 }

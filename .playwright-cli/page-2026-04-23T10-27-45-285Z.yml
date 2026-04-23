@@ -1,0 +1,168 @@
+- generic [ref=e1]:
+  - generic [ref=e59]:
+    - complementary [ref=e60]:
+      - generic [ref=e61]:
+        - paragraph [ref=e62]: Seed CRM
+        - heading "约束驱动的中文 CRM 控制台" [level=1] [ref=e63]
+        - paragraph [ref=e64]: 围绕“客资 -> 客户 -> 订单 -> 服务单”主链工作，登录、角色与权限在整个系统中统一生效。
+      - navigation [ref=e65]:
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - strong [ref=e68]: 客资中心
+            - generic [ref=e69]: 统一接入与转化客资
+          - link "客资列表 查看自动拉取客资、手动分配、公海回收和转订单主链" [ref=e71] [cursor=pointer]:
+            - /url: /clues
+            - generic [ref=e72]: 客资列表
+            - generic [ref=e73]: 查看自动拉取客资、手动分配、公海回收和转订单主链
+        - generic [ref=e74]:
+          - generic [ref=e75]:
+            - strong [ref=e76]: 客资管理
+            - generic [ref=e77]: 仅客资主管可见
+          - generic [ref=e78]:
+            - link "自动分配 维护自动轮询当值客服的分配策略" [ref=e79] [cursor=pointer]:
+              - /url: /clue-management/auto-assign
+              - generic [ref=e80]: 自动分配
+              - generic [ref=e81]: 维护自动轮询当值客服的分配策略
+            - link "值班客服 设置客服班次、当值状态和请假情况" [ref=e82] [cursor=pointer]:
+              - /url: /clue-management/duty-cs
+              - generic [ref=e83]: 值班客服
+              - generic [ref=e84]: 设置客服班次、当值状态和请假情况
+        - generic [ref=e85]:
+          - generic [ref=e86]:
+            - strong [ref=e87]: 调度中心
+            - generic [ref=e88]: 同步、队列和日志
+          - link "任务调度 管理外部调用、增量同步、失败重试和执行日志" [ref=e90] [cursor=pointer]:
+            - /url: /scheduler
+            - generic [ref=e91]: 任务调度
+            - generic [ref=e92]: 管理外部调用、增量同步、失败重试和执行日志
+      - generic [ref=e93]:
+        - generic [ref=e94]:
+          - generic [ref=e95]:
+            - heading "当前登录" [level=3] [ref=e96]
+            - paragraph [ref=e97]: 系统会自动带入角色、门店范围与模块权限，无需手动切换上下文。
+          - button "退出" [ref=e98] [cursor=pointer]:
+            - generic [ref=e99]: 退出
+        - generic [ref=e100]:
+          - generic [ref=e101]:
+            - generic [ref=e102]: 姓名
+            - strong [ref=e103]: 客资主管
+          - generic [ref=e104]:
+            - generic [ref=e105]: 角色
+            - strong [ref=e106]: 客资主管
+          - generic [ref=e107]:
+            - generic [ref=e108]: 数据范围
+            - strong [ref=e109]: 全部
+          - generic [ref=e110]:
+            - generic [ref=e111]: 门店 ID
+            - strong [ref=e112]: "10"
+          - generic [ref=e113]:
+            - generic [ref=e114]: 账号
+            - strong [ref=e115]: clue_manager
+    - main [ref=e116]:
+      - generic [ref=e117]:
+        - generic [ref=e118]:
+          - paragraph [ref=e119]: 客资管理
+          - heading "自动分配" [level=2] [ref=e8464]
+          - paragraph [ref=e121]: 由客资主管维护自动分配策略，V1 固定为自动轮询当值客服。
+        - generic [ref=e122]:
+          - generic [ref=e123]: 角色：客资主管
+          - generic [ref=e124]: 范围：全部
+          - generic [ref=e125]: 主链：客资 → 客户 → 订单 → 服务单
+      - generic [ref=e8465]:
+        - generic [ref=e8466]:
+          - article [ref=e8467]:
+            - generic [ref=e8468]: 策略状态
+            - strong [ref=e8469]: 已启用
+            - text: 启用后，新进入系统的客资会自动轮询分配给当值客服。
+          - article [ref=e8470]:
+            - generic [ref=e8471]: 当值客服
+            - strong [ref=e8472]: "2"
+            - text: 仅当值且未请假的客服会进入自动分配池。
+          - article [ref=e8473]:
+            - generic [ref=e8474]: 上次轮询
+            - strong [ref=e8475]: 客服B
+            - text: 自动分配会以上次分配的客服为游标继续轮询。
+        - generic [ref=e8476]:
+          - generic [ref=e8478]:
+            - heading "自动分配策略" [level=3] [ref=e8479]
+            - paragraph [ref=e8480]: V1 固定为“自动轮询当值客服”，不接入外部模型，也不做复杂条件编排。
+          - generic [ref=e8481]:
+            - article [ref=e8482]:
+              - heading "开关状态" [level=3] [ref=e8483]
+              - generic [ref=e8484]:
+                - switch [checked]
+                - generic [ref=e8488] [cursor=pointer]: 启用
+              - paragraph [ref=e8490]: 关闭后，新客资入库时不会执行自动轮询分配。
+            - article [ref=e8491]:
+              - heading "分配模式" [level=3] [ref=e8492]
+              - paragraph [ref=e8493]: 当前模式：自动轮询当值客服
+              - paragraph [ref=e8494]: 模式编码：ROUND_ROBIN
+            - article [ref=e8495]:
+              - heading "策略更新时间" [level=3] [ref=e8496]
+              - paragraph [ref=e8497]: 2026/4/23 18:26:56
+              - paragraph [ref=e8498]: 更新人：5001
+          - generic [ref=e8499]:
+            - button "保存策略" [ref=e8500] [cursor=pointer]:
+              - generic [ref=e8501]: 保存策略
+            - button "刷新数据" [ref=e8502] [cursor=pointer]:
+              - generic [ref=e8503]: 刷新数据
+        - generic [ref=e8504]:
+          - generic [ref=e8506]:
+            - heading "当前参与轮询的客服" [level=3] [ref=e8507]
+            - paragraph [ref=e8508]: 值班名单来源于“值班客服”配置页，这里只展示当前自动分配会用到的人员。
+          - generic [ref=e8510]:
+            - table [ref=e8512]:
+              - rowgroup [ref=e8519]:
+                - row "客服 班次 当值 请假 备注" [ref=e8520]:
+                  - columnheader "客服" [ref=e8521]:
+                    - generic [ref=e8522]: 客服
+                  - columnheader "班次" [ref=e8523]:
+                    - generic [ref=e8524]: 班次
+                  - columnheader "当值" [ref=e8525]:
+                    - generic [ref=e8526]: 当值
+                  - columnheader "请假" [ref=e8527]:
+                    - generic [ref=e8528]: 请假
+                  - columnheader "备注" [ref=e8529]:
+                    - generic [ref=e8530]: 备注
+            - table [ref=e8535]:
+              - rowgroup [ref=e8542]:
+                - row "客服A online_cs_a 早班 09:00-18:00 当值 正常 默认当值客服" [ref=e8543]:
+                  - cell "客服A online_cs_a" [ref=e8544]:
+                    - generic [ref=e8546]:
+                      - strong [ref=e8547]: 客服A
+                      - generic [ref=e8548]: online_cs_a
+                  - cell "早班 09:00-18:00" [ref=e8549]:
+                    - generic [ref=e8550]: 早班 09:00-18:00
+                  - cell "当值" [ref=e8551]:
+                    - generic [ref=e8554]: 当值
+                  - cell "正常" [ref=e8555]:
+                    - generic [ref=e8558]: 正常
+                  - cell "默认当值客服" [ref=e8559]:
+                    - generic [ref=e8560]: 默认当值客服
+                - row "客服B online_cs_b 晚班 13:00-22:00 当值 正常 默认当值客服" [ref=e8561]:
+                  - cell "客服B online_cs_b" [ref=e8562]:
+                    - generic [ref=e8564]:
+                      - strong [ref=e8565]: 客服B
+                      - generic [ref=e8566]: online_cs_b
+                  - cell "晚班 13:00-22:00" [ref=e8567]:
+                    - generic [ref=e8568]: 晚班 13:00-22:00
+                  - cell "当值" [ref=e8569]:
+                    - generic [ref=e8572]: 当值
+                  - cell "正常" [ref=e8573]:
+                    - generic [ref=e8576]: 正常
+                  - cell "默认当值客服" [ref=e8577]:
+                    - generic [ref=e8578]: 默认当值客服
+  - dialog "退出登录" [ref=e8580]:
+    - generic [ref=e8581]:
+      - generic [ref=e8582]:
+        - generic [ref=e8583]: 退出登录
+        - button "关闭此对话框" [ref=e8584] [cursor=pointer]:
+          - img [ref=e8586]
+      - generic [ref=e8589]:
+        - img [ref=e8591]
+        - paragraph [ref=e8594]: 退出后需要重新登录才能继续操作，是否确认退出？
+      - generic [ref=e8595]:
+        - button "取消" [ref=e8596] [cursor=pointer]:
+          - generic [ref=e8597]: 取消
+        - button "确认退出" [active] [ref=e8598] [cursor=pointer]:
+          - generic [ref=e8599]: 确认退出

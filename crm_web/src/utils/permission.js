@@ -1,7 +1,7 @@
 export const roleOptions = [
   { label: '管理员', value: 'ADMIN' },
   { label: '在线客服', value: 'ONLINE_CUSTOMER_SERVICE' },
-  { label: '线索主管', value: 'CLUE_MANAGER' },
+  { label: '客资主管', value: 'CLUE_MANAGER' },
   { label: '门店服务', value: 'STORE_SERVICE' },
   { label: '财务', value: 'FINANCE' },
   { label: '私域服务', value: 'PRIVATE_DOMAIN_SERVICE' }

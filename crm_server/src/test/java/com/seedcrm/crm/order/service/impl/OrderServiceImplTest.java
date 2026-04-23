@@ -19,6 +19,7 @@ import com.seedcrm.crm.distributor.service.DistributorIncomeService;
 import com.seedcrm.crm.order.dto.OrderActionDTO;
 import com.seedcrm.crm.order.dto.OrderCreateDTO;
 import com.seedcrm.crm.order.dto.OrderPayDTO;
+import com.seedcrm.crm.order.dto.OrderServiceDetailDTO;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
@@ -242,5 +243,25 @@ class OrderServiceImplTest {
         assertThatThrownBy(() -> orderService.complete(dto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("plan order must be finished");
+    }
+
+    @Test
+    void updateServiceDetailShouldPersistServiceRequirement() {
+        Order order = new Order();
+        order.setId(6L);
+        order.setCustomerId(206L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        when(orderMapper.selectById(6L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(206L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderServiceDetailDTO dto = new OrderServiceDetailDTO();
+        dto.setOrderId(6L);
+        dto.setServiceRequirement("客户到店后先做面诊，再确认套餐细项");
+
+        Order updated = orderService.updateServiceDetail(dto);
+
+        assertThat(updated.getRemark()).isEqualTo("客户到店后先做面诊，再确认套餐细项");
+        verify(customerService).refreshCustomerLifecycle(206L);
     }
 }

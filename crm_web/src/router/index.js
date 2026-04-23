@@ -2,8 +2,10 @@ import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from '../layouts/AppLayout.vue'
 import { getFirstAccessibleRoute, hasAccess, initializeAuth } from '../utils/auth'
 import ClueManagement from '../views/ClueManagement.vue'
+import ClueAutoAssignmentView from '../views/ClueAutoAssignmentView.vue'
 import CustomerDetail from '../views/CustomerDetail.vue'
 import DistributorManagement from '../views/DistributorManagement.vue'
+import DutyCustomerServiceView from '../views/DutyCustomerServiceView.vue'
 import FinanceOverview from '../views/FinanceOverview.vue'
 import LoginView from '../views/LoginView.vue'
 import OrderManagement from '../views/OrderManagement.vue'
@@ -19,7 +21,7 @@ const routes = [
     component: LoginView,
     meta: {
       title: '登录',
-      description: '登录后按角色自动应用权限和数据范围。'
+      description: '登录后自动注入角色、数据范围和模块权限。'
     }
   },
   {
@@ -32,20 +34,55 @@ const routes = [
         name: 'clues',
         component: ClueManagement,
         meta: {
-          title: '线索管理',
-          description: '统一接入抖音与分销客资，支持自动拉取、分配、回收与后续转化。',
-          moduleCode: 'CLUE'
+          title: '客资中心',
+          sectionTitle: '客资中心',
+          description: '统一查看自动拉取的客资、手动分配、公海回收和转订单主链。',
+          moduleCode: 'CLUE',
+          navKey: 'clues'
+        }
+      },
+      {
+        path: 'clue-management/auto-assign',
+        name: 'clue-auto-assign',
+        component: ClueAutoAssignmentView,
+        meta: {
+          title: '自动分配',
+          sectionTitle: '客资管理',
+          description: '由客资主管维护自动分配策略，V1 固定为自动轮询当值客服。',
+          moduleCode: 'CLUE',
+          roleCodes: ['CLUE_MANAGER', 'ADMIN'],
+          navKey: 'clue-auto-assign'
+        }
+      },
+      {
+        path: 'clue-management/duty-cs',
+        name: 'duty-customer-service',
+        component: DutyCustomerServiceView,
+        meta: {
+          title: '值班客服',
+          sectionTitle: '客资管理',
+          description: '设置客服班次、当值状态和请假情况，为自动分配提供当值名单。',
+          moduleCode: 'CLUE',
+          roleCodes: ['CLUE_MANAGER', 'ADMIN'],
+          navKey: 'duty-customer-service'
+        }
+      },
+      {
+        path: 'store-service/orders',
+        name: 'store-service-orders',
+        component: OrderManagement,
+        meta: {
+          title: '订单列表',
+          sectionTitle: '门店服务',
+          description: '查看全部状态订单，切换已预约和已完成，并填写确认单与到店详细需求。',
+          moduleCode: 'ORDER',
+          roleCodes: ['STORE_SERVICE', 'ADMIN'],
+          navKey: 'store-service-orders'
         }
       },
       {
         path: 'orders',
-        name: 'orders',
-        component: OrderManagement,
-        meta: {
-          title: '订单管理',
-          description: '订单必须绑定客户，且仅允许定金、卡券与已支付/已使用状态。',
-          moduleCode: 'ORDER'
-        }
+        redirect: '/store-service/orders'
       },
       {
         path: 'plan-orders/:id?',
@@ -53,8 +90,10 @@ const routes = [
         component: PlanOrderService,
         meta: {
           title: '服务单履约',
-          description: '严格执行已到店 -> 服务中 -> 已完成，并完整记录角色流转。',
-          moduleCode: 'PLANORDER'
+          sectionTitle: '门店服务',
+          description: '严格执行到店、服务中、已完成的服务单履约链路。',
+          moduleCode: 'PLANORDER',
+          navKey: 'store-service-orders'
         }
       },
       {
@@ -63,8 +102,10 @@ const routes = [
         component: CustomerDetail,
         meta: {
           title: '客户详情',
-          description: '只读查看客户资料、订单历史、企微绑定与履约信息。',
-          moduleCode: 'ORDER'
+          sectionTitle: '客户档案',
+          description: '查看客户资料、订单历史、企微绑定和最近触达记录。',
+          moduleCode: 'ORDER',
+          navKey: 'store-service-orders'
         }
       },
       {
@@ -73,8 +114,10 @@ const routes = [
         component: SchedulerCenter,
         meta: {
           title: '调度中心',
-          description: '管理 1 分钟增量同步、队列处理、失败重试与执行日志。',
-          moduleCode: 'SCHEDULER'
+          sectionTitle: '调度中心',
+          description: '管理外部调用、增量同步、队列处理、失败重试与日志。',
+          moduleCode: 'SCHEDULER',
+          navKey: 'scheduler'
         }
       },
       {
@@ -83,8 +126,10 @@ const routes = [
         component: PermissionCenter,
         meta: {
           title: '权限中心',
-          description: '维护 RBAC/ABAC 规则，并基于当前登录用户实时校验权限。',
-          moduleCode: 'PERMISSION'
+          sectionTitle: '权限中心',
+          description: '维护 RBAC 与 ABAC 策略，并使用当前登录用户实时校验权限。',
+          moduleCode: 'PERMISSION',
+          navKey: 'permission'
         }
       },
       {
@@ -93,8 +138,10 @@ const routes = [
         component: SalaryCenter,
         meta: {
           title: '薪酬中心',
+          sectionTitle: '薪酬中心',
           description: '基于 order_role_record 计算薪酬，并支持结算、打款和提现。',
-          moduleCode: 'SALARY'
+          moduleCode: 'SALARY',
+          navKey: 'salary'
         }
       },
       {
@@ -103,8 +150,10 @@ const routes = [
         component: DistributorManagement,
         meta: {
           title: '分销概览',
+          sectionTitle: '分销概览',
           description: '查看分销线索贡献、订单转化和收益表现。',
-          moduleCode: 'DISTRIBUTOR'
+          moduleCode: 'DISTRIBUTOR',
+          navKey: 'distributors'
         }
       },
       {
@@ -113,8 +162,10 @@ const routes = [
         component: FinanceOverview,
         meta: {
           title: '财务总览',
-          description: '查看员工与分销两侧的收入与提现记录。',
-          moduleCode: 'FINANCE'
+          sectionTitle: '财务总览',
+          description: '查看员工与分销两侧的收入、结算和提现记录。',
+          moduleCode: 'FINANCE',
+          navKey: 'finance'
         }
       }
     ]
@@ -144,7 +195,7 @@ router.beforeEach(async (to) => {
     }
   }
 
-  if (to.meta.moduleCode && !hasAccess(to.meta.moduleCode)) {
+  if (!hasAccess(to.meta.moduleCode, to.meta.roleCodes)) {
     return target
   }
 

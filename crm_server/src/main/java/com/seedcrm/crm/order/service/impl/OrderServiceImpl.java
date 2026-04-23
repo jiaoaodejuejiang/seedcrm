@@ -14,6 +14,7 @@ import com.seedcrm.crm.order.dto.OrderActionDTO;
 import com.seedcrm.crm.order.dto.OrderAppointmentDTO;
 import com.seedcrm.crm.order.dto.OrderCreateDTO;
 import com.seedcrm.crm.order.dto.OrderPayDTO;
+import com.seedcrm.crm.order.dto.OrderServiceDetailDTO;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.enums.OrderType;
@@ -195,6 +196,23 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
         updateRemark(order, orderActionDTO.getRemark());
         return updateOrderStatus(order, OrderStatus.REFUNDED);
+    }
+
+    @Override
+    @Transactional
+    public Order updateServiceDetail(OrderServiceDetailDTO orderServiceDetailDTO) {
+        validateOrderId(orderServiceDetailDTO == null ? null : orderServiceDetailDTO.getOrderId());
+        Order order = getOrderById(orderServiceDetailDTO.getOrderId());
+        ensureOrderCustomerBound(order);
+        order.setRemark(StringUtils.hasText(orderServiceDetailDTO.getServiceRequirement())
+                ? orderServiceDetailDTO.getServiceRequirement().trim()
+                : null);
+        order.setUpdateTime(LocalDateTime.now());
+        if (orderMapper.updateById(order) <= 0) {
+            throw new BusinessException("failed to update order service detail");
+        }
+        refreshCustomerLifecycle(order.getCustomerId());
+        return order;
     }
 
     private void validateCreateRequest(OrderCreateDTO orderCreateDTO) {

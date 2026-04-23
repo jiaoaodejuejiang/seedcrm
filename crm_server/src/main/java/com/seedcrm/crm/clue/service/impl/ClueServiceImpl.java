@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.seedcrm.crm.clue.enums.SourceChannel;
 import com.seedcrm.crm.clue.entity.Clue;
+import com.seedcrm.crm.clue.management.service.ClueManagementService;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.clue.service.ClueService;
 import com.seedcrm.crm.distributor.service.DistributorService;
@@ -21,10 +22,14 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
 
     private final ClueMapper clueMapper;
     private final DistributorService distributorService;
+    private final ClueManagementService clueManagementService;
 
-    public ClueServiceImpl(ClueMapper clueMapper, DistributorService distributorService) {
+    public ClueServiceImpl(ClueMapper clueMapper,
+                           DistributorService distributorService,
+                           ClueManagementService clueManagementService) {
         this.clueMapper = clueMapper;
         this.distributorService = distributorService;
+        this.clueManagementService = clueManagementService;
     }
 
     @Override
@@ -52,7 +57,7 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
         clue.setCreatedAt(now);
         clue.setUpdatedAt(now);
         clueMapper.insert(clue);
-        return clue;
+        return autoAssignClue(clue);
     }
 
     @Override
@@ -126,6 +131,11 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
                 .orderByDesc(Clue::getCreatedAt)
                 .orderByDesc(Clue::getId);
         return clueMapper.selectList(queryWrapper);
+    }
+
+    @Override
+    public Clue autoAssignClue(Clue clue) {
+        return clueManagementService.autoAssignIfEnabled(clue);
     }
 
     private Clue findExistingClue(String phone, String wechat) {

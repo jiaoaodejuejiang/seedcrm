@@ -68,6 +68,7 @@ public final class WorkbenchResponses {
         private BigDecimal deposit;
         private String type;
         private String status;
+        private String statusCategory;
         private Long planOrderId;
         private String planOrderStatus;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -76,6 +77,7 @@ public final class WorkbenchResponses {
         private LocalDateTime arriveTime;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime completeTime;
+        private String remark;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime createTime;
     }

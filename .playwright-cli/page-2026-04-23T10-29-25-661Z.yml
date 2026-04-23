@@ -1,0 +1,222 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e8656]:
+    - complementary [ref=e8657]:
+      - generic [ref=e8658]:
+        - paragraph [ref=e8659]: Seed CRM
+        - heading "约束驱动的中文 CRM 控制台" [level=1] [ref=e8660]
+        - paragraph [ref=e8661]: 围绕“客资 -> 客户 -> 订单 -> 服务单”主链工作，登录、角色与权限在整个系统中统一生效。
+      - navigation [ref=e8662]:
+        - generic [ref=e8663]:
+          - generic [ref=e8664]:
+            - strong [ref=e8665]: 门店服务
+            - generic [ref=e8666]: 门店服务人员工入口
+          - link "订单列表 查看全部、已预约、已完成订单，并填写确认单" [ref=e8668] [cursor=pointer]:
+            - /url: /store-service/orders
+            - generic [ref=e8669]: 订单列表
+            - generic [ref=e8670]: 查看全部、已预约、已完成订单，并填写确认单
+      - generic [ref=e8671]:
+        - generic [ref=e8672]:
+          - generic [ref=e8673]:
+            - heading "当前登录" [level=3] [ref=e8674]
+            - paragraph [ref=e8675]: 系统会自动带入角色、门店范围与模块权限，无需手动切换上下文。
+          - button "退出" [ref=e8676] [cursor=pointer]:
+            - generic [ref=e8677]: 退出
+        - generic [ref=e8678]:
+          - generic [ref=e8679]:
+            - generic [ref=e8680]: 姓名
+            - strong [ref=e8681]: 门店服务
+          - generic [ref=e8682]:
+            - generic [ref=e8683]: 角色
+            - strong [ref=e8684]: 门店服务
+          - generic [ref=e8685]:
+            - generic [ref=e8686]: 数据范围
+            - strong [ref=e8687]: 门店
+          - generic [ref=e8688]:
+            - generic [ref=e8689]: 门店 ID
+            - strong [ref=e8690]: "10"
+          - generic [ref=e8691]:
+            - generic [ref=e8692]: 账号
+            - strong [ref=e8693]: store_service
+    - main [ref=e8694]:
+      - generic [ref=e8695]:
+        - generic [ref=e8696]:
+          - paragraph [ref=e8697]: 门店服务
+          - heading "订单列表" [level=2] [ref=e8698]
+          - paragraph [ref=e8699]: 查看全部状态订单，切换已预约和已完成，并填写确认单与到店详细需求。
+        - generic [ref=e8700]:
+          - generic [ref=e8701]: 角色：门店服务
+          - generic [ref=e8702]: 范围：门店
+          - generic [ref=e8703]: 主链：客资 → 客户 → 订单 → 服务单
+      - generic [ref=e8705]:
+        - generic [ref=e8706]:
+          - article [ref=e8707]:
+            - generic [ref=e8708]: 当前列表订单
+            - strong [ref=e8709]: "4"
+            - text: 门店服务入口只围绕订单和服务单主链开展工作。
+          - article [ref=e8710]:
+            - generic [ref=e8711]: 已预约
+            - strong [ref=e8712]: "0"
+            - text: 已完成预约，待到店或待服务的订单。
+          - article [ref=e8713]:
+            - generic [ref=e8714]: 已完成
+            - strong [ref=e8715]: "3"
+            - text: 服务已闭环的订单，可继续回看确认单和历史记录。
+        - generic [ref=e8716]:
+          - generic [ref=e8717]:
+            - radiogroup "radio-group" [ref=e8719]:
+              - generic [ref=e8720]:
+                - radio "全部状态" [checked] [ref=e8721]
+                - generic [ref=e8722] [cursor=pointer]: 全部状态
+              - generic [ref=e8723]:
+                - radio "已预约" [ref=e8724]
+                - generic [ref=e8725] [cursor=pointer]: 已预约
+              - generic [ref=e8726]:
+                - radio "已完成" [ref=e8727]
+                - generic [ref=e8728] [cursor=pointer]: 已完成
+            - generic [ref=e8729]:
+              - generic [ref=e8730]: 点击“确认单”可填写客户到店详细需求，并直接进入服务单履约。
+              - button "刷新列表" [ref=e8731] [cursor=pointer]:
+                - generic [ref=e8732]: 刷新列表
+          - generic [ref=e8734]:
+            - table [ref=e8736]:
+              - rowgroup [ref=e8747]:
+                - row "订单 客户 类型 金额 状态 预约时间 服务单 确认单 操作" [ref=e8748]:
+                  - columnheader "订单" [ref=e8749]:
+                    - generic [ref=e8750]: 订单
+                  - columnheader "客户" [ref=e8751]:
+                    - generic [ref=e8752]: 客户
+                  - columnheader "类型" [ref=e8753]:
+                    - generic [ref=e8754]: 类型
+                  - columnheader "金额" [ref=e8755]:
+                    - generic [ref=e8756]: 金额
+                  - columnheader "状态" [ref=e8757]:
+                    - generic [ref=e8758]: 状态
+                  - columnheader "预约时间" [ref=e8759]:
+                    - generic [ref=e8760]: 预约时间
+                  - columnheader "服务单" [ref=e8761]:
+                    - generic [ref=e8762]: 服务单
+                  - columnheader "确认单" [ref=e8763]:
+                    - generic [ref=e8764]: 确认单
+                  - columnheader "操作" [ref=e8765]:
+                    - generic [ref=e8766]: 操作
+            - table [ref=e8771]:
+              - rowgroup [ref=e8782]:
+                - 'row "ORD202604231133105148457 #21 Codex Flow 13990009988 定金 ¥1,999.00 服务中 -- #10 / 服务中 未填写 确认单 打开服务单 客户详情" [ref=e8783]':
+                  - 'cell "ORD202604231133105148457 #21" [ref=e8784]':
+                    - generic [ref=e8786]:
+                      - strong [ref=e8787]: ORD202604231133105148457
+                      - generic [ref=e8788]: "#21"
+                  - cell "Codex Flow 13990009988" [ref=e8789]:
+                    - generic [ref=e8791]:
+                      - strong [ref=e8792]: Codex Flow
+                      - generic [ref=e8793]: "13990009988"
+                  - cell "定金" [ref=e8794]:
+                    - generic [ref=e8797]: 定金
+                  - cell "¥1,999.00" [ref=e8798]:
+                    - generic [ref=e8799]: ¥1,999.00
+                  - cell "服务中" [ref=e8800]:
+                    - generic [ref=e8803]: 服务中
+                  - cell "--" [ref=e8804]:
+                    - generic [ref=e8805]: "--"
+                  - cell "#10 / 服务中" [ref=e8806]:
+                    - generic [ref=e8807]: "#10 / 服务中"
+                  - cell "未填写" [ref=e8808]:
+                    - generic [ref=e8809]: 未填写
+                  - cell "确认单 打开服务单 客户详情" [ref=e8810]:
+                    - generic [ref=e8812]:
+                      - button "确认单" [ref=e8813] [cursor=pointer]:
+                        - generic [ref=e8814]: 确认单
+                      - button "打开服务单" [ref=e8815] [cursor=pointer]:
+                        - generic [ref=e8816]: 打开服务单
+                      - button "客户详情" [ref=e8817] [cursor=pointer]:
+                        - generic [ref=e8818]: 客户详情
+                - 'row "ORD202604221527370004335 #20 Rerun-42849368 13982849368 定金 ¥5,000.00 已完成 -- #9 / 已完成 未填写 确认单 打开服务单 客户详情" [ref=e8819]':
+                  - 'cell "ORD202604221527370004335 #20" [ref=e8820]':
+                    - generic [ref=e8822]:
+                      - strong [ref=e8823]: ORD202604221527370004335
+                      - generic [ref=e8824]: "#20"
+                  - cell "Rerun-42849368 13982849368" [ref=e8825]:
+                    - generic [ref=e8827]:
+                      - strong [ref=e8828]: Rerun-42849368
+                      - generic [ref=e8829]: "13982849368"
+                  - cell "定金" [ref=e8830]:
+                    - generic [ref=e8833]: 定金
+                  - cell "¥5,000.00" [ref=e8834]:
+                    - generic [ref=e8835]: ¥5,000.00
+                  - cell "已完成" [ref=e8836]:
+                    - generic [ref=e8839]: 已完成
+                  - cell "--" [ref=e8840]:
+                    - generic [ref=e8841]: "--"
+                  - cell "#9 / 已完成" [ref=e8842]:
+                    - generic [ref=e8843]: "#9 / 已完成"
+                  - cell "未填写" [ref=e8844]:
+                    - generic [ref=e8845]: 未填写
+                  - cell "确认单 打开服务单 客户详情" [ref=e8846]:
+                    - generic [ref=e8848]:
+                      - button "确认单" [ref=e8849] [cursor=pointer]:
+                        - generic [ref=e8850]: 确认单
+                      - button "打开服务单" [ref=e8851] [cursor=pointer]:
+                        - generic [ref=e8852]: 打开服务单
+                      - button "客户详情" [ref=e8853] [cursor=pointer]:
+                        - generic [ref=e8854]: 客户详情
+                - 'row "ORD202604221526079412758 #19 Rerun-42761206 13982761206 定金 ¥5,000.00 已完成 -- #8 / 已完成 未填写 确认单 打开服务单 客户详情" [ref=e8855]':
+                  - 'cell "ORD202604221526079412758 #19" [ref=e8856]':
+                    - generic [ref=e8858]:
+                      - strong [ref=e8859]: ORD202604221526079412758
+                      - generic [ref=e8860]: "#19"
+                  - cell "Rerun-42761206 13982761206" [ref=e8861]:
+                    - generic [ref=e8863]:
+                      - strong [ref=e8864]: Rerun-42761206
+                      - generic [ref=e8865]: "13982761206"
+                  - cell "定金" [ref=e8866]:
+                    - generic [ref=e8869]: 定金
+                  - cell "¥5,000.00" [ref=e8870]:
+                    - generic [ref=e8871]: ¥5,000.00
+                  - cell "已完成" [ref=e8872]:
+                    - generic [ref=e8875]: 已完成
+                  - cell "--" [ref=e8876]:
+                    - generic [ref=e8877]: "--"
+                  - cell "#8 / 已完成" [ref=e8878]:
+                    - generic [ref=e8879]: "#8 / 已完成"
+                  - cell "未填写" [ref=e8880]:
+                    - generic [ref=e8881]: 未填写
+                  - cell "确认单 打开服务单 客户详情" [ref=e8882]:
+                    - generic [ref=e8884]:
+                      - button "确认单" [ref=e8885] [cursor=pointer]:
+                        - generic [ref=e8886]: 确认单
+                      - button "打开服务单" [ref=e8887] [cursor=pointer]:
+                        - generic [ref=e8888]: 打开服务单
+                      - button "客户详情" [ref=e8889] [cursor=pointer]:
+                        - generic [ref=e8890]: 客户详情
+                - 'row "ORD202604221459347488361 #18 UI Auto Flow 13990005678 定金 ¥5,000.00 已完成 -- #7 / 已完成 未填写 确认单 打开服务单 客户详情" [ref=e8891]':
+                  - 'cell "ORD202604221459347488361 #18" [ref=e8892]':
+                    - generic [ref=e8894]:
+                      - strong [ref=e8895]: ORD202604221459347488361
+                      - generic [ref=e8896]: "#18"
+                  - cell "UI Auto Flow 13990005678" [ref=e8897]:
+                    - generic [ref=e8899]:
+                      - strong [ref=e8900]: UI Auto Flow
+                      - generic [ref=e8901]: "13990005678"
+                  - cell "定金" [ref=e8902]:
+                    - generic [ref=e8905]: 定金
+                  - cell "¥5,000.00" [ref=e8906]:
+                    - generic [ref=e8907]: ¥5,000.00
+                  - cell "已完成" [ref=e8908]:
+                    - generic [ref=e8911]: 已完成
+                  - cell "--" [ref=e8912]:
+                    - generic [ref=e8913]: "--"
+                  - cell "#7 / 已完成" [ref=e8914]:
+                    - generic [ref=e8915]: "#7 / 已完成"
+                  - cell "未填写" [ref=e8916]:
+                    - generic [ref=e8917]: 未填写
+                  - cell "确认单 打开服务单 客户详情" [ref=e8918]:
+                    - generic [ref=e8920]:
+                      - button "确认单" [ref=e8921] [cursor=pointer]:
+                        - generic [ref=e8922]: 确认单
+                      - button "打开服务单" [ref=e8923] [cursor=pointer]:
+                        - generic [ref=e8924]: 打开服务单
+                      - button "客户详情" [ref=e8925] [cursor=pointer]:
+                        - generic [ref=e8926]: 客户详情
+  - alert [ref=e8927]:
+    - img [ref=e8929]
+    - paragraph [ref=e8931]: 登录成功

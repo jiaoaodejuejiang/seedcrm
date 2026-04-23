@@ -1,0 +1,182 @@
+- generic [ref=e59]:
+  - complementary [ref=e60]:
+    - generic [ref=e61]:
+      - paragraph [ref=e62]: Seed CRM
+      - heading "约束驱动的中文 CRM 控制台" [level=1] [ref=e63]
+      - paragraph [ref=e64]: 围绕“客资 -> 客户 -> 订单 -> 服务单”主链工作，登录、角色与权限在整个系统中统一生效。
+    - navigation [ref=e65]:
+      - generic [ref=e66]:
+        - generic [ref=e67]:
+          - strong [ref=e68]: 客资中心
+          - generic [ref=e69]: 统一接入与转化客资
+        - link "客资列表 查看自动拉取客资、手动分配、公海回收和转订单主链" [ref=e71] [cursor=pointer]:
+          - /url: /clues
+          - generic [ref=e72]: 客资列表
+          - generic [ref=e73]: 查看自动拉取客资、手动分配、公海回收和转订单主链
+      - generic [ref=e74]:
+        - generic [ref=e75]:
+          - strong [ref=e76]: 客资管理
+          - generic [ref=e77]: 仅客资主管可见
+        - generic [ref=e78]:
+          - link "自动分配 维护自动轮询当值客服的分配策略" [ref=e79] [cursor=pointer]:
+            - /url: /clue-management/auto-assign
+            - generic [ref=e80]: 自动分配
+            - generic [ref=e81]: 维护自动轮询当值客服的分配策略
+          - link "值班客服 设置客服班次、当值状态和请假情况" [active] [ref=e82] [cursor=pointer]:
+            - /url: /clue-management/duty-cs
+            - generic [ref=e83]: 值班客服
+            - generic [ref=e84]: 设置客服班次、当值状态和请假情况
+      - generic [ref=e85]:
+        - generic [ref=e86]:
+          - strong [ref=e87]: 调度中心
+          - generic [ref=e88]: 同步、队列和日志
+        - link "任务调度 管理外部调用、增量同步、失败重试和执行日志" [ref=e90] [cursor=pointer]:
+          - /url: /scheduler
+          - generic [ref=e91]: 任务调度
+          - generic [ref=e92]: 管理外部调用、增量同步、失败重试和执行日志
+    - generic [ref=e93]:
+      - generic [ref=e94]:
+        - generic [ref=e95]:
+          - heading "当前登录" [level=3] [ref=e96]
+          - paragraph [ref=e97]: 系统会自动带入角色、门店范围与模块权限，无需手动切换上下文。
+        - button "退出" [ref=e98] [cursor=pointer]:
+          - generic [ref=e99]: 退出
+      - generic [ref=e100]:
+        - generic [ref=e101]:
+          - generic [ref=e102]: 姓名
+          - strong [ref=e103]: 客资主管
+        - generic [ref=e104]:
+          - generic [ref=e105]: 角色
+          - strong [ref=e106]: 客资主管
+        - generic [ref=e107]:
+          - generic [ref=e108]: 数据范围
+          - strong [ref=e109]: 全部
+        - generic [ref=e110]:
+          - generic [ref=e111]: 门店 ID
+          - strong [ref=e112]: "10"
+        - generic [ref=e113]:
+          - generic [ref=e114]: 账号
+          - strong [ref=e115]: clue_manager
+  - main [ref=e116]:
+    - generic [ref=e117]:
+      - generic [ref=e118]:
+        - paragraph [ref=e119]: 客资管理
+        - heading "值班客服" [level=2] [ref=e8264]
+        - paragraph [ref=e121]: 设置客服班次、当值状态和请假情况，为自动分配提供当值名单。
+      - generic [ref=e122]:
+        - generic [ref=e123]: 角色：客资主管
+        - generic [ref=e124]: 范围：全部
+        - generic [ref=e125]: 主链：客资 → 客户 → 订单 → 服务单
+    - generic [ref=e8265]:
+      - generic [ref=e8266]:
+        - article [ref=e8267]:
+          - generic [ref=e8268]: 客服人数
+          - strong [ref=e8269]: "2"
+          - text: 值班客服维护自动分配可使用的客服名单。
+        - article [ref=e8270]:
+          - generic [ref=e8271]: 当值中
+          - strong [ref=e8272]: "2"
+          - text: 只有当值且未请假的客服会进入自动分配池。
+        - article [ref=e8273]:
+          - generic [ref=e8274]: 请假中
+          - strong [ref=e8275]: "0"
+          - text: 请假客服会自动被排除出轮询队列。
+      - generic [ref=e8276]:
+        - generic [ref=e8278]:
+          - heading "值班客服配置" [level=3] [ref=e8279]
+          - paragraph [ref=e8280]: 可以维护班次、排序、请假和备注；保存后自动分配策略会立刻读取最新名单。
+        - generic [ref=e8281]:
+          - button "新增客服" [ref=e8282] [cursor=pointer]:
+            - generic [ref=e8283]: 新增客服
+          - button "保存配置" [ref=e8284] [cursor=pointer]:
+            - generic [ref=e8285]: 保存配置
+          - button "重新加载" [ref=e8286] [cursor=pointer]:
+            - generic [ref=e8287]: 重新加载
+        - generic [ref=e8289]:
+          - table [ref=e8291]:
+            - rowgroup [ref=e8302]:
+              - row "用户 ID 账号 姓名 班次 排序 当值 请假 备注 操作" [ref=e8303]:
+                - columnheader "用户 ID" [ref=e8304]:
+                  - generic [ref=e8305]: 用户 ID
+                - columnheader "账号" [ref=e8306]:
+                  - generic [ref=e8307]: 账号
+                - columnheader "姓名" [ref=e8308]:
+                  - generic [ref=e8309]: 姓名
+                - columnheader "班次" [ref=e8310]:
+                  - generic [ref=e8311]: 班次
+                - columnheader "排序" [ref=e8312]:
+                  - generic [ref=e8313]: 排序
+                - columnheader "当值" [ref=e8314]:
+                  - generic [ref=e8315]: 当值
+                - columnheader "请假" [ref=e8316]:
+                  - generic [ref=e8317]: 请假
+                - columnheader "备注" [ref=e8318]:
+                  - generic [ref=e8319]: 备注
+                - columnheader "操作" [ref=e8320]:
+                  - generic [ref=e8321]: 操作
+          - table [ref=e8326]:
+            - rowgroup [ref=e8337]:
+              - row "减少数值 增加数值 1001 online_cs_a 客服A 早班 09:00-18:00 减少数值 增加数值 1 默认当值客服 删除" [ref=e8338]:
+                - cell "减少数值 增加数值 1001" [ref=e8339]:
+                  - generic [ref=e8341]:
+                    - button "减少数值" [ref=e8342] [cursor=pointer]:
+                      - img [ref=e8344]
+                    - button "增加数值" [ref=e8346] [cursor=pointer]:
+                      - img [ref=e8348]
+                    - spinbutton [ref=e8352]: "1001"
+                - cell "online_cs_a" [ref=e8353]:
+                  - textbox "如 online_cs_a" [ref=e8357]: online_cs_a
+                - cell "客服A" [ref=e8358]:
+                  - textbox "如 客服A" [ref=e8362]: 客服A
+                - cell "早班 09:00-18:00" [ref=e8363]:
+                  - textbox "如 早班 09:00-18:00" [ref=e8367]: 早班 09:00-18:00
+                - cell "减少数值 增加数值 1" [ref=e8368]:
+                  - generic [ref=e8370]:
+                    - button "减少数值" [ref=e8371]:
+                      - img [ref=e8373]
+                    - button "增加数值" [ref=e8375] [cursor=pointer]:
+                      - img [ref=e8377]
+                    - spinbutton [ref=e8381]: "1"
+                - cell [ref=e8382]:
+                  - generic [ref=e8384]:
+                    - switch [checked]
+                - cell [ref=e8387]:
+                  - generic [ref=e8389]:
+                    - switch
+                - cell "默认当值客服" [ref=e8392]:
+                  - textbox "班次备注、请假说明等" [ref=e8396]: 默认当值客服
+                - cell "删除" [ref=e8397]:
+                  - button "删除" [ref=e8399] [cursor=pointer]:
+                    - generic [ref=e8400]: 删除
+              - row "减少数值 增加数值 1002 online_cs_b 客服B 晚班 13:00-22:00 减少数值 增加数值 2 默认当值客服 删除" [ref=e8401]:
+                - cell "减少数值 增加数值 1002" [ref=e8402]:
+                  - generic [ref=e8404]:
+                    - button "减少数值" [ref=e8405] [cursor=pointer]:
+                      - img [ref=e8407]
+                    - button "增加数值" [ref=e8409] [cursor=pointer]:
+                      - img [ref=e8411]
+                    - spinbutton [ref=e8415]: "1002"
+                - cell "online_cs_b" [ref=e8416]:
+                  - textbox "如 online_cs_a" [ref=e8420]: online_cs_b
+                - cell "客服B" [ref=e8421]:
+                  - textbox "如 客服A" [ref=e8425]: 客服B
+                - cell "晚班 13:00-22:00" [ref=e8426]:
+                  - textbox "如 早班 09:00-18:00" [ref=e8430]: 晚班 13:00-22:00
+                - cell "减少数值 增加数值 2" [ref=e8431]:
+                  - generic [ref=e8433]:
+                    - button "减少数值" [ref=e8434] [cursor=pointer]:
+                      - img [ref=e8436]
+                    - button "增加数值" [ref=e8438] [cursor=pointer]:
+                      - img [ref=e8440]
+                    - spinbutton [ref=e8444]: "2"
+                - cell [ref=e8445]:
+                  - generic [ref=e8447]:
+                    - switch [checked]
+                - cell [ref=e8450]:
+                  - generic [ref=e8452]:
+                    - switch
+                - cell "默认当值客服" [ref=e8455]:
+                  - textbox "班次备注、请假说明等" [ref=e8459]: 默认当值客服
+                - cell "删除" [ref=e8460]:
+                  - button "删除" [ref=e8462] [cursor=pointer]:
+                    - generic [ref=e8463]: 删除

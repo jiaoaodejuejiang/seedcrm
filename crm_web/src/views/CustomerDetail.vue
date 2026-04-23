@@ -48,7 +48,7 @@
       <div class="panel-heading">
         <div>
           <h3>订单历史</h3>
-          <p>客户详情页只读展示下游结果，不绕过主链创建规则。</p>
+          <p>客户详情页只读展示主链结果，不绕过主链规则直接创建数据。</p>
         </div>
       </div>
 
@@ -118,7 +118,7 @@
     </section>
 
     <el-dialog v-model="messageDialogVisible" title="发送企微消息" width="480px">
-      <el-input v-model="messageForm.message" type="textarea" :rows="4" placeholder="输入发送给该绑定客户的消息内容。" />
+      <el-input v-model="messageForm.message" type="textarea" :rows="4" placeholder="输入要发送给该客户的消息内容" />
       <template #footer>
         <el-button @click="messageDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleSendMessage">发送</el-button>
@@ -160,18 +160,14 @@ async function loadProfile(customerId) {
 }
 
 async function handleSendMessage() {
-  try {
-    await sendWecomMessage({
-      customerId: Number(route.params.id),
-      message: messageForm.message || undefined
-    })
-    ElMessage.success('企微消息已发送')
-    messageDialogVisible.value = false
-    messageForm.message = ''
-    await loadProfile(Number(route.params.id))
-  } catch {
-    // HTTP 层统一处理错误提示。
-  }
+  await sendWecomMessage({
+    customerId: Number(route.params.id),
+    message: messageForm.message || undefined
+  })
+  ElMessage.success('企微消息已发送')
+  messageDialogVisible.value = false
+  messageForm.message = ''
+  await loadProfile(Number(route.params.id))
 }
 
 watch(

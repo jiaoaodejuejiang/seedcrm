@@ -3,16 +3,17 @@ import { fetchCurrentUser, login as loginRequest, logout as logoutRequest } from
 
 const STORAGE_KEY = 'seedcrm.auth-token'
 
-const routeMap = {
-  CLUE: '/clues',
-  ORDER: '/orders',
-  PLANORDER: '/plan-orders',
-  SCHEDULER: '/scheduler',
-  PERMISSION: '/permission',
-  SALARY: '/salary',
-  DISTRIBUTOR: '/distributors',
-  FINANCE: '/finance'
-}
+const accessibleRoutes = [
+  { path: '/clues', moduleCode: 'CLUE' },
+  { path: '/clue-management/auto-assign', moduleCode: 'CLUE', roleCodes: ['CLUE_MANAGER', 'ADMIN'] },
+  { path: '/store-service/orders', moduleCode: 'ORDER', roleCodes: ['STORE_SERVICE', 'ADMIN'] },
+  { path: '/plan-orders', moduleCode: 'PLANORDER' },
+  { path: '/scheduler', moduleCode: 'SCHEDULER' },
+  { path: '/permission', moduleCode: 'PERMISSION' },
+  { path: '/salary', moduleCode: 'SALARY' },
+  { path: '/distributors', moduleCode: 'DISTRIBUTOR' },
+  { path: '/finance', moduleCode: 'FINANCE' }
+]
 
 export const authState = reactive({
   token: window.localStorage.getItem(STORAGE_KEY) || '',
@@ -23,12 +24,12 @@ export const authState = reactive({
 export const currentUser = computed(() => authState.currentUser)
 
 export const demoAccounts = [
-  { username: 'admin', password: '123456', title: '管理员', description: '可查看全部模块并维护权限策略。' },
-  { username: 'clue_manager', password: '123456', title: '线索主管', description: '可查看线索池和调度同步。' },
-  { username: 'online_cs', password: '123456', title: '在线客服', description: '仅查看本人或团队已分配线索。' },
-  { username: 'store_service', password: '123456', title: '门店服务', description: '处理订单与服务单主链。' },
-  { username: 'finance', password: '123456', title: '财务', description: '查看财务、薪酬和订单完结权限。' },
-  { username: 'private_domain', password: '123456', title: '私域服务', description: '查看绑定客户的订单与服务单。' }
+  { username: 'admin', password: '123456', title: '管理员', description: '查看所有模块并维护系统规则与权限策略' },
+  { username: 'clue_manager', password: '123456', title: '客资主管', description: '管理客资中心、自动分配和值班客服配置' },
+  { username: 'online_cs', password: '123456', title: '在线客服', description: '查看分配给自己的客资并跟进转化' },
+  { username: 'store_service', password: '123456', title: '门店服务', description: '查看订单、填写确认单并推进门店履约' },
+  { username: 'finance', password: '123456', title: '财务', description: '查看财务与薪酬数据，处理结算与提现' },
+  { username: 'private_domain', password: '123456', title: '私域服务', description: '查看绑定客户的订单和服务记录' }
 ]
 
 export async function initializeAuth() {
@@ -39,6 +40,7 @@ export async function initializeAuth() {
     authState.initialized = true
     return null
   }
+
   try {
     authState.currentUser = await fetchCurrentUser(authState.token)
     return authState.currentUser
@@ -64,8 +66,6 @@ export async function logout() {
     if (authState.token) {
       await logoutRequest(authState.token)
     }
-  } catch {
-    // 忽略退出链路的网络错误，优先清理本地状态。
   } finally {
     clearAuthSession()
   }
@@ -82,7 +82,15 @@ export function clearAuthSession() {
   window.localStorage.removeItem(STORAGE_KEY)
 }
 
-export function hasAccess(moduleCode) {
+export function hasRole(roleCodes = []) {
+  if (!roleCodes?.length) {
+    return true
+  }
+  const currentRoleCode = String(authState.currentUser?.roleCode || '').trim().toUpperCase()
+  return roleCodes.map((item) => String(item).trim().toUpperCase()).includes(currentRoleCode)
+}
+
+export function hasModule(moduleCode) {
   if (!moduleCode) {
     return true
   }
@@ -90,11 +98,14 @@ export function hasAccess(moduleCode) {
   return modules.includes(moduleCode)
 }
 
+export function hasAccess(moduleCode, roleCodes = []) {
+  return hasModule(moduleCode) && hasRole(roleCodes)
+}
+
 export function getFirstAccessibleRoute() {
-  const modules = authState.currentUser?.allowedModules || []
-  for (const moduleCode of modules) {
-    if (routeMap[moduleCode]) {
-      return routeMap[moduleCode]
+  for (const route of accessibleRoutes) {
+    if (hasAccess(route.moduleCode, route.roleCodes)) {
+      return route.path
     }
   }
   return '/login'

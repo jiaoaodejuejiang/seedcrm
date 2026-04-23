@@ -18,17 +18,17 @@ import org.springframework.util.StringUtils;
 public class StaffDirectoryService {
 
     private static final List<StaffMemberOption> DEFAULT_STAFF = List.of(
-            new StaffMemberOption(1001L, "Wang Consultant", "CONSULTANT"),
-            new StaffMemberOption(1002L, "Li Consultant", "CONSULTANT"),
-            new StaffMemberOption(2001L, "Zhang Doctor", "DOCTOR"),
-            new StaffMemberOption(2002L, "Zhou Doctor", "DOCTOR"),
-            new StaffMemberOption(3001L, "Chen Assistant", "ASSISTANT"),
-            new StaffMemberOption(3002L, "Lin Assistant", "ASSISTANT"));
+            new StaffMemberOption(1001L, "顾问A", "CONSULTANT"),
+            new StaffMemberOption(1002L, "顾问B", "CONSULTANT"),
+            new StaffMemberOption(2001L, "医生A", "DOCTOR"),
+            new StaffMemberOption(2002L, "医生B", "DOCTOR"),
+            new StaffMemberOption(3001L, "助理A", "ASSISTANT"),
+            new StaffMemberOption(3002L, "助理B", "ASSISTANT"));
 
     private static final Map<String, String> DEFAULT_ROLE_NAMES = Map.of(
-            "CONSULTANT", "Consultant",
-            "DOCTOR", "Doctor",
-            "ASSISTANT", "Assistant");
+            "CONSULTANT", "顾问",
+            "DOCTOR", "医生",
+            "ASSISTANT", "助理");
 
     private final RoleConfigService roleConfigService;
 

@@ -122,6 +122,30 @@ label > span {
   gap: 12px;
 }
 
+.nav-section {
+  display: grid;
+  gap: 10px;
+}
+
+.nav-section__header {
+  display: grid;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.nav-section__header strong {
+  color: #f6f8fb;
+}
+
+.nav-section__header small {
+  color: rgba(246, 248, 251, 0.68);
+}
+
+.nav-section__items {
+  display: grid;
+  gap: 10px;
+}
+
 .nav-card {
   display: flex;
   flex-direction: column;
@@ -241,7 +265,8 @@ label > span {
 .toolbar__filters,
 .action-group,
 .chip-row,
-.quick-button-row {
+.quick-button-row,
+.toolbar-tabs {
   display: flex;
   gap: 12px;
 }
@@ -260,7 +285,8 @@ label > span {
 .toolbar__filters,
 .action-group,
 .chip-row,
-.quick-button-row {
+.quick-button-row,
+.toolbar-tabs {
   flex-wrap: wrap;
 }
 
@@ -425,6 +451,10 @@ label > span {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.flex-end {
+  justify-content: flex-end;
 }
 
 .login-shell {

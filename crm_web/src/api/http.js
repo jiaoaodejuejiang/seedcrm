@@ -21,7 +21,6 @@ http.interceptors.request.use((config) => {
 http.interceptors.response.use(
   (response) => {
     const payload = response.data
-
     if (payload && typeof payload.code !== 'undefined') {
       if (payload.code === 0) {
         return payload.data
@@ -35,17 +34,14 @@ http.interceptors.response.use(
     return payload
   },
   (error) => {
-    if (error.response?.status === 401 || error.response?.data?.message?.includes('登录状态')) {
+    if (error.response?.status === 401 || error.response?.data?.message?.includes('登录')) {
       clearAuthSession()
       if (window.location.pathname !== '/login') {
         window.location.href = '/login'
       }
     }
-    const message =
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      error.message ||
-      '网络请求失败'
+
+    const message = error.response?.data?.message || error.response?.data?.error || error.message || '网络请求失败'
     ElMessage.error(message)
     return Promise.reject(error)
   }

@@ -165,7 +165,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                     clue.getIsPublic(),
                     customer == null ? null : customer.getId(),
                     latestOrder == null ? null : latestOrder.getId(),
-                    latestOrder == null ? null : OrderStatus.toApiValue(latestOrder.getStatus()),
+                    latestOrder == null ? null : toWorkbenchOrderStatus(latestOrder.getStatus()),
                     (long) clueOrders.size(),
                     clue.getCreatedAt()));
         }
@@ -179,8 +179,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 .orderByDesc(Order::getId));
         String normalizedStatus = normalize(status);
         List<Order> filteredOrders = orders.stream()
-                .filter(order -> !StringUtils.hasText(normalizedStatus)
-                        || normalizedStatus.equals(normalize(OrderStatus.toApiValue(order.getStatus()))))
+                .filter(order -> matchesWorkbenchOrderStatus(order, normalizedStatus))
                 .toList();
         return buildOrderResponses(filteredOrders);
     }
@@ -420,12 +419,14 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 scale(order.getAmount()),
                 scale(order.getDeposit()),
                 OrderType.toApiValue(order.getType()),
+                toWorkbenchOrderStatus(order.getStatus()),
                 OrderStatus.toApiValue(order.getStatus()),
                 planOrderId,
                 PlanOrderStatus.toApiValue(planOrderStatus),
                 order.getAppointmentTime(),
                 order.getArriveTime(),
                 order.getCompleteTime(),
+                order.getRemark(),
                 order.getCreateTime());
     }
 
@@ -631,6 +632,32 @@ public class WorkbenchServiceImpl implements WorkbenchService {
 
     private String normalize(String value) {
         return value == null ? null : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private boolean matchesWorkbenchOrderStatus(Order order, String normalizedStatus) {
+        if (!StringUtils.hasText(normalizedStatus)) {
+            return true;
+        }
+        String orderStatus = normalize(order == null ? null : order.getStatus());
+        if (!StringUtils.hasText(orderStatus)) {
+            return false;
+        }
+        return switch (normalizedStatus) {
+            case "PAID" -> List.of("PAID_DEPOSIT", "APPOINTMENT", "ARRIVED", "SERVING").contains(orderStatus);
+            case "USED", "FINISHED", "COMPLETED" -> "COMPLETED".equals(orderStatus);
+            case "APPOINTMENT" -> "APPOINTMENT".equals(orderStatus);
+            case "ARRIVED" -> "ARRIVED".equals(orderStatus);
+            case "SERVING" -> "SERVING".equals(orderStatus);
+            case "CREATED" -> "CREATED".equals(orderStatus);
+            case "CANCELLED" -> "CANCELLED".equals(orderStatus);
+            case "REFUNDED" -> "REFUNDED".equals(orderStatus);
+            default -> normalizedStatus.equals(orderStatus);
+        };
+    }
+
+    private String toWorkbenchOrderStatus(String status) {
+        String normalizedStatus = normalize(status);
+        return StringUtils.hasText(normalizedStatus) ? normalizedStatus.toLowerCase(Locale.ROOT) : null;
     }
 
     private BigDecimal scale(BigDecimal value) {

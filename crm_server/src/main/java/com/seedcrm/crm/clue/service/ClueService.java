@@ -18,4 +18,6 @@ public interface ClueService extends IService<Clue> {
     Clue recycleClue(Long clueId);
 
     List<Clue> listPublicClues();
+
+    Clue autoAssignClue(Clue clue);
 }

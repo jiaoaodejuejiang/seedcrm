@@ -1,0 +1,104 @@
+- generic [ref=e8656]:
+  - complementary [ref=e8657]:
+    - generic [ref=e8658]:
+      - paragraph [ref=e8659]: Seed CRM
+      - heading "约束驱动的中文 CRM 控制台" [level=1] [ref=e8660]
+      - paragraph [ref=e8661]: 围绕“客资 -> 客户 -> 订单 -> 服务单”主链工作，登录、角色与权限在整个系统中统一生效。
+    - navigation [ref=e8662]:
+      - generic [ref=e8663]:
+        - generic [ref=e8664]:
+          - strong [ref=e8665]: 门店服务
+          - generic [ref=e8666]: 门店服务人员工入口
+        - link "订单列表 查看全部、已预约、已完成订单，并填写确认单" [ref=e8668] [cursor=pointer]:
+          - /url: /store-service/orders
+          - generic [ref=e8669]: 订单列表
+          - generic [ref=e8670]: 查看全部、已预约、已完成订单，并填写确认单
+    - generic [ref=e8671]:
+      - generic [ref=e8672]:
+        - generic [ref=e8673]:
+          - heading "当前登录" [level=3] [ref=e8674]
+          - paragraph [ref=e8675]: 系统会自动带入角色、门店范围与模块权限，无需手动切换上下文。
+        - button "退出" [ref=e8676] [cursor=pointer]:
+          - generic [ref=e8677]: 退出
+      - generic [ref=e8678]:
+        - generic [ref=e8679]:
+          - generic [ref=e8680]: 姓名
+          - strong [ref=e8681]: 门店服务
+        - generic [ref=e8682]:
+          - generic [ref=e8683]: 角色
+          - strong [ref=e8684]: 门店服务
+        - generic [ref=e8685]:
+          - generic [ref=e8686]: 数据范围
+          - strong [ref=e8687]: 门店
+        - generic [ref=e8688]:
+          - generic [ref=e8689]: 门店 ID
+          - strong [ref=e8690]: "10"
+        - generic [ref=e8691]:
+          - generic [ref=e8692]: 账号
+          - strong [ref=e8693]: store_service
+  - main [ref=e8694]:
+    - generic [ref=e8695]:
+      - generic [ref=e8696]:
+        - paragraph [ref=e8697]: 门店服务
+        - heading "订单列表" [level=2] [ref=e8698]
+        - paragraph [ref=e8699]: 查看全部状态订单，切换已预约和已完成，并填写确认单与到店详细需求。
+      - generic [ref=e8700]:
+        - generic [ref=e8701]: 角色：门店服务
+        - generic [ref=e8702]: 范围：门店
+        - generic [ref=e8703]: 主链：客资 → 客户 → 订单 → 服务单
+    - generic [ref=e8705]:
+      - generic [ref=e8706]:
+        - article [ref=e8707]:
+          - generic [ref=e8708]: 当前列表订单
+          - strong [ref=e8709]: "0"
+          - text: 门店服务入口只围绕订单和服务单主链开展工作。
+        - article [ref=e8710]:
+          - generic [ref=e8711]: 已预约
+          - strong [ref=e8712]: "0"
+          - text: 已完成预约，待到店或待服务的订单。
+        - article [ref=e8713]:
+          - generic [ref=e8714]: 已完成
+          - strong [ref=e8715]: "0"
+          - text: 服务已闭环的订单，可继续回看确认单和历史记录。
+      - generic [ref=e8716]:
+        - generic [ref=e8717]:
+          - radiogroup "radio-group" [ref=e8719]:
+            - generic [ref=e8720]:
+              - radio "全部状态" [ref=e8721]
+              - generic [ref=e8722] [cursor=pointer]: 全部状态
+            - generic [ref=e8723]:
+              - radio "已预约" [checked] [active] [ref=e8724]
+              - generic [ref=e8725] [cursor=pointer]: 已预约
+            - generic [ref=e8726]:
+              - radio "已完成" [ref=e8727]
+              - generic [ref=e8728] [cursor=pointer]: 已完成
+          - generic [ref=e8729]:
+            - generic [ref=e8730]: 点击“确认单”可填写客户到店详细需求，并直接进入服务单履约。
+            - button "刷新列表" [ref=e8731] [cursor=pointer]:
+              - generic [ref=e8732]: 刷新列表
+        - generic [ref=e8734]:
+          - table [ref=e8736]:
+            - rowgroup [ref=e8747]:
+              - row "订单 客户 类型 金额 状态 预约时间 服务单 确认单 操作" [ref=e8748]:
+                - columnheader "订单" [ref=e8749]:
+                  - generic [ref=e8750]: 订单
+                - columnheader "客户" [ref=e8751]:
+                  - generic [ref=e8752]: 客户
+                - columnheader "类型" [ref=e8753]:
+                  - generic [ref=e8754]: 类型
+                - columnheader "金额" [ref=e8755]:
+                  - generic [ref=e8756]: 金额
+                - columnheader "状态" [ref=e8757]:
+                  - generic [ref=e8758]: 状态
+                - columnheader "预约时间" [ref=e8759]:
+                  - generic [ref=e8760]: 预约时间
+                - columnheader "服务单" [ref=e8761]:
+                  - generic [ref=e8762]: 服务单
+                - columnheader "确认单" [ref=e8763]:
+                  - generic [ref=e8764]: 确认单
+                - columnheader "操作" [ref=e8765]:
+                  - generic [ref=e8766]: 操作
+          - generic [ref=e8770]:
+            - table:
+              - rowgroup
+            - generic [ref=e8947]: 暂无数据

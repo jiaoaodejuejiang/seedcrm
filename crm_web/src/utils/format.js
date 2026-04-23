@@ -4,7 +4,7 @@ export function normalize(value) {
 
 export function formatMoney(value) {
   const number = Number(value || 0)
-  return `¥ ${number.toLocaleString('zh-CN', {
+  return `¥${number.toLocaleString('zh-CN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })}`
@@ -31,7 +31,7 @@ export function formatChannel(value) {
     {
       DOUYIN: '抖音',
       DISTRIBUTION: '分销',
-      DISTRIBUTOR: '分销商'
+      DISTRIBUTOR: '分销'
     }[normalized] || value || '--'
   )
 }
@@ -52,13 +52,13 @@ export function formatOrderStatus(status) {
   const normalized = normalize(status)
   return (
     {
-      CREATED: '已创建',
+      CREATED: '待支付',
       PAID: '已支付',
-      PAID_DEPOSIT: '已付定金',
+      PAID_DEPOSIT: '已支付',
       APPOINTMENT: '已预约',
       ARRIVED: '已到店',
       SERVING: '服务中',
-      USED: '已使用',
+      USED: '已完成',
       COMPLETED: '已完成',
       FINISHED: '已完成',
       CANCELLED: '已取消',
@@ -76,31 +76,26 @@ export function formatOrderStage(status) {
   if (!normalized) {
     return '--'
   }
-
-  if (['PAID', 'CREATED', 'PAID_DEPOSIT', 'APPOINTMENT', 'ARRIVED', 'SERVING'].includes(normalized)) {
+  if (['CREATED', 'PAID', 'PAID_DEPOSIT', 'APPOINTMENT', 'ARRIVED', 'SERVING'].includes(normalized)) {
     return '进行中'
   }
-
-  if (['USED', 'COMPLETED'].includes(normalized)) {
-    return '已关闭'
+  if (['USED', 'COMPLETED', 'FINISHED'].includes(normalized)) {
+    return '已完成'
   }
-
   if (normalized === 'CANCELLED') {
     return '已取消'
   }
-
   if (normalized === 'REFUNDED') {
     return '已退款'
   }
-
-  return status
+  return formatOrderStatus(status)
 }
 
 export function formatClueStatus(status) {
   const normalized = normalize(status)
   return (
     {
-      NEW: '新线索',
+      NEW: '新客资',
       ASSIGNED: '已分配',
       FOLLOWING: '跟进中',
       CONVERTED: '已转化'
@@ -140,7 +135,7 @@ export function formatModuleCode(value) {
   const normalized = normalize(value)
   return (
     {
-      CLUE: '线索',
+      CLUE: '客资',
       ORDER: '订单',
       PLANORDER: '服务单',
       SCHEDULER: '调度',
@@ -186,7 +181,7 @@ export function formatRoleCode(value) {
     {
       ADMIN: '管理员',
       ONLINE_CUSTOMER_SERVICE: '在线客服',
-      CLUE_MANAGER: '线索主管',
+      CLUE_MANAGER: '客资主管',
       STORE_SERVICE: '门店服务',
       FINANCE: '财务',
       PRIVATE_DOMAIN_SERVICE: '私域服务',
@@ -225,14 +220,15 @@ export function statusTagType(value) {
       FOLLOWING: '',
       CONVERTED: 'success',
       PAID: 'warning',
-      USED: 'success',
-      CREATED: 'info',
       PAID_DEPOSIT: 'warning',
       APPOINTMENT: 'warning',
       ARRIVED: 'primary',
+      SERVING: 'primary',
       SERVICING: 'primary',
+      USED: 'success',
       COMPLETED: 'success',
       FINISHED: 'success',
+      CREATED: 'info',
       CANCELLED: 'info',
       REFUNDED: 'danger',
       SUCCESS: 'success',

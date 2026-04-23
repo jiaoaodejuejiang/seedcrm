@@ -1,0 +1,106 @@
+[2m18:19:31[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /auth/me[39m
+Error: connect ECONNREFUSED 127.0.0.1:8080
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+[2m18:19:33[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /auth/me[39m
+Error: connect ECONNREFUSED 127.0.0.1:8080
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+[2m18:19:37[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /auth/login[39m
+Error: connect ECONNREFUSED 127.0.0.1:8080
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+[2m18:19:37[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22m[Vue warn]: Unhandled error during execution of component event handler 
+  at <ElButton type="primary" class="login-submit" loading=false  ... > 
+  at <ElForm model= {"username":"admin","password":"123456"} label-position="top" onSubmit=fn > 
+  at <LoginView onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< {} > > 
+  at <RouterView> 
+  at <App>
+[2m18:19:37[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [31m[Unhandled rejection] [1mAxiosError[22m: Request failed with status code 502
+[39m > settle node_modules/axios/lib/core/settle.js:20:6
+ > XMLHttpRequest.onloadend node_modules/axios/lib/adapters/xhr.js:62:8
+ > Axios$1.request node_modules/axios/lib/core/Axios.js:46:40
+ > login src/utils/auth.js:56:18
+    54 |  
+    55 |  export async function login(form) {
+    56 |    const result = await loginRequest(form)
+       |                    ^
+    57 |    authState.token = result?.token || ''
+    58 |    authState.currentUser = result?.user || null
+ > handleLogin src/views/LoginView.vue:69:5
+
+[2m18:29:23[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+For more detail, please visit: https://element-plus.org/en-US/component/radio.html
+
+    at debugWarn (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5932:35)
+    at watch.immediate (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5972:12)
+    at callWithErrorHandling (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1873:17)
+    at callWithAsyncErrorHandling (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1880:15)
+    at baseWatchOptions.call (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2372:46)
+    at job (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1654:13)
+    at watch$1 (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1675:25)
+    at doWatch (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2394:22)
+    at watch (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2346:9)
+    at useDeprecated (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5971:2)
+[2m18:29:23[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+For more detail, please visit: https://element-plus.org/en-US/component/radio.html
+
+    at debugWarn (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5932:35)
+    at watch.immediate (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5972:12)
+    at callWithErrorHandling (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1873:17)
+    at callWithAsyncErrorHandling (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1880:15)
+    at baseWatchOptions.call (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2372:46)
+    at job (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1654:13)
+    at watch$1 (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1675:25)
+    at doWatch (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2394:22)
+    at watch (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2346:9)
+    at useDeprecated (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5971:2)
+[2m18:29:23[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+For more detail, please visit: https://element-plus.org/en-US/component/radio.html
+
+    at debugWarn (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5932:35)
+    at watch.immediate (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5972:12)
+    at callWithErrorHandling (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1873:17)
+    at callWithAsyncErrorHandling (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1880:15)
+    at baseWatchOptions.call (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2372:46)
+    at job (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1654:13)
+    at watch$1 (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1675:25)
+    at doWatch (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2394:22)
+    at watch (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2346:9)
+    at useDeprecated (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5971:2)
+[2m18:34:22[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+For more detail, please visit: https://element-plus.org/en-US/component/radio.html
+
+    at debugWarn (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5932:35)
+    at watch.immediate (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5972:12)
+    at callWithErrorHandling (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1873:17)
+    at callWithAsyncErrorHandling (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1880:15)
+    at baseWatchOptions.call (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2372:46)
+    at job (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1654:13)
+    at watch$1 (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1675:25)
+    at doWatch (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2394:22)
+    at watch (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2346:9)
+    at useDeprecated (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5971:2)
+[2m18:34:22[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+For more detail, please visit: https://element-plus.org/en-US/component/radio.html
+
+    at debugWarn (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5932:35)
+    at watch.immediate (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5972:12)
+    at callWithErrorHandling (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1873:17)
+    at callWithAsyncErrorHandling (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1880:15)
+    at baseWatchOptions.call (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2372:46)
+    at job (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1654:13)
+    at watch$1 (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1675:25)
+    at doWatch (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2394:22)
+    at watch (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2346:9)
+    at useDeprecated (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5971:2)
+[2m18:34:22[22m [33m[1m[vite][22m[39m [33m[2m(client)[22m[39m [2m[console.warn] [22mElementPlusError: [el-radio] [API] label act as value is about to be deprecated in version 3.0.0, please use value instead.
+For more detail, please visit: https://element-plus.org/en-US/component/radio.html
+
+    at debugWarn (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5932:35)
+    at watch.immediate (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5972:12)
+    at callWithErrorHandling (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1873:17)
+    at callWithAsyncErrorHandling (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1880:15)
+    at baseWatchOptions.call (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2372:46)
+    at job (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1654:13)
+    at watch$1 (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:1675:25)
+    at doWatch (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2394:22)
+    at watch (http://127.0.0.1:4173/node_modules/.vite/deps/vue.runtime.esm-bundler-v-a3Yrua.js?v=04af6781:2346:9)
+    at useDeprecated (http://127.0.0.1:4173/node_modules/.vite/deps/element-plus.js?v=04af6781:5971:2)

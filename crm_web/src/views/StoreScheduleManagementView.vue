@@ -127,7 +127,7 @@
 
       <div class="calendar-layout">
         <div class="calendar-side">
-          <el-calendar v-model="calendarDate" class="appointment-calendar">
+          <el-calendar v-model="calendarDate" class="appointment-calendar" data-qa="store-schedule-calendar">
             <template #date-cell="{ data }">
               <button type="button" class="calendar-cell schedule-calendar-cell" @click="selectedDate = data.day">
                 <span class="calendar-cell__day">{{ Number(data.day.split('-').pop()) }}</span>
@@ -141,7 +141,7 @@
         </div>
 
         <div class="calendar-side">
-          <div class="detail-card calendar-day-card">
+          <div data-qa="store-schedule-day-card" class="detail-card calendar-day-card">
             <h3>{{ selectedStoreName }} - {{ selectedDate }}</h3>
             <p>已预约 {{ bookedCount(selectedDate) }} 位客户，剩余 {{ remainingCount(selectedDate) }} 个档位。</p>
 

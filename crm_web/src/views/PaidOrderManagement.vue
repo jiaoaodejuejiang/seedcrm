@@ -47,15 +47,39 @@
 
           <el-calendar v-model="calendarDate" class="appointment-calendar">
             <template #date-cell="{ data }">
-              <div class="calendar-cell schedule-calendar-cell">
+              <button
+                type="button"
+                class="calendar-cell schedule-calendar-cell"
+                :class="{ 'is-selected': selectedCalendarDay === data.day, 'is-full': isDateFull(data.day) }"
+                @click="handleCalendarDayClick(data.day)"
+              >
                 <span class="calendar-cell__day">{{ Number(data.day.split('-').pop()) }}</span>
                 <template v-for="item in appointmentRowsByDay(data.day).slice(0, 2)" :key="`${data.day}-${item.id}`">
                   <span class="calendar-cell__event">{{ item.customerName || item.orderNo }}</span>
                 </template>
                 <span v-if="isDateFull(data.day)" class="calendar-cell__full">满</span>
-              </div>
+              </button>
             </template>
           </el-calendar>
+
+          <div data-qa="paid-order-calendar-selection" class="detail-card calendar-day-card calendar-selection-card">
+            <h3>{{ activeStoreName || '当前门店' }} - {{ selectedCalendarDay }}</h3>
+            <p>已预约 {{ selectedDayAppointmentRows.length }} 位客户，剩余 {{ selectedDayRemainingCount }} 个档位。</p>
+
+            <div class="chip-row">
+              <el-tag effect="plain">当前门店：{{ activeStoreName || '--' }}</el-tag>
+              <el-tag effect="plain">每日容量：{{ selectedDayCapacity }} 档</el-tag>
+              <el-tag v-if="selectedOrderCanSchedule" type="success" effect="plain">可点击日历快速选中预约日期</el-tag>
+            </div>
+
+            <div v-if="selectedDayAppointmentRows.length" class="binding-list">
+              <div v-for="item in selectedDayAppointmentRows" :key="item.id" class="binding-item">
+                <strong>{{ item.customerName || item.orderNo }}</strong>
+                <span>{{ formatDateTime(item.appointmentTime) }}</span>
+              </div>
+            </div>
+            <p v-else class="text-secondary">当天暂无已预约客户。</p>
+          </div>
         </div>
 
         <div class="calendar-side">
@@ -111,7 +135,7 @@
             </el-table-column>
             <el-table-column label="操作" width="150" fixed="right">
               <template #default="{ row }">
-                <el-button type="primary" size="small" @click="openAppointmentDialog(row)">
+                <el-button data-qa="paid-order-open-dialog" type="primary" size="small" @click="openAppointmentDialog(row)">
                   {{ canSchedule(row) ? '预约门店档期' : '查看排档' }}
                 </el-button>
               </template>
@@ -159,6 +183,23 @@
             style="width: 100%"
           />
         </el-form-item>
+        <el-form-item v-if="selectedOrderCanSchedule" label="快捷档位">
+          <div data-qa="paid-order-slot-picker" class="slot-picker">
+            <button
+              v-for="slot in appointmentSlotOptions"
+              :key="slot.value"
+              type="button"
+              class="slot-button"
+              :class="{ 'is-selected': appointmentForm.appointmentTime === slot.value }"
+              :disabled="slot.isOccupied"
+              @click="selectAppointmentSlot(slot)"
+            >
+              <strong>{{ slot.label }}</strong>
+              <span>{{ slot.isOccupied ? `已约：${slot.occupiedLabel}` : '点击使用该档位' }}</span>
+            </button>
+            <span v-if="!appointmentSlotOptions.length" class="text-secondary">当前门店当天没有可用档位，请先检查门店档期配置。</span>
+          </div>
+        </el-form-item>
         <el-form-item label="档位提示">
           <div class="table-note">
             当前门店 {{ appointmentForm.storeName || '--' }} 每日可排 {{ storeCapacity(appointmentForm.storeName) }} 档；
@@ -203,6 +244,7 @@ const orders = ref([])
 const productSourceFilter = ref('ALL')
 const storeFilter = ref('')
 const calendarDate = ref(new Date())
+const selectedCalendarDay = ref(String(route.query.day || '').trim() || formatDate(new Date()))
 const appointmentDialogVisible = ref(false)
 const selectedOrder = ref(null)
 const pendingRouteOrderId = ref(Number(route.query.orderId || 0))
@@ -237,9 +279,20 @@ const filteredOrders = computed(() =>
 
 const pagination = useTablePagination(filteredOrders)
 const storeOptions = computed(() => [...new Set(mergedOrders.value.map((item) => item.storeName).filter(Boolean))])
-const appointmentCount = computed(() => filteredOrders.value.filter((item) => item.appointmentTime).length)
-const waitingCount = computed(() => filteredOrders.value.filter((item) => !item.appointmentTime).length)
+const activeStoreName = computed(() => appointmentForm.storeName || storeFilter.value || storeOptions.value[0] || '')
+const selectedDayAppointmentRows = computed(() => appointmentRowsByDay(selectedCalendarDay.value, activeStoreName.value))
+const selectedDayCapacity = computed(() => storeCapacity(activeStoreName.value))
+const selectedDayRemainingCount = computed(() => Math.max(selectedDayCapacity.value - selectedDayAppointmentRows.value.length, 0))
+const appointmentCount = computed(() => filteredOrders.value.filter((item) => hasAppointmentJourney(item)).length)
+const waitingCount = computed(() => filteredOrders.value.filter((item) => canSchedule(item) && !item.appointmentTime).length)
 const selectedOrderCanSchedule = computed(() => canSchedule(selectedOrder.value))
+const appointmentSlotOptions = computed(() => {
+  if (!selectedOrderCanSchedule.value) {
+    return []
+  }
+  const scheduleDay = formatDate(appointmentForm.appointmentTime) || selectedCalendarDay.value
+  return buildAppointmentSlots(appointmentForm.storeName, scheduleDay, selectedOrder.value?.id)
+})
 
 const selectedOrderLabel = computed(() => {
   if (!selectedOrder.value) {
@@ -259,8 +312,24 @@ function formatDate(value) {
   return date.toISOString().slice(0, 10)
 }
 
-function appointmentRowsByDay(day) {
-  return filteredOrders.value.filter((item) => item.storeName === storeFilter.value && formatDate(item.appointmentTime) === day)
+function mergeOrdersById(...groups) {
+  const orderMap = new Map()
+  for (const group of groups) {
+    for (const item of group || []) {
+      if (!item?.id || orderMap.has(item.id)) {
+        continue
+      }
+      orderMap.set(item.id, item)
+    }
+  }
+  return [...orderMap.values()]
+}
+
+function appointmentRowsByDay(day, storeName = activeStoreName.value) {
+  if (!storeName) {
+    return []
+  }
+  return filteredOrders.value.filter((item) => item.storeName === storeName && formatDate(item.appointmentTime) === day)
 }
 
 function bookedCountByStoreAndDay(storeName, day, excludingOrderId = null) {
@@ -283,42 +352,158 @@ function storeCapacity(storeName) {
   return calculateStoreCapacity(config)
 }
 
-function isDateFull(day) {
-  if (!storeFilter.value || !day) {
+function isDateFull(day, storeName = activeStoreName.value) {
+  if (!storeName || !day) {
     return false
   }
-  const capacity = storeCapacity(storeFilter.value)
+  const capacity = storeCapacity(storeName)
   if (capacity <= 0) {
     return false
   }
-  return bookedCountByStoreAndDay(storeFilter.value, day) >= capacity
+  return bookedCountByStoreAndDay(storeName, day) >= capacity
 }
 
 function canSchedule(row) {
-  return normalize(row?.status) === 'PAID_DEPOSIT'
+  return ['PAID', 'PAID_DEPOSIT'].includes(normalize(row?.status || row?.statusCategory))
+}
+
+function hasAppointmentJourney(row) {
+  return ['APPOINTMENT', 'ARRIVED', 'SERVING', 'USED', 'COMPLETED', 'FINISHED'].includes(normalize(row?.status || row?.statusCategory))
+}
+
+function parseClockMinutes(value) {
+  if (!value || !String(value).includes(':')) {
+    return 0
+  }
+  const [hour, minute] = String(value).split(':').map((item) => Number(item))
+  return (Number.isFinite(hour) ? hour : 0) * 60 + (Number.isFinite(minute) ? minute : 0)
+}
+
+function formatClock(minutes) {
+  const hour = Math.floor(minutes / 60)
+  const minute = minutes % 60
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+function isAppointmentWithinSlot(appointmentTime, day, startMinutes, endMinutes) {
+  if (!appointmentTime || formatDate(appointmentTime) !== day) {
+    return false
+  }
+  const normalized = String(appointmentTime).trim()
+  const timePart = normalized.includes(' ') ? normalized.split(' ')[1] : normalized.slice(11, 19)
+  const minutes = parseClockMinutes(timePart)
+  return minutes >= startMinutes && minutes < endMinutes
+}
+
+function buildAppointmentSlots(storeName, day, excludingOrderId = null) {
+  if (!storeName || !day) {
+    return []
+  }
+  const config = (consoleState.storeScheduleConfigs || []).find((item) => item.storeName === storeName)
+  const slotMinutes = Number(config?.slotHours || 0) * 60
+  if (!config || slotMinutes <= 0) {
+    return []
+  }
+
+  const segments = [
+    [config.morningStart, config.morningEnd],
+    [config.afternoonStart, config.afternoonEnd]
+  ]
+
+  return segments.flatMap(([start, end]) => {
+    const slots = []
+    const startMinutes = parseClockMinutes(start)
+    const endMinutes = parseClockMinutes(end)
+    for (let current = startMinutes; current + slotMinutes <= endMinutes; current += slotMinutes) {
+      const slotStart = formatClock(current)
+      const slotEnd = formatClock(current + slotMinutes)
+      const slotValue = `${day} ${slotStart}:00`
+      const occupiedOrder = mergedOrders.value.find((item) => {
+        if (item.id === excludingOrderId || item.storeName !== storeName) {
+          return false
+        }
+        return isAppointmentWithinSlot(item.appointmentTime, day, current, current + slotMinutes)
+      })
+      slots.push({
+        label: `${slotStart} - ${slotEnd}`,
+        value: slotValue,
+        isOccupied: Boolean(occupiedOrder),
+        occupiedLabel: occupiedOrder ? occupiedOrder.customerName || occupiedOrder.orderNo : ''
+      })
+    }
+    return slots
+  })
+}
+
+function firstAvailableSlotValue(storeName, day, excludingOrderId = null) {
+  return buildAppointmentSlots(storeName, day, excludingOrderId).find((item) => !item.isOccupied)?.value || ''
+}
+
+function handleCalendarDayClick(day) {
+  selectedCalendarDay.value = day
+  if (!appointmentDialogVisible.value || !selectedOrderCanSchedule.value) {
+    return
+  }
+  const nextValue = firstAvailableSlotValue(appointmentForm.storeName, day, selectedOrder.value?.id)
+  if (nextValue) {
+    appointmentForm.appointmentTime = nextValue
+  } else if (storeCapacity(appointmentForm.storeName) > 0) {
+    ElMessage.warning('所选日期已满，请改约其他日期')
+  }
+}
+
+function selectAppointmentSlot(slot) {
+  if (slot?.isOccupied) {
+    return
+  }
+  appointmentForm.appointmentTime = slot.value
 }
 
 function openAppointmentDialog(row) {
   selectedOrder.value = row
-  appointmentForm.appointmentTime = row.appointmentTime || ''
   appointmentForm.remark = row.remark || ''
   appointmentForm.storeName = row.storeName || storeFilter.value || storeOptions.value[0] || ''
   if (appointmentForm.storeName) {
     storeFilter.value = appointmentForm.storeName
+  }
+  const preferredDay = formatDate(row.appointmentTime) || selectedCalendarDay.value || formatDate(new Date())
+  selectedCalendarDay.value = preferredDay
+  if (canSchedule(row)) {
+    appointmentForm.appointmentTime = row.appointmentTime || firstAvailableSlotValue(appointmentForm.storeName, preferredDay, row.id)
+  } else {
+    appointmentForm.appointmentTime = row.appointmentTime || ''
   }
   appointmentDialogVisible.value = true
 }
 
 function handleStoreChange(value) {
   storeFilter.value = value || ''
+  if (!selectedOrderCanSchedule.value) {
+    return
+  }
+  const nextValue = firstAvailableSlotValue(value, selectedCalendarDay.value, selectedOrder.value?.id)
+  if (nextValue) {
+    appointmentForm.appointmentTime = nextValue
+  }
 }
 
 async function loadOrders() {
   loading.value = true
   try {
-    orders.value = await fetchOrders({
+    let nextOrders = await fetchOrders({
       status: 'paid'
     })
+    if (pendingRouteOrderId.value && !nextOrders.some((item) => item.id === pendingRouteOrderId.value)) {
+      const completedOrders = await fetchOrders({
+        status: 'used'
+      }).catch(() => [])
+      nextOrders = mergeOrdersById(nextOrders, completedOrders)
+    }
+    orders.value = nextOrders
+    const routeDay = String(route.query.day || '').trim()
+    if (routeDay) {
+      selectedCalendarDay.value = routeDay
+    }
     if (!storeFilter.value && storeOptions.value.length) {
       const routeStore = String(route.query.storeName || '').trim()
       storeFilter.value = routeStore && storeOptions.value.includes(routeStore) ? routeStore : storeOptions.value[0]
@@ -388,7 +573,14 @@ async function handleSaveAppointment() {
     ElMessage.success('门店档期已保存')
     appointmentDialogVisible.value = false
     if (route.query.orderId) {
-      router.replace({ path: '/clues/scheduling', query: appointmentForm.storeName ? { storeName: appointmentForm.storeName } : {} })
+      const nextQuery = {}
+      if (appointmentForm.storeName) {
+        nextQuery.storeName = appointmentForm.storeName
+      }
+      if (formatDate(appointmentForm.appointmentTime)) {
+        nextQuery.day = formatDate(appointmentForm.appointmentTime)
+      }
+      router.replace({ path: '/clues/scheduling', query: nextQuery })
     }
     await loadOrders()
   } finally {

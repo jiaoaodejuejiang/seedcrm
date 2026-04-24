@@ -140,12 +140,13 @@
             <div class="action-group">
               <el-button size="small" @click="openDetailDrawer(row)">查看详情</el-button>
               <el-button
-                v-if="row.isPaidCustomer"
+                v-if="row.paidOrderId"
+                data-qa="clue-schedule-action"
                 type="primary"
                 size="small"
                 @click="goToScheduling(row)"
               >
-                预约门店档期
+                {{ row.schedulingActionLabel }}
               </el-button>
               <el-dropdown v-if="canShowMoreActions(row)">
                 <el-button size="small" plain>
@@ -213,6 +214,7 @@
             </div>
             <div class="table-note">
               最近订单状态：{{ detailRow.latestOrderId ? detailRow.latestOrderStageLabel : '暂无订单' }}
+              <span v-if="detailRow.paidOrderAppointmentTime">；预约时间：{{ formatDateTime(detailRow.paidOrderAppointmentTime) }}</span>
             </div>
           </section>
         </div>
@@ -312,7 +314,7 @@ import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { assignClue, createClue, createOrder, recycleClue } from '../api/actions'
 import { fetchDutyCustomerServices } from '../api/clueManagement'
-import { fetchClues } from '../api/workbench'
+import { fetchClues, fetchOrders } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
 import { currentUser, hasAccess } from '../utils/auth'
 import {
@@ -329,6 +331,7 @@ const router = useRouter()
 const consoleState = reactive(loadSystemConsoleState())
 const loading = ref(true)
 const clues = ref([])
+const paidOrders = ref([])
 const dutyStaff = ref([])
 const createDialogVisible = ref(false)
 const assignDialogVisible = ref(false)
@@ -338,7 +341,14 @@ const assignTarget = ref(null)
 const selectedClue = ref(null)
 const detailRow = ref(null)
 const productSourceFilter = ref('ALL')
-const mergedClues = computed(() => clues.value.map((item) => buildClueRow(item)))
+const clueSourceRows = computed(() => {
+  const existingClueIds = new Set(clues.value.map((item) => item.id))
+  const fallbackRows = paidOrders.value
+    .filter((item) => item?.clueId && !existingClueIds.has(item.clueId))
+    .map((item) => buildSyntheticClueFromOrder(item))
+  return [...fallbackRows, ...clues.value].sort((left, right) => compareClueRecency(right, left))
+})
+const mergedClues = computed(() => clueSourceRows.value.map((item) => buildClueRow(item)))
 const pagination = useTablePagination(mergedClues)
 let refreshTimer = null
 
@@ -365,8 +375,25 @@ const orderForm = reactive({
 
 const roleCode = computed(() => currentUser.value?.roleCode || '')
 const storeOptions = computed(() => {
-  const values = [...listStoreNames(consoleState), ...clues.value.map((item) => item.storeName).filter(Boolean)]
+  const values = [
+    ...listStoreNames(consoleState),
+    ...clueSourceRows.value.map((item) => item.storeName).filter(Boolean),
+    ...paidOrders.value.map((item) => item.storeName).filter(Boolean)
+  ]
   return [...new Set(values)]
+})
+const latestPaidOrderByClueId = computed(() => {
+  const orderMap = new Map()
+  for (const item of paidOrders.value) {
+    if (!item?.clueId) {
+      continue
+    }
+    const current = orderMap.get(item.clueId)
+    if (!current || compareOrderRecency(item, current) > 0) {
+      orderMap.set(item.clueId, item)
+    }
+  }
+  return orderMap
 })
 const assignableStaff = computed(() => dutyStaff.value.filter((item) => item.onLeave !== 1))
 const canCreateClue = computed(() => ['ADMIN', 'CLUE_MANAGER'].includes(roleCode.value))
@@ -403,6 +430,65 @@ const leadStageOptions = [
 
 const tagOptions = ['高意向', '待回拨', '团购', '表单', '已付款', '待预约', '复诊']
 
+function parseDateValue(value) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime()
+}
+
+function compareClueRecency(left, right) {
+  return parseDateValue(left?.createdAt) - parseDateValue(right?.createdAt)
+}
+
+function compareOrderRecency(left, right) {
+  const leftTime = parseDateValue(left?.appointmentTime || left?.createTime)
+  const rightTime = parseDateValue(right?.appointmentTime || right?.createTime)
+  if (leftTime !== rightTime) {
+    return leftTime - rightTime
+  }
+  return Number(left?.id || 0) - Number(right?.id || 0)
+}
+
+function resolvePaidOrder(row) {
+  return latestPaidOrderByClueId.value.get(row.id) || null
+}
+
+function resolveLatestOrderStatus(row) {
+  const paidOrder = resolvePaidOrder(row)
+  return paidOrder?.status || paidOrder?.statusCategory || row.latestOrderStatus
+}
+
+function resolveLatestOrderId(row) {
+  const paidOrder = resolvePaidOrder(row)
+  return paidOrder?.id || row.latestOrderId || null
+}
+
+function canSchedulePaidOrder(status) {
+  return ['PAID', 'PAID_DEPOSIT'].includes(normalize(status))
+}
+
+function buildSyntheticClueFromOrder(order) {
+  const profile = findClueProfile(order.clueId)
+  return {
+    id: order.clueId,
+    name: profile?.displayName || order.customerName || '',
+    phone: profile?.phone || order.customerPhone || '',
+    wechat: '',
+    sourceChannel: order.sourceChannel,
+    productSourceType: order.productSourceType,
+    sourceId: null,
+    status: 'CONVERTED',
+    currentOwnerId: currentUser.value?.userId || null,
+    currentOwnerName: currentUser.value?.displayName || '',
+    isPublic: 0,
+    storeName: profile?.intendedStoreName || order.storeName || '',
+    customerId: order.customerId,
+    latestOrderId: order.id,
+    latestOrderStatus: order.statusCategory || order.status,
+    orderCount: 1,
+    createdAt: order.createTime
+  }
+}
+
 function replaceConsoleState(nextState) {
   saveSystemConsoleState(nextState)
   Object.assign(consoleState, loadSystemConsoleState())
@@ -415,7 +501,7 @@ function currentTimestampString() {
 }
 
 function defaultCallStatus(row) {
-  if (isPaidCustomer(row.latestOrderStatus)) {
+  if (isPaidCustomer(resolveLatestOrderStatus(row))) {
     return 'CONNECTED'
   }
   if (['ASSIGNED', 'FOLLOWING', 'CONVERTED'].includes(normalize(row.status))) {
@@ -425,14 +511,15 @@ function defaultCallStatus(row) {
 }
 
 function defaultLeadStage(row) {
-  if (isPaidCustomer(row.latestOrderStatus)) {
-    if (['USED', 'COMPLETED', 'FINISHED'].includes(normalize(row.latestOrderStatus))) {
+  const latestOrderStatus = resolveLatestOrderStatus(row)
+  if (isPaidCustomer(latestOrderStatus)) {
+    if (['USED', 'COMPLETED', 'FINISHED'].includes(normalize(latestOrderStatus))) {
       return 'CLOSED'
     }
-    if (['ARRIVED', 'SERVING'].includes(normalize(row.latestOrderStatus))) {
+    if (['ARRIVED', 'SERVING'].includes(normalize(latestOrderStatus))) {
       return 'ARRIVED'
     }
-    if (normalize(row.latestOrderStatus) === 'APPOINTMENT') {
+    if (normalize(latestOrderStatus) === 'APPOINTMENT') {
       return 'APPOINTED'
     }
     return 'APPOINTMENT_PENDING'
@@ -448,13 +535,14 @@ function defaultLeadStage(row) {
 
 function defaultLeadTags(row) {
   const values = []
+  const latestOrderStatus = resolveLatestOrderStatus(row)
   if (row.productSourceType) {
     values.push(formatProductSourceType(row.productSourceType))
   }
   if (row.currentOwnerId) {
     values.push('已分配')
   }
-  if (isPaidCustomer(row.latestOrderStatus)) {
+  if (isPaidCustomer(latestOrderStatus)) {
     values.push('已付款')
   }
   return [...new Set(values.filter(Boolean))]
@@ -484,10 +572,17 @@ function ensureClueProfile(row) {
 }
 
 function buildClueRow(row) {
+  const paidOrder = resolvePaidOrder(row)
   const profile = ensureClueProfile(row)
-  const orderStageLabel = row.latestOrderId ? formatOrderStage(row.latestOrderStatus) : '暂无订单'
+  const latestOrderId = resolveLatestOrderId(row)
+  const latestOrderStatus = resolveLatestOrderStatus(row)
+  const paidOrderAppointmentTime = paidOrder?.appointmentTime || ''
+  const canViewScheduling = isPaidCustomer(latestOrderStatus)
+  const orderStageLabel = latestOrderId ? formatOrderStage(latestOrderStatus) : '暂无订单'
   return {
     ...row,
+    latestOrderId,
+    latestOrderStatus,
     editName: profile.displayName || row.name || '',
     editPhone: profile.phone || row.phone || '',
     callStatus: profile.callStatus,
@@ -496,7 +591,11 @@ function buildClueRow(row) {
     intendedStoreName: profile.intendedStoreName || row.storeName || '',
     assignedAt: row.currentOwnerId ? profile.assignedAt || row.createdAt : '',
     latestOrderStageLabel: orderStageLabel,
-    isPaidCustomer: isPaidCustomer(row.latestOrderStatus)
+    isPaidCustomer: canViewScheduling,
+    paidOrderId: canViewScheduling ? latestOrderId : null,
+    paidOrderAppointmentTime,
+    canDirectSchedule: canSchedulePaidOrder(latestOrderStatus),
+    schedulingActionLabel: canSchedulePaidOrder(latestOrderStatus) ? '预约门店档期' : '查看门店档期'
   }
 }
 
@@ -556,14 +655,22 @@ function handleInlineUpdate(row, patch, options = {}) {
 async function loadClues() {
   loading.value = true
   try {
-    clues.value = await fetchClues({
-      sourceChannel: filters.sourceChannel || undefined,
-      productSourceType: productSourceFilter.value === 'ALL' ? undefined : productSourceFilter.value,
-      status: filters.status || undefined
-    })
+    const [clueResult, orderResult] = await Promise.allSettled([
+      fetchClues({
+        sourceChannel: filters.sourceChannel || undefined,
+        productSourceType: productSourceFilter.value === 'ALL' ? undefined : productSourceFilter.value,
+        status: filters.status || undefined
+      }),
+      fetchOrders({
+        status: 'paid'
+      })
+    ])
+    clues.value = clueResult.status === 'fulfilled' ? clueResult.value : []
+    paidOrders.value = orderResult.status === 'fulfilled' ? orderResult.value : []
     pagination.reset()
   } catch {
     clues.value = []
+    paidOrders.value = []
   } finally {
     loading.value = false
   }
@@ -671,16 +778,23 @@ function openDetailDrawer(row) {
 }
 
 function goToScheduling(row) {
-  if (!row.latestOrderId) {
+  if (!row.paidOrderId) {
     ElMessage.warning('当前线索还没有可排档的订单')
     return
   }
+  const query = {
+    orderId: row.paidOrderId,
+    clueId: row.id
+  }
+  if (row.intendedStoreName) {
+    query.storeName = row.intendedStoreName
+  }
+  if (row.paidOrderAppointmentTime) {
+    query.day = String(row.paidOrderAppointmentTime).slice(0, 10)
+  }
   router.push({
     path: '/clues/scheduling',
-    query: {
-      orderId: row.latestOrderId,
-      clueId: row.id
-    }
+    query
   })
 }
 

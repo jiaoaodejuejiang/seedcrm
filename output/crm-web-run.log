@@ -1,33 +1,8 @@
 
-  [32m[1mVITE[22m v8.0.9[39m  [2mready in [0m[1m1615[22m[2m[0m ms[22m
+> crm_web@0.0.0 dev
+> vite --host 127.0.0.1 --port 4173
+
+
+  [32m[1mVITE[22m v8.0.9[39m  [2mready in [0m[1m1375[22m[2m[0m ms[22m
 
   [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m4173[22m/[39m
-[2m11:37:19[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PrivateDomainMomentsView.vue, /src/views/DutyCustomerServiceView.vue, /src/views/SystemOrganizationView.vue, /src/views/PrivateDomainLiveCodeView.vue, /src/views/SystemSettingView.vue, /src/views/CustomerDetail.vue, /src/views/ClueManagement.vue, /src/views/PrivateDomainServiceView.vue, /src/views/OrderManagement.vue, /src/views/PrivateDomainCustomerProfileView.vue, /src/views/FinanceOverview.vue, /src/views/PaidOrderManagement.vue, /src/views/SalaryConfigView.vue and 2 more[22m
-[2m11:39:30[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/LoginView.vue[22m
-[2m11:39:30[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/LoginView.vue[22m
-[2m11:47:15[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PaidOrderManagement.vue[22m
-[2m12:18:52[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layouts/AppLayout.vue[22m
-[2m12:19:12[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/LoginView.vue[22m
-[2m12:19:30[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/ClueManagement.vue[22m
-[2m12:20:04[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/style.css[22m
-[2m12:27:16[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/SystemOrganizationView.vue[22m
-[2m13:41:26[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PrivateDomainMomentsView.vue, /src/views/SystemOrganizationView.vue, /src/views/PrivateDomainLiveCodeView.vue, /src/views/SystemSettingView.vue, /src/views/PrivateDomainServiceView.vue, /src/views/PrivateDomainCustomerProfileView.vue, /src/views/SalaryConfigView.vue, /src/views/PrivateDomainTagManagementView.vue[22m
-[2m13:45:41[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layouts/AppLayout.vue[22m
-[2m13:46:46[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layouts/AppLayout.vue[22m
-[2m13:47:06[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/utils/auth.js[22m
-[2m13:47:44[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/router/index.js[22m
-[2m13:48:03[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PrivateDomainMomentsView.vue, /src/views/SystemOrganizationView.vue, /src/views/PrivateDomainLiveCodeView.vue, /src/views/SystemSettingView.vue, /src/views/SalaryCenter.vue, /src/views/CustomerDetail.vue, /src/views/PlanOrderService.vue, /src/views/ClueManagement.vue, /src/views/PrivateDomainServiceView.vue, /src/views/OrderManagement.vue, /src/views/PrivateDomainCustomerProfileView.vue, /src/views/FinanceOverview.vue, /src/views/PaidOrderManagement.vue and 3 more[22m
-[2m13:49:22[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/views/StoreScheduleManagementView.vue[22m
-[2m13:51:02[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/ClueManagement.vue[22m
-[2m13:53:09[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/ClueManagement.vue[22m
-[2m13:53:30[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/ClueManagement.vue[22m
-[2m13:54:05[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PaidOrderManagement.vue[22m
-[2m13:55:25[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PaidOrderManagement.vue[22m
-[2m13:56:03[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PaidOrderManagement.vue[22m
-[2m13:56:19[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PaidOrderManagement.vue[22m
-[2m13:57:25[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/style.css[22m
-[2m13:58:24[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PrivateDomainMomentsView.vue, /src/views/SystemOrganizationView.vue, /src/views/PrivateDomainLiveCodeView.vue, /src/views/SystemSettingView.vue, /src/views/PrivateDomainServiceView.vue, /src/views/PrivateDomainCustomerProfileView.vue, /src/views/SalaryConfigView.vue, /src/views/PrivateDomainTagManagementView.vue, /src/views/StoreScheduleManagementView.vue, /src/views/ClueManagement.vue, /src/views/PaidOrderManagement.vue[22m
-[2m13:59:07[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/PaidOrderManagement.vue[22m
-[2m14:00:02[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/StoreScheduleManagementView.vue[22m
-[2m14:08:47[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/views/ClueManagement.vue[22m
-[2m14:09:28[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/style.css[22m

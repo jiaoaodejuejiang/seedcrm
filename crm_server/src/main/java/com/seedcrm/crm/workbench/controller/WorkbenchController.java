@@ -48,10 +48,11 @@ public class WorkbenchController {
 
     @GetMapping("/clues")
     public ApiResponse<List<ClueItemResponse>> clues(@RequestParam(required = false) String sourceChannel,
+                                                     @RequestParam(required = false) String productSourceType,
                                                      @RequestParam(required = false) String status,
                                                      HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
-        List<ClueItemResponse> clues = workbenchService.listClues(sourceChannel, status).stream()
+        List<ClueItemResponse> clues = workbenchService.listClues(sourceChannel, productSourceType, status).stream()
                 .filter(clue -> cluePermissionGuard.canView(context, clue.getId()))
                 .collect(Collectors.toList());
         return ApiResponse.success(clues);

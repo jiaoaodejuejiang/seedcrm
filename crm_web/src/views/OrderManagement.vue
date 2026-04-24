@@ -34,7 +34,7 @@
         </div>
       </div>
 
-      <el-table v-loading="loading" :data="orders" stripe>
+      <el-table v-loading="loading" :data="pagination.rows" stripe>
         <el-table-column label="订单" min-width="180">
           <template #default="{ row }">
             <div class="table-primary">
@@ -94,6 +94,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="pagination.total"
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :page-sizes="pagination.pageSizes"
+          @size-change="pagination.handleSizeChange"
+          @current-change="pagination.handleCurrentChange"
+        />
+      </div>
     </section>
 
     <el-drawer v-model="serviceDrawerVisible" :title="selectedOrderReadOnly ? '订单确认单查看' : '订单确认单确认'" size="560px">
@@ -152,11 +165,13 @@ import { useRouter } from 'vue-router'
 import { createPlanOrder } from '../api/actions'
 import { saveOrderServiceDetail } from '../api/order'
 import { fetchOrders } from '../api/workbench'
+import { useTablePagination } from '../composables/useTablePagination'
 import { formatDateTime, formatMoney, formatOrderStatus, formatOrderType, formatPlanOrderStatus, normalize, statusTagType } from '../utils/format'
 
 const router = useRouter()
 const loading = ref(true)
 const orders = ref([])
+const pagination = useTablePagination(orders)
 const statusFilter = ref('')
 const serviceDrawerVisible = ref(false)
 const selectedOrder = ref(null)
@@ -176,6 +191,7 @@ async function loadOrders() {
     orders.value = await fetchOrders({
       status: statusFilter.value || undefined
     })
+    pagination.reset()
   } catch {
     orders.value = []
   } finally {

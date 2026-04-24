@@ -36,6 +36,18 @@ export function formatChannel(value) {
   )
 }
 
+export function formatProductSourceType(value) {
+  const normalized = normalize(value)
+  return (
+    {
+      GROUP_BUY: '团购',
+      GROUPBUY: '团购',
+      GROUPON: '团购',
+      FORM: '表单'
+    }[normalized] || value || '--'
+  )
+}
+
 export function formatOrderType(value) {
   const normalized = normalize(value)
   return (
@@ -66,7 +78,12 @@ export function formatOrderStatus(status) {
       APPROVED: '已通过',
       PENDING: '待处理',
       CONFIRMED: '已确认',
-      PAID_OUT: '已打款'
+      PAID_OUT: '已打款',
+      DRAFT: '草稿',
+      ENABLED: '启用',
+      DISABLED: '停用',
+      SUCCESS: '成功',
+      FAIL: '失败'
     }[normalized] || status || '--'
   )
 }
@@ -100,6 +117,34 @@ export function formatClueStatus(status) {
       FOLLOWING: '跟进中',
       CONVERTED: '已转化'
     }[normalized] || status || '--'
+  )
+}
+
+export function formatCallStatus(status) {
+  const normalized = normalize(status)
+  return (
+    {
+      NOT_CALLED: '未通话',
+      CONNECTED: '已接通',
+      MISSED: '未接通',
+      CALLBACK: '待回拨',
+      INVALID: '无效号码'
+    }[normalized] || status || '--'
+  )
+}
+
+export function formatLeadStage(stage) {
+  const normalized = normalize(stage)
+  return (
+    {
+      NEW: '新线索',
+      CONTACTED: '已联系',
+      INTENT: '高意向',
+      APPOINTMENT_PENDING: '待预约',
+      APPOINTED: '已预约',
+      ARRIVED: '已到店',
+      CLOSED: '已成交'
+    }[normalized] || stage || '--'
   )
 }
 
@@ -222,6 +267,15 @@ export function statusTagType(value) {
       ASSIGNED: 'primary',
       FOLLOWING: '',
       CONVERTED: 'success',
+      NOT_CALLED: 'info',
+      CONNECTED: 'success',
+      MISSED: 'warning',
+      CALLBACK: 'warning',
+      INVALID: 'danger',
+      CONTACTED: 'primary',
+      INTENT: 'success',
+      APPOINTMENT_PENDING: 'warning',
+      APPOINTED: 'primary',
       PAID: 'warning',
       PAID_DEPOSIT: 'warning',
       APPOINTMENT: 'warning',
@@ -246,7 +300,8 @@ export function statusTagType(value) {
       APPROVED: 'success',
       PENDING: 'warning',
       CONFIRMED: 'primary',
-      PAID_OUT: 'success'
+      PAID_OUT: 'success',
+      DRAFT: 'info'
     }[normalized] || 'info'
   )
 }

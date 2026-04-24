@@ -52,7 +52,7 @@
         </div>
       </div>
 
-      <el-table :data="profile.orderHistory || []" stripe>
+      <el-table :data="pagination.rows" stripe>
         <el-table-column label="订单" min-width="180">
           <template #default="{ row }">
             <div class="table-primary">
@@ -90,6 +90,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="pagination.total"
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :page-sizes="pagination.pageSizes"
+          @size-change="pagination.handleSizeChange"
+          @current-change="pagination.handleCurrentChange"
+        />
+      </div>
     </section>
 
     <section v-if="profile" class="panel">
@@ -128,11 +141,12 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { sendWecomMessage } from '../api/actions'
 import { fetchCustomerDetail } from '../api/workbench'
+import { useTablePagination } from '../composables/useTablePagination'
 import { formatChannel, formatDateTime, formatMoney, formatOrderStatus, formatOrderType, statusTagType } from '../utils/format'
 
 const route = useRoute()
@@ -140,6 +154,7 @@ const router = useRouter()
 const loading = ref(true)
 const profile = ref(null)
 const messageDialogVisible = ref(false)
+const pagination = useTablePagination(computed(() => profile.value?.orderHistory || []))
 const messageForm = reactive({
   message: ''
 })
@@ -152,6 +167,7 @@ async function loadProfile(customerId) {
   loading.value = true
   try {
     profile.value = await fetchCustomerDetail(customerId)
+    pagination.reset()
   } catch {
     profile.value = null
   } finally {

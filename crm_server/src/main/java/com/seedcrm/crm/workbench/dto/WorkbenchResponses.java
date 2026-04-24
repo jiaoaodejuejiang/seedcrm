@@ -40,11 +40,13 @@ public final class WorkbenchResponses {
         private String phone;
         private String wechat;
         private String sourceChannel;
+        private String productSourceType;
         private Long sourceId;
         private String status;
         private Long currentOwnerId;
         private String currentOwnerName;
         private Integer isPublic;
+        private String storeName;
         private Long customerId;
         private Long latestOrderId;
         private String latestOrderStatus;
@@ -64,6 +66,8 @@ public final class WorkbenchResponses {
         private String customerName;
         private String customerPhone;
         private String sourceChannel;
+        private String productSourceType;
+        private String storeName;
         private BigDecimal amount;
         private BigDecimal deposit;
         private String type;

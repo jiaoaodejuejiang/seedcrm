@@ -22,10 +22,10 @@ public class AuthServiceImpl implements AuthService {
                     List.of("CLUE", "ORDER", "PLANORDER", "SALARY", "FINANCE", "SYSTEM", "SETTING", "WECOM"))),
             "clue_manager", new DemoAccount("clue_manager", "123456", new AuthenticatedUser(
                     "clue_manager", "客资主管", "CLUE_MANAGER", "客资主管", "ALL", 5001L, 10L,
-                    List.of(1001L, 1002L), null, List.of("CLUE", "SYSTEM"))),
+                    List.of(1001L, 1002L), null, List.of("CLUE", "ORDER", "SYSTEM"))),
             "online_cs", new DemoAccount("online_cs", "123456", new AuthenticatedUser(
                     "online_cs", "在线客服", "ONLINE_CUSTOMER_SERVICE", "在线客服", "TEAM", 1001L, 10L,
-                    List.of(1001L, 1002L), null, List.of("CLUE"))),
+                    List.of(1001L, 1002L), null, List.of("CLUE", "ORDER"))),
             "store_service", new DemoAccount("store_service", "123456", new AuthenticatedUser(
                     "store_service", "门店服务", "STORE_SERVICE", "门店服务", "STORE", 1001L, 10L,
                     List.of(1001L, 1002L, 2001L, 2002L, 3001L, 3002L), null, List.of("ORDER", "PLANORDER"))),

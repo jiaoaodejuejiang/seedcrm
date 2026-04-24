@@ -8,10 +8,16 @@ import DutyCustomerServiceView from '../views/DutyCustomerServiceView.vue'
 import FinanceOverview from '../views/FinanceOverview.vue'
 import LoginView from '../views/LoginView.vue'
 import OrderManagement from '../views/OrderManagement.vue'
+import PaidOrderManagement from '../views/PaidOrderManagement.vue'
 import PlanOrderService from '../views/PlanOrderService.vue'
+import PrivateDomainCustomerProfileView from '../views/PrivateDomainCustomerProfileView.vue'
 import PrivateDomainLiveCodeView from '../views/PrivateDomainLiveCodeView.vue'
+import PrivateDomainMomentsView from '../views/PrivateDomainMomentsView.vue'
 import PrivateDomainServiceView from '../views/PrivateDomainServiceView.vue'
+import PrivateDomainTagManagementView from '../views/PrivateDomainTagManagementView.vue'
 import SalaryCenter from '../views/SalaryCenter.vue'
+import SalaryConfigView from '../views/SalaryConfigView.vue'
+import StoreScheduleManagementView from '../views/StoreScheduleManagementView.vue'
 import SystemOrganizationView from '../views/SystemOrganizationView.vue'
 import SystemSettingView from '../views/SystemSettingView.vue'
 
@@ -35,12 +41,29 @@ const routes = [
         name: 'clues',
         component: ClueManagement,
         meta: {
-          title: '客资中心',
+          title: '客资列表',
           sectionTitle: '客资中心',
-          description: '统一查看自动拉取的客资、手动分配、公海回收和转订单主链。',
+          description: '统一查看自动拉取线索，支持名单整理、打标签、查看详情和预约门店档期。',
           moduleCode: 'CLUE',
           navKey: 'clues'
         }
+      },
+      {
+        path: 'clues/scheduling',
+        name: 'clues-payments',
+        component: PaidOrderManagement,
+        meta: {
+          title: '顾客排档',
+          sectionTitle: '客资中心',
+          description: '查看已付款客资并按门店档期安排预约，客服在这里为门店做排档处理。',
+          moduleCode: 'ORDER',
+          roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE'],
+          navKey: 'paid-orders'
+        }
+      },
+      {
+        path: 'clues/payments',
+        redirect: '/clues/scheduling'
       },
       {
         path: 'clue-management/auto-assign',
@@ -48,7 +71,7 @@ const routes = [
         component: ClueAutoAssignmentView,
         meta: {
           title: '自动分配',
-          sectionTitle: '客资管理',
+          sectionTitle: '客资中心 / 客资管理',
           description: '由客资主管维护自动分配策略，V1 固定为自动轮询当值客服。',
           moduleCode: 'CLUE',
           roleCodes: ['CLUE_MANAGER', 'ADMIN'],
@@ -61,11 +84,24 @@ const routes = [
         component: DutyCustomerServiceView,
         meta: {
           title: '值班客服',
-          sectionTitle: '客资管理',
+          sectionTitle: '客资中心 / 客资管理',
           description: '设置客服班次、当值状态和请假情况，为自动分配提供当值名单。',
           moduleCode: 'CLUE',
           roleCodes: ['CLUE_MANAGER', 'ADMIN'],
           navKey: 'duty-customer-service'
+        }
+      },
+      {
+        path: 'clue-management/store-schedules',
+        name: 'store-schedules',
+        component: StoreScheduleManagementView,
+        meta: {
+          title: '门店档期',
+          sectionTitle: '客资中心 / 门店档期',
+          description: '按门店配置上下班时间与每档服务时长，日历中满档日期不可继续预约。',
+          moduleCode: 'CLUE',
+          roleCodes: ['CLUE_MANAGER', 'ADMIN'],
+          navKey: 'store-schedules'
         }
       },
       {
@@ -109,6 +145,123 @@ const routes = [
           moduleCode: 'ORDER',
           roleCodes: ['STORE_SERVICE', 'ADMIN'],
           navKey: 'store-service-orders'
+        }
+      },
+      {
+        path: 'private-domain/wecom',
+        name: 'private-domain-wecom',
+        component: PrivateDomainServiceView,
+        meta: {
+          title: '企业微信',
+          sectionTitle: '私域客服',
+          description: '配置企微联系人、触达规则，并支持手工发送客户消息。',
+          moduleCode: 'WECOM',
+          roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
+          navKey: 'private-domain-wecom'
+        }
+      },
+      {
+        path: 'private-domain/live-code',
+        name: 'private-domain-live-code',
+        component: PrivateDomainLiveCodeView,
+        meta: {
+          title: '活码配置',
+          sectionTitle: '私域客服',
+          description: '配置轮询员工列表并生成企业微信活码，供门店服务人员营销引流时使用。',
+          moduleCode: 'WECOM',
+          roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
+          navKey: 'private-domain-live-code'
+        }
+      },
+      {
+        path: 'private-domain/customer-profile',
+        name: 'private-domain-customer-profile',
+        component: PrivateDomainCustomerProfileView,
+        meta: {
+          title: '客户画像',
+          sectionTitle: '私域客服',
+          description: '读取系统参数中的画像开关，并维护在企业微信端展示的客户画像内容。',
+          moduleCode: 'WECOM',
+          roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
+          navKey: 'private-domain-profile'
+        }
+      },
+      {
+        path: 'private-domain/moments',
+        name: 'private-domain-moments',
+        component: PrivateDomainMomentsView,
+        meta: {
+          title: '朋友圈定时群发',
+          sectionTitle: '私域客服',
+          description: '面向企业微信好友朋友圈统一配置定时群发任务。',
+          moduleCode: 'WECOM',
+          roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
+          navKey: 'private-domain-moments'
+        }
+      },
+      {
+        path: 'private-domain/tags',
+        name: 'private-domain-tags',
+        component: PrivateDomainTagManagementView,
+        meta: {
+          title: '便签管理',
+          sectionTitle: '私域客服',
+          description: '维护客户标签、同步状态和按标签统计的数据看板。',
+          moduleCode: 'WECOM',
+          roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
+          navKey: 'private-domain-tags'
+        }
+      },
+      {
+        path: 'finance',
+        name: 'finance',
+        component: FinanceOverview,
+        meta: {
+          title: '财务看板',
+          sectionTitle: '财务管理',
+          description: '查看员工与分销两侧的收入、结算和提现记录。',
+          moduleCode: 'FINANCE',
+          navKey: 'finance'
+        }
+      },
+      {
+        path: 'finance/salary-center',
+        name: 'salary-center',
+        component: SalaryCenter,
+        meta: {
+          title: '薪酬中心',
+          sectionTitle: '财务管理',
+          description: '基于 order_role_record 计算薪酬，并支持结算、打款和提现。',
+          moduleCode: 'SALARY',
+          navKey: 'salary-center'
+        }
+      },
+      {
+        path: 'finance/salary-config/roles',
+        name: 'salary-config-roles',
+        component: SalaryConfigView,
+        meta: {
+          title: '薪酬角色',
+          sectionTitle: '财务管理 / 薪酬配置',
+          description: '配置薪酬角色、角色人员和启停状态。',
+          moduleCode: 'SALARY',
+          roleCodes: ['ADMIN'],
+          navKey: 'salary-config-roles',
+          salaryConfigMode: 'role'
+        }
+      },
+      {
+        path: 'finance/salary-config/grades',
+        name: 'salary-config-grades',
+        component: SalaryConfigView,
+        meta: {
+          title: '薪酬档位',
+          sectionTitle: '财务管理 / 薪酬配置',
+          description: '配置个人档、团队档、转化节点和奖励金额。',
+          moduleCode: 'SALARY',
+          roleCodes: ['ADMIN'],
+          navKey: 'salary-config-grades',
+          salaryConfigMode: 'grade'
         }
       },
       {
@@ -266,42 +419,8 @@ const routes = [
         }
       },
       {
-        path: 'private-domain/wecom',
-        name: 'private-domain-wecom',
-        component: PrivateDomainServiceView,
-        meta: {
-          title: '企业微信',
-          sectionTitle: '私域客服',
-          description: '配置企微联系人、触达规则，并支持手工发送客户消息。',
-          moduleCode: 'WECOM',
-          roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
-          navKey: 'private-domain-wecom'
-        }
-      },
-      {
-        path: 'private-domain/live-code',
-        name: 'private-domain-live-code',
-        component: PrivateDomainLiveCodeView,
-        meta: {
-          title: '活码配置',
-          sectionTitle: '私域客服',
-          description: '配置轮询员工列表并生成企业微信活码，供门店服务人员营销引流时使用。',
-          moduleCode: 'WECOM',
-          roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
-          navKey: 'private-domain-live-code'
-        }
-      },
-      {
         path: 'salary',
-        name: 'salary',
-        component: SalaryCenter,
-        meta: {
-          title: '薪酬中心',
-          sectionTitle: '薪酬中心',
-          description: '基于 order_role_record 计算薪酬，并支持结算、打款和提现。',
-          moduleCode: 'SALARY',
-          navKey: 'salary'
-        }
+        redirect: '/finance/salary-center'
       },
       {
         path: 'scheduler',
@@ -314,18 +433,6 @@ const routes = [
       {
         path: 'distributors',
         redirect: '/clues'
-      },
-      {
-        path: 'finance',
-        name: 'finance',
-        component: FinanceOverview,
-        meta: {
-          title: '财务总览',
-          sectionTitle: '财务总览',
-          description: '查看员工与分销两侧的收入、结算和提现记录。',
-          moduleCode: 'FINANCE',
-          navKey: 'finance'
-        }
       }
     ]
   }
@@ -354,7 +461,7 @@ router.beforeEach(async (to) => {
     }
   }
 
-  if (!hasAccess(to.meta.moduleCode, to.meta.roleCodes)) {
+  if (!hasAccess(to.meta?.moduleCode, to.meta?.roleCodes)) {
     return target
   }
 

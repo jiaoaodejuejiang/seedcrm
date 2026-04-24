@@ -118,6 +118,10 @@ public class PermissionSchemaInitializer {
         seedPolicy("CLUE", "ASSIGN", "CLUE_MANAGER", "ALL", "clue assign");
         seedPolicy("CLUE", "RECYCLE", "CLUE_MANAGER", "ALL", "clue recycle");
 
+        seedPolicy("ORDER", "VIEW", "ONLINE_CUSTOMER_SERVICE", "TEAM", "appointment follow-up");
+        seedPolicy("ORDER", "UPDATE", "ONLINE_CUSTOMER_SERVICE", "TEAM", "appointment follow-up");
+        seedPolicy("ORDER", "VIEW", "CLUE_MANAGER", "ALL", "appointment scheduling");
+        seedPolicy("ORDER", "UPDATE", "CLUE_MANAGER", "ALL", "appointment scheduling");
         seedPolicy("ORDER", "VIEW", "STORE_SERVICE", "STORE", null);
         seedPolicy("ORDER", "UPDATE", "STORE_SERVICE", "STORE", null);
         seedPolicy("ORDER", "FINISH", "STORE_SERVICE", "STORE", "order(status=finished)");

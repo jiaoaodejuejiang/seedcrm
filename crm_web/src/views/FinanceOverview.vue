@@ -26,7 +26,7 @@
         </div>
       </div>
 
-      <el-table v-loading="loading" :data="overview?.withdrawRecords || []" stripe>
+      <el-table v-loading="loading" :data="pagination.rows" stripe>
         <el-table-column label="归属类型" width="140">
           <template #default="{ row }">
             <el-tag>{{ row.ownerType === 'EMPLOYEE' ? '员工' : '分销商' }}</el-tag>
@@ -56,22 +56,38 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="pagination.total"
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :page-sizes="pagination.pageSizes"
+          @size-change="pagination.handleSizeChange"
+          @current-change="pagination.handleCurrentChange"
+        />
+      </div>
     </section>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { fetchFinanceOverview } from '../api/workbench'
+import { useTablePagination } from '../composables/useTablePagination'
 import { formatDateTime, formatMoney, statusTagType } from '../utils/format'
 
 const loading = ref(true)
 const overview = ref(null)
+const pagination = useTablePagination(computed(() => overview.value?.withdrawRecords || []))
 
 async function loadOverview() {
   loading.value = true
   try {
     overview.value = await fetchFinanceOverview()
+    pagination.reset()
   } catch {
     overview.value = null
   } finally {

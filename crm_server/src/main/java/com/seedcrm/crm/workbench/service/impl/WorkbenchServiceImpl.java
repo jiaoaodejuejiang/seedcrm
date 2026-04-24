@@ -124,18 +124,27 @@ public class WorkbenchServiceImpl implements WorkbenchService {
     }
 
     @Override
-    public List<ClueItemResponse> listClues(String sourceChannel, String status) {
+    public List<ClueItemResponse> listClues(String sourceChannel, String productSourceType, String status) {
         List<Clue> clues = clueMapper.selectList(Wrappers.<Clue>lambdaQuery()
                 .orderByDesc(Clue::getCreatedAt)
                 .orderByDesc(Clue::getId));
 
         String normalizedSourceChannel = normalize(sourceChannel);
+        String normalizedProductSourceType = normalize(productSourceType);
         String normalizedStatus = normalize(status);
         List<Clue> filteredClues = clues.stream()
                 .filter(clue -> !StringUtils.hasText(normalizedSourceChannel)
                         || normalizedSourceChannel.equals(normalize(clue.getSourceChannel())))
+                .filter(clue -> !StringUtils.hasText(normalizedProductSourceType)
+                        || normalizedProductSourceType.equals(resolveProductSourceType(
+                        clue.getSourceChannel(),
+                        clue.getSource(),
+                        clue.getRawData(),
+                        clue.getSourceId(),
+                        clue.getId())))
                 .filter(clue -> !StringUtils.hasText(normalizedStatus)
                         || normalizedStatus.equals(normalize(clue.getStatus())))
+                .limit(20)
                 .toList();
 
         List<Long> clueIds = filteredClues.stream().map(Clue::getId).filter(Objects::nonNull).toList();
@@ -158,11 +167,13 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                     clue.getPhone(),
                     clue.getWechat(),
                     clue.getSourceChannel(),
+                    resolveProductSourceType(clue.getSourceChannel(), clue.getSource(), clue.getRawData(), clue.getSourceId(), clue.getId()),
                     clue.getSourceId(),
                     clue.getStatus(),
                     clue.getCurrentOwnerId(),
                     staffDirectoryService.getUserName(clue.getCurrentOwnerId()),
                     clue.getIsPublic(),
+                    resolveStoreName(clue.getId()),
                     customer == null ? null : customer.getId(),
                     latestOrder == null ? null : latestOrder.getId(),
                     latestOrder == null ? null : toWorkbenchOrderStatus(latestOrder.getStatus()),
@@ -180,6 +191,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         String normalizedStatus = normalize(status);
         List<Order> filteredOrders = orders.stream()
                 .filter(order -> matchesWorkbenchOrderStatus(order, normalizedStatus))
+                .limit(20)
                 .toList();
         return buildOrderResponses(filteredOrders);
     }
@@ -416,6 +428,8 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 customer == null ? null : customer.getName(),
                 customer == null ? null : customer.getPhone(),
                 order.getSourceChannel(),
+                resolveProductSourceType(order.getSourceChannel(), null, null, order.getSourceId(), order.getClueId()),
+                resolveStoreName(order.getClueId() == null ? order.getId() : order.getClueId()),
                 scale(order.getAmount()),
                 scale(order.getDeposit()),
                 OrderType.toApiValue(order.getType()),
@@ -632,6 +646,36 @@ public class WorkbenchServiceImpl implements WorkbenchService {
 
     private String normalize(String value) {
         return value == null ? null : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String resolveProductSourceType(String sourceChannel,
+                                            String legacySource,
+                                            String rawData,
+                                            Long sourceId,
+                                            Long fallbackId) {
+        String rawText = ((legacySource == null ? "" : legacySource) + " " + (rawData == null ? "" : rawData))
+                .toUpperCase(Locale.ROOT);
+        if (rawText.contains("FORM") || rawText.contains("表单")) {
+            return "FORM";
+        }
+        if (rawText.contains("GROUP") || rawText.contains("COUPON") || rawText.contains("团购")) {
+            return "GROUP_BUY";
+        }
+        String normalizedSourceChannel = normalize(sourceChannel);
+        if ("DISTRIBUTOR".equals(normalizedSourceChannel) || "DISTRIBUTION".equals(normalizedSourceChannel)) {
+            return "FORM";
+        }
+        long compatibleMarker = sourceId != null ? sourceId : (fallbackId == null ? 0L : fallbackId);
+        return compatibleMarker % 2 == 0 ? "FORM" : "GROUP_BUY";
+    }
+
+    private String resolveStoreName(Long compatibleId) {
+        long marker = compatibleId == null ? 0L : Math.abs(compatibleId);
+        return switch ((int) (marker % 3)) {
+            case 0 -> "静安门店";
+            case 1 -> "浦东门店";
+            default -> "徐汇门店";
+        };
     }
 
     private boolean matchesWorkbenchOrderStatus(Order order, String normalizedStatus) {

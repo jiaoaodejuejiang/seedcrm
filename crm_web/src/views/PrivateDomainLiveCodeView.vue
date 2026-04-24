@@ -131,7 +131,7 @@
         </div>
       </div>
 
-      <el-table :data="state.wecomLiveCodeConfigs" stripe>
+      <el-table :data="pagination.rows" stripe>
         <el-table-column label="活码名称" min-width="180">
           <template #default="{ row }">
             <div class="table-primary">
@@ -174,6 +174,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="pagination.total"
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :page-sizes="pagination.pageSizes"
+          @size-change="pagination.handleSizeChange"
+          @current-change="pagination.handleCurrentChange"
+        />
+      </div>
     </section>
   </div>
 </template>
@@ -182,6 +195,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { generateWecomLiveCode } from '../api/wecom'
+import { useTablePagination } from '../composables/useTablePagination'
 import { formatDateTime } from '../utils/format'
 import { loadSystemConsoleState, nextSystemId, saveSystemConsoleState } from '../utils/systemConsoleStore'
 
@@ -192,6 +206,7 @@ const generating = ref(false)
 const generatingRowId = ref(null)
 const generatedResult = ref(null)
 const liveCodeForm = reactive(createLiveCodeForm())
+const pagination = useTablePagination(computed(() => state.wecomLiveCodeConfigs))
 
 ensureLiveCodeState()
 
@@ -317,6 +332,7 @@ function upsertLiveCodeConfig(config) {
     ...state,
     wecomLiveCodeConfigs: nextConfigs
   })
+  pagination.reset()
 
   return saved
 }

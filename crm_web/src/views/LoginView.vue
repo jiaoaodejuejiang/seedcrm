@@ -2,8 +2,8 @@
   <div class="login-shell">
     <section class="login-card">
       <div class="login-hero">
-        <p class="brand-mark">Seed CRM</p>
-        <h1>中文 CRM 控制台登录</h1>
+        <p class="brand-mark">CRM</p>
+        <h1>CRM控制台登录</h1>
         <p>登录后系统会自动注入角色、数据范围和菜单权限，整个前后台保持统一约束。</p>
       </div>
 

@@ -32,7 +32,7 @@
         <el-button @click="loadData">重新加载</el-button>
       </div>
 
-      <el-table :data="staffRows" stripe>
+      <el-table :data="pagination.rows" stripe>
         <el-table-column label="用户 ID" width="110">
           <template #default="{ row }">
             <el-input-number v-model="row.userId" :min="1" controls-position="right" />
@@ -79,6 +79,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="pagination.total"
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :page-sizes="pagination.pageSizes"
+          @size-change="pagination.handleSizeChange"
+          @current-change="pagination.handleCurrentChange"
+        />
+      </div>
     </section>
   </div>
 </template>
@@ -87,8 +100,10 @@
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { fetchDutyCustomerServices, saveDutyCustomerServices } from '../api/clueManagement'
+import { useTablePagination } from '../composables/useTablePagination'
 
 const staffRows = ref([])
+const pagination = useTablePagination(staffRows)
 const saving = ref(false)
 
 const onDutyCount = computed(() => staffRows.value.filter((item) => item.onDuty === 1 && item.onLeave !== 1).length)
@@ -96,6 +111,7 @@ const onLeaveCount = computed(() => staffRows.value.filter((item) => item.onLeav
 
 async function loadData() {
   staffRows.value = await fetchDutyCustomerServices()
+  pagination.reset()
 }
 
 function handleAddRow() {
@@ -121,6 +137,7 @@ async function handleSave() {
         sortOrder: item.sortOrder || index + 1
       }))
     })
+    pagination.reset()
     ElMessage.success('值班客服配置已保存')
   } finally {
     saving.value = false

@@ -12,7 +12,7 @@ import java.util.List;
 
 public interface WorkbenchService {
 
-    List<ClueItemResponse> listClues(String sourceChannel, String status);
+    List<ClueItemResponse> listClues(String sourceChannel, String productSourceType, String status);
 
     List<OrderItemResponse> listOrders(String status);
 

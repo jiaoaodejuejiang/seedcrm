@@ -63,7 +63,7 @@
         </div>
       </div>
 
-      <el-table :data="dutyStaff" stripe>
+      <el-table :data="pagination.rows" stripe>
         <el-table-column label="客服" min-width="180">
           <template #default="{ row }">
             <div class="table-primary">
@@ -85,6 +85,19 @@
         </el-table-column>
         <el-table-column label="备注" min-width="200" prop="remark" />
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="pagination.total"
+          :current-page="pagination.currentPage"
+          :page-size="pagination.pageSize"
+          :page-sizes="pagination.pageSizes"
+          @size-change="pagination.handleSizeChange"
+          @current-change="pagination.handleCurrentChange"
+        />
+      </div>
     </section>
   </div>
 </template>
@@ -93,6 +106,7 @@
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { fetchAssignmentStrategy, fetchDutyCustomerServices, saveAssignmentStrategy } from '../api/clueManagement'
+import { useTablePagination } from '../composables/useTablePagination'
 import { formatDateTime } from '../utils/format'
 
 const strategy = ref({
@@ -103,6 +117,7 @@ const strategy = ref({
   updatedBy: null
 })
 const dutyStaff = ref([])
+const pagination = useTablePagination(dutyStaff)
 const saving = ref(false)
 const strategyEnabled = ref(true)
 
@@ -116,6 +131,7 @@ async function loadData() {
   const [strategyResponse, dutyStaffResponse] = await Promise.all([fetchAssignmentStrategy(), fetchDutyCustomerServices()])
   strategy.value = strategyResponse || strategy.value
   dutyStaff.value = dutyStaffResponse || []
+  pagination.reset()
   strategyEnabled.value = strategy.value.enabled === 1
 }
 

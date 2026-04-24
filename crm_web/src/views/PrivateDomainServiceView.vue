@@ -76,7 +76,7 @@
         <el-button @click="resetRuleForm">重置表单</el-button>
       </div>
 
-      <el-table :data="state.wecomRules" stripe>
+      <el-table :data="rulePagination.rows" stripe>
         <el-table-column label="规则名称" min-width="180" prop="ruleName" />
         <el-table-column label="触发场景" width="160" prop="triggerScene" />
         <el-table-column label="消息模板" min-width="260" prop="template" />
@@ -94,6 +94,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="rulePagination.total"
+          :current-page="rulePagination.currentPage"
+          :page-size="rulePagination.pageSize"
+          :page-sizes="rulePagination.pageSizes"
+          @size-change="rulePagination.handleSizeChange"
+          @current-change="rulePagination.handleCurrentChange"
+        />
+      </div>
     </section>
 
     <section class="panel">
@@ -124,7 +137,7 @@
         <el-button @click="resetContactForm">重置表单</el-button>
       </div>
 
-      <el-table :data="state.wecomContacts" stripe>
+      <el-table :data="contactPagination.rows" stripe>
         <el-table-column label="联系人" min-width="180">
           <template #default="{ row }">
             <div class="table-primary">
@@ -148,6 +161,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="contactPagination.total"
+          :current-page="contactPagination.currentPage"
+          :page-size="contactPagination.pageSize"
+          :page-sizes="contactPagination.pageSizes"
+          @size-change="contactPagination.handleSizeChange"
+          @current-change="contactPagination.handleCurrentChange"
+        />
+      </div>
     </section>
 
     <section class="panel">
@@ -158,7 +184,7 @@
         </div>
       </div>
 
-      <el-table :data="sendLogs" stripe>
+      <el-table :data="logPagination.rows" stripe>
         <el-table-column label="发送时间" min-width="180">
           <template #default="{ row }">
             {{ formatDateTime(row.createdAt || row.sentAt) }}
@@ -173,14 +199,28 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="logPagination.total"
+          :current-page="logPagination.currentPage"
+          :page-size="logPagination.pageSize"
+          :page-sizes="logPagination.pageSizes"
+          @size-change="logPagination.handleSizeChange"
+          @current-change="logPagination.handleCurrentChange"
+        />
+      </div>
     </section>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { sendWecomMessage } from '../api/wecom'
+import { useTablePagination } from '../composables/useTablePagination'
 import { formatDateTime } from '../utils/format'
 import { loadSystemConsoleState, nextSystemId, saveSystemConsoleState } from '../utils/systemConsoleStore'
 
@@ -188,6 +228,9 @@ const state = reactive(loadSystemConsoleState())
 const sending = ref(false)
 const selectedContactId = ref(state.wecomContacts[0]?.id || null)
 const sendLogs = ref([])
+const rulePagination = useTablePagination(computed(() => state.wecomRules))
+const contactPagination = useTablePagination(computed(() => state.wecomContacts))
+const logPagination = useTablePagination(sendLogs)
 
 const sendForm = reactive({
   customerId: 301,
@@ -250,6 +293,7 @@ async function handleSend() {
       },
       ...sendLogs.value
     ].slice(0, 10)
+    logPagination.reset()
     ElMessage.success('企业微信消息已发送')
   } finally {
     sending.value = false
@@ -273,6 +317,7 @@ function saveRule() {
     })
   }
   replaceState({ ...state, wecomRules: nextRules })
+  rulePagination.reset()
   ElMessage.success('触达规则已保存')
   resetRuleForm()
 }
@@ -306,6 +351,7 @@ function saveContact() {
     })
   }
   replaceState({ ...state, wecomContacts: nextContacts })
+  contactPagination.reset()
   ElMessage.success('企微联系人已保存')
   resetContactForm()
 }

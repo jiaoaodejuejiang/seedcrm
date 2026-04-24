@@ -58,7 +58,7 @@
         <el-button @click="resetMenuForm">重置表单</el-button>
       </div>
 
-      <el-table :data="state.menuConfigs" stripe>
+      <el-table :data="menuPagination.rows" stripe>
         <el-table-column label="菜单" min-width="220">
           <template #default="{ row }">
             <div class="table-primary">
@@ -93,6 +93,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="menuPagination.total"
+          :current-page="menuPagination.currentPage"
+          :page-size="menuPagination.pageSize"
+          :page-sizes="menuPagination.pageSizes"
+          @size-change="menuPagination.handleSizeChange"
+          @current-change="menuPagination.handleCurrentChange"
+        />
+      </div>
     </section>
 
     <section v-else-if="currentMode === 'third-party'" class="panel">
@@ -144,7 +157,7 @@
         <el-button @click="resetThirdPartyForm">重置表单</el-button>
       </div>
 
-      <el-table :data="state.thirdPartyApis" stripe>
+      <el-table :data="thirdPartyPagination.rows" stripe>
         <el-table-column label="接口" min-width="220">
           <template #default="{ row }">
             <div class="table-primary">
@@ -177,6 +190,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="thirdPartyPagination.total"
+          :current-page="thirdPartyPagination.currentPage"
+          :page-size="thirdPartyPagination.pageSize"
+          :page-sizes="thirdPartyPagination.pageSizes"
+          @size-change="thirdPartyPagination.handleSizeChange"
+          @current-change="thirdPartyPagination.handleCurrentChange"
+        />
+      </div>
     </section>
 
     <section v-else-if="currentMode === 'callback'" class="panel">
@@ -211,7 +237,7 @@
         <el-button @click="resetCallbackForm">重置表单</el-button>
       </div>
 
-      <el-table :data="state.callbackApis" stripe>
+      <el-table :data="callbackPagination.rows" stripe>
         <el-table-column label="回调名称" min-width="180" prop="callbackName" />
         <el-table-column label="回调地址" min-width="260" prop="callbackUrl" />
         <el-table-column label="签名方式" width="160" prop="signatureMode" />
@@ -231,6 +257,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="callbackPagination.total"
+          :current-page="callbackPagination.currentPage"
+          :page-size="callbackPagination.pageSize"
+          :page-sizes="callbackPagination.pageSizes"
+          @size-change="callbackPagination.handleSizeChange"
+          @current-change="callbackPagination.handleCurrentChange"
+        />
+      </div>
     </section>
 
     <template v-else-if="currentMode === 'jobs'">
@@ -291,7 +330,7 @@
           <el-button @click="loadSchedulerData">刷新</el-button>
         </div>
 
-        <el-table :data="jobs" stripe>
+        <el-table :data="jobPagination.rows" stripe>
           <el-table-column label="任务编码" min-width="180" prop="jobCode" />
           <el-table-column label="模块" width="120">
             <template #default="{ row }">
@@ -328,6 +367,19 @@
             </template>
           </el-table-column>
         </el-table>
+
+        <div class="table-pagination">
+          <el-pagination
+            background
+            layout="total, sizes, prev, pager, next"
+            :total="jobPagination.total"
+            :current-page="jobPagination.currentPage"
+            :page-size="jobPagination.pageSize"
+            :page-sizes="jobPagination.pageSizes"
+            @size-change="jobPagination.handleSizeChange"
+            @current-change="jobPagination.handleCurrentChange"
+          />
+        </div>
       </section>
 
       <section class="panel">
@@ -341,7 +393,7 @@
           </el-select>
         </div>
 
-        <el-table :data="logs" stripe>
+        <el-table :data="logPagination.rows" stripe>
           <el-table-column label="任务编码" min-width="180" prop="jobCode" />
           <el-table-column label="状态" width="100">
             <template #default="{ row }">
@@ -357,6 +409,19 @@
             </template>
           </el-table-column>
         </el-table>
+
+        <div class="table-pagination">
+          <el-pagination
+            background
+            layout="total, sizes, prev, pager, next"
+            :total="logPagination.total"
+            :current-page="logPagination.currentPage"
+            :page-size="logPagination.pageSize"
+            :page-sizes="logPagination.pageSizes"
+            @size-change="logPagination.handleSizeChange"
+            @current-change="logPagination.handleCurrentChange"
+          />
+        </div>
       </section>
     </template>
 
@@ -400,7 +465,7 @@
         <el-button @click="resetPublicApiForm">重置表单</el-button>
       </div>
 
-      <el-table :data="state.publicApis" stripe>
+      <el-table :data="publicApiPagination.rows" stripe>
         <el-table-column label="接口名称" min-width="180" prop="apiName" />
         <el-table-column label="数据源" min-width="220" prop="sourceTable" />
         <el-table-column label="输出字段" min-width="220" prop="outputFields" />
@@ -425,6 +490,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="publicApiPagination.total"
+          :current-page="publicApiPagination.currentPage"
+          :page-size="publicApiPagination.pageSize"
+          :page-sizes="publicApiPagination.pageSizes"
+          @size-change="publicApiPagination.handleSizeChange"
+          @current-change="publicApiPagination.handleCurrentChange"
+        />
+      </div>
     </section>
 
     <section v-else-if="currentMode === 'dictionary'" class="panel">
@@ -459,7 +537,7 @@
         <el-button @click="resetDictionaryForm">重置表单</el-button>
       </div>
 
-      <el-table :data="state.dictionaries" stripe>
+      <el-table :data="dictionaryPagination.rows" stripe>
         <el-table-column label="字典类型" width="180" prop="dictType" />
         <el-table-column label="编码值" width="180" prop="itemCode" />
         <el-table-column label="显示值" width="180" prop="itemLabel" />
@@ -480,6 +558,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="dictionaryPagination.total"
+          :current-page="dictionaryPagination.currentPage"
+          :page-size="dictionaryPagination.pageSize"
+          :page-sizes="dictionaryPagination.pageSizes"
+          @size-change="dictionaryPagination.handleSizeChange"
+          @current-change="dictionaryPagination.handleCurrentChange"
+        />
+      </div>
     </section>
 
     <section v-else class="panel">
@@ -514,7 +605,7 @@
         <el-button @click="resetParameterForm">重置表单</el-button>
       </div>
 
-      <el-table :data="state.parameters" stripe>
+      <el-table :data="parameterPagination.rows" stripe>
         <el-table-column label="参数键" min-width="220" prop="paramKey" />
         <el-table-column label="参数值" min-width="180" prop="paramValue" />
         <el-table-column label="分类" width="120" prop="category" />
@@ -527,6 +618,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="parameterPagination.total"
+          :current-page="parameterPagination.currentPage"
+          :page-size="parameterPagination.pageSize"
+          :page-sizes="parameterPagination.pageSizes"
+          @size-change="parameterPagination.handleSizeChange"
+          @current-change="parameterPagination.handleCurrentChange"
+        />
+      </div>
     </section>
   </div>
 </template>
@@ -536,6 +640,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { fetchSchedulerJobs, fetchSchedulerLogs, retrySchedulerJob, saveSchedulerJob, triggerSchedulerJob } from '../api/scheduler'
+import { useTablePagination } from '../composables/useTablePagination'
 import {
   formatDateTime,
   formatModuleCode,
@@ -551,12 +656,22 @@ const state = reactive(loadSystemConsoleState())
 const jobs = ref([])
 const logs = ref([])
 const selectedJobCode = ref('')
+const menuPagination = useTablePagination(computed(() => state.menuConfigs))
+const thirdPartyPagination = useTablePagination(computed(() => state.thirdPartyApis))
+const callbackPagination = useTablePagination(computed(() => state.callbackApis))
+const jobPagination = useTablePagination(jobs)
+const logPagination = useTablePagination(logs)
+const publicApiPagination = useTablePagination(computed(() => state.publicApis))
+const dictionaryPagination = useTablePagination(computed(() => state.dictionaries))
+const parameterPagination = useTablePagination(computed(() => state.parameters))
 
 const currentMode = computed(() => route.meta.settingMode || 'menu')
 const moduleOptions = [
   { label: '客资', value: 'CLUE' },
   { label: '订单', value: 'ORDER' },
   { label: '服务单', value: 'PLANORDER' },
+  { label: '薪酬', value: 'SALARY' },
+  { label: '财务', value: 'FINANCE' },
   { label: '系统管理', value: 'SYSTEM' },
   { label: '系统设置', value: 'SETTING' },
   { label: '私域客服', value: 'WECOM' }

@@ -62,7 +62,7 @@
         <el-button @click="resetDepartmentForm">重置表单</el-button>
       </div>
 
-      <el-table :data="state.departments" stripe>
+      <el-table :data="departmentPagination.rows" stripe>
         <el-table-column label="部门" min-width="180">
           <template #default="{ row }">
             <div class="table-primary">
@@ -96,6 +96,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="departmentPagination.total"
+          :current-page="departmentPagination.currentPage"
+          :page-size="departmentPagination.pageSize"
+          :page-sizes="departmentPagination.pageSizes"
+          @size-change="departmentPagination.handleSizeChange"
+          @current-change="departmentPagination.handleCurrentChange"
+        />
+      </div>
     </section>
 
     <section v-else-if="currentMode === 'employee'" class="panel">
@@ -156,7 +169,7 @@
         <el-button @click="resetEmployeeForm">重置表单</el-button>
       </div>
 
-      <el-table :data="filteredEmployees" stripe>
+      <el-table :data="employeePagination.rows" stripe>
         <el-table-column label="员工" min-width="180">
           <template #default="{ row }">
             <div class="table-primary">
@@ -198,6 +211,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="employeePagination.total"
+          :current-page="employeePagination.currentPage"
+          :page-size="employeePagination.pageSize"
+          :page-sizes="employeePagination.pageSizes"
+          @size-change="employeePagination.handleSizeChange"
+          @current-change="employeePagination.handleCurrentChange"
+        />
+      </div>
     </section>
 
     <section v-else-if="currentMode === 'position'" class="panel">
@@ -234,7 +260,7 @@
         <el-button @click="resetPositionForm">重置表单</el-button>
       </div>
 
-      <el-table :data="state.positions" stripe>
+      <el-table :data="positionPagination.rows" stripe>
         <el-table-column label="岗位" min-width="180">
           <template #default="{ row }">
             <div class="table-primary">
@@ -269,6 +295,19 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="table-pagination">
+        <el-pagination
+          background
+          layout="total, sizes, prev, pager, next"
+          :total="positionPagination.total"
+          :current-page="positionPagination.currentPage"
+          :page-size="positionPagination.pageSize"
+          :page-sizes="positionPagination.pageSizes"
+          @size-change="positionPagination.handleSizeChange"
+          @current-change="positionPagination.handleCurrentChange"
+        />
+      </div>
     </section>
 
     <template v-else>
@@ -312,7 +351,7 @@
           <el-button @click="resetRoleForm">重置表单</el-button>
         </div>
 
-        <el-table :data="state.roles" stripe>
+        <el-table :data="rolePagination.rows" stripe>
           <el-table-column label="角色" min-width="180">
             <template #default="{ row }">
               <div class="table-primary">
@@ -351,6 +390,19 @@
             </template>
           </el-table-column>
         </el-table>
+
+        <div class="table-pagination">
+          <el-pagination
+            background
+            layout="total, sizes, prev, pager, next"
+            :total="rolePagination.total"
+            :current-page="rolePagination.currentPage"
+            :page-size="rolePagination.pageSize"
+            :page-sizes="rolePagination.pageSizes"
+            @size-change="rolePagination.handleSizeChange"
+            @current-change="rolePagination.handleCurrentChange"
+          />
+        </div>
       </section>
 
       <section class="panel">
@@ -397,7 +449,7 @@
           <el-button @click="loadPolicies">刷新策略</el-button>
         </div>
 
-        <el-table :data="policies" stripe>
+        <el-table :data="policyPagination.rows" stripe>
           <el-table-column label="模块" width="140">
             <template #default="{ row }">
               {{ formatModuleCode(row.moduleCode) }}
@@ -420,6 +472,19 @@
           </el-table-column>
           <el-table-column label="条件规则" min-width="220" prop="conditionRule" />
         </el-table>
+
+        <div class="table-pagination">
+          <el-pagination
+            background
+            layout="total, sizes, prev, pager, next"
+            :total="policyPagination.total"
+            :current-page="policyPagination.currentPage"
+            :page-size="policyPagination.pageSize"
+            :page-sizes="policyPagination.pageSizes"
+            @size-change="policyPagination.handleSizeChange"
+            @current-change="policyPagination.handleCurrentChange"
+          />
+        </div>
       </section>
     </template>
   </div>
@@ -430,6 +495,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { fetchPermissionPolicies, savePermissionPolicy } from '../api/permission'
+import { useTablePagination } from '../composables/useTablePagination'
 import { currentUser } from '../utils/auth'
 import {
   formatActionCode,
@@ -516,6 +582,11 @@ const filteredEmployees = computed(() =>
     return true
   })
 )
+const departmentPagination = useTablePagination(computed(() => state.departments))
+const employeePagination = useTablePagination(() => filteredEmployees.value)
+const positionPagination = useTablePagination(computed(() => state.positions))
+const rolePagination = useTablePagination(computed(() => state.roles))
+const policyPagination = useTablePagination(policies)
 const filteredPositionsForEmployeeForm = computed(() => {
   const departmentCode = employeeForm.departmentCode
   return state.positions.filter((item) => item.departmentCode === departmentCode && item.isEnabled === 1)

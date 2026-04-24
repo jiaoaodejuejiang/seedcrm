@@ -9,6 +9,7 @@ import FinanceOverview from '../views/FinanceOverview.vue'
 import LoginView from '../views/LoginView.vue'
 import OrderManagement from '../views/OrderManagement.vue'
 import PlanOrderService from '../views/PlanOrderService.vue'
+import PrivateDomainLiveCodeView from '../views/PrivateDomainLiveCodeView.vue'
 import PrivateDomainServiceView from '../views/PrivateDomainServiceView.vue'
 import SalaryCenter from '../views/SalaryCenter.vue'
 import SystemOrganizationView from '../views/SystemOrganizationView.vue'
@@ -275,6 +276,19 @@ const routes = [
           moduleCode: 'WECOM',
           roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
           navKey: 'private-domain-wecom'
+        }
+      },
+      {
+        path: 'private-domain/live-code',
+        name: 'private-domain-live-code',
+        component: PrivateDomainLiveCodeView,
+        meta: {
+          title: '活码配置',
+          sectionTitle: '私域客服',
+          description: '配置轮询员工列表并生成企业微信活码，供门店服务人员营销引流时使用。',
+          moduleCode: 'WECOM',
+          roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
+          navKey: 'private-domain-live-code'
         }
       },
       {

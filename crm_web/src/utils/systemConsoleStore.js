@@ -243,7 +243,8 @@ const DEFAULT_STATE = {
     { id: 13, menuGroup: '系统设置', menuName: '对外接口', routePath: '/settings/integration/public-api', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 14, menuGroup: '系统设置', menuName: '字典管理', routePath: '/settings/dictionaries', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 15, menuGroup: '系统设置', menuName: '参数管理', routePath: '/settings/parameters', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 16, menuGroup: '私域客服', menuName: '企业微信', routePath: '/private-domain/wecom', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'], moduleCode: 'WECOM', isEnabled: 1 }
+    { id: 16, menuGroup: '私域客服', menuName: '企业微信', routePath: '/private-domain/wecom', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'], moduleCode: 'WECOM', isEnabled: 1 },
+    { id: 17, menuGroup: '私域客服', menuName: '活码配置', routePath: '/private-domain/live-code', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'], moduleCode: 'WECOM', isEnabled: 1 }
   ],
   thirdPartyApis: [
     {
@@ -305,25 +306,57 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value))
 }
 
+function mergeCollectionByKey(items, defaults, resolveKey) {
+  const currentItems = Array.isArray(items) ? items : []
+  const defaultItems = Array.isArray(defaults) ? defaults : []
+  const existingKeys = new Set(currentItems.map((item) => resolveKey(item)))
+
+  return [
+    ...currentItems,
+    ...defaultItems.filter((item) => !existingKeys.has(resolveKey(item)))
+  ]
+}
+
+function migrateSystemConsoleState(state) {
+  const defaults = clone(DEFAULT_STATE)
+  const nextState = {
+    ...defaults,
+    ...state
+  }
+
+  nextState.menuConfigs = mergeCollectionByKey(
+    state?.menuConfigs,
+    defaults.menuConfigs,
+    (item) => item?.routePath || item?.id
+  )
+
+  if (!Array.isArray(nextState.wecomLiveCodeConfigs)) {
+    nextState.wecomLiveCodeConfigs = []
+  }
+
+  return nextState
+}
+
 export function loadSystemConsoleState() {
   if (typeof window === 'undefined') {
-    return clone(DEFAULT_STATE)
+    return migrateSystemConsoleState(DEFAULT_STATE)
   }
   const raw = window.localStorage.getItem(STORAGE_KEY)
   if (!raw) {
-    const seeded = clone(DEFAULT_STATE)
+    const seeded = migrateSystemConsoleState(DEFAULT_STATE)
     saveSystemConsoleState(seeded)
     return seeded
   }
 
   try {
     const parsed = JSON.parse(raw)
-    return {
-      ...clone(DEFAULT_STATE),
-      ...parsed
+    const migrated = migrateSystemConsoleState(parsed)
+    if (JSON.stringify(migrated) !== JSON.stringify(parsed)) {
+      saveSystemConsoleState(migrated)
     }
+    return migrated
   } catch {
-    const seeded = clone(DEFAULT_STATE)
+    const seeded = migrateSystemConsoleState(DEFAULT_STATE)
     saveSystemConsoleState(seeded)
     return seeded
   }

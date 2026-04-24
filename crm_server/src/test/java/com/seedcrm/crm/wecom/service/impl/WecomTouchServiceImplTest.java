@@ -129,7 +129,7 @@ class WecomTouchServiceImplTest {
 
         assertThatThrownBy(() -> wecomTouchService.manualSend(5L, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("customer wecom relation not found");
+                .hasMessageContaining("企业微信关系");
         verify(wecomTouchLogMapper).insert(any(WecomTouchLog.class));
     }
 

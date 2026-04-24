@@ -1,113 +1,188 @@
 <template>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand-block">
-        <p class="brand-mark">CRM</p>
-        <h1>CRM控制台</h1>
+  <div class="app-shell admin-shell">
+    <header class="shell-topbar">
+      <div class="shell-topbar__brand">
+        <div class="brand-mark">CRM</div>
+        <div class="brand-copy">
+          <h1>CRM控制台</h1>
+          <p>{{ currentUser?.displayName || '未登录' }} · {{ currentRoleLabel }}</p>
+        </div>
       </div>
 
-      <nav class="nav-stack">
-        <section v-for="group in visibleGroups" :key="group.key" class="nav-section">
-          <div class="nav-section__header">
-            <div class="nav-title-row">
-              <strong>{{ group.label }}</strong>
-            </div>
-          </div>
+      <div class="shell-topbar__main">
+        <el-breadcrumb class="top-breadcrumb" separator="/">
+          <el-breadcrumb-item v-for="item in breadcrumbItems" :key="item">
+            {{ item }}
+          </el-breadcrumb-item>
+        </el-breadcrumb>
 
-          <template v-if="group.sections?.length">
-            <div v-for="section in group.sections" :key="section.key" class="nav-subsection">
-              <div class="nav-subsection__title">{{ section.label }}</div>
-              <div class="nav-section__items">
-                <RouterLink
-                  v-for="item in section.items"
-                  :key="item.key"
-                  :to="item.to"
-                  class="nav-card"
-                  :class="{ 'is-active': isActive(item) }"
-                >
-                  <div class="nav-card__row">
-                    <span class="nav-card__label">{{ item.label }}</span>
-                  </div>
-                </RouterLink>
+        <nav class="top-nav">
+          <RouterLink
+            v-for="group in visibleGroups"
+            :key="group.key"
+            :to="getGroupEntry(group)"
+            class="top-nav__item"
+            :class="{ 'is-active': activeGroup?.key === group.key }"
+          >
+            <el-icon class="top-nav__icon">
+              <component :is="group.icon" />
+            </el-icon>
+            <span>{{ group.label }}</span>
+          </RouterLink>
+        </nav>
+      </div>
+
+      <div class="shell-topbar__actions">
+        <div class="account-chip">
+          <strong class="account-chip__name">{{ currentUser?.displayName || '--' }}</strong>
+          <span>{{ currentScopeLabel }} · {{ currentUser?.username || '--' }}</span>
+        </div>
+        <el-button class="shell-topbar__logout" @click="handleLogout">退出</el-button>
+      </div>
+    </header>
+
+    <div class="shell-body">
+      <aside v-if="activeGroup" class="side-nav">
+        <div class="side-nav__hero">
+          <div class="side-nav__hero-icon">
+            <el-icon>
+              <component :is="activeGroup.icon" />
+            </el-icon>
+          </div>
+          <div class="side-nav__hero-copy">
+            <span class="side-nav__hero-eyebrow">当前模块</span>
+            <strong>{{ activeGroup.label }}</strong>
+            <p>{{ activeGroup.description }}</p>
+          </div>
+        </div>
+
+        <nav class="side-nav__sections">
+          <template v-if="activeGroup.sections?.length">
+            <section v-for="section in activeGroup.sections" :key="section.key" class="side-nav__section">
+              <div class="side-nav__section-title">
+                <el-icon>
+                  <component :is="section.icon" />
+                </el-icon>
+                <span>{{ section.label }}</span>
               </div>
-            </div>
+
+              <RouterLink
+                v-for="item in section.items"
+                :key="item.key"
+                :to="item.to"
+                class="side-nav__link"
+                :class="{ 'is-active': isActive(item) }"
+              >
+                <span class="side-nav__link-icon">
+                  <el-icon>
+                    <component :is="item.icon" />
+                  </el-icon>
+                </span>
+                <span class="side-nav__link-body">
+                  <span class="side-nav__link-title">{{ item.label }}</span>
+                </span>
+                <el-icon class="side-nav__link-arrow">
+                  <ArrowRight />
+                </el-icon>
+              </RouterLink>
+            </section>
           </template>
 
-          <div v-else class="nav-section__items">
+          <section v-else class="side-nav__section">
             <RouterLink
-              v-for="item in group.items"
+              v-for="item in activeGroup.items"
               :key="item.key"
               :to="item.to"
-              class="nav-card"
+              class="side-nav__link"
               :class="{ 'is-active': isActive(item) }"
             >
-              <div class="nav-card__row">
-                <span class="nav-card__label">{{ item.label }}</span>
-              </div>
+              <span class="side-nav__link-icon">
+                <el-icon>
+                  <component :is="item.icon" />
+                </el-icon>
+              </span>
+              <span class="side-nav__link-body">
+                <span class="side-nav__link-title">{{ item.label }}</span>
+              </span>
+              <el-icon class="side-nav__link-arrow">
+                <ArrowRight />
+              </el-icon>
             </RouterLink>
+          </section>
+        </nav>
+
+        <section class="side-nav__meta">
+          <div class="side-nav__meta-card">
+            <span>当前角色</span>
+            <strong>{{ currentRoleLabel }}</strong>
+          </div>
+          <div class="side-nav__meta-card">
+            <span>数据范围</span>
+            <strong>{{ currentScopeLabel }}</strong>
+          </div>
+          <div class="side-nav__meta-card">
+            <span>门店 ID</span>
+            <strong>{{ currentUser?.storeId || '--' }}</strong>
+          </div>
+          <div class="side-nav__meta-card">
+            <span>账号</span>
+            <strong>{{ currentUser?.username || '--' }}</strong>
           </div>
         </section>
-      </nav>
+      </aside>
 
-      <section class="permission-card">
-        <div class="panel-heading compact">
-          <div>
-            <h3>当前登录</h3>
-            <p>登录角色与权限已自动生效。</p>
+      <main class="main-panel">
+        <section class="page-header">
+          <div class="page-header__main">
+            <p class="page-header__eyebrow">{{ route.meta.sectionTitle || activeGroup?.label || '系统模块' }}</p>
+            <h2>{{ route.meta.title }}</h2>
           </div>
-          <el-button size="small" text @click="handleLogout">退出</el-button>
-        </div>
 
-        <div class="context-grid auth-grid">
-          <label>
-            <span>姓名</span>
-            <strong class="auth-card-value">{{ currentUser?.displayName || '--' }}</strong>
-          </label>
-          <label>
-            <span>角色</span>
-            <strong class="auth-card-value">{{ currentRoleLabel }}</strong>
-          </label>
-          <label>
-            <span>数据范围</span>
-            <strong class="auth-card-value">{{ currentScopeLabel }}</strong>
-          </label>
-          <label>
-            <span>门店 ID</span>
-            <strong class="auth-card-value">{{ currentUser?.storeId || '--' }}</strong>
-          </label>
-          <label class="full-span">
-            <span>账号</span>
-            <strong class="auth-card-value">{{ currentUser?.username || '--' }}</strong>
-          </label>
-        </div>
-      </section>
-    </aside>
+          <div class="page-header__summary">
+            <span class="summary-pill">角色：{{ currentRoleLabel }}</span>
+            <span class="summary-pill">范围：{{ currentScopeLabel }}</span>
+            <span class="summary-pill">主链：客资 → 客户 → 订单 → 排期履约</span>
+          </div>
+        </section>
 
-    <main class="main-panel">
-      <section class="page-header">
-        <div>
-          <p class="page-header__eyebrow">{{ route.meta.sectionTitle || '系统模块' }}</p>
-          <h2>{{ route.meta.title }}</h2>
-        </div>
-
-        <div class="page-header__summary">
-          <span class="summary-pill">角色：{{ currentRoleLabel }}</span>
-          <span class="summary-pill">范围：{{ currentScopeLabel }}</span>
-          <span class="summary-pill">主链：客资 → 客户 → 订单 → 排期履约</span>
-        </div>
-      </section>
-
-      <section class="page-body">
-        <router-view />
-        <p class="page-footnote">说明：{{ route.meta.note || route.meta.description || '当前页面按角色权限展示可操作数据。' }}</p>
-      </section>
-    </main>
+        <section class="page-body">
+          <router-view />
+        </section>
+      </main>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, markRaw } from 'vue'
 import { ElMessageBox } from 'element-plus'
+import {
+  ArrowRight,
+  Bell,
+  Calendar,
+  ChatDotRound,
+  CollectionTag,
+  Connection,
+  DataAnalysis,
+  Files,
+  Grid,
+  House,
+  Key,
+  Link,
+  Menu as MenuIcon,
+  Money,
+  OfficeBuilding,
+  Operation,
+  Picture,
+  Promotion,
+  SetUp,
+  Shop,
+  Suitcase,
+  Timer,
+  User,
+  Van,
+  WalletFilled
+} from '@element-plus/icons-vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { currentUser, hasAccess, logout } from '../utils/auth'
 import { formatRoleCode, formatScope } from '../utils/format'
@@ -115,25 +190,32 @@ import { formatRoleCode, formatScope } from '../utils/format'
 const route = useRoute()
 const router = useRouter()
 
+const icon = (component) => markRaw(component)
+
 const navGroups = [
   {
     key: 'clue-center',
     label: '客资中心',
+    icon: icon(House),
+    description: '统一查看客资、付款线索和排档进度。',
     sections: [
       {
         key: 'clue-center-main',
         label: '业务工作台',
+        icon: icon(Operation),
         items: [
           {
             key: 'clues',
             to: '/clues',
             label: '客资列表',
+            icon: icon(Files),
             moduleCode: 'CLUE'
           },
           {
             key: 'paid-orders',
             to: '/clues/scheduling',
             label: '顾客排档',
+            icon: icon(Calendar),
             moduleCode: 'ORDER',
             roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE']
           }
@@ -142,11 +224,13 @@ const navGroups = [
       {
         key: 'clue-center-management',
         label: '客资管理',
+        icon: icon(SetUp),
         items: [
           {
             key: 'clue-auto-assign',
             to: '/clue-management/auto-assign',
             label: '自动分配',
+            icon: icon(Connection),
             moduleCode: 'CLUE',
             roleCodes: ['CLUE_MANAGER', 'ADMIN']
           },
@@ -154,6 +238,7 @@ const navGroups = [
             key: 'duty-customer-service',
             to: '/clue-management/duty-cs',
             label: '值班客服',
+            icon: icon(User),
             moduleCode: 'CLUE',
             roleCodes: ['CLUE_MANAGER', 'ADMIN']
           },
@@ -161,6 +246,7 @@ const navGroups = [
             key: 'store-schedules',
             to: '/clue-management/store-schedules',
             label: '门店档期',
+            icon: icon(Calendar),
             moduleCode: 'CLUE',
             roleCodes: ['CLUE_MANAGER', 'ADMIN']
           }
@@ -171,11 +257,14 @@ const navGroups = [
   {
     key: 'store-service',
     label: '门店服务',
+    icon: icon(Shop),
+    description: '围绕订单、确认单和服务履约完成门店服务。',
     items: [
       {
         key: 'store-service-orders',
         to: '/store-service/orders',
         label: '订单列表',
+        icon: icon(Van),
         moduleCode: 'ORDER',
         roleCodes: ['STORE_SERVICE', 'ADMIN'],
         activePrefixes: ['/store-service/orders', '/orders', '/plan-orders', '/customers']
@@ -185,11 +274,14 @@ const navGroups = [
   {
     key: 'private-domain',
     label: '私域客服',
+    icon: icon(ChatDotRound),
+    description: '统一管理企业微信触达、活码、画像和标签能力。',
     items: [
       {
         key: 'private-domain-wecom',
         to: '/private-domain/wecom',
         label: '企业微信',
+        icon: icon(ChatDotRound),
         moduleCode: 'WECOM',
         roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE']
       },
@@ -197,6 +289,7 @@ const navGroups = [
         key: 'private-domain-live-code',
         to: '/private-domain/live-code',
         label: '活码配置',
+        icon: icon(Promotion),
         moduleCode: 'WECOM',
         roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE']
       },
@@ -204,6 +297,7 @@ const navGroups = [
         key: 'private-domain-profile',
         to: '/private-domain/customer-profile',
         label: '客户画像',
+        icon: icon(Picture),
         moduleCode: 'WECOM',
         roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE']
       },
@@ -211,13 +305,15 @@ const navGroups = [
         key: 'private-domain-moments',
         to: '/private-domain/moments',
         label: '朋友圈定时群发',
+        icon: icon(Bell),
         moduleCode: 'WECOM',
         roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE']
       },
       {
         key: 'private-domain-tags',
         to: '/private-domain/tags',
-        label: '便签管理',
+        label: '标签管理',
+        icon: icon(CollectionTag),
         moduleCode: 'WECOM',
         roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE']
       }
@@ -226,15 +322,19 @@ const navGroups = [
   {
     key: 'finance',
     label: '财务管理',
+    icon: icon(WalletFilled),
+    description: '查看财务看板、薪酬中心和薪酬配置。',
     sections: [
       {
         key: 'finance-dashboard',
         label: '财务看板',
+        icon: icon(DataAnalysis),
         items: [
           {
             key: 'finance',
             to: '/finance',
             label: '财务看板',
+            icon: icon(DataAnalysis),
             moduleCode: 'FINANCE'
           }
         ]
@@ -242,11 +342,13 @@ const navGroups = [
       {
         key: 'finance-salary',
         label: '薪酬中心',
+        icon: icon(Money),
         items: [
           {
             key: 'salary-center',
             to: '/finance/salary-center',
             label: '薪酬中心',
+            icon: icon(Money),
             moduleCode: 'SALARY'
           }
         ]
@@ -254,11 +356,13 @@ const navGroups = [
       {
         key: 'finance-salary-config',
         label: '薪酬配置',
+        icon: icon(Grid),
         items: [
           {
             key: 'salary-config-roles',
             to: '/finance/salary-config/roles',
             label: '薪酬角色',
+            icon: icon(User),
             moduleCode: 'SALARY',
             roleCodes: ['ADMIN']
           },
@@ -266,6 +370,7 @@ const navGroups = [
             key: 'salary-config-grades',
             to: '/finance/salary-config/grades',
             label: '薪酬档位',
+            icon: icon(Suitcase),
             moduleCode: 'SALARY',
             roleCodes: ['ADMIN']
           }
@@ -276,11 +381,14 @@ const navGroups = [
   {
     key: 'system-management',
     label: '系统管理',
+    icon: icon(Grid),
+    description: '维护组织架构、员工、岗位与角色关系。',
     items: [
       {
         key: 'system-departments',
         to: '/system/departments',
         label: '部门管理',
+        icon: icon(OfficeBuilding),
         moduleCode: 'SYSTEM',
         roleCodes: ['ADMIN']
       },
@@ -288,6 +396,7 @@ const navGroups = [
         key: 'system-employees',
         to: '/system/employees',
         label: '员工管理',
+        icon: icon(User),
         moduleCode: 'SYSTEM',
         roleCodes: ['ADMIN', 'CLUE_MANAGER']
       },
@@ -295,6 +404,7 @@ const navGroups = [
         key: 'system-positions',
         to: '/system/positions',
         label: '岗位管理',
+        icon: icon(Suitcase),
         moduleCode: 'SYSTEM',
         roleCodes: ['ADMIN']
       },
@@ -302,6 +412,7 @@ const navGroups = [
         key: 'system-roles',
         to: '/system/roles',
         label: '角色管理',
+        icon: icon(Key),
         moduleCode: 'SYSTEM',
         roleCodes: ['ADMIN']
       }
@@ -310,15 +421,19 @@ const navGroups = [
   {
     key: 'system-settings',
     label: '系统设置',
+    icon: icon(SetUp),
+    description: '统一管理菜单、参数、字典和调度中心。',
     sections: [
       {
         key: 'system-setting-base',
         label: '基础配置',
+        icon: icon(MenuIcon),
         items: [
           {
             key: 'settings-menu',
             to: '/settings/menu',
             label: '菜单管理',
+            icon: icon(MenuIcon),
             moduleCode: 'SETTING',
             roleCodes: ['ADMIN']
           },
@@ -326,6 +441,7 @@ const navGroups = [
             key: 'settings-dictionaries',
             to: '/settings/dictionaries',
             label: '字典管理',
+            icon: icon(CollectionTag),
             moduleCode: 'SETTING',
             roleCodes: ['ADMIN']
           },
@@ -333,6 +449,7 @@ const navGroups = [
             key: 'settings-parameters',
             to: '/settings/parameters',
             label: '参数管理',
+            icon: icon(SetUp),
             moduleCode: 'SETTING',
             roleCodes: ['ADMIN']
           }
@@ -341,11 +458,13 @@ const navGroups = [
       {
         key: 'system-setting-integration',
         label: '调度中心',
+        icon: icon(Timer),
         items: [
           {
             key: 'settings-third-party',
             to: '/settings/integration/third-party',
             label: '三方接口',
+            icon: icon(Link),
             moduleCode: 'SETTING',
             roleCodes: ['ADMIN']
           },
@@ -353,6 +472,7 @@ const navGroups = [
             key: 'settings-callback',
             to: '/settings/integration/callback',
             label: '回调接口',
+            icon: icon(Bell),
             moduleCode: 'SETTING',
             roleCodes: ['ADMIN']
           },
@@ -360,6 +480,7 @@ const navGroups = [
             key: 'settings-jobs',
             to: '/settings/integration/jobs',
             label: '任务调度',
+            icon: icon(Timer),
             moduleCode: 'SETTING',
             roleCodes: ['ADMIN']
           },
@@ -367,6 +488,7 @@ const navGroups = [
             key: 'settings-public-api',
             to: '/settings/integration/public-api',
             label: '对外接口',
+            icon: icon(Connection),
             moduleCode: 'SETTING',
             roleCodes: ['ADMIN']
           }
@@ -403,8 +525,22 @@ const visibleGroups = computed(() =>
     .filter((group) => group.items.length || group.sections.length)
 )
 
+const activeGroup = computed(() => visibleGroups.value.find((group) => groupHasActive(group)) || visibleGroups.value[0] || null)
 const currentRoleLabel = computed(() => formatRoleCode(currentUser.value?.roleCode))
 const currentScopeLabel = computed(() => formatScope(currentUser.value?.dataScope))
+const breadcrumbItems = computed(() => {
+  const parts = String(route.meta.sectionTitle || activeGroup.value?.label || '系统模块')
+    .split(/\s*\/\s*/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+  const title = String(route.meta.title || '').trim()
+
+  if (title && parts.at(-1) !== title) {
+    parts.push(title)
+  }
+
+  return parts.length ? parts : ['系统模块']
+})
 
 async function handleLogout() {
   try {
@@ -420,8 +556,22 @@ async function handleLogout() {
   }
 }
 
+function getGroupEntry(group) {
+  if (group.sections?.length) {
+    return group.sections[0]?.items[0]?.to || '/'
+  }
+  return group.items?.[0]?.to || '/'
+}
+
 function isActive(item) {
   const activePrefixes = item.activePrefixes || [item.to]
   return activePrefixes.some((prefix) => route.path === prefix || route.path.startsWith(`${prefix}/`))
+}
+
+function groupHasActive(group) {
+  if (group.sections?.length) {
+    return group.sections.some((section) => section.items.some((item) => isActive(item)))
+  }
+  return (group.items || []).some((item) => isActive(item))
 }
 </script>

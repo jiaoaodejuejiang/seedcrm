@@ -2,3 +2,4 @@
 .playwright-cli/
 .git/
 *.txt
+output/*.log

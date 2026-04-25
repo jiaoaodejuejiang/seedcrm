@@ -23,12 +23,21 @@ public class WecomModuleGuard {
         assertAllowed(check(context, "UPDATE"), "wecom update denied");
     }
 
+    public void checkConfigManage(PermissionRequestContext context) {
+        if (!"ADMIN".equalsIgnoreCase(String.valueOf(context.getRoleCode()).trim())) {
+            throw new BusinessException("wecom config manage denied: admin required");
+        }
+        assertAllowed(check(context, "UPDATE"), "wecom update denied");
+    }
+
     private PermissionCheckResponse check(PermissionRequestContext context, String actionCode) {
         PermissionCheckRequest request = new PermissionCheckRequest();
         request.setModuleCode("WECOM");
         request.setActionCode(actionCode);
         request.setRoleCode(context.getRoleCode());
-        request.setDataScope(context.getDataScope());
+        // WECOM console endpoints are workspace-level actions. Use the module policy
+        // directly instead of filtering them by the user's default data scope.
+        request.setDataScope(null);
         request.setCurrentUserId(context.getCurrentUserId());
         request.setCurrentStoreId(context.getCurrentStoreId());
         request.setResourceStoreId(context.getCurrentStoreId());

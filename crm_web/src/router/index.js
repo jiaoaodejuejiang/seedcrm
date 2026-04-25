@@ -13,8 +13,10 @@ import PlanOrderService from '../views/PlanOrderService.vue'
 import PrivateDomainCustomerProfileView from '../views/PrivateDomainCustomerProfileView.vue'
 import PrivateDomainLiveCodeView from '../views/PrivateDomainLiveCodeView.vue'
 import PrivateDomainMomentsView from '../views/PrivateDomainMomentsView.vue'
-import PrivateDomainServiceView from '../views/PrivateDomainServiceView.vue'
 import PrivateDomainTagManagementView from '../views/PrivateDomainTagManagementView.vue'
+import PlatformDouyinConfigView from '../views/PlatformDouyinConfigView.vue'
+import PlatformRuntimeView from '../views/PlatformRuntimeView.vue'
+import PlatformWecomConfigView from '../views/PlatformWecomConfigView.vue'
 import SalaryCenter from '../views/SalaryCenter.vue'
 import SalaryConfigView from '../views/SalaryConfigView.vue'
 import StoreScheduleManagementView from '../views/StoreScheduleManagementView.vue'
@@ -150,11 +152,11 @@ const routes = [
       {
         path: 'private-domain/wecom',
         name: 'private-domain-wecom',
-        component: PrivateDomainServiceView,
+        component: PlatformWecomConfigView,
         meta: {
           title: '企业微信',
           sectionTitle: '私域客服',
-          description: '配置企微联系人、触达规则，并支持手工发送客户消息。',
+          description: '统一配置企微接入、回调安全与活码默认参数。',
           moduleCode: 'WECOM',
           roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
           navKey: 'private-domain-wecom'
@@ -321,6 +323,62 @@ const routes = [
         }
       },
       {
+        path: 'platform/wecom',
+        name: 'platform-wecom',
+        redirect: '/private-domain/wecom'
+      },
+      {
+        path: 'platform/douyin',
+        name: 'platform-douyin',
+        redirect: '/settings/integration/third-party'
+      },
+      {
+        path: 'platform/runtime',
+        name: 'platform-runtime',
+        redirect: '/settings/integration/callback'
+      },
+      {
+        path: 'settings/integration/third-party',
+        name: 'settings-third-party',
+        component: PlatformDouyinConfigView,
+        meta: {
+          title: '三方接口',
+          sectionTitle: '系统设置 / 调度中心',
+          description: '配置抖音来客接入、授权参数与拉取能力。',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-third-party'
+        }
+      },
+      {
+        path: 'settings/integration/callback',
+        name: 'settings-callback',
+        component: PlatformRuntimeView,
+        meta: {
+          title: '回调接口',
+          sectionTitle: '系统设置 / 调度中心',
+          description: '查看企业微信与抖音来客回调状态。',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-callback',
+          runtimeTab: 'wecom'
+        }
+      },
+      {
+        path: 'settings/integration/jobs',
+        name: 'settings-jobs',
+        component: PlatformRuntimeView,
+        meta: {
+          title: '任务调度',
+          sectionTitle: '系统设置 / 调度中心',
+          description: '查看调度任务、执行记录与失败重试。',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-jobs',
+          runtimeTab: 'jobs'
+        }
+      },
+      {
         path: 'settings/menu',
         name: 'settings-menu',
         component: SystemSettingView,
@@ -332,48 +390,6 @@ const routes = [
           roleCodes: ['ADMIN'],
           navKey: 'settings-menu',
           settingMode: 'menu'
-        }
-      },
-      {
-        path: 'settings/integration/third-party',
-        name: 'settings-third-party',
-        component: SystemSettingView,
-        meta: {
-          title: '三方接口',
-          sectionTitle: '系统设置 / 调度中心',
-          description: '配置三方 API 地址和拉取方式，客资中心当前数据来源于此。',
-          moduleCode: 'SETTING',
-          roleCodes: ['ADMIN'],
-          navKey: 'settings-third-party',
-          settingMode: 'third-party'
-        }
-      },
-      {
-        path: 'settings/integration/callback',
-        name: 'settings-callback',
-        component: SystemSettingView,
-        meta: {
-          title: '回调接口',
-          sectionTitle: '系统设置 / 调度中心',
-          description: '维护回调地址与签名方式，统一接收外部异步通知。',
-          moduleCode: 'SETTING',
-          roleCodes: ['ADMIN'],
-          navKey: 'settings-callback',
-          settingMode: 'callback'
-        }
-      },
-      {
-        path: 'settings/integration/jobs',
-        name: 'settings-jobs',
-        component: SystemSettingView,
-        meta: {
-          title: '任务调度',
-          sectionTitle: '系统设置 / 调度中心',
-          description: '参考任务调度中心方式管理三方调用、定时同步和失败重试。',
-          moduleCode: 'SETTING',
-          roleCodes: ['ADMIN'],
-          navKey: 'settings-jobs',
-          settingMode: 'jobs'
         }
       },
       {

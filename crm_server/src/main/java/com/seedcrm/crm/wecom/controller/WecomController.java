@@ -56,7 +56,7 @@ public class WecomController {
     public ApiResponse<WecomAppConfig> saveConfig(@RequestBody WecomAppConfig request,
                                                   HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
-        wecomModuleGuard.checkUpdate(context);
+        wecomModuleGuard.checkConfigManage(context);
         return ApiResponse.success(wecomConsoleService.saveConfig(request));
     }
 
@@ -64,14 +64,14 @@ public class WecomController {
     public ApiResponse<WecomAppConfig> testConfig(@RequestBody WecomAppConfig request,
                                                   HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
-        wecomModuleGuard.checkUpdate(context);
+        wecomModuleGuard.checkConfigManage(context);
         return ApiResponse.success(wecomConsoleService.testConfig(request));
     }
 
     @GetMapping("/rules")
     public ApiResponse<List<WecomTouchRule>> listRules(HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
-        wecomModuleGuard.checkView(context);
+        wecomModuleGuard.checkConfigManage(context);
         return ApiResponse.success(wecomConsoleService.listRules());
     }
 
@@ -79,7 +79,7 @@ public class WecomController {
     public ApiResponse<WecomTouchRule> saveRule(@RequestBody WecomTouchRule request,
                                                 HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
-        wecomModuleGuard.checkUpdate(context);
+        wecomModuleGuard.checkConfigManage(context);
         return ApiResponse.success(wecomConsoleService.saveRule(request));
     }
 
@@ -87,7 +87,7 @@ public class WecomController {
     public ApiResponse<WecomTouchRule> toggleRule(@RequestParam Long ruleId,
                                                   HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
-        wecomModuleGuard.checkUpdate(context);
+        wecomModuleGuard.checkConfigManage(context);
         return ApiResponse.success(wecomConsoleService.toggleRule(ruleId));
     }
 

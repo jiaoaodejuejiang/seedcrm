@@ -60,6 +60,9 @@ public class IntegrationProviderConfig {
     @TableField("auth_code")
     private String authCode;
 
+    @TableField("auth_code_status")
+    private String authCodeStatus;
+
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @TableField("access_token")
     private String accessToken;
@@ -68,17 +71,38 @@ public class IntegrationProviderConfig {
     @TableField("refresh_token")
     private String refreshToken;
 
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("token_expires_at")
+    private LocalDateTime tokenExpiresAt;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("refresh_token_expires_at")
+    private LocalDateTime refreshTokenExpiresAt;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("last_refresh_at")
+    private LocalDateTime lastRefreshAt;
+
     @TableField("account_id")
     private String accountId;
 
     @TableField("life_account_ids")
     private String lifeAccountIds;
 
+    @TableField("local_account_ids")
+    private String localAccountIds;
+
     @TableField("open_id")
     private String openId;
 
     @TableField("page_size")
     private Integer pageSize;
+
+    @TableField("pull_window_minutes")
+    private Integer pullWindowMinutes;
+
+    @TableField("overlap_minutes")
+    private Integer overlapMinutes;
 
     @TableField("request_timeout_ms")
     private Integer requestTimeoutMs;

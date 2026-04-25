@@ -66,14 +66,23 @@ public class WecomConsoleSchemaInitializer {
                     app_code VARCHAR(64) NOT NULL,
                     app_id VARCHAR(128),
                     suite_id VARCHAR(128),
+                    auth_mode VARCHAR(32),
                     corp_id VARCHAR(128),
+                    auth_corp_id VARCHAR(128),
                     agent_id VARCHAR(64),
                     app_secret VARCHAR(255),
+                    suite_secret VARCHAR(255),
                     auth_code VARCHAR(255),
+                    suite_ticket VARCHAR(255),
+                    permanent_code VARCHAR(255),
                     access_token VARCHAR(255),
                     refresh_token VARCHAR(255),
+                    suite_access_token VARCHAR(255),
+                    corp_access_token VARCHAR(255),
                     execution_mode VARCHAR(16) DEFAULT 'MOCK',
                     callback_url VARCHAR(255),
+                    redirect_uri VARCHAR(255),
+                    trusted_domain VARCHAR(255),
                     callback_token VARCHAR(255),
                     encoding_aes_key VARCHAR(255),
                     live_code_type INT DEFAULT 2,
@@ -89,7 +98,11 @@ public class WecomConsoleSchemaInitializer {
                     last_callback_status VARCHAR(32),
                     last_callback_message VARCHAR(255),
                     last_token_checked_at DATETIME,
+                    suite_ticket_at DATETIME,
                     last_auth_code_at DATETIME,
+                    token_expires_at DATETIME,
+                    suite_access_token_expires_at DATETIME,
+                    corp_access_token_expires_at DATETIME,
                     last_callback_at DATETIME,
                     last_callback_payload TEXT,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -127,14 +140,23 @@ public class WecomConsoleSchemaInitializer {
         columns.put("app_code", "app_code VARCHAR(64) NOT NULL");
         columns.put("app_id", "app_id VARCHAR(128)");
         columns.put("suite_id", "suite_id VARCHAR(128)");
+        columns.put("auth_mode", "auth_mode VARCHAR(32)");
         columns.put("corp_id", "corp_id VARCHAR(128)");
+        columns.put("auth_corp_id", "auth_corp_id VARCHAR(128)");
         columns.put("agent_id", "agent_id VARCHAR(64)");
         columns.put("app_secret", "app_secret VARCHAR(255)");
+        columns.put("suite_secret", "suite_secret VARCHAR(255)");
         columns.put("auth_code", "auth_code VARCHAR(255)");
+        columns.put("suite_ticket", "suite_ticket VARCHAR(255)");
+        columns.put("permanent_code", "permanent_code VARCHAR(255)");
         columns.put("access_token", "access_token VARCHAR(255)");
         columns.put("refresh_token", "refresh_token VARCHAR(255)");
+        columns.put("suite_access_token", "suite_access_token VARCHAR(255)");
+        columns.put("corp_access_token", "corp_access_token VARCHAR(255)");
         columns.put("execution_mode", "execution_mode VARCHAR(16) DEFAULT 'MOCK'");
         columns.put("callback_url", "callback_url VARCHAR(255)");
+        columns.put("redirect_uri", "redirect_uri VARCHAR(255)");
+        columns.put("trusted_domain", "trusted_domain VARCHAR(255)");
         columns.put("callback_token", "callback_token VARCHAR(255)");
         columns.put("encoding_aes_key", "encoding_aes_key VARCHAR(255)");
         columns.put("live_code_type", "live_code_type INT DEFAULT 2");
@@ -150,7 +172,11 @@ public class WecomConsoleSchemaInitializer {
         columns.put("last_callback_status", "last_callback_status VARCHAR(32)");
         columns.put("last_callback_message", "last_callback_message VARCHAR(255)");
         columns.put("last_token_checked_at", "last_token_checked_at DATETIME");
+        columns.put("suite_ticket_at", "suite_ticket_at DATETIME");
         columns.put("last_auth_code_at", "last_auth_code_at DATETIME");
+        columns.put("token_expires_at", "token_expires_at DATETIME");
+        columns.put("suite_access_token_expires_at", "suite_access_token_expires_at DATETIME");
+        columns.put("corp_access_token_expires_at", "corp_access_token_expires_at DATETIME");
         columns.put("last_callback_at", "last_callback_at DATETIME");
         columns.put("last_callback_payload", "last_callback_payload TEXT");
         columns.put("created_at", "created_at DATETIME DEFAULT CURRENT_TIMESTAMP");

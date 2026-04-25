@@ -82,12 +82,19 @@ public class SchedulerIntegrationSchemaInitializer {
                     redirect_uri VARCHAR(255),
                     scope VARCHAR(255),
                     auth_code VARCHAR(255),
+                    auth_code_status VARCHAR(32),
                     access_token VARCHAR(255),
                     refresh_token VARCHAR(255),
+                    token_expires_at DATETIME,
+                    refresh_token_expires_at DATETIME,
+                    last_refresh_at DATETIME,
                     account_id VARCHAR(128),
                     life_account_ids VARCHAR(255),
+                    local_account_ids VARCHAR(255),
                     open_id VARCHAR(128),
                     page_size INT DEFAULT 20,
+                    pull_window_minutes INT DEFAULT 60,
+                    overlap_minutes INT DEFAULT 10,
                     request_timeout_ms INT DEFAULT 10000,
                     callback_url VARCHAR(255),
                     enabled TINYINT DEFAULT 1,
@@ -178,12 +185,19 @@ public class SchedulerIntegrationSchemaInitializer {
         columns.put("redirect_uri", "redirect_uri VARCHAR(255)");
         columns.put("scope", "scope VARCHAR(255)");
         columns.put("auth_code", "auth_code VARCHAR(255)");
+        columns.put("auth_code_status", "auth_code_status VARCHAR(32)");
         columns.put("access_token", "access_token VARCHAR(255)");
         columns.put("refresh_token", "refresh_token VARCHAR(255)");
+        columns.put("token_expires_at", "token_expires_at DATETIME");
+        columns.put("refresh_token_expires_at", "refresh_token_expires_at DATETIME");
+        columns.put("last_refresh_at", "last_refresh_at DATETIME");
         columns.put("account_id", "account_id VARCHAR(128)");
         columns.put("life_account_ids", "life_account_ids VARCHAR(255)");
+        columns.put("local_account_ids", "local_account_ids VARCHAR(255)");
         columns.put("open_id", "open_id VARCHAR(128)");
         columns.put("page_size", "page_size INT DEFAULT 20");
+        columns.put("pull_window_minutes", "pull_window_minutes INT DEFAULT 60");
+        columns.put("overlap_minutes", "overlap_minutes INT DEFAULT 10");
         columns.put("request_timeout_ms", "request_timeout_ms INT DEFAULT 10000");
         columns.put("callback_url", "callback_url VARCHAR(255)");
         columns.put("enabled", "enabled TINYINT DEFAULT 1");
@@ -261,15 +275,16 @@ public class SchedulerIntegrationSchemaInitializer {
         jdbcTemplate.update("""
                 INSERT INTO integration_provider_config(
                     provider_code, provider_name, module_code, execution_mode, auth_type,
-                    app_id, base_url, token_url, endpoint_path, page_size, request_timeout_ms,
+                    app_id, base_url, token_url, endpoint_path, page_size, pull_window_minutes,
+                    overlap_minutes, request_timeout_ms,
                     enabled, remark, auth_status, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                "DOUYIN_LAIKE", "抖音来客线索", "CLUE", "MOCK", "CLIENT_TOKEN",
+                "DOUYIN_LAIKE", "抖音来客线索", "CLUE", "MOCK", "AUTH_CODE",
                 null,
-                "https://open.douyin.com", "https://open.douyin.com/oauth/client_token/",
-                "/goodlife/v1/open_api/crm/clue/query/", 20, 10000,
+                "https://api.oceanengine.com", "https://api.oceanengine.com/open_api/oauth2/access_token/",
+                "/open_api/2/tools/clue/life/get/", 20, 60, 10, 10000,
                 1, "默认保留 MOCK 模式，便于本地联调", "MOCK", now, now);
     }
 

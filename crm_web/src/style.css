@@ -597,20 +597,28 @@ label > span {
   padding: 14px 16px;
   background: #f8fafc;
   text-align: left;
-  display: grid;
-  gap: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   cursor: pointer;
   color: #13212d;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background 0.18s ease;
 }
 
 .workspace-card strong {
+  flex: 1;
+  min-width: 0;
   font-size: 15px;
 }
 
 .workspace-card span {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.1);
+  color: #1d4ed8;
   font-size: 12px;
-  color: #64748b;
 }
 
 .workspace-card:hover,
@@ -1401,10 +1409,7 @@ label > span {
 }
 
 body {
-  background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 22%),
-    radial-gradient(circle at right top, rgba(14, 165, 233, 0.08), transparent 20%),
-    var(--crm-bg);
+  background: var(--crm-bg);
   color: var(--crm-text);
   overflow-x: hidden;
 }
@@ -1414,12 +1419,12 @@ body {
 }
 
 .admin-shell .shell-topbar {
-  grid-template-columns: minmax(196px, 232px) minmax(0, 1fr) auto;
-  gap: 16px;
-  padding: 18px 24px;
-  background: rgba(255, 255, 255, 0.88);
+  grid-template-columns: minmax(164px, 196px) minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 14px 18px;
+  background: #ffffff;
   border-bottom: 1px solid var(--crm-border);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+  box-shadow: none;
 }
 
 .admin-shell .shell-topbar__brand,
@@ -1439,15 +1444,15 @@ body {
 }
 
 .admin-shell .brand-mark {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+  box-shadow: none;
 }
 
 .admin-shell .brand-copy h1 {
-  font-size: 24px;
+  font-size: 22px;
   white-space: nowrap;
 }
 
@@ -1485,12 +1490,13 @@ body {
 }
 
 .admin-shell .top-nav__item {
-  padding: 10px 12px;
-  border-radius: 14px;
+  padding: 8px 10px;
+  border-radius: 12px;
   border: 1px solid transparent;
   background: transparent;
   color: #334155;
   white-space: nowrap;
+  font-size: 13px;
 }
 
 .admin-shell .top-nav__item:hover {
@@ -1515,12 +1521,12 @@ body {
 
 .admin-shell .account-chip {
   min-width: 0;
-  max-width: 188px;
-  padding: 9px 12px;
+  max-width: 164px;
+  padding: 8px 10px;
   border-radius: 14px;
   border: 1px solid var(--crm-border);
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.04);
+  box-shadow: none;
 }
 
 .admin-shell .account-chip__name {
@@ -1542,25 +1548,25 @@ body {
 }
 
 .admin-shell .shell-body {
-  grid-template-columns: 232px minmax(0, 1fr);
-  gap: 16px;
-  padding: 16px 18px 18px;
+  grid-template-columns: 224px minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px 16px 16px;
 }
 
 .admin-shell .side-nav {
   top: 90px;
   max-height: calc(100vh - 108px);
-  gap: 14px;
-  padding: 14px;
-  border-radius: 20px;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 18px;
   border: 1px solid var(--crm-border);
   background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+  box-shadow: none;
 }
 
 .admin-shell .side-nav__hero {
   gap: 10px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 16px;
   background: #f8fbff;
   border: 1px solid rgba(59, 130, 246, 0.1);
@@ -1700,6 +1706,8 @@ body {
 }
 
 .login-showcase {
+  display: grid;
+  gap: 18px;
   padding: 34px;
   background:
     radial-gradient(circle at top right, rgba(96, 165, 250, 0.26), transparent 30%),
@@ -1707,55 +1715,39 @@ body {
   color: #ffffff;
 }
 
-.login-showcase__badge {
-  display: inline-flex;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  font-size: 12px;
-  letter-spacing: 0.06em;
-}
-
 .login-showcase .brand-mark {
-  margin-top: 18px;
+  margin-top: 0;
   background: rgba(255, 255, 255, 0.12);
   box-shadow: none;
 }
 
 .login-showcase h1 {
-  margin: 16px 0 12px;
-  font-size: 40px;
+  margin: 0;
+  font-size: 36px;
   line-height: 1.1;
 }
 
 .login-showcase__summary {
   margin: 0;
-  max-width: 460px;
+  max-width: 360px;
   color: rgba(255, 255, 255, 0.82);
   font-size: 15px;
 }
 
-.login-showcase__highlights {
-  margin-top: 28px;
-  display: grid;
-  gap: 14px;
+.login-showcase__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.login-highlight {
-  display: grid;
-  gap: 6px;
-  padding: 16px 18px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.08);
+.login-role-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.login-highlight strong {
-  font-size: 16px;
-}
-
-.login-highlight span {
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.88);
   font-size: 13px;
 }
 
@@ -1801,7 +1793,10 @@ body {
 }
 
 .admin-login-shell .demo-account {
-  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
   border-radius: 18px;
   border: 1px solid rgba(59, 130, 246, 0.08);
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
@@ -1814,18 +1809,24 @@ body {
 }
 
 .admin-login-shell .demo-account strong {
+  flex: 1;
+  min-width: 0;
   color: var(--crm-text);
 }
 
-.admin-login-shell .demo-account span,
-.admin-login-shell .demo-account small {
-  color: var(--crm-text-soft);
+.admin-login-shell .demo-account span {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.08);
+  color: #1d4ed8;
+  font-size: 12px;
 }
 
 @media (max-width: 1400px) {
   .admin-shell .shell-topbar {
-    grid-template-columns: minmax(176px, 212px) minmax(0, 1fr) auto;
-    padding: 16px 20px;
+    grid-template-columns: minmax(160px, 188px) minmax(0, 1fr) auto;
+    padding: 14px 16px;
   }
 
   .admin-shell .brand-copy p,
@@ -1839,7 +1840,7 @@ body {
   }
 
   .admin-shell .account-chip {
-    max-width: 170px;
+    max-width: 156px;
   }
 }
 

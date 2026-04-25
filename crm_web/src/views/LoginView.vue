@@ -1,26 +1,14 @@
 <template>
   <div class="login-shell admin-login-shell">
     <section class="login-showcase">
-      <div class="login-showcase__badge">Element Admin 风格</div>
       <p class="brand-mark">CRM</p>
-      <h1>CRM 控制台登录</h1>
-      <p class="login-showcase__summary">
-        采用统一后台壳风格，登录后自动注入角色、数据范围和菜单权限，前后台行为保持一致。
-      </p>
+      <h1>CRM 控制台</h1>
+      <p class="login-showcase__summary">按角色登录后自动进入对应工作台与权限范围。</p>
 
-      <div class="login-showcase__highlights">
-        <article class="login-highlight">
-          <strong>角色权限自动生效</strong>
-          <span>管理员、客资主管、门店服务、私域客服登录后看到的菜单会自动收敛。</span>
-        </article>
-        <article class="login-highlight">
-          <strong>业务主链统一联动</strong>
-          <span>客资、订单、排档和门店履约都在同一套后台交互中完成。</span>
-        </article>
-        <article class="login-highlight">
-          <strong>后续可继续扩展主题</strong>
-          <span>当前先落地成熟商务风，后面再接入浅色、深色或品牌主题切换。</span>
-        </article>
+      <div class="login-showcase__roles">
+        <span v-for="account in demoAccounts" :key="account.username" class="login-role-pill">
+          {{ account.title }}
+        </span>
       </div>
     </section>
 
@@ -52,8 +40,8 @@
 
       <div class="login-panel__card login-panel__card--soft">
         <div class="login-panel__header">
-          <h3>演示账号</h3>
-          <p>点击即可自动填充，统一密码均为 `123456`</p>
+          <h3>快捷账号</h3>
+          <p>点击即可填充，统一密码 `123456`</p>
         </div>
 
         <div class="login-demo-grid">
@@ -66,7 +54,6 @@
           >
             <strong>{{ account.title }}</strong>
             <span>{{ account.username }}</span>
-            <small>{{ account.description }}</small>
           </button>
         </div>
       </div>

@@ -12,6 +12,7 @@ import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
 import com.seedcrm.crm.scheduler.mapper.IntegrationCallbackConfigMapper;
 import com.seedcrm.crm.scheduler.mapper.IntegrationCallbackEventLogMapper;
 import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
+import java.time.LocalDateTime;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,10 +52,14 @@ class SchedulerIntegrationServiceImplTest {
         provider.setProviderName("抖音来客线索");
         provider.setModuleCode("CLUE");
         provider.setExecutionMode("LIVE");
+        provider.setCallbackUrl("http://127.0.0.1:8080/scheduler/oauth/douyin/callback");
+        provider.setAccessToken("live-access-token");
+        provider.setTokenExpiresAt(LocalDateTime.now().plusHours(1));
 
         IntegrationCallbackConfig callback = new IntegrationCallbackConfig();
         callback.setId(2L);
         callback.setProviderCode("DOUYIN_LAIKE");
+        callback.setCallbackUrl("http://127.0.0.1:8080/scheduler/oauth/douyin/callback");
         callback.setCallbackName("抖音来客授权回调");
 
         when(providerConfigMapper.selectOne(any())).thenReturn(provider);

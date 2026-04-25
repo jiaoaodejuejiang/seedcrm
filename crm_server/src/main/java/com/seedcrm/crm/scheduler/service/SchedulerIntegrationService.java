@@ -29,5 +29,7 @@ public interface SchedulerIntegrationService {
 
     IntegrationProviderConfig getEnabledProviderOrNull(Long providerId);
 
+    String resolveProviderAccessToken(IntegrationProviderConfig config);
+
     void markSyncResult(Long providerId, boolean success, String message);
 }

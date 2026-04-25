@@ -33,6 +33,9 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     private static final String MODE_MOCK = "MOCK";
     private static final String MODE_LIVE = "LIVE";
     private static final String PROVIDER_DOUYIN = "DOUYIN_LAIKE";
+    private static final String AUTH_TYPE_AUTH_CODE = "AUTH_CODE";
+    private static final String DOUYIN_TOKEN_URL = "https://api.oceanengine.com/open_api/oauth2/access_token/";
+    private static final String DOUYIN_REFRESH_TOKEN_URL = "https://api.oceanengine.com/open_api/oauth2/refresh_token/";
 
     private final IntegrationProviderConfigMapper providerConfigMapper;
     private final IntegrationCallbackConfigMapper callbackConfigMapper;
@@ -106,9 +109,9 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         }
         assertHttps(working.getBaseUrl(), "baseUrl");
         if (PROVIDER_DOUYIN.equals(working.getProviderCode())) {
-            String token = fetchDouyinClientToken(working);
+            String token = resolveDouyinAccessToken(working);
             working.setLastTestStatus("SUCCESS");
-            working.setLastTestMessage("连接成功，已获取 client_token：" + maskValue(token));
+            working.setLastTestMessage("连接成功，已获取 access_token：" + maskValue(token));
             working.setLastTestAt(LocalDateTime.now());
             updateProviderTestStateIfPersisted(working);
             return maskProvider(working);
@@ -233,11 +236,25 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             provider.setLastCallbackPayload(trimPayload(callbackPayload));
             if (trustedCallback) {
                 provider.setAuthCode(resolveSensitiveValue(authCode, provider.getAuthCode()));
+                provider.setAuthCodeStatus(StringUtils.hasText(authCode) ? "RECEIVED" : provider.getAuthCodeStatus());
                 provider.setAccessToken(resolveSensitiveValue(accessToken, provider.getAccessToken()));
                 provider.setRefreshToken(resolveSensitiveValue(refreshToken, provider.getRefreshToken()));
+                try {
+                    if (PROVIDER_DOUYIN.equals(normalizedProviderCode)) {
+                        resolveDouyinAccessToken(provider);
+                        if (StringUtils.hasText(authCode)) {
+                            callbackMessage = "已接收 auth_code 并完成 access_token 换取";
+                        }
+                    }
+                } catch (BusinessException exception) {
+                    callbackStatus = "FAILED";
+                    callbackMessage = exception.getMessage();
+                }
                 provider.setAuthStatus(resolveAuthStatus(provider.getAuthStatus(), errorMessage, authCode, accessToken));
                 provider.setLastAuthCodeAt(StringUtils.hasText(authCode) ? now : provider.getLastAuthCodeAt());
             }
+            provider.setLastCallbackStatus(callbackStatus);
+            provider.setLastCallbackMessage(trimMessage(callbackMessage));
             provider.setUpdatedAt(now);
             providerConfigMapper.updateById(provider);
         }
@@ -288,6 +305,20 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     }
 
     @Override
+    public String resolveProviderAccessToken(IntegrationProviderConfig config) {
+        IntegrationProviderConfig working = mergeProvider(config);
+        if (working == null || !MODE_LIVE.equals(working.getExecutionMode())) {
+            return null;
+        }
+        if (PROVIDER_DOUYIN.equals(working.getProviderCode())) {
+            String token = resolveDouyinAccessToken(working);
+            updateProviderAuthorizationIfPersisted(working);
+            return token;
+        }
+        return working.getAccessToken();
+    }
+
+    @Override
     public void markSyncResult(Long providerId, boolean success, String message) {
         if (providerId == null || providerId <= 0) {
             return;
@@ -325,12 +356,19 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             working.setRedirectUri(existing.getRedirectUri());
             working.setScope(existing.getScope());
             working.setAuthCode(existing.getAuthCode());
+            working.setAuthCodeStatus(existing.getAuthCodeStatus());
             working.setAccessToken(existing.getAccessToken());
             working.setRefreshToken(existing.getRefreshToken());
+            working.setTokenExpiresAt(existing.getTokenExpiresAt());
+            working.setRefreshTokenExpiresAt(existing.getRefreshTokenExpiresAt());
+            working.setLastRefreshAt(existing.getLastRefreshAt());
             working.setAccountId(existing.getAccountId());
             working.setLifeAccountIds(existing.getLifeAccountIds());
+            working.setLocalAccountIds(existing.getLocalAccountIds());
             working.setOpenId(existing.getOpenId());
             working.setPageSize(existing.getPageSize());
+            working.setPullWindowMinutes(existing.getPullWindowMinutes());
+            working.setOverlapMinutes(existing.getOverlapMinutes());
             working.setRequestTimeoutMs(existing.getRequestTimeoutMs());
             working.setCallbackUrl(existing.getCallbackUrl());
             working.setEnabled(existing.getEnabled());
@@ -384,7 +422,9 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         target.setProviderName(source.getProviderName().trim());
         target.setModuleCode(normalize(source.getModuleCode()));
         target.setExecutionMode(normalizeExecutionMode(source.getExecutionMode()));
-        target.setAuthType(StringUtils.hasText(source.getAuthType()) ? source.getAuthType().trim() : "CLIENT_TOKEN");
+        target.setAuthType(StringUtils.hasText(source.getAuthType())
+                ? source.getAuthType().trim()
+                : PROVIDER_DOUYIN.equals(normalize(source.getProviderCode())) ? AUTH_TYPE_AUTH_CODE : "CLIENT_TOKEN");
         target.setAppId(trimToNull(source.getAppId()));
         target.setBaseUrl(trimToNull(source.getBaseUrl()));
         target.setTokenUrl(trimToNull(source.getTokenUrl()));
@@ -394,12 +434,21 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         target.setRedirectUri(trimToNull(source.getRedirectUri()));
         target.setScope(trimToNull(source.getScope()));
         target.setAuthCode(resolveSensitiveValue(source.getAuthCode(), existing == null ? null : existing.getAuthCode()));
+        target.setAuthCodeStatus(trimToNull(firstNonBlank(source.getAuthCodeStatus(), existing == null ? null : existing.getAuthCodeStatus())));
         target.setAccessToken(resolveSensitiveValue(source.getAccessToken(), existing == null ? null : existing.getAccessToken()));
         target.setRefreshToken(resolveSensitiveValue(source.getRefreshToken(), existing == null ? null : existing.getRefreshToken()));
+        target.setTokenExpiresAt(source.getTokenExpiresAt() == null ? existing == null ? null : existing.getTokenExpiresAt() : source.getTokenExpiresAt());
+        target.setRefreshTokenExpiresAt(source.getRefreshTokenExpiresAt() == null
+                ? existing == null ? null : existing.getRefreshTokenExpiresAt()
+                : source.getRefreshTokenExpiresAt());
+        target.setLastRefreshAt(source.getLastRefreshAt() == null ? existing == null ? null : existing.getLastRefreshAt() : source.getLastRefreshAt());
         target.setAccountId(trimToNull(source.getAccountId()));
         target.setLifeAccountIds(trimToNull(source.getLifeAccountIds()));
+        target.setLocalAccountIds(trimToNull(source.getLocalAccountIds()));
         target.setOpenId(trimToNull(source.getOpenId()));
         target.setPageSize(source.getPageSize() == null || source.getPageSize() <= 0 ? 20 : source.getPageSize());
+        target.setPullWindowMinutes(source.getPullWindowMinutes() == null || source.getPullWindowMinutes() <= 0 ? 60 : source.getPullWindowMinutes());
+        target.setOverlapMinutes(source.getOverlapMinutes() == null || source.getOverlapMinutes() < 0 ? 10 : source.getOverlapMinutes());
         target.setRequestTimeoutMs(source.getRequestTimeoutMs() == null || source.getRequestTimeoutMs() <= 0 ? 10000 : source.getRequestTimeoutMs());
         target.setCallbackUrl(trimToNull(source.getCallbackUrl()));
         target.setEnabled(source.getEnabled() == null ? 1 : source.getEnabled());
@@ -434,6 +483,27 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         return provider;
     }
 
+    private void updateProviderAuthorizationIfPersisted(IntegrationProviderConfig provider) {
+        if (provider == null || provider.getId() == null || provider.getId() <= 0) {
+            return;
+        }
+        IntegrationProviderConfig existing = providerConfigMapper.selectById(provider.getId());
+        if (existing == null) {
+            return;
+        }
+        existing.setAuthCode(resolveSensitiveValue(provider.getAuthCode(), existing.getAuthCode()));
+        existing.setAuthCodeStatus(provider.getAuthCodeStatus());
+        existing.setAccessToken(resolveSensitiveValue(provider.getAccessToken(), existing.getAccessToken()));
+        existing.setRefreshToken(resolveSensitiveValue(provider.getRefreshToken(), existing.getRefreshToken()));
+        existing.setTokenExpiresAt(provider.getTokenExpiresAt());
+        existing.setRefreshTokenExpiresAt(provider.getRefreshTokenExpiresAt());
+        existing.setLastRefreshAt(provider.getLastRefreshAt());
+        existing.setAuthStatus(provider.getAuthStatus());
+        existing.setLastAuthCodeAt(provider.getLastAuthCodeAt());
+        existing.setUpdatedAt(LocalDateTime.now());
+        providerConfigMapper.updateById(existing);
+    }
+
     private IntegrationCallbackConfig maskCallback(IntegrationCallbackConfig callback) {
         if (callback == null) {
             return null;
@@ -456,50 +526,122 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         existing.setLastTestMessage(trimMessage(provider.getLastTestMessage()));
         existing.setLastTestAt(provider.getLastTestAt());
         existing.setAuthStatus(provider.getAuthStatus());
+        existing.setAuthCodeStatus(provider.getAuthCodeStatus());
         existing.setAccessToken(resolveSensitiveValue(provider.getAccessToken(), existing.getAccessToken()));
+        existing.setRefreshToken(resolveSensitiveValue(provider.getRefreshToken(), existing.getRefreshToken()));
+        existing.setTokenExpiresAt(provider.getTokenExpiresAt());
+        existing.setRefreshTokenExpiresAt(provider.getRefreshTokenExpiresAt());
+        existing.setLastRefreshAt(provider.getLastRefreshAt());
         existing.setUpdatedAt(LocalDateTime.now());
         providerConfigMapper.updateById(existing);
     }
 
-    private String fetchDouyinClientToken(IntegrationProviderConfig config) {
-        if (!StringUtils.hasText(config.getClientKey()) || !StringUtils.hasText(config.getClientSecret())) {
-            throw new BusinessException("抖音来客 LIVE 模式必须配置 clientKey 和 clientSecret");
+    private String resolveDouyinAccessToken(IntegrationProviderConfig config) {
+        if (StringUtils.hasText(config.getAccessToken())
+                && config.getTokenExpiresAt() != null
+                && config.getTokenExpiresAt().isAfter(LocalDateTime.now().plusMinutes(5))) {
+            return config.getAccessToken().trim();
         }
-        RestClient restClient = RestClient.create();
-        String tokenUrl = StringUtils.hasText(config.getTokenUrl())
-                ? config.getTokenUrl().trim()
-                : trimTrailingSlash(config.getBaseUrl()) + "/oauth/client_token/";
-        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("client_key", config.getClientKey().trim());
-        form.add("client_secret", config.getClientSecret().trim());
-        try {
-            JsonNode response = restClient.post()
-                    .uri(tokenUrl)
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body(form)
-                    .retrieve()
-                    .body(JsonNode.class);
-            String token = extractText(response, "data.client_token", "client_token", "access_token");
-            if (StringUtils.hasText(token)) {
-                config.setAccessToken(token);
-                config.setAuthStatus("CONNECTED");
-                return token;
-            }
-        } catch (Exception ignored) {
-            // 回退到 query 方式兼容部分环境。
+        if (StringUtils.hasText(config.getRefreshToken())) {
+            return refreshDouyinAccessToken(config);
         }
+        if (StringUtils.hasText(config.getAuthCode())) {
+            return exchangeDouyinAuthCode(config);
+        }
+        throw new BusinessException("抖音来客 LIVE 模式必须先完成 auth_code 授权");
+    }
 
-        JsonNode fallbackResponse = restClient.get()
-                .uri(tokenUrl + "?client_key=" + config.getClientKey().trim() + "&client_secret=" + config.getClientSecret().trim())
+    private String exchangeDouyinAuthCode(IntegrationProviderConfig config) {
+        String appId = resolveDouyinAppId(config);
+        String secret = resolveDouyinSecret(config);
+        config.setLastAuthCodeAt(LocalDateTime.now());
+        JsonNode response = RestClient.create()
+                .post()
+                .uri(resolveDouyinTokenUrl(config))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "app_id", appId,
+                        "secret", secret,
+                        "auth_code", config.getAuthCode().trim()))
                 .retrieve()
                 .body(JsonNode.class);
-        String token = extractText(fallbackResponse, "data.client_token", "client_token", "access_token");
-        if (!StringUtils.hasText(token)) {
-            throw new BusinessException("抖音来客 token 获取失败");
+        return applyDouyinTokenResponse(config, response, "换取 access_token 失败", "EXCHANGED");
+    }
+
+    private String refreshDouyinAccessToken(IntegrationProviderConfig config) {
+        String appId = resolveDouyinAppId(config);
+        JsonNode response = RestClient.create()
+                .post()
+                .uri(resolveDouyinRefreshTokenUrl(config))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "app_id", appId,
+                        "refresh_token", config.getRefreshToken().trim()))
+                .retrieve()
+                .body(JsonNode.class);
+        config.setLastRefreshAt(LocalDateTime.now());
+        return applyDouyinTokenResponse(config, response, "刷新 access_token 失败", "REFRESHED");
+    }
+
+    private String applyDouyinTokenResponse(IntegrationProviderConfig config,
+                                            JsonNode response,
+                                            String defaultMessage,
+                                            String authCodeStatus) {
+        int code = response == null ? -1 : response.path("code").asInt(0);
+        if (code != 0) {
+            String message = response == null ? defaultMessage : firstNonBlank(
+                    extractText(response, "message"),
+                    extractText(response, "data.description"),
+                    defaultMessage);
+            throw new BusinessException(message);
         }
-        config.setAccessToken(token);
-        config.setAuthStatus("CONNECTED");
-        return token;
+        String accessToken = extractText(response, "data.access_token", "access_token");
+        if (!StringUtils.hasText(accessToken)) {
+            throw new BusinessException(defaultMessage);
+        }
+        String refreshToken = firstNonBlank(
+                extractText(response, "data.refresh_token"),
+                extractText(response, "refresh_token"),
+                config.getRefreshToken());
+        int expiresIn = parseInteger(extractText(response, "data.expires_in", "expires_in"), 24 * 3600);
+        int refreshExpiresIn = parseInteger(
+                extractText(response, "data.refresh_token_expires_in", "refresh_token_expires_in"),
+                30 * 24 * 3600);
+        config.setAccessToken(accessToken.trim());
+        config.setRefreshToken(trimToNull(refreshToken));
+        config.setTokenExpiresAt(LocalDateTime.now().plusSeconds(expiresIn));
+        config.setRefreshTokenExpiresAt(LocalDateTime.now().plusSeconds(refreshExpiresIn));
+        config.setAuthCodeStatus(authCodeStatus);
+        config.setAuthStatus("AUTHORIZED");
+        return accessToken.trim();
+    }
+
+    private String resolveDouyinAppId(IntegrationProviderConfig config) {
+        String appId = firstNonBlank(config.getAppId(), config.getClientKey());
+        if (!StringUtils.hasText(appId)) {
+            throw new BusinessException("抖音来客必须配置 appId");
+        }
+        return appId.trim();
+    }
+
+    private String resolveDouyinSecret(IntegrationProviderConfig config) {
+        String secret = config.getClientSecret();
+        if (!StringUtils.hasText(secret)) {
+            throw new BusinessException("抖音来客必须配置应用 Secret");
+        }
+        return secret.trim();
+    }
+
+    private String resolveDouyinTokenUrl(IntegrationProviderConfig config) {
+        return StringUtils.hasText(config.getTokenUrl()) ? config.getTokenUrl().trim() : DOUYIN_TOKEN_URL;
+    }
+
+    private String resolveDouyinRefreshTokenUrl(IntegrationProviderConfig config) {
+        String tokenUrl = resolveDouyinTokenUrl(config);
+        if (tokenUrl.endsWith("/access_token/")) {
+            return tokenUrl.replace("/access_token/", "/refresh_token/");
+        }
+        return DOUYIN_REFRESH_TOKEN_URL;
     }
 
     private IntegrationCallbackConfig findCallbackByProviderOrName(String providerCode, String callbackName) {
@@ -577,6 +719,9 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     private String resolveAuthStatus(String currentStatus, String errorMessage, String authCode, String accessToken) {
         if (StringUtils.hasText(errorMessage)) {
             return "FAILED";
+        }
+        if ("AUTHORIZED".equals(currentStatus) || "CONNECTED".equals(currentStatus)) {
+            return currentStatus;
         }
         if (StringUtils.hasText(accessToken)) {
             return "AUTHORIZED";
@@ -769,6 +914,17 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         }
         String trimmed = value.trim();
         return trimmed.length() > 240 ? trimmed.substring(0, 240) : trimmed;
+    }
+
+    private int parseInteger(String value, int defaultValue) {
+        if (!StringUtils.hasText(value)) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException ignored) {
+            return defaultValue;
+        }
     }
 
     private String maskValue(String value) {

@@ -14,7 +14,10 @@ const accessibleRoutes = [
   { path: '/finance/salary-center', moduleCode: 'SALARY' },
   { path: '/system/departments', moduleCode: 'SYSTEM', roleCodes: ['ADMIN'] },
   { path: '/system/employees', moduleCode: 'SYSTEM', roleCodes: ['ADMIN', 'CLUE_MANAGER'] },
-  { path: '/settings/menu', moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
+  { path: '/settings/menu', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+  { path: '/settings/integration/third-party', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+  { path: '/settings/integration/callback', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+  { path: '/settings/integration/jobs', moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
 ]
 
 export const authState = reactive({

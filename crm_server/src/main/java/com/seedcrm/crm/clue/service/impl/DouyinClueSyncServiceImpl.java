@@ -7,31 +7,34 @@ import com.seedcrm.crm.clue.service.ClueService;
 import com.seedcrm.crm.clue.service.DouyinClueSyncService;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
+import com.seedcrm.crm.scheduler.service.SchedulerIntegrationService;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
 public class DouyinClueSyncServiceImpl implements DouyinClueSyncService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmm");
+    private static final DateTimeFormatter DOUYIN_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final ClueService clueService;
     private final ObjectMapper objectMapper;
+    private final SchedulerIntegrationService schedulerIntegrationService;
 
-    public DouyinClueSyncServiceImpl(ClueService clueService, ObjectMapper objectMapper) {
+    public DouyinClueSyncServiceImpl(ClueService clueService,
+                                     ObjectMapper objectMapper,
+                                     SchedulerIntegrationService schedulerIntegrationService) {
         this.clueService = clueService;
         this.objectMapper = objectMapper;
+        this.schedulerIntegrationService = schedulerIntegrationService;
     }
 
     @Override
@@ -69,18 +72,38 @@ public class DouyinClueSyncServiceImpl implements DouyinClueSyncService {
     }
 
     private int syncLive(IntegrationProviderConfig providerConfig) {
-        String accessToken = fetchClientToken(providerConfig);
-        LocalDateTime endTime = LocalDateTime.now().minusMinutes(10);
+        String accessToken = schedulerIntegrationService.resolveProviderAccessToken(providerConfig);
+        if (!StringUtils.hasText(accessToken)) {
+            throw new BusinessException("抖音来客未完成授权，无法拉取线索");
+        }
+
+        LocalDateTime endTime = LocalDateTime.now();
+        int overlapMinutes = providerConfig.getOverlapMinutes() == null ? 10 : Math.max(0, providerConfig.getOverlapMinutes());
+        int pullWindowMinutes = providerConfig.getPullWindowMinutes() == null ? 60 : Math.max(10, providerConfig.getPullWindowMinutes());
         LocalDateTime startTime = providerConfig.getLastSyncTime() == null
-                ? endTime.minusHours(1)
-                : providerConfig.getLastSyncTime();
+                ? endTime.minusMinutes(pullWindowMinutes)
+                : providerConfig.getLastSyncTime().minusMinutes(overlapMinutes);
+
         JsonNode response = RestClient.create()
-                .get()
-                .uri(buildClueQueryUri(providerConfig, startTime, endTime))
-                .header("access-token", accessToken)
-                .header("content-type", MediaType.APPLICATION_JSON_VALUE)
+                .post()
+                .uri(resolveClueEndpoint(providerConfig))
+                .header("Access-Token", accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "local_account_ids", resolveLocalAccountIds(providerConfig),
+                        "start_time", DOUYIN_TIME_FORMATTER.format(startTime),
+                        "end_time", DOUYIN_TIME_FORMATTER.format(endTime),
+                        "page_number", 1,
+                        "page_size", providerConfig.getPageSize() == null || providerConfig.getPageSize() <= 0
+                                ? 20 : Math.min(providerConfig.getPageSize(), 100)))
                 .retrieve()
                 .body(JsonNode.class);
+
+        int code = response == null ? -1 : response.path("code").asInt(0);
+        if (code != 0) {
+            String message = extractText(response, "message", "data.description");
+            throw new BusinessException(StringUtils.hasText(message) ? message : "抖音来客线索拉取失败");
+        }
 
         List<JsonNode> records = extractRecords(response);
         int imported = 0;
@@ -92,81 +115,17 @@ public class DouyinClueSyncServiceImpl implements DouyinClueSyncService {
         return imported;
     }
 
-    private String fetchClientToken(IntegrationProviderConfig providerConfig) {
-        if (!StringUtils.hasText(providerConfig.getClientKey()) || !StringUtils.hasText(providerConfig.getClientSecret())) {
-            throw new BusinessException("抖音来客 LIVE 模式必须配置 clientKey 和 clientSecret");
-        }
-        String tokenUrl = StringUtils.hasText(providerConfig.getTokenUrl())
-                ? providerConfig.getTokenUrl().trim()
-                : trimTrailingSlash(providerConfig.getBaseUrl()) + "/oauth/client_token/";
-        RestClient restClient = RestClient.create();
-        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("client_key", providerConfig.getClientKey().trim());
-        form.add("client_secret", providerConfig.getClientSecret().trim());
-        try {
-            JsonNode response = restClient.post()
-                    .uri(tokenUrl)
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body(form)
-                    .retrieve()
-                    .body(JsonNode.class);
-            String token = extractText(response, "data.client_token", "client_token", "access_token");
-            if (StringUtils.hasText(token)) {
-                return token;
-            }
-        } catch (Exception ignored) {
-            // 兼容不同环境的 client_token 调用方式。
-        }
-        JsonNode fallback = restClient.get()
-                .uri(tokenUrl + "?client_key=" + providerConfig.getClientKey().trim()
-                        + "&client_secret=" + providerConfig.getClientSecret().trim())
-                .retrieve()
-                .body(JsonNode.class);
-        String token = extractText(fallback, "data.client_token", "client_token", "access_token");
-        if (!StringUtils.hasText(token)) {
-            throw new BusinessException("抖音来客 client_token 获取失败");
-        }
-        return token;
-    }
-
-    private String buildClueQueryUri(IntegrationProviderConfig providerConfig,
-                                     LocalDateTime startTime,
-                                     LocalDateTime endTime) {
-        if (!StringUtils.hasText(providerConfig.getBaseUrl()) || !StringUtils.hasText(providerConfig.getAccountId())) {
-            throw new BusinessException("抖音来客 LIVE 模式必须配置 baseUrl 和 accountId");
-        }
-        UriComponentsBuilder builder = UriComponentsBuilder
-                .fromHttpUrl(trimTrailingSlash(providerConfig.getBaseUrl()) + resolveEndpointPath(providerConfig.getEndpointPath()))
-                .queryParam("account_id", providerConfig.getAccountId().trim())
-                .queryParam("start_time", toEpochSeconds(startTime))
-                .queryParam("end_time", toEpochSeconds(endTime))
-                .queryParam("page", 1)
-                .queryParam("page_size", providerConfig.getPageSize() == null || providerConfig.getPageSize() <= 0
-                        ? 20 : providerConfig.getPageSize());
-        if (StringUtils.hasText(providerConfig.getOpenId())) {
-            builder.queryParam("open_id", providerConfig.getOpenId().trim());
-        }
-        if (StringUtils.hasText(providerConfig.getLifeAccountIds())) {
-            for (String lifeAccountId : providerConfig.getLifeAccountIds().split(",")) {
-                if (StringUtils.hasText(lifeAccountId)) {
-                    builder.queryParam("life_account_id[]", lifeAccountId.trim());
-                }
-            }
-        }
-        return builder.toUriString();
-    }
-
     private List<JsonNode> extractRecords(JsonNode response) {
         List<JsonNode> result = new ArrayList<>();
         if (response == null || response.isNull()) {
             return result;
         }
         JsonNode[] candidates = new JsonNode[] {
+                response.path("data"),
                 response.path("data").path("clues"),
                 response.path("data").path("list"),
                 response.path("data").path("records"),
                 response.path("data").path("items"),
-                response.path("data"),
                 response
         };
         for (JsonNode candidate : candidates) {
@@ -186,15 +145,17 @@ public class DouyinClueSyncServiceImpl implements DouyinClueSyncService {
 
     private boolean importRecord(JsonNode record) {
         String phone = extractText(record,
-                "phone", "mobile", "customer_phone", "user_phone", "phone_info.phone");
+                "telephone", "phone", "mobile", "customer_phone", "user_phone", "phone_info.phone");
         if (!StringUtils.hasText(phone)) {
             return false;
         }
         String externalId = extractText(record, "clue_id", "clueId", "lead_id", "id");
         String name = extractText(record, "name", "customer_name", "user_name", "nickname");
-        String wechat = extractText(record, "wechat", "weixin", "wx");
+        String wechat = extractText(record, "weixin", "wechat", "wx");
         Clue clue = new Clue();
-        clue.setName(StringUtils.hasText(name) ? name : "抖音客资-" + (StringUtils.hasText(externalId) ? externalId : TIME_FORMATTER.format(LocalDateTime.now())));
+        clue.setName(StringUtils.hasText(name) ? name : "抖音客资-" + (StringUtils.hasText(externalId)
+                ? externalId
+                : TIME_FORMATTER.format(LocalDateTime.now())));
         clue.setPhone(phone.trim());
         clue.setWechat(StringUtils.hasText(wechat) ? wechat.trim() : null);
         clue.setSourceChannel("DOUYIN");
@@ -208,15 +169,33 @@ public class DouyinClueSyncServiceImpl implements DouyinClueSyncService {
         return true;
     }
 
-    private long toEpochSeconds(LocalDateTime value) {
-        return value.atZone(ZoneId.systemDefault()).toEpochSecond();
+    private String resolveClueEndpoint(IntegrationProviderConfig providerConfig) {
+        String baseUrl = StringUtils.hasText(providerConfig.getBaseUrl())
+                ? trimTrailingSlash(providerConfig.getBaseUrl())
+                : "https://api.oceanengine.com";
+        String endpointPath = StringUtils.hasText(providerConfig.getEndpointPath())
+                ? providerConfig.getEndpointPath().trim()
+                : "/open_api/2/tools/clue/life/get/";
+        return endpointPath.startsWith("http") ? endpointPath : baseUrl + (endpointPath.startsWith("/") ? endpointPath : "/" + endpointPath);
     }
 
-    private String resolveEndpointPath(String endpointPath) {
-        if (!StringUtils.hasText(endpointPath)) {
-            return "/goodlife/v1/open_api/crm/clue/query/";
+    private List<String> resolveLocalAccountIds(IntegrationProviderConfig providerConfig) {
+        String raw = StringUtils.hasText(providerConfig.getLocalAccountIds())
+                ? providerConfig.getLocalAccountIds()
+                : firstNonBlank(providerConfig.getLifeAccountIds(), providerConfig.getAccountId());
+        if (!StringUtils.hasText(raw)) {
+            throw new BusinessException("抖音来客必须配置 local_account_ids");
         }
-        return endpointPath.startsWith("/") ? endpointPath.trim() : "/" + endpointPath.trim();
+        List<String> accountIds = new ArrayList<>();
+        for (String part : raw.split(",")) {
+            if (StringUtils.hasText(part)) {
+                accountIds.add(part.trim());
+            }
+        }
+        if (accountIds.isEmpty()) {
+            throw new BusinessException("抖音来客 local_account_ids 不能为空");
+        }
+        return accountIds;
     }
 
     private String extractText(JsonNode node, String... candidates) {
@@ -244,6 +223,18 @@ public class DouyinClueSyncServiceImpl implements DouyinClueSyncService {
         }
         String trimmed = value.trim();
         return trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     private String buildPhone(LocalDateTime now, int index) {

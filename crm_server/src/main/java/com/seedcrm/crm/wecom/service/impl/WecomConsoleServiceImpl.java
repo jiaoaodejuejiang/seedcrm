@@ -35,6 +35,7 @@ import java.util.regex.Pattern;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
@@ -47,6 +48,8 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
     private static final String MODE_LIVE = "LIVE";
     private static final String DEFAULT_APP_CODE = "PRIVATE_DOMAIN";
     private static final String DEFAULT_STRATEGY = "ROUND_ROBIN";
+    private static final String AUTH_MODE_SELF_BUILT = "SELF_BUILT";
+    private static final String AUTH_MODE_SERVICE_PROVIDER = "SERVICE_PROVIDER";
 
     private final WecomAppConfigMapper wecomAppConfigMapper;
     private final WecomTouchRuleMapper wecomTouchRuleMapper;
@@ -135,6 +138,26 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
         if (!MODE_LIVE.equals(working.getExecutionMode())) {
             throw new BusinessException("当前未启用企业微信 LIVE 模式");
         }
+        String authMode = normalizeAuthMode(working.getAuthMode());
+        if (AUTH_MODE_SERVICE_PROVIDER.equals(authMode)) {
+            AccessTokenCacheEntry cached = working.getId() == null ? null : accessTokenCache.get(working.getId());
+            if (cached != null && cached.expiresAt().isAfter(LocalDateTime.now().plusMinutes(5))) {
+                return cached.accessToken();
+            }
+            String accessToken = resolveServiceProviderAccessToken(working);
+            if (working.getId() != null) {
+                LocalDateTime expiresAt = working.getTokenExpiresAt() == null
+                        ? LocalDateTime.now().plusMinutes(110)
+                        : working.getTokenExpiresAt().minusMinutes(5);
+                accessTokenCache.put(working.getId(), new AccessTokenCacheEntry(accessToken, expiresAt));
+            }
+            working.setLastTokenStatus("SUCCESS");
+            working.setLastTokenMessage("服务商 access_token 已就绪");
+            working.setLastTokenCheckedAt(LocalDateTime.now());
+            working.setAuthStatus("CONNECTED");
+            updateTokenStateIfPersisted(working);
+            return accessToken;
+        }
         if (!StringUtils.hasText(working.getCorpId()) || !StringUtils.hasText(working.getAppSecret())) {
             throw new BusinessException("LIVE 模式必须配置 corpId 和应用 Secret");
         }
@@ -167,6 +190,7 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
             throw new BusinessException("企业微信 access_token 返回为空");
         }
         int expiresIn = response.path("expires_in").asInt(7200);
+        working.setTokenExpiresAt(LocalDateTime.now().plusSeconds(expiresIn));
         if (working.getId() != null) {
             accessTokenCache.put(working.getId(), new AccessTokenCacheEntry(
                     accessToken.trim(),
@@ -201,29 +225,44 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
         LocalDateTime now = LocalDateTime.now();
         Map<String, String> normalizedParameters = normalizeParameters(parameters);
         JsonNode payloadNode = parsePayload(payload);
+        String signatureStatus = resolveSignatureStatus(config, requestMethod, normalizedParameters, payload);
+        boolean trustedCallback = isTrustedCallback(config, signatureStatus);
+        String decryptedPayload = tryDecryptCallbackPayload(config, normalizedParameters, requestMethod, payload, signatureStatus);
+        String callbackEventPayload = StringUtils.hasText(decryptedPayload) ? decryptedPayload : payload;
         String authCode = firstNonBlank(
                 normalizedParameters.get("auth_code"),
                 normalizedParameters.get("code"),
-                extractText(payloadNode, "auth_code", "code"));
+                extractText(payloadNode, "auth_code", "code"),
+                extractXmlValue(callbackEventPayload, "AuthCode"));
         String accessToken = firstNonBlank(
                 normalizedParameters.get("access_token"),
                 extractText(payloadNode, "access_token"));
         String refreshToken = firstNonBlank(
                 normalizedParameters.get("refresh_token"),
                 extractText(payloadNode, "refresh_token"));
+        String suiteTicket = firstNonBlank(
+                normalizedParameters.get("suite_ticket"),
+                extractXmlValue(callbackEventPayload, "SuiteTicket"));
+        String infoType = firstNonBlank(
+                normalizedParameters.get("info_type"),
+                extractXmlValue(callbackEventPayload, "InfoType"));
+        String authCorpId = firstNonBlank(
+                normalizedParameters.get("auth_corpid"),
+                extractXmlValue(callbackEventPayload, "AuthCorpId"));
         String callbackState = firstNonBlank(
                 normalizedParameters.get("state"),
                 extractText(payloadNode, "state"),
-                extractXmlValue(payload, "State"));
+                extractXmlValue(callbackEventPayload, "State"));
         String eventType = firstNonBlank(
+                infoType,
                 normalizedParameters.get("event"),
                 normalizedParameters.get("event_type"),
                 extractText(payloadNode, "event", "event_type", "Event"),
-                extractXmlValue(payload, "Event"));
+                extractXmlValue(callbackEventPayload, "Event"));
         String externalUserId = firstNonBlank(
                 normalizedParameters.get("external_userid"),
                 extractText(payloadNode, "external_userid", "ExternalUserID"),
-                extractXmlValue(payload, "ExternalUserID"));
+                extractXmlValue(callbackEventPayload, "ExternalUserID"));
         String errorMessage = firstNonBlank(
                 normalizedParameters.get("error_description"),
                 normalizedParameters.get("error_msg"),
@@ -231,13 +270,12 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
                 normalizedParameters.get("error"),
                 extractText(payloadNode, "error_description", "error_msg", "errmsg", "message", "error"));
         String traceId = UUID.randomUUID().toString();
-        String signatureStatus = resolveSignatureStatus(config, requestMethod, normalizedParameters, payload);
-        boolean trustedCallback = isTrustedCallback(config, signatureStatus);
         String processStatus = StringUtils.hasText(errorMessage)
                 ? "FAILED"
                 : !trustedCallback && MODE_LIVE.equals(config == null ? null : config.getExecutionMode())
                 ? "UNVERIFIED"
-                : StringUtils.hasText(authCode) || StringUtils.hasText(accessToken) || StringUtils.hasText(externalUserId)
+                : StringUtils.hasText(authCode) || StringUtils.hasText(accessToken)
+                || StringUtils.hasText(externalUserId) || StringUtils.hasText(suiteTicket)
                 ? "SUCCESS"
                 : "RECEIVED";
         String processMessage = StringUtils.hasText(errorMessage)
@@ -256,11 +294,24 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
             config.setLastCallbackAt(now);
             config.setLastCallbackPayload(trimPayload(buildCallbackPayload(normalizedParameters, payload)));
             if (trustedCallback) {
+                config.setSuiteTicket(resolveSensitiveValue(suiteTicket, config.getSuiteTicket()));
                 config.setAuthCode(resolveSensitiveValue(authCode, config.getAuthCode()));
                 config.setAccessToken(resolveSensitiveValue(accessToken, config.getAccessToken()));
                 config.setRefreshToken(resolveSensitiveValue(refreshToken, config.getRefreshToken()));
+                config.setAuthCorpId(trimToNull(firstNonBlank(authCorpId, config.getAuthCorpId())));
+                String providerMessage = null;
+                try {
+                    providerMessage = processServiceProviderCallback(config, infoType, suiteTicket, authCode, authCorpId, now);
+                } catch (BusinessException exception) {
+                    processStatus = "FAILED";
+                    providerMessage = exception.getMessage();
+                }
                 config.setAuthStatus(resolveAuthStatus(config.getAuthStatus(), errorMessage, authCode, accessToken, externalUserId));
                 config.setLastAuthCodeAt(StringUtils.hasText(authCode) ? now : config.getLastAuthCodeAt());
+                if (StringUtils.hasText(providerMessage)) {
+                    processMessage = providerMessage;
+                    config.setLastCallbackMessage(trimMessage(providerMessage));
+                }
             }
             config.setUpdatedAt(now);
             wecomAppConfigMapper.updateById(config);
@@ -453,14 +504,23 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
             working.setAppCode(existing.getAppCode());
             working.setAppId(existing.getAppId());
             working.setSuiteId(existing.getSuiteId());
+            working.setAuthMode(existing.getAuthMode());
             working.setCorpId(existing.getCorpId());
+            working.setAuthCorpId(existing.getAuthCorpId());
             working.setAgentId(existing.getAgentId());
             working.setAppSecret(existing.getAppSecret());
+            working.setSuiteSecret(existing.getSuiteSecret());
             working.setAuthCode(existing.getAuthCode());
+            working.setSuiteTicket(existing.getSuiteTicket());
+            working.setPermanentCode(existing.getPermanentCode());
             working.setAccessToken(existing.getAccessToken());
             working.setRefreshToken(existing.getRefreshToken());
+            working.setSuiteAccessToken(existing.getSuiteAccessToken());
+            working.setCorpAccessToken(existing.getCorpAccessToken());
             working.setExecutionMode(existing.getExecutionMode());
             working.setCallbackUrl(existing.getCallbackUrl());
+            working.setRedirectUri(existing.getRedirectUri());
+            working.setTrustedDomain(existing.getTrustedDomain());
             working.setCallbackToken(existing.getCallbackToken());
             working.setEncodingAesKey(existing.getEncodingAesKey());
             working.setLiveCodeType(existing.getLiveCodeType());
@@ -473,10 +533,14 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
             working.setLastTokenStatus(existing.getLastTokenStatus());
             working.setLastTokenMessage(existing.getLastTokenMessage());
             working.setLastTokenCheckedAt(existing.getLastTokenCheckedAt());
+            working.setSuiteTicketAt(existing.getSuiteTicketAt());
             working.setAuthStatus(existing.getAuthStatus());
             working.setLastCallbackStatus(existing.getLastCallbackStatus());
             working.setLastCallbackMessage(existing.getLastCallbackMessage());
             working.setLastAuthCodeAt(existing.getLastAuthCodeAt());
+            working.setTokenExpiresAt(existing.getTokenExpiresAt());
+            working.setSuiteAccessTokenExpiresAt(existing.getSuiteAccessTokenExpiresAt());
+            working.setCorpAccessTokenExpiresAt(existing.getCorpAccessTokenExpiresAt());
             working.setLastCallbackAt(existing.getLastCallbackAt());
             working.setLastCallbackPayload(existing.getLastCallbackPayload());
         }
@@ -488,14 +552,23 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
         target.setAppCode(StringUtils.hasText(source.getAppCode()) ? normalize(source.getAppCode()) : DEFAULT_APP_CODE);
         target.setAppId(trimToNull(source.getAppId()));
         target.setSuiteId(trimToNull(source.getSuiteId()));
+        target.setAuthMode(normalizeAuthMode(source.getAuthMode()));
         target.setCorpId(trimToNull(source.getCorpId()));
+        target.setAuthCorpId(trimToNull(source.getAuthCorpId()));
         target.setAgentId(trimToNull(source.getAgentId()));
         target.setAppSecret(resolveSensitiveValue(source.getAppSecret(), existing == null ? null : existing.getAppSecret()));
+        target.setSuiteSecret(resolveSensitiveValue(source.getSuiteSecret(), existing == null ? null : existing.getSuiteSecret()));
         target.setAuthCode(resolveSensitiveValue(source.getAuthCode(), existing == null ? null : existing.getAuthCode()));
+        target.setSuiteTicket(resolveSensitiveValue(source.getSuiteTicket(), existing == null ? null : existing.getSuiteTicket()));
+        target.setPermanentCode(resolveSensitiveValue(source.getPermanentCode(), existing == null ? null : existing.getPermanentCode()));
         target.setAccessToken(resolveSensitiveValue(source.getAccessToken(), existing == null ? null : existing.getAccessToken()));
         target.setRefreshToken(resolveSensitiveValue(source.getRefreshToken(), existing == null ? null : existing.getRefreshToken()));
+        target.setSuiteAccessToken(resolveSensitiveValue(source.getSuiteAccessToken(), existing == null ? null : existing.getSuiteAccessToken()));
+        target.setCorpAccessToken(resolveSensitiveValue(source.getCorpAccessToken(), existing == null ? null : existing.getCorpAccessToken()));
         target.setExecutionMode(normalizeExecutionMode(source.getExecutionMode()));
         target.setCallbackUrl(trimToNull(source.getCallbackUrl()));
+        target.setRedirectUri(trimToNull(source.getRedirectUri()));
+        target.setTrustedDomain(trimToNull(source.getTrustedDomain()));
         target.setCallbackToken(resolveSensitiveValue(source.getCallbackToken(), existing == null ? null : existing.getCallbackToken()));
         target.setEncodingAesKey(resolveSensitiveValue(source.getEncodingAesKey(), existing == null ? null : existing.getEncodingAesKey()));
         target.setLiveCodeType(source.getLiveCodeType() == null || source.getLiveCodeType() <= 0 ? 2 : source.getLiveCodeType());
@@ -515,6 +588,7 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
     private WecomAppConfig defaultConfig() {
         WecomAppConfig config = new WecomAppConfig();
         config.setAppCode(DEFAULT_APP_CODE);
+        config.setAuthMode(AUTH_MODE_SELF_BUILT);
         config.setExecutionMode(MODE_MOCK);
         config.setLiveCodeType(2);
         config.setLiveCodeScene(2);
@@ -526,6 +600,165 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
         config.setLastTokenMessage("尚未完成企业微信应用配置");
         config.setAuthStatus("UNAUTHORIZED");
         return config;
+    }
+
+    private String resolveServiceProviderAccessToken(WecomAppConfig working) {
+        if (!StringUtils.hasText(working.getSuiteId()) || !StringUtils.hasText(working.getSuiteSecret())) {
+            throw new BusinessException("服务商模式必须配置 suiteId 和 suiteSecret");
+        }
+        if (!StringUtils.hasText(working.getAuthCorpId()) && StringUtils.hasText(working.getCorpId())) {
+            working.setAuthCorpId(working.getCorpId().trim());
+        }
+        String suiteAccessToken = resolveSuiteAccessToken(working);
+        exchangePermanentCodeIfNecessary(working, suiteAccessToken);
+        if (!StringUtils.hasText(working.getAuthCorpId())) {
+            throw new BusinessException("服务商模式必须先拿到授权企业 corpId");
+        }
+        if (!StringUtils.hasText(working.getPermanentCode())) {
+            throw new BusinessException("服务商模式必须先完成 permanent_code 换取");
+        }
+        JsonNode response = RestClient.create()
+                .post()
+                .uri("https://qyapi.weixin.qq.com/cgi-bin/service/get_corp_token?suite_access_token={suiteAccessToken}",
+                        suiteAccessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "auth_corpid", working.getAuthCorpId().trim(),
+                        "permanent_code", working.getPermanentCode().trim()))
+                .retrieve()
+                .body(JsonNode.class);
+        assertWecomSuccess(response, "获取企业授权 access_token 失败");
+        String accessToken = extractText(response, "access_token");
+        if (!StringUtils.hasText(accessToken)) {
+            throw new BusinessException("企业授权 access_token 返回为空");
+        }
+        int expiresIn = response.path("expires_in").asInt(7200);
+        LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(expiresIn);
+        working.setCorpAccessToken(accessToken.trim());
+        working.setAccessToken(accessToken.trim());
+        working.setCorpAccessTokenExpiresAt(expiresAt);
+        working.setTokenExpiresAt(expiresAt);
+        return accessToken.trim();
+    }
+
+    private String resolveSuiteAccessToken(WecomAppConfig working) {
+        if (StringUtils.hasText(working.getSuiteAccessToken())
+                && working.getSuiteAccessTokenExpiresAt() != null
+                && working.getSuiteAccessTokenExpiresAt().isAfter(LocalDateTime.now().plusMinutes(5))) {
+            return working.getSuiteAccessToken().trim();
+        }
+        if (!StringUtils.hasText(working.getSuiteTicket())) {
+            throw new BusinessException("服务商模式必须先收到 suite_ticket 回调");
+        }
+        JsonNode response = RestClient.create()
+                .post()
+                .uri("https://qyapi.weixin.qq.com/cgi-bin/service/get_suite_token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "suite_id", working.getSuiteId().trim(),
+                        "suite_secret", working.getSuiteSecret().trim(),
+                        "suite_ticket", working.getSuiteTicket().trim()))
+                .retrieve()
+                .body(JsonNode.class);
+        assertWecomSuccess(response, "获取 suite_access_token 失败");
+        String suiteAccessToken = extractText(response, "suite_access_token");
+        if (!StringUtils.hasText(suiteAccessToken)) {
+            throw new BusinessException("suite_access_token 返回为空");
+        }
+        int expiresIn = response.path("expires_in").asInt(7200);
+        working.setSuiteAccessToken(suiteAccessToken.trim());
+        working.setSuiteAccessTokenExpiresAt(LocalDateTime.now().plusSeconds(expiresIn));
+        return suiteAccessToken.trim();
+    }
+
+    private void exchangePermanentCodeIfNecessary(WecomAppConfig working, String suiteAccessToken) {
+        if (StringUtils.hasText(working.getPermanentCode())) {
+            return;
+        }
+        if (!StringUtils.hasText(working.getAuthCode())) {
+            throw new BusinessException("服务商模式必须先收到 auth_code 回调");
+        }
+        JsonNode response = RestClient.create()
+                .post()
+                .uri("https://qyapi.weixin.qq.com/cgi-bin/service/get_permanent_code?suite_access_token={suiteAccessToken}",
+                        suiteAccessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "suite_id", working.getSuiteId().trim(),
+                        "auth_code", working.getAuthCode().trim()))
+                .retrieve()
+                .body(JsonNode.class);
+        assertWecomSuccess(response, "换取 permanent_code 失败");
+        String permanentCode = extractText(response, "permanent_code");
+        if (!StringUtils.hasText(permanentCode)) {
+            throw new BusinessException("permanent_code 返回为空");
+        }
+        String authCorpId = extractText(response, "auth_corp_info.corpid");
+        working.setPermanentCode(permanentCode.trim());
+        if (StringUtils.hasText(authCorpId)) {
+            working.setAuthCorpId(authCorpId.trim());
+            if (!StringUtils.hasText(working.getCorpId())) {
+                working.setCorpId(authCorpId.trim());
+            }
+        }
+    }
+
+    private String processServiceProviderCallback(WecomAppConfig config,
+                                                  String infoType,
+                                                  String suiteTicket,
+                                                  String authCode,
+                                                  String authCorpId,
+                                                  LocalDateTime now) {
+        if (config == null || !AUTH_MODE_SERVICE_PROVIDER.equals(normalizeAuthMode(config.getAuthMode()))) {
+            return null;
+        }
+        String normalizedInfoType = normalize(infoType);
+        if ("SUITE_TICKET".equals(normalizedInfoType)) {
+            if (StringUtils.hasText(suiteTicket)) {
+                config.setSuiteTicket(suiteTicket.trim());
+                config.setSuiteTicketAt(now);
+                if (!StringUtils.hasText(config.getAuthStatus()) || "UNAUTHORIZED".equals(config.getAuthStatus())) {
+                    config.setAuthStatus("SUITE_TICKET_READY");
+                }
+            }
+            return "已接收 suite_ticket";
+        }
+        if ("CANCEL_AUTH".equals(normalizedInfoType)) {
+            config.setAuthStatus("CANCELLED");
+            config.setCorpAccessToken(null);
+            config.setAccessToken(null);
+            config.setCorpAccessTokenExpiresAt(null);
+            config.setTokenExpiresAt(null);
+            return "已接收取消授权通知";
+        }
+        if ("CREATE_AUTH".equals(normalizedInfoType)
+                || "CHANGE_AUTH".equals(normalizedInfoType)
+                || "RESET_PERMANENT_CODE".equals(normalizedInfoType)) {
+            if (StringUtils.hasText(authCorpId)) {
+                config.setAuthCorpId(authCorpId.trim());
+                if (!StringUtils.hasText(config.getCorpId())) {
+                    config.setCorpId(authCorpId.trim());
+                }
+            }
+            if (StringUtils.hasText(authCode)) {
+                config.setAuthCode(authCode.trim());
+                config.setLastAuthCodeAt(now);
+                String suiteAccessToken = resolveSuiteAccessToken(config);
+                exchangePermanentCodeIfNecessary(config, suiteAccessToken);
+                config.setAuthStatus("AUTHORIZED");
+                return "已接收授权码并完成 permanent_code 换取";
+            }
+            return "已接收授权变更通知";
+        }
+        return null;
+    }
+
+    private void assertWecomSuccess(JsonNode response, String defaultMessage) {
+        int errorCode = response == null ? -1 : response.path("errcode").asInt(0);
+        if (errorCode != 0) {
+            String message = response == null ? defaultMessage : response.path("errmsg").asText(defaultMessage);
+            throw new BusinessException(message);
+        }
     }
 
     private void updateTokenStateIfPersisted(WecomAppConfig config) {
@@ -541,6 +774,15 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
         existing.setLastTokenCheckedAt(config.getLastTokenCheckedAt());
         existing.setAuthStatus(config.getAuthStatus());
         existing.setAccessToken(resolveSensitiveValue(config.getAccessToken(), existing.getAccessToken()));
+        existing.setSuiteAccessToken(resolveSensitiveValue(config.getSuiteAccessToken(), existing.getSuiteAccessToken()));
+        existing.setCorpAccessToken(resolveSensitiveValue(config.getCorpAccessToken(), existing.getCorpAccessToken()));
+        existing.setSuiteTicket(resolveSensitiveValue(config.getSuiteTicket(), existing.getSuiteTicket()));
+        existing.setPermanentCode(resolveSensitiveValue(config.getPermanentCode(), existing.getPermanentCode()));
+        existing.setAuthCorpId(trimToNull(config.getAuthCorpId()));
+        existing.setSuiteTicketAt(config.getSuiteTicketAt());
+        existing.setTokenExpiresAt(config.getTokenExpiresAt());
+        existing.setSuiteAccessTokenExpiresAt(config.getSuiteAccessTokenExpiresAt());
+        existing.setCorpAccessTokenExpiresAt(config.getCorpAccessTokenExpiresAt());
         existing.setUpdatedAt(LocalDateTime.now());
         wecomAppConfigMapper.updateById(existing);
     }
@@ -550,9 +792,14 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
             return null;
         }
         config.setAppSecretMasked(maskValue(config.getAppSecret()));
+        config.setSuiteSecretMasked(maskValue(config.getSuiteSecret()));
         config.setAuthCodeMasked(maskValue(config.getAuthCode()));
+        config.setSuiteTicketMasked(maskValue(config.getSuiteTicket()));
+        config.setPermanentCodeMasked(maskValue(config.getPermanentCode()));
         config.setAccessTokenMasked(maskValue(config.getAccessToken()));
         config.setRefreshTokenMasked(maskValue(config.getRefreshToken()));
+        config.setSuiteAccessTokenMasked(maskValue(config.getSuiteAccessToken()));
+        config.setCorpAccessTokenMasked(maskValue(config.getCorpAccessToken()));
         config.setCallbackTokenMasked(maskValue(config.getCallbackToken()));
         config.setEncodingAesKeyMasked(maskValue(config.getEncodingAesKey()));
         return config;
@@ -622,6 +869,14 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
         return MODE_LIVE.equals(normalized) ? MODE_LIVE : MODE_MOCK;
     }
 
+    private String normalizeAuthMode(String value) {
+        String normalized = normalize(value);
+        if (!StringUtils.hasText(normalized)) {
+            return AUTH_MODE_SELF_BUILT;
+        }
+        return AUTH_MODE_SERVICE_PROVIDER.equals(normalized) ? AUTH_MODE_SERVICE_PROVIDER : AUTH_MODE_SELF_BUILT;
+    }
+
     private String resolveSensitiveValue(String incoming, String existing) {
         return StringUtils.hasText(incoming) ? incoming.trim() : existing;
     }
@@ -682,6 +937,29 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
             })));
         }
         return merged.isEmpty() ? null : toCompactJson(merged);
+    }
+
+    private String tryDecryptCallbackPayload(WecomAppConfig config,
+                                             Map<String, String> parameters,
+                                             String requestMethod,
+                                             String payload,
+                                             String signatureStatus) {
+        if (!"POST".equalsIgnoreCase(requestMethod)
+                || config == null
+                || !StringUtils.hasText(payload)
+                || !StringUtils.hasText(config.getEncodingAesKey())
+                || "INVALID".equals(signatureStatus)) {
+            return null;
+        }
+        String encrypt = extractXmlValue(payload, "Encrypt");
+        if (!StringUtils.hasText(encrypt)) {
+            return null;
+        }
+        try {
+            return decryptWecomMessage(config, encrypt);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private String toCompactJson(Object value) {
@@ -753,6 +1031,9 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
                                      String externalUserId) {
         if (StringUtils.hasText(errorMessage)) {
             return "FAILED";
+        }
+        if ("AUTHORIZED".equals(currentStatus) || "CONNECTED".equals(currentStatus) || "CANCELLED".equals(currentStatus)) {
+            return currentStatus;
         }
         if (StringUtils.hasText(accessToken) || StringUtils.hasText(externalUserId)) {
             return "AUTHORIZED";
@@ -919,6 +1200,8 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
         String sanitized = payload.trim();
         sanitized = sanitized.replaceAll("(?i)(<Encrypt><!\\[CDATA\\[)(.*?)(]]></Encrypt>)", "$1****$3");
         sanitized = sanitized.replaceAll("(?i)(<AuthCode><!\\[CDATA\\[)(.*?)(]]></AuthCode>)", "$1****$3");
+        sanitized = sanitized.replaceAll("(?i)(<SuiteTicket><!\\[CDATA\\[)(.*?)(]]></SuiteTicket>)", "$1****$3");
+        sanitized = sanitized.replaceAll("(?i)(<PermanentCode><!\\[CDATA\\[)(.*?)(]]></PermanentCode>)", "$1****$3");
         sanitized = sanitized.replaceAll("(?i)(\"(?:auth_code|code|access_token|refresh_token|token)\"\\s*:\\s*\")(.*?)(\")", "$1****$3");
         return trimPayload(sanitized);
     }
@@ -934,6 +1217,9 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
                 || normalizedKey.equals("refresh_token")
                 || normalizedKey.equals("token")
                 || normalizedKey.equals("app_secret")
+                || normalizedKey.equals("suite_secret")
+                || normalizedKey.equals("suite_ticket")
+                || normalizedKey.equals("permanent_code")
                 || normalizedKey.equals("corpsecret")
                 || normalizedKey.equals("encodingaeskey")
                 || normalizedKey.equals("encoding_aes_key");

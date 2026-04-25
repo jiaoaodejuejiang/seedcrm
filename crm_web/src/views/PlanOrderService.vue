@@ -1,5 +1,5 @@
 <template>
-  <div class="service-layout">
+  <div class="service-layout plan-order-service-page">
     <section class="panel service-list">
       <div class="panel-heading">
         <div>

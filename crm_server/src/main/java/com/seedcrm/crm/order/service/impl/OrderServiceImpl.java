@@ -130,10 +130,27 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         Order order = getOrderById(orderAppointmentDTO.getOrderId());
         ensureOrderCustomerBound(order);
-        assertNextStatus(order, OrderStatus.APPOINTMENT);
+        OrderStatus currentStatus = getCurrentStatus(order);
+        if (currentStatus != OrderStatus.APPOINTMENT) {
+            assertNextStatus(order, OrderStatus.APPOINTMENT);
+        }
         order.setAppointmentTime(orderAppointmentDTO.getAppointmentTime());
         updateRemark(order, orderAppointmentDTO.getRemark());
         return updateOrderStatus(order, OrderStatus.APPOINTMENT);
+    }
+
+    @Override
+    @Transactional
+    public Order cancelAppointment(OrderActionDTO orderActionDTO) {
+        validateOrderId(orderActionDTO == null ? null : orderActionDTO.getOrderId());
+        Order order = getOrderById(orderActionDTO.getOrderId());
+        ensureOrderCustomerBound(order);
+        if (getCurrentStatus(order) != OrderStatus.APPOINTMENT) {
+            throw new BusinessException("only appointment order can cancel appointment");
+        }
+        order.setAppointmentTime(null);
+        updateRemark(order, orderActionDTO.getRemark());
+        return updateOrderStatus(order, OrderStatus.PAID_DEPOSIT);
     }
 
     @Override

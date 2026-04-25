@@ -18,49 +18,103 @@
       </article>
     </section>
 
+    <section class="panel compact-panel">
+      <div class="panel-heading compact">
+        <div>
+          <h3>系统管理工作台</h3>
+        </div>
+      </div>
+
+      <div class="workspace-board">
+        <section v-for="group in organizationWorkbenchGroups" :key="group.key" class="workspace-board__group">
+          <div class="workspace-board__header">
+            <strong>{{ group.label }}</strong>
+          </div>
+          <div class="workspace-grid">
+            <button
+              v-for="item in group.items"
+              :key="item.key"
+              type="button"
+              class="workspace-card"
+              :class="{ 'is-active': item.active }"
+              @click="router.push(item.to)"
+            >
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.meta }}</span>
+            </button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section v-if="currentMode === 'role'" class="panel compact-panel">
+      <div class="toolbar toolbar--compact">
+        <div class="toolbar-tabs">
+          <el-radio-group v-model="roleWorkspace">
+            <el-radio-button value="role">角色信息</el-radio-button>
+            <el-radio-button value="policy">授权策略</el-radio-button>
+          </el-radio-group>
+        </div>
+      </div>
+    </section>
+
     <section v-if="currentMode === 'department'" class="panel">
       <div class="panel-heading">
         <div>
           <h3>部门管理</h3>
           <p>设置组织架构，并约束各部门只处理自己部门内有效数据。</p>
         </div>
+        <div class="action-group">
+          <el-button type="primary" @click="openManagementEditor('department')">新增部门</el-button>
+        </div>
       </div>
 
-      <div class="form-grid">
-        <label>
-          <span>部门编码</span>
-          <el-input v-model="departmentForm.departmentCode" placeholder="如 CLUE" />
-        </label>
-        <label>
-          <span>部门名称</span>
-          <el-input v-model="departmentForm.departmentName" placeholder="请输入部门名称" />
-        </label>
-        <label>
-          <span>上级部门</span>
-          <el-select v-model="departmentForm.parentCode" clearable placeholder="请选择上级部门">
-            <el-option v-for="item in state.departments" :key="item.id" :label="item.departmentName" :value="item.departmentCode" />
-          </el-select>
-        </label>
-        <label>
-          <span>管理角色</span>
-          <el-select v-model="departmentForm.managerRoleCode" placeholder="请选择管理角色">
-            <el-option v-for="item in state.roles" :key="item.id" :label="item.roleName" :value="item.roleCode" />
-          </el-select>
-        </label>
-        <label class="full-span">
-          <span>数据范围规则</span>
-          <el-input v-model="departmentForm.dataScopeRule" placeholder="描述部门内有效数据边界" />
-        </label>
-        <label class="full-span">
-          <span>备注</span>
-          <el-input v-model="departmentForm.remark" type="textarea" :rows="3" placeholder="请输入部门备注" />
-        </label>
-      </div>
+      <el-collapse-transition>
+        <div v-show="managementEditorMode === 'department'" class="inline-editor-shell">
+          <div class="panel-heading compact">
+            <div>
+              <h3>{{ departmentForm.id ? '编辑部门' : '新增部门' }}</h3>
+            </div>
+          </div>
 
-      <div class="action-group">
-        <el-button type="primary" @click="saveDepartment">保存部门</el-button>
-        <el-button @click="resetDepartmentForm">重置表单</el-button>
-      </div>
+          <div class="form-grid">
+            <label>
+              <span>部门编码</span>
+              <el-input v-model="departmentForm.departmentCode" placeholder="如 CLUE" />
+            </label>
+            <label>
+              <span>部门名称</span>
+              <el-input v-model="departmentForm.departmentName" placeholder="请输入部门名称" />
+            </label>
+            <label>
+              <span>上级部门</span>
+              <el-select v-model="departmentForm.parentCode" clearable placeholder="请选择上级部门">
+                <el-option v-for="item in state.departments" :key="item.id" :label="item.departmentName" :value="item.departmentCode" />
+              </el-select>
+            </label>
+            <label>
+              <span>管理角色</span>
+              <el-select v-model="departmentForm.managerRoleCode" placeholder="请选择管理角色">
+                <el-option v-for="item in state.roles" :key="item.id" :label="item.roleName" :value="item.roleCode" />
+              </el-select>
+            </label>
+            <label class="full-span">
+              <span>数据范围规则</span>
+              <el-input v-model="departmentForm.dataScopeRule" placeholder="描述部门内有效数据边界" />
+            </label>
+            <label class="full-span">
+              <span>备注</span>
+              <el-input v-model="departmentForm.remark" type="textarea" :rows="3" placeholder="请输入部门备注" />
+            </label>
+          </div>
+
+          <div class="action-group">
+            <el-button type="primary" @click="saveDepartment">保存部门</el-button>
+            <el-button @click="resetDepartmentForm">重置表单</el-button>
+            <el-button plain @click="closeManagementEditor('department')">收起</el-button>
+          </div>
+        </div>
+      </el-collapse-transition>
 
       <el-table :data="departmentPagination.rows" stripe>
         <el-table-column label="部门" min-width="180">
@@ -117,6 +171,9 @@
           <h3>员工管理</h3>
           <p>支持新增、停用与调岗；停用前会自动转移名下数据，停用员工不可登录。</p>
         </div>
+        <div class="action-group">
+          <el-button type="primary" @click="openManagementEditor('employee')">新增员工</el-button>
+        </div>
       </div>
 
       <div class="toolbar">
@@ -131,43 +188,54 @@
         </div>
       </div>
 
-      <div class="form-grid">
-        <label>
-          <span>账号</span>
-          <el-input v-model="employeeForm.accountName" placeholder="请输入登录账号" />
-        </label>
-        <label>
-          <span>姓名</span>
-          <el-input v-model="employeeForm.userName" placeholder="请输入员工姓名" />
-        </label>
-        <label>
-          <span>部门</span>
-          <el-select v-model="employeeForm.departmentCode" placeholder="请选择部门">
-            <el-option v-for="item in availableDepartments" :key="item.id" :label="item.departmentName" :value="item.departmentCode" />
-          </el-select>
-        </label>
-        <label>
-          <span>岗位</span>
-          <el-select v-model="employeeForm.positionCode" placeholder="请选择岗位">
-            <el-option v-for="item in filteredPositionsForEmployeeForm" :key="item.id" :label="item.positionName" :value="item.positionCode" />
-          </el-select>
-        </label>
-        <label>
-          <span>角色</span>
-          <el-select v-model="employeeForm.roleCode" placeholder="请选择角色">
-            <el-option v-for="item in availableRoles" :key="item.id" :label="item.roleName" :value="item.roleCode" />
-          </el-select>
-        </label>
-        <label>
-          <span>名下数据量</span>
-          <el-input-number v-model="employeeForm.ownedDataCount" :min="0" controls-position="right" />
-        </label>
-      </div>
+      <el-collapse-transition>
+        <div v-show="managementEditorMode === 'employee'" class="inline-editor-shell">
+          <div class="panel-heading compact">
+            <div>
+              <h3>{{ employeeForm.id ? '编辑员工' : '新增员工' }}</h3>
+            </div>
+          </div>
 
-      <div class="action-group">
-        <el-button type="primary" @click="saveEmployee">保存员工</el-button>
-        <el-button @click="resetEmployeeForm">重置表单</el-button>
-      </div>
+          <div class="form-grid">
+            <label>
+              <span>账号</span>
+              <el-input v-model="employeeForm.accountName" placeholder="请输入登录账号" />
+            </label>
+            <label>
+              <span>姓名</span>
+              <el-input v-model="employeeForm.userName" placeholder="请输入员工姓名" />
+            </label>
+            <label>
+              <span>部门</span>
+              <el-select v-model="employeeForm.departmentCode" placeholder="请选择部门">
+                <el-option v-for="item in availableDepartments" :key="item.id" :label="item.departmentName" :value="item.departmentCode" />
+              </el-select>
+            </label>
+            <label>
+              <span>岗位</span>
+              <el-select v-model="employeeForm.positionCode" placeholder="请选择岗位">
+                <el-option v-for="item in filteredPositionsForEmployeeForm" :key="item.id" :label="item.positionName" :value="item.positionCode" />
+              </el-select>
+            </label>
+            <label>
+              <span>角色</span>
+              <el-select v-model="employeeForm.roleCode" placeholder="请选择角色">
+                <el-option v-for="item in availableRoles" :key="item.id" :label="item.roleName" :value="item.roleCode" />
+              </el-select>
+            </label>
+            <label>
+              <span>名下数据量</span>
+              <el-input-number v-model="employeeForm.ownedDataCount" :min="0" controls-position="right" />
+            </label>
+          </div>
+
+          <div class="action-group">
+            <el-button type="primary" @click="saveEmployee">保存员工</el-button>
+            <el-button @click="resetEmployeeForm">重置表单</el-button>
+            <el-button plain @click="closeManagementEditor('employee')">收起</el-button>
+          </div>
+        </div>
+      </el-collapse-transition>
 
       <el-table :data="employeePagination.rows" stripe>
         <el-table-column label="员工" min-width="180">
@@ -232,33 +300,47 @@
           <h3>岗位管理</h3>
           <p>新增、修改、删除岗位；删除前会自动把名下员工迁移到同部门其它岗位。</p>
         </div>
+        <div class="action-group">
+          <el-button type="primary" @click="openManagementEditor('position')">新增岗位</el-button>
+        </div>
       </div>
 
-      <div class="form-grid">
-        <label>
-          <span>岗位编码</span>
-          <el-input v-model="positionForm.positionCode" placeholder="如 CLUE_SUPERVISOR" />
-        </label>
-        <label>
-          <span>岗位名称</span>
-          <el-input v-model="positionForm.positionName" placeholder="请输入岗位名称" />
-        </label>
-        <label>
-          <span>所属部门</span>
-          <el-select v-model="positionForm.departmentCode" placeholder="请选择部门">
-            <el-option v-for="item in state.departments" :key="item.id" :label="item.departmentName" :value="item.departmentCode" />
-          </el-select>
-        </label>
-        <label class="full-span">
-          <span>备注</span>
-          <el-input v-model="positionForm.remark" placeholder="请输入岗位说明" />
-        </label>
-      </div>
+      <el-collapse-transition>
+        <div v-show="managementEditorMode === 'position'" class="inline-editor-shell">
+          <div class="panel-heading compact">
+            <div>
+              <h3>{{ positionForm.id ? '编辑岗位' : '新增岗位' }}</h3>
+            </div>
+          </div>
 
-      <div class="action-group">
-        <el-button type="primary" @click="savePosition">保存岗位</el-button>
-        <el-button @click="resetPositionForm">重置表单</el-button>
-      </div>
+          <div class="form-grid">
+            <label>
+              <span>岗位编码</span>
+              <el-input v-model="positionForm.positionCode" placeholder="如 CLUE_SUPERVISOR" />
+            </label>
+            <label>
+              <span>岗位名称</span>
+              <el-input v-model="positionForm.positionName" placeholder="请输入岗位名称" />
+            </label>
+            <label>
+              <span>所属部门</span>
+              <el-select v-model="positionForm.departmentCode" placeholder="请选择部门">
+                <el-option v-for="item in state.departments" :key="item.id" :label="item.departmentName" :value="item.departmentCode" />
+              </el-select>
+            </label>
+            <label class="full-span">
+              <span>备注</span>
+              <el-input v-model="positionForm.remark" placeholder="请输入岗位说明" />
+            </label>
+          </div>
+
+          <div class="action-group">
+            <el-button type="primary" @click="savePosition">保存岗位</el-button>
+            <el-button @click="resetPositionForm">重置表单</el-button>
+            <el-button plain @click="closeManagementEditor('position')">收起</el-button>
+          </div>
+        </div>
+      </el-collapse-transition>
 
       <el-table :data="positionPagination.rows" stripe>
         <el-table-column label="岗位" min-width="180">
@@ -311,45 +393,59 @@
     </section>
 
     <template v-else>
-      <section class="panel">
+      <section v-if="roleWorkspace === 'role'" class="panel">
         <div class="panel-heading">
           <div>
             <h3>角色管理</h3>
             <p>维护角色、模块权限和数据范围；原“权限中心”能力已融合到这里。</p>
           </div>
+          <div class="action-group">
+            <el-button type="primary" @click="openManagementEditor('role')">新增角色</el-button>
+          </div>
         </div>
 
-        <div class="form-grid">
-          <label>
-            <span>角色编码</span>
-            <el-input v-model="roleForm.roleCode" placeholder="如 STORE_SERVICE" />
-          </label>
-          <label>
-            <span>角色名称</span>
-            <el-input v-model="roleForm.roleName" placeholder="请输入角色名称" />
-          </label>
-          <label>
-            <span>数据范围</span>
-            <el-select v-model="roleForm.dataScope" placeholder="请选择数据范围">
-              <el-option v-for="item in scopeOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
-          </label>
-          <label class="full-span">
-            <span>模块权限</span>
-            <el-select v-model="roleForm.moduleCodes" multiple placeholder="请选择模块权限">
-              <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
-          </label>
-          <label class="full-span">
-            <span>备注</span>
-            <el-input v-model="roleForm.remark" placeholder="请输入角色说明" />
-          </label>
-        </div>
+        <el-collapse-transition>
+          <div v-show="managementEditorMode === 'role'" class="inline-editor-shell">
+            <div class="panel-heading compact">
+              <div>
+                <h3>{{ roleForm.id ? '编辑角色' : '新增角色' }}</h3>
+              </div>
+            </div>
 
-        <div class="action-group">
-          <el-button type="primary" @click="saveRole">保存角色</el-button>
-          <el-button @click="resetRoleForm">重置表单</el-button>
-        </div>
+            <div class="form-grid">
+              <label>
+                <span>角色编码</span>
+                <el-input v-model="roleForm.roleCode" placeholder="如 STORE_SERVICE" />
+              </label>
+              <label>
+                <span>角色名称</span>
+                <el-input v-model="roleForm.roleName" placeholder="请输入角色名称" />
+              </label>
+              <label>
+                <span>数据范围</span>
+                <el-select v-model="roleForm.dataScope" placeholder="请选择数据范围">
+                  <el-option v-for="item in scopeOptions" :key="item.value" :label="item.label" :value="item.value" />
+                </el-select>
+              </label>
+              <label class="full-span">
+                <span>模块权限</span>
+                <el-select v-model="roleForm.moduleCodes" multiple placeholder="请选择模块权限">
+                  <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
+                </el-select>
+              </label>
+              <label class="full-span">
+                <span>备注</span>
+                <el-input v-model="roleForm.remark" placeholder="请输入角色说明" />
+              </label>
+            </div>
+
+            <div class="action-group">
+              <el-button type="primary" @click="saveRole">保存角色</el-button>
+              <el-button @click="resetRoleForm">重置表单</el-button>
+              <el-button plain @click="closeManagementEditor('role')">收起</el-button>
+            </div>
+          </div>
+        </el-collapse-transition>
 
         <el-table :data="rolePagination.rows" stripe>
           <el-table-column label="角色" min-width="180">
@@ -405,49 +501,63 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section v-else class="panel">
         <div class="panel-heading">
           <div>
             <h3>角色授权策略</h3>
             <p>这里保留原“权限中心”的策略保存能力，角色和菜单的授权都从这块编排。</p>
           </div>
+          <div class="action-group">
+            <el-button type="primary" @click="openPolicyEditor">新增策略</el-button>
+          </div>
         </div>
 
-        <div class="form-grid">
-          <label>
-            <span>模块</span>
-            <el-select v-model="policyForm.moduleCode">
-              <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
-          </label>
-          <label>
-            <span>动作</span>
-            <el-select v-model="policyForm.actionCode">
-              <el-option v-for="item in actionOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
-          </label>
-          <label>
-            <span>角色</span>
-            <el-select v-model="policyForm.roleCode">
-              <el-option v-for="item in state.roles" :key="item.id" :label="item.roleName" :value="item.roleCode" />
-            </el-select>
-          </label>
-          <label>
-            <span>范围</span>
-            <el-select v-model="policyForm.dataScope">
-              <el-option v-for="item in scopeOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
-          </label>
-          <label class="full-span">
-            <span>条件规则</span>
-            <el-input v-model="policyForm.conditionRule" placeholder="如 order(status=appointment)" />
-          </label>
-        </div>
+        <el-collapse-transition>
+          <div v-show="policyEditorVisible" class="inline-editor-shell">
+            <div class="panel-heading compact">
+              <div>
+                <h3>新增授权策略</h3>
+              </div>
+            </div>
 
-        <div class="action-group">
-          <el-button type="primary" @click="savePolicy">保存授权策略</el-button>
-          <el-button @click="loadPolicies">刷新策略</el-button>
-        </div>
+            <div class="form-grid">
+              <label>
+                <span>模块</span>
+                <el-select v-model="policyForm.moduleCode">
+                  <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
+                </el-select>
+              </label>
+              <label>
+                <span>动作</span>
+                <el-select v-model="policyForm.actionCode">
+                  <el-option v-for="item in actionOptions" :key="item.value" :label="item.label" :value="item.value" />
+                </el-select>
+              </label>
+              <label>
+                <span>角色</span>
+                <el-select v-model="policyForm.roleCode">
+                  <el-option v-for="item in state.roles" :key="item.id" :label="item.roleName" :value="item.roleCode" />
+                </el-select>
+              </label>
+              <label>
+                <span>范围</span>
+                <el-select v-model="policyForm.dataScope">
+                  <el-option v-for="item in scopeOptions" :key="item.value" :label="item.label" :value="item.value" />
+                </el-select>
+              </label>
+              <label class="full-span">
+                <span>条件规则</span>
+                <el-input v-model="policyForm.conditionRule" placeholder="如 order(status=appointment)" />
+              </label>
+            </div>
+
+            <div class="action-group">
+              <el-button type="primary" @click="savePolicy">保存授权策略</el-button>
+              <el-button @click="resetPolicyForm">重置表单</el-button>
+              <el-button plain @click="closePolicyEditor">收起</el-button>
+            </div>
+          </div>
+        </el-collapse-transition>
 
         <el-table :data="policyPagination.rows" stripe>
           <el-table-column label="模块" width="140">
@@ -493,7 +603,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { fetchPermissionPolicies, savePermissionPolicy } from '../api/permission'
 import { useTablePagination } from '../composables/useTablePagination'
 import { currentUser } from '../utils/auth'
@@ -515,6 +625,7 @@ import {
 } from '../utils/systemConsoleStore'
 
 const route = useRoute()
+const router = useRouter()
 const state = reactive(loadSystemConsoleState())
 const policies = ref([])
 
@@ -543,18 +654,15 @@ const employeeFilter = reactive({
   departmentCode: '',
   status: ''
 })
+const managementEditorMode = ref('')
+const policyEditorVisible = ref(false)
+const roleWorkspace = ref('role')
 
 const departmentForm = reactive(createDepartmentForm())
 const employeeForm = reactive(createEmployeeForm())
 const positionForm = reactive(createPositionForm())
 const roleForm = reactive(createRoleForm())
-const policyForm = reactive({
-  moduleCode: 'SYSTEM',
-  actionCode: 'VIEW',
-  roleCode: 'ADMIN',
-  dataScope: 'ALL',
-  conditionRule: ''
-})
+const policyForm = reactive(createPolicyForm())
 
 const currentMode = computed(() => route.meta.orgMode || 'department')
 const isAdmin = computed(() => String(currentUser.value?.roleCode || '').trim().toUpperCase() === 'ADMIN')
@@ -591,6 +699,48 @@ const filteredPositionsForEmployeeForm = computed(() => {
   const departmentCode = employeeForm.departmentCode
   return state.positions.filter((item) => item.departmentCode === departmentCode && item.isEnabled === 1)
 })
+const organizationWorkbenchGroups = computed(() => [
+  {
+    key: 'organization',
+    label: '组织工作台',
+    items: [
+      {
+        key: 'department',
+        label: '部门管理',
+        meta: `${state.departments.length} 个部门`,
+        to: '/system/departments',
+        active: currentMode.value === 'department'
+      },
+      {
+        key: 'position',
+        label: '岗位管理',
+        meta: `${state.positions.length} 个岗位`,
+        to: '/system/positions',
+        active: currentMode.value === 'position'
+      }
+    ]
+  },
+  {
+    key: 'staff',
+    label: '人员与权限',
+    items: [
+      {
+        key: 'employee',
+        label: '员工管理',
+        meta: `${filteredEmployees.value.length} 位员工`,
+        to: '/system/employees',
+        active: currentMode.value === 'employee'
+      },
+      {
+        key: 'role',
+        label: '角色管理',
+        meta: `${state.roles.length} 个角色`,
+        to: '/system/roles',
+        active: currentMode.value === 'role'
+      }
+    ]
+  }
+])
 
 const metrics = computed(() => {
   if (currentMode.value === 'department') {
@@ -691,6 +841,16 @@ function createRoleForm() {
   }
 }
 
+function createPolicyForm() {
+  return {
+    moduleCode: 'SYSTEM',
+    actionCode: 'VIEW',
+    roleCode: 'ADMIN',
+    dataScope: 'ALL',
+    conditionRule: ''
+  }
+}
+
 function replaceState(nextState) {
   saveSystemConsoleState(nextState)
   Object.assign(state, loadSystemConsoleState())
@@ -712,16 +872,57 @@ function resetRoleForm() {
   Object.assign(roleForm, createRoleForm())
 }
 
+function resetPolicyForm() {
+  Object.assign(policyForm, createPolicyForm())
+}
+
+function openManagementEditor(mode) {
+  managementEditorMode.value = mode
+  if (mode === 'department') {
+    resetDepartmentForm()
+  }
+  if (mode === 'employee') {
+    resetEmployeeForm()
+  }
+  if (mode === 'position') {
+    resetPositionForm()
+  }
+  if (mode === 'role') {
+    resetRoleForm()
+    roleWorkspace.value = 'role'
+  }
+}
+
+function closeManagementEditor(mode) {
+  if (managementEditorMode.value !== mode) {
+    return
+  }
+  managementEditorMode.value = ''
+}
+
+function openPolicyEditor() {
+  resetPolicyForm()
+  roleWorkspace.value = 'policy'
+  policyEditorVisible.value = true
+}
+
+function closePolicyEditor() {
+  policyEditorVisible.value = false
+}
+
 function pickDepartment(row) {
   Object.assign(departmentForm, { ...row })
+  managementEditorMode.value = 'department'
 }
 
 function pickEmployee(row) {
   Object.assign(employeeForm, { ...row })
+  managementEditorMode.value = 'employee'
 }
 
 function pickPosition(row) {
   Object.assign(positionForm, { ...row })
+  managementEditorMode.value = 'position'
 }
 
 function pickRole(row) {
@@ -729,6 +930,8 @@ function pickRole(row) {
     ...row,
     moduleCodes: [...(row.moduleCodes || [])]
   })
+  roleWorkspace.value = 'role'
+  managementEditorMode.value = 'role'
 }
 
 function saveDepartment() {
@@ -750,6 +953,7 @@ function saveDepartment() {
   replaceState({ ...state, departments: nextDepartments })
   ElMessage.success('部门信息已保存')
   resetDepartmentForm()
+  closeManagementEditor('department')
 }
 
 function toggleDepartment(row) {
@@ -783,6 +987,7 @@ function saveEmployee() {
   replaceState({ ...state, employees: nextEmployees })
   ElMessage.success('员工信息已保存')
   resetEmployeeForm()
+  closeManagementEditor('employee')
 }
 
 function moveEmployee(row) {
@@ -847,6 +1052,7 @@ function savePosition() {
   replaceState({ ...state, positions: nextPositions })
   ElMessage.success('岗位信息已保存')
   resetPositionForm()
+  closeManagementEditor('position')
 }
 
 function employeesInPosition(positionCode) {
@@ -904,6 +1110,7 @@ function saveRole() {
   replaceState({ ...state, roles: nextRoles })
   ElMessage.success('角色信息已保存')
   resetRoleForm()
+  closeManagementEditor('role')
 }
 
 function employeesInRole(roleCode) {
@@ -947,6 +1154,8 @@ async function savePolicy() {
       isEnabled: 1
     })
     ElMessage.success('授权策略已保存')
+    resetPolicyForm()
+    closePolicyEditor()
     await loadPolicies()
   } catch {
     // HTTP 层统一处理提示
@@ -956,7 +1165,10 @@ async function savePolicy() {
 watch(
   () => currentMode.value,
   async (mode) => {
+    managementEditorMode.value = ''
+    policyEditorVisible.value = false
     if (mode === 'role') {
+      roleWorkspace.value = 'role'
       await loadPolicies()
     }
   },

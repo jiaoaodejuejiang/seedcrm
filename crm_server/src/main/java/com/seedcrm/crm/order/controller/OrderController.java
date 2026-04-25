@@ -54,6 +54,14 @@ public class OrderController {
         return ApiResponse.success(OrderResponse.from(orderService.appointment(orderAppointmentDTO)));
     }
 
+    @PostMapping("/appointment/cancel")
+    public ApiResponse<OrderResponse> cancelAppointment(@RequestBody OrderActionDTO orderActionDTO,
+                                                        HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        orderPermissionGuard.checkUpdate(context, orderActionDTO == null ? null : orderActionDTO.getOrderId());
+        return ApiResponse.success(OrderResponse.from(orderService.cancelAppointment(orderActionDTO)));
+    }
+
     @PostMapping("/arrive")
     public ApiResponse<OrderResponse> arrive(@RequestBody OrderActionDTO orderActionDTO, HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);

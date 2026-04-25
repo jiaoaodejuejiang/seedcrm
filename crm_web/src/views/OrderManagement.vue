@@ -1,5 +1,5 @@
 <template>
-  <div class="stack-page">
+  <div class="stack-page order-management-page">
     <section class="metrics-row">
       <article class="metric-card">
         <span>当前列表订单</span>
@@ -29,7 +29,6 @@
         </div>
 
         <div class="action-group">
-          <span class="text-secondary">已预约订单可确认服务项目并进入服务单，已完成订单只查看确认单与服务结果。</span>
           <el-button @click="loadOrders">刷新列表</el-button>
         </div>
       </div>
@@ -79,17 +78,23 @@
         </el-table-column>
         <el-table-column label="确认单" min-width="180">
           <template #default="{ row }">
-            <span>{{ row.remark || '未填写' }}</span>
+            <div class="editable-cell">
+              <span class="editable-cell__text">{{ confirmationSummary(row) }}</span>
+              <el-button link class="editable-cell__trigger" :title="confirmationTriggerTitle(row)" @click="openServiceDrawer(row)">
+                <el-icon>
+                  <component :is="isCompletedOrder(row) ? View : EditPen" />
+                </el-icon>
+              </el-button>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" min-width="300" fixed="right">
+        <el-table-column label="操作" min-width="220" fixed="right">
           <template #default="{ row }">
             <div class="action-group">
-              <el-button size="small" @click="openServiceDrawer(row)">{{ confirmationButtonLabel(row) }}</el-button>
               <el-button type="primary" size="small" @click="enterService(row)">
                 {{ serviceButtonLabel(row) }}
               </el-button>
-              <el-button v-if="row.customerId" size="small" plain @click="router.push(`/customers/${row.customerId}`)">客户详情</el-button>
+              <el-button v-if="row.customerId" link @click="router.push(`/customers/${row.customerId}`)">客户详情</el-button>
             </div>
           </template>
         </el-table-column>
@@ -160,6 +165,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { EditPen, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { createPlanOrder } from '../api/actions'
@@ -245,6 +251,14 @@ function isCompletedOrder(row) {
 
 function confirmationButtonLabel(row) {
   return isCompletedOrder(row) ? '查看确认单' : '确认单'
+}
+
+function confirmationSummary(row) {
+  return row?.remark || '未填写'
+}
+
+function confirmationTriggerTitle(row) {
+  return confirmationButtonLabel(row)
 }
 
 function serviceButtonLabel(row, inDrawer = false) {

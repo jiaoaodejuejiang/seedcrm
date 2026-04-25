@@ -1,20 +1,20 @@
 <template>
-  <div class="stack-page">
+  <div class="stack-page paid-order-page">
     <section class="metrics-row">
       <article class="metric-card">
-        <span>已付款客资</span>
-        <strong>{{ filteredOrders.length }}</strong>
-        <small>这里承接所有已付款客资，由客服统一为门店安排档期。</small>
+        <span>付款订单</span>
+        <strong>{{ schedulingOrders.length }}</strong>
+        <small>这里只展示已付款且仍需预约排档的订单。</small>
       </article>
       <article class="metric-card">
         <span>已预约</span>
         <strong>{{ appointmentCount }}</strong>
-        <small>已生成预约时间的客户会同步显示到门店日历中。</small>
+        <small>已预约客户可以继续更改档期，也能在门店日历里查看。</small>
       </article>
       <article class="metric-card">
-        <span>待排档</span>
+        <span>未预约</span>
         <strong>{{ waitingCount }}</strong>
-        <small>仍未预约的已付款客资需要尽快安排门店档期。</small>
+        <small>默认优先展示未预约客户，方便客服尽快排入门店空档。</small>
       </article>
     </section>
 
@@ -26,139 +26,243 @@
             <el-radio-button value="GROUP_BUY">团购</el-radio-button>
             <el-radio-button value="FORM">表单</el-radio-button>
           </el-radio-group>
+
+          <el-radio-group v-model="viewMode">
+            <el-radio-button value="ORDER">订单列表</el-radio-button>
+            <el-radio-button value="STORE">门店列表</el-radio-button>
+          </el-radio-group>
         </div>
 
         <div class="toolbar__filters">
-          <el-select v-model="storeFilter" clearable placeholder="按门店筛选" style="width: 180px">
-            <el-option v-for="store in storeOptions" :key="store" :label="store" :value="store" />
-          </el-select>
           <el-button @click="loadOrders">刷新列表</el-button>
         </div>
       </div>
 
-      <div class="calendar-layout">
-        <div class="calendar-side">
-          <div class="panel-heading compact">
-            <div>
-              <h3>门店排档日历</h3>
-              <p>按当前门店查看已预约客户，满档日期会显示“满”，当天不可继续预约。</p>
-            </div>
+      <template v-if="viewMode === 'ORDER'">
+        <div class="toolbar toolbar--compact">
+          <div class="toolbar-tabs">
+            <el-radio-group v-model="orderStatusFilter">
+              <el-radio-button value="UNAPPOINTED">未预约</el-radio-button>
+              <el-radio-button value="APPOINTED">已预约</el-radio-button>
+              <el-radio-button value="ALL">全部</el-radio-button>
+            </el-radio-group>
           </div>
 
-          <el-calendar v-model="calendarDate" class="appointment-calendar">
-            <template #date-cell="{ data }">
-              <button
-                type="button"
-                class="calendar-cell schedule-calendar-cell"
-                :class="{ 'is-selected': selectedCalendarDay === data.day, 'is-full': isDateFull(data.day) }"
-                @click="handleCalendarDayClick(data.day)"
-              >
-                <span class="calendar-cell__day">{{ Number(data.day.split('-').pop()) }}</span>
-                <template v-for="item in appointmentRowsByDay(data.day).slice(0, 2)" :key="`${data.day}-${item.id}`">
-                  <span class="calendar-cell__event">{{ item.customerName || item.orderNo }}</span>
-                </template>
-                <span v-if="isDateFull(data.day)" class="calendar-cell__full">满</span>
-              </button>
+          <div class="toolbar__filters">
+            <el-input v-model="orderFilters.customerName" clearable placeholder="姓名查询" style="width: 180px" />
+            <el-input v-model="orderFilters.customerPhone" clearable placeholder="手机号查询" style="width: 180px" />
+          </div>
+        </div>
+
+        <el-table class="paid-order-table" v-loading="loading" :data="orderPagination.rows" row-key="id" stripe table-layout="fixed">
+          <el-table-column label="订单" width="170">
+            <template #default="{ row }">
+              <div class="table-primary">
+                <strong>{{ row.orderNo }}</strong>
+                <span>#{{ row.id }}</span>
+              </div>
             </template>
-          </el-calendar>
+          </el-table-column>
 
-          <div data-qa="paid-order-calendar-selection" class="detail-card calendar-day-card calendar-selection-card">
-            <h3>{{ activeStoreName || '当前门店' }} - {{ selectedCalendarDay }}</h3>
-            <p>已预约 {{ selectedDayAppointmentRows.length }} 位客户，剩余 {{ selectedDayRemainingCount }} 个档位。</p>
+          <el-table-column label="客户信息" width="180">
+            <template #default="{ row }">
+              <div class="table-primary">
+                <strong>{{ row.customerName || '--' }}</strong>
+                <span>{{ row.customerPhone || '--' }}</span>
+              </div>
+            </template>
+          </el-table-column>
 
-            <div class="chip-row">
-              <el-tag effect="plain">当前门店：{{ activeStoreName || '--' }}</el-tag>
-              <el-tag effect="plain">每日容量：{{ selectedDayCapacity }} 档</el-tag>
-              <el-tag v-if="selectedOrderCanSchedule" type="success" effect="plain">可点击日历快速选中预约日期</el-tag>
-            </div>
+          <el-table-column label="门店" width="132" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="editable-cell">
+                <span class="editable-cell__text">{{ row.storeName || '--' }}</span>
+                <el-button
+                  v-if="canEditAppointment(row)"
+                  link
+                  class="editable-cell__trigger"
+                  :title="storeActionTitle(row)"
+                  @click="openAppointmentDialog(row)"
+                >
+                  <el-icon><EditPen /></el-icon>
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
 
-            <div v-if="selectedDayAppointmentRows.length" class="binding-list">
-              <div v-for="item in selectedDayAppointmentRows" :key="item.id" class="binding-item">
-                <strong>{{ item.customerName || item.orderNo }}</strong>
-                <span>{{ formatDateTime(item.appointmentTime) }}</span>
+          <el-table-column label="金额" width="120">
+            <template #default="{ row }">
+              {{ formatMoney(row.amount) }}
+            </template>
+          </el-table-column>
+
+          <el-table-column label="付款时间" width="160">
+            <template #default="{ row }">
+              {{ formatDateTime(row.createTime) }}
+            </template>
+          </el-table-column>
+
+          <el-table-column label="是否已预约" width="120">
+            <template #default="{ row }">
+              <el-tag :type="isAppointedOrder(row) ? 'success' : 'warning'">
+                {{ isAppointedOrder(row) ? '已预约' : '未预约' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="预约档期" width="190" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="editable-cell">
+                <span class="editable-cell__text">{{ appointmentDisplayText(row) }}</span>
+                <el-button
+                  v-if="canEditAppointment(row)"
+                  link
+                  class="editable-cell__trigger"
+                  :title="appointmentActionTitle(row)"
+                  @click="openAppointmentDialog(row)"
+                >
+                  <el-icon><EditPen /></el-icon>
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="操作" width="120" fixed="right">
+            <template #default="{ row }">
+              <div class="action-group action-group--compact">
+                <el-popconfirm v-if="isAppointedOrder(row)" title="确认取消当前预约吗？" @confirm="handleCancelAppointment(row)">
+                  <template #reference>
+                    <el-button size="small" plain type="danger">取消预约</el-button>
+                  </template>
+                </el-popconfirm>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <div class="table-pagination">
+          <el-pagination
+            background
+            layout="total, sizes, prev, pager, next"
+            :total="orderPagination.total"
+            :current-page="orderPagination.currentPage"
+            :page-size="orderPagination.pageSize"
+            :page-sizes="orderPagination.pageSizes"
+            @size-change="orderPagination.handleSizeChange"
+            @current-change="orderPagination.handleCurrentChange"
+          />
+        </div>
+      </template>
+
+      <template v-else>
+        <div class="store-browser">
+          <aside class="store-browser__aside">
+            <div class="panel-heading compact">
+              <div>
+                <h3>门店列表</h3>
               </div>
             </div>
-            <p v-else class="text-secondary">当天暂无已预约客户。</p>
-          </div>
-        </div>
 
-        <div class="calendar-side">
-          <div class="panel-heading compact">
-            <div>
-              <h3>客资排档列表</h3>
-              <p>客服在这里为已付款客资安排门店档期；仅待预约订单允许提交新的排档。</p>
+            <div class="toolbar toolbar--compact">
+              <div class="toolbar__filters">
+                <el-input v-model="storeKeyword" clearable placeholder="名称 / 位置搜索" style="width: 100%" />
+              </div>
+            </div>
+
+            <div v-if="filteredStoreCards.length" class="store-browser__list">
+              <button
+                v-for="store in filteredStoreCards"
+                :key="store.storeName"
+                type="button"
+                class="store-card"
+                :class="{ 'is-active': activeStoreName === store.storeName }"
+                @click="selectedStoreName = store.storeName"
+              >
+                <strong>{{ store.storeName }}</strong>
+                <span>{{ store.location }}</span>
+                <small>今日已约 {{ store.todayBooked }} / {{ store.capacity || 0 }} 档</small>
+              </button>
+            </div>
+            <p v-else class="text-secondary">暂无符合条件的门店。</p>
+          </aside>
+
+          <div class="calendar-side">
+            <div class="panel-heading compact">
+              <div>
+                <h3>{{ activeStoreName || '请选择门店' }}</h3>
+                <p class="panel-heading__meta">{{ activeStoreLocation }}</p>
+              </div>
+            </div>
+
+            <el-calendar v-model="calendarDate" class="appointment-calendar">
+              <template #date-cell="{ data }">
+                <button
+                  type="button"
+                  class="calendar-cell schedule-calendar-cell"
+                  :class="{ 'is-selected': selectedCalendarDay === data.day, 'is-full': isDateFull(data.day) }"
+                  @click="handleCalendarDayClick(data.day)"
+                >
+                  <span class="calendar-cell__day">{{ Number(data.day.split('-').pop()) }}</span>
+                  <template v-for="item in appointmentRowsByDay(data.day).slice(0, 2)" :key="`${data.day}-${item.id}`">
+                    <span class="calendar-cell__event">{{ item.customerName || item.orderNo }}</span>
+                  </template>
+                  <span v-if="isDateFull(data.day)" class="calendar-cell__full">满</span>
+                </button>
+              </template>
+            </el-calendar>
+
+            <div class="detail-card calendar-day-card">
+              <div class="store-day-actions">
+                <div>
+                  <h3>{{ selectedCalendarDay }}</h3>
+                  <p>已预约 {{ selectedDayScheduledRows.length }} 位客户，剩余 {{ selectedDayRemainingCount }} 个空档。</p>
+                </div>
+                <el-button
+                  type="primary"
+                  :disabled="!activeStoreName || !availableStoreSlots.length"
+                  @click="openStoreBookingDialog"
+                >
+                  添加
+                </el-button>
+              </div>
+
+              <el-table
+                v-if="selectedDayScheduledRows.length"
+                class="appointment-day-table"
+                :data="selectedDayScheduledRows"
+                stripe
+                size="small"
+                table-layout="fixed"
+              >
+                <el-table-column label="客户" width="178">
+                  <template #default="{ row }">
+                    <div class="table-primary">
+                      <strong>{{ row.customerName }}</strong>
+                      <span>{{ row.customerPhone }}</span>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column label="金额" width="110">
+                  <template #default="{ row }">
+                    {{ formatMoney(row.amount) }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="付款时间" width="160">
+                  <template #default="{ row }">
+                    {{ formatDateTime(row.createTime) }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="档顺序号" width="92" prop="slotIndex" />
+                <el-table-column label="档期时间段" min-width="150" prop="slotLabel" />
+              </el-table>
+              <p v-else class="text-secondary">当天暂无预约客户。</p>
             </div>
           </div>
-
-          <el-table v-loading="loading" :data="pagination.rows" stripe>
-            <el-table-column label="订单" min-width="180">
-              <template #default="{ row }">
-                <div class="table-primary">
-                  <strong>{{ row.orderNo }}</strong>
-                  <span>#{{ row.id }}</span>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="顾客" min-width="160">
-              <template #default="{ row }">
-                <div class="table-primary">
-                  <strong>{{ row.customerName || '待绑定客户' }}</strong>
-                  <span>{{ row.customerPhone || '--' }}</span>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="来源形式" width="110">
-              <template #default="{ row }">
-                <el-tag>{{ formatProductSourceType(row.productSourceType) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="预约门店" min-width="130" prop="storeName" />
-            <el-table-column label="金额" width="120">
-              <template #default="{ row }">
-                {{ formatMoney(row.amount) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="状态" width="110">
-              <template #default="{ row }">
-                <el-tag :type="statusTagType(row.status)">{{ formatOrderStatus(row.status) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="预约时间" min-width="170">
-              <template #default="{ row }">
-                {{ formatDateTime(row.appointmentTime) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="门店容量" min-width="130">
-              <template #default="{ row }">
-                {{ storeCapacity(row.storeName) || 0 }} 档/天
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="150" fixed="right">
-              <template #default="{ row }">
-                <el-button data-qa="paid-order-open-dialog" type="primary" size="small" @click="openAppointmentDialog(row)">
-                  {{ canSchedule(row) ? '预约门店档期' : '查看排档' }}
-                </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-
-          <div class="table-pagination">
-            <el-pagination
-              background
-              layout="total, sizes, prev, pager, next"
-              :total="pagination.total"
-              :current-page="pagination.currentPage"
-              :page-size="pagination.pageSize"
-              :page-sizes="pagination.pageSizes"
-              @size-change="pagination.handleSizeChange"
-              @current-change="pagination.handleCurrentChange"
-            />
-          </div>
         </div>
-      </div>
+      </template>
     </section>
 
-    <el-dialog v-model="appointmentDialogVisible" :title="selectedOrderCanSchedule ? '预约门店档期' : '查看排档'" width="560px">
+    <el-dialog v-model="appointmentDialogVisible" :title="appointmentDialogTitle" width="560px">
       <el-form :model="appointmentForm" label-width="92px">
         <el-form-item label="订单">
           <el-input :model-value="selectedOrderLabel" disabled />
@@ -166,9 +270,9 @@
         <el-form-item label="预约门店">
           <el-select
             v-model="appointmentForm.storeName"
-            :disabled="!selectedOrderCanSchedule"
+            :disabled="!selectedOrderCanEditAppointment"
             style="width: 100%"
-            @change="handleStoreChange"
+            @change="handleAppointmentStoreChange"
           >
             <el-option v-for="item in storeOptions" :key="item" :label="item" :value="item" />
           </el-select>
@@ -179,11 +283,11 @@
             type="datetime"
             placeholder="请选择预约时间"
             value-format="YYYY-MM-DD HH:mm:ss"
-            :disabled="!selectedOrderCanSchedule"
+            :disabled="!selectedOrderCanEditAppointment"
             style="width: 100%"
           />
         </el-form-item>
-        <el-form-item v-if="selectedOrderCanSchedule" label="快捷档位">
+        <el-form-item v-if="selectedOrderCanEditAppointment" label="门店空档">
           <div data-qa="paid-order-slot-picker" class="slot-picker">
             <button
               v-for="slot in appointmentSlotOptions"
@@ -195,16 +299,17 @@
               @click="selectAppointmentSlot(slot)"
             >
               <strong>{{ slot.label }}</strong>
-              <span>{{ slot.isOccupied ? `已约：${slot.occupiedLabel}` : '点击使用该档位' }}</span>
+              <span>{{ slot.isOccupied ? `已约：${slot.occupiedLabel}` : `第 ${slot.index} 档` }}</span>
             </button>
-            <span v-if="!appointmentSlotOptions.length" class="text-secondary">当前门店当天没有可用档位，请先检查门店档期配置。</span>
+            <span v-if="!appointmentSlotOptions.length" class="text-secondary">当前门店当天没有可用空档。</span>
           </div>
         </el-form-item>
-        <el-form-item label="档位提示">
+        <el-form-item label="排档提示">
           <div class="table-note">
             当前门店 {{ appointmentForm.storeName || '--' }} 每日可排 {{ storeCapacity(appointmentForm.storeName) }} 档；
             {{ formatDate(appointmentForm.appointmentTime) || '所选日期' }} 已约
-            {{ bookedCountByStoreAndDay(appointmentForm.storeName, formatDate(appointmentForm.appointmentTime), selectedOrder?.id) }} 位客户。
+            {{ bookedCountByStoreAndDay(appointmentForm.storeName, formatDate(appointmentForm.appointmentTime), selectedOrder?.id) }}
+            位客户。
           </div>
         </el-form-item>
         <el-form-item label="排档备注">
@@ -212,14 +317,81 @@
             v-model="appointmentForm.remark"
             type="textarea"
             :rows="4"
-            :readonly="!selectedOrderCanSchedule"
+            :readonly="!selectedOrderCanEditAppointment"
             placeholder="填写排档说明、到店提醒或门店注意事项"
           />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="appointmentDialogVisible = false">取消</el-button>
-        <el-button v-if="selectedOrderCanSchedule" type="primary" :loading="saving" @click="handleSaveAppointment">保存排档</el-button>
+        <el-button @click="appointmentDialogVisible = false">关闭</el-button>
+        <el-button v-if="selectedOrderCanEditAppointment" type="primary" :loading="saving" @click="handleSaveAppointment">
+          {{ isAppointedOrder(selectedOrder) ? '确认更改档期' : '确认预约排档' }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="storeBookingDialogVisible" title="添加客户到门店空档" width="760px">
+      <div class="stack-page">
+        <div class="toolbar toolbar--compact">
+          <div class="toolbar__filters">
+            <el-input v-model="storeBookingForm.keyword" clearable placeholder="搜索姓名或手机号" style="width: 240px" />
+          </div>
+        </div>
+
+        <div class="store-booking-grid">
+          <section class="panel">
+            <div class="panel-heading compact">
+              <div>
+                <h3>选择客户订单</h3>
+              </div>
+            </div>
+
+            <div v-if="storeBookingCandidateOrders.length" class="store-booking-list">
+              <button
+                v-for="order in storeBookingCandidateOrders"
+                :key="order.id"
+                type="button"
+                class="store-booking-card"
+                :class="{ 'is-active': storeBookingForm.orderId === order.id }"
+                @click="storeBookingForm.orderId = order.id"
+              >
+                <strong>{{ order.customerName || order.orderNo }}</strong>
+                <span>{{ order.customerPhone || '--' }} · {{ formatMoney(order.amount) }}</span>
+                <small>付款时间：{{ formatDateTime(order.createTime) }}</small>
+              </button>
+            </div>
+            <p v-else class="text-secondary">没有可加入当前门店档期的未预约订单。</p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading compact">
+              <div>
+                <h3>选择空白档期</h3>
+                <p class="panel-heading__meta">{{ activeStoreName }} / {{ selectedCalendarDay }}</p>
+              </div>
+            </div>
+
+            <div v-if="availableStoreSlots.length" class="slot-picker">
+              <button
+                v-for="slot in availableStoreSlots"
+                :key="slot.value"
+                type="button"
+                class="slot-button"
+                :class="{ 'is-selected': storeBookingForm.slotValue === slot.value }"
+                @click="storeBookingForm.slotValue = slot.value"
+              >
+                <strong>{{ slot.label }}</strong>
+                <span>第 {{ slot.index }} 档</span>
+              </button>
+            </div>
+            <p v-else class="text-secondary">当前日期已满，无法继续添加预约。</p>
+          </section>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="storeBookingDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="handleStoreBookingConfirm">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -227,13 +399,20 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
+import { EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { appointOrder } from '../api/order'
+import { appointOrder, cancelOrderAppointment } from '../api/order'
 import { fetchOrders } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
-import { formatDateTime, formatMoney, formatOrderStatus, formatProductSourceType, normalize, statusTagType } from '../utils/format'
-import { calculateStoreCapacity, loadSystemConsoleState, saveSystemConsoleState } from '../utils/systemConsoleStore'
+import { formatDateTime, formatMoney, normalize } from '../utils/format'
+import { calculateStoreCapacity, loadSystemConsoleState, nextSystemId, saveSystemConsoleState } from '../utils/systemConsoleStore'
+
+const FALLBACK_STORE_LOCATIONS = {
+  静安门店: '上海市静安区南京西路商圈',
+  浦东门店: '上海市浦东新区陆家嘴片区',
+  徐汇门店: '上海市徐汇区漕溪北路片区'
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -242,17 +421,33 @@ const loading = ref(true)
 const saving = ref(false)
 const orders = ref([])
 const productSourceFilter = ref('ALL')
-const storeFilter = ref('')
-const calendarDate = ref(new Date())
-const selectedCalendarDay = ref(String(route.query.day || '').trim() || formatDate(new Date()))
+const viewMode = ref('ORDER')
+const orderStatusFilter = ref('UNAPPOINTED')
+const initialCalendarDay = String(route.query.day || '').trim() || formatDate(new Date())
+const calendarDate = ref(parseCalendarDate(initialCalendarDay))
+const selectedCalendarDay = ref(initialCalendarDay)
+const selectedStoreName = ref(String(route.query.storeName || '').trim())
+const storeKeyword = ref('')
 const appointmentDialogVisible = ref(false)
+const storeBookingDialogVisible = ref(false)
 const selectedOrder = ref(null)
 const pendingRouteOrderId = ref(Number(route.query.orderId || 0))
+
+const orderFilters = reactive({
+  customerName: '',
+  customerPhone: ''
+})
 
 const appointmentForm = reactive({
   appointmentTime: '',
   remark: '',
   storeName: ''
+})
+
+const storeBookingForm = reactive({
+  keyword: '',
+  orderId: null,
+  slotValue: ''
 })
 
 const mergedOrders = computed(() =>
@@ -265,40 +460,116 @@ const mergedOrders = computed(() =>
   })
 )
 
-const filteredOrders = computed(() =>
+const productFilteredOrders = computed(() =>
   mergedOrders.value.filter((item) => {
-    if (productSourceFilter.value !== 'ALL' && item.productSourceType !== productSourceFilter.value) {
+    if (productSourceFilter.value === 'ALL') {
+      return true
+    }
+    return item.productSourceType === productSourceFilter.value
+  })
+)
+
+const schedulingOrders = computed(() => productFilteredOrders.value.filter((item) => isSchedulingOrder(item)))
+
+const filteredOrderRows = computed(() =>
+  schedulingOrders.value.filter((item) => {
+    if (orderStatusFilter.value === 'UNAPPOINTED' && !isUnappointedOrder(item)) {
       return false
     }
-    if (storeFilter.value && item.storeName !== storeFilter.value) {
+    if (orderStatusFilter.value === 'APPOINTED' && !isAppointedOrder(item)) {
+      return false
+    }
+    if (orderFilters.customerName && !String(item.customerName || '').includes(orderFilters.customerName.trim())) {
+      return false
+    }
+    if (orderFilters.customerPhone && !String(item.customerPhone || '').includes(orderFilters.customerPhone.trim())) {
       return false
     }
     return true
   })
 )
 
-const pagination = useTablePagination(filteredOrders)
-const storeOptions = computed(() => [...new Set(mergedOrders.value.map((item) => item.storeName).filter(Boolean))])
-const activeStoreName = computed(() => appointmentForm.storeName || storeFilter.value || storeOptions.value[0] || '')
-const selectedDayAppointmentRows = computed(() => appointmentRowsByDay(selectedCalendarDay.value, activeStoreName.value))
+const orderPagination = useTablePagination(filteredOrderRows)
+const storeCards = computed(() => {
+  const storeNames = [
+    ...(consoleState.storeScheduleConfigs || []).map((item) => item.storeName),
+    ...mergedOrders.value.map((item) => item.storeName)
+  ].filter(Boolean)
+
+  return [...new Set(storeNames)].map((storeName) => ({
+    storeName,
+    location: resolveStoreLocation(storeName),
+    capacity: storeCapacity(storeName),
+    todayBooked: bookedCountByStoreAndDay(storeName, formatDate(new Date()))
+  }))
+})
+const filteredStoreCards = computed(() =>
+  storeCards.value.filter((item) => {
+    const keyword = String(storeKeyword.value || '').trim()
+    if (!keyword) {
+      return true
+    }
+    return `${item.storeName} ${item.location}`.includes(keyword)
+  })
+)
+const activeStoreCard = computed(
+  () => filteredStoreCards.value.find((item) => item.storeName === selectedStoreName.value) || filteredStoreCards.value[0] || null
+)
+const activeStoreName = computed(() => activeStoreCard.value?.storeName || '')
+const activeStoreLocation = computed(() => activeStoreCard.value?.location || '请选择左侧门店后查看日历')
+const selectedDaySlotRows = computed(() => buildAppointmentSlots(activeStoreName.value, selectedCalendarDay.value))
+const selectedDayScheduledRows = computed(() =>
+  selectedDaySlotRows.value
+    .filter((item) => item.order)
+    .map((item) => ({
+      id: item.order.id,
+      customerName: item.order.customerName || item.order.orderNo,
+      customerPhone: item.order.customerPhone || '--',
+      amount: item.order.amount,
+      createTime: item.order.createTime,
+      slotIndex: item.index,
+      slotLabel: item.label
+    }))
+)
 const selectedDayCapacity = computed(() => storeCapacity(activeStoreName.value))
-const selectedDayRemainingCount = computed(() => Math.max(selectedDayCapacity.value - selectedDayAppointmentRows.value.length, 0))
-const appointmentCount = computed(() => filteredOrders.value.filter((item) => hasAppointmentJourney(item)).length)
-const waitingCount = computed(() => filteredOrders.value.filter((item) => canSchedule(item) && !item.appointmentTime).length)
-const selectedOrderCanSchedule = computed(() => canSchedule(selectedOrder.value))
+const selectedDayRemainingCount = computed(() => Math.max(selectedDayCapacity.value - selectedDayScheduledRows.value.length, 0))
+const appointmentCount = computed(() => schedulingOrders.value.filter((item) => isAppointedOrder(item)).length)
+const waitingCount = computed(() => schedulingOrders.value.filter((item) => isUnappointedOrder(item)).length)
+const selectedOrderCanEditAppointment = computed(() => canEditAppointment(selectedOrder.value))
 const appointmentSlotOptions = computed(() => {
-  if (!selectedOrderCanSchedule.value) {
+  if (!selectedOrderCanEditAppointment.value) {
     return []
   }
   const scheduleDay = formatDate(appointmentForm.appointmentTime) || selectedCalendarDay.value
   return buildAppointmentSlots(appointmentForm.storeName, scheduleDay, selectedOrder.value?.id)
 })
-
+const availableStoreSlots = computed(() => selectedDaySlotRows.value.filter((item) => !item.isOccupied))
+const storeBookingCandidateOrders = computed(() =>
+  schedulingOrders.value.filter((item) => {
+    if (!isUnappointedOrder(item)) {
+      return false
+    }
+    const keyword = String(storeBookingForm.keyword || '').trim()
+    if (!keyword) {
+      return true
+    }
+    return `${item.customerName || ''} ${item.customerPhone || ''} ${item.orderNo || ''}`.includes(keyword)
+  })
+)
+const appointmentDialogTitle = computed(() => {
+  if (isAppointedOrder(selectedOrder.value)) {
+    return '更改档期'
+  }
+  if (isUnappointedOrder(selectedOrder.value)) {
+    return '预约排档'
+  }
+  return '查看排档'
+})
 const selectedOrderLabel = computed(() => {
   if (!selectedOrder.value) {
     return ''
   }
-  return `${selectedOrder.value.orderNo} / ${selectedOrder.value.customerName || '待绑定客户'}`
+  return `${selectedOrder.value.orderNo} / ${selectedOrder.value.customerName || '未绑定客户'}`
 })
 
 function formatDate(value) {
@@ -310,6 +581,27 @@ function formatDate(value) {
     return ''
   }
   return date.toISOString().slice(0, 10)
+}
+
+function parseCalendarDate(day) {
+  const normalized = String(day || '').trim()
+  if (!normalized) {
+    return new Date()
+  }
+  const [year, month, date] = normalized.split('-').map((item) => Number(item))
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(date)) {
+    return new Date(normalized)
+  }
+  return new Date(year, month - 1, date, 12, 0, 0)
+}
+
+function syncCalendarDay(day) {
+  const normalized = String(day || '').trim()
+  if (!normalized) {
+    return
+  }
+  selectedCalendarDay.value = normalized
+  calendarDate.value = parseCalendarDate(normalized)
 }
 
 function mergeOrdersById(...groups) {
@@ -325,11 +617,16 @@ function mergeOrdersById(...groups) {
   return [...orderMap.values()]
 }
 
+function resolveStoreLocation(storeName) {
+  const config = (consoleState.storeScheduleConfigs || []).find((item) => item.storeName === storeName)
+  return config?.location || FALLBACK_STORE_LOCATIONS[storeName] || '门店位置待维护'
+}
+
 function appointmentRowsByDay(day, storeName = activeStoreName.value) {
   if (!storeName) {
     return []
   }
-  return filteredOrders.value.filter((item) => item.storeName === storeName && formatDate(item.appointmentTime) === day)
+  return mergedOrders.value.filter((item) => item.storeName === storeName && formatDate(item.appointmentTime) === day)
 }
 
 function bookedCountByStoreAndDay(storeName, day, excludingOrderId = null) {
@@ -363,12 +660,36 @@ function isDateFull(day, storeName = activeStoreName.value) {
   return bookedCountByStoreAndDay(storeName, day) >= capacity
 }
 
-function canSchedule(row) {
-  return ['PAID', 'PAID_DEPOSIT'].includes(normalize(row?.status || row?.statusCategory))
+function resolveOrderStatus(row) {
+  return normalize(row?.status || row?.statusCategory)
 }
 
-function hasAppointmentJourney(row) {
-  return ['APPOINTMENT', 'ARRIVED', 'SERVING', 'USED', 'COMPLETED', 'FINISHED'].includes(normalize(row?.status || row?.statusCategory))
+function isSchedulingOrder(row) {
+  return isUnappointedOrder(row) || isAppointedOrder(row)
+}
+
+function isUnappointedOrder(row) {
+  return ['PAID', 'PAID_DEPOSIT'].includes(resolveOrderStatus(row))
+}
+
+function isAppointedOrder(row) {
+  return resolveOrderStatus(row) === 'APPOINTMENT'
+}
+
+function canEditAppointment(row) {
+  return isUnappointedOrder(row) || isAppointedOrder(row)
+}
+
+function storeActionTitle(row) {
+  return isAppointedOrder(row) ? '调整预约门店和档期' : '选择预约门店'
+}
+
+function appointmentDisplayText(row) {
+  return row.appointmentTime ? formatDateTime(row.appointmentTime) : '待预约'
+}
+
+function appointmentActionTitle(row) {
+  return isAppointedOrder(row) ? '更改档期' : '预约排档'
 }
 
 function parseClockMinutes(value) {
@@ -410,6 +731,7 @@ function buildAppointmentSlots(storeName, day, excludingOrderId = null) {
     [config.afternoonStart, config.afternoonEnd]
   ]
 
+  let slotIndex = 1
   return segments.flatMap(([start, end]) => {
     const slots = []
     const startMinutes = parseClockMinutes(start)
@@ -425,11 +747,14 @@ function buildAppointmentSlots(storeName, day, excludingOrderId = null) {
         return isAppointmentWithinSlot(item.appointmentTime, day, current, current + slotMinutes)
       })
       slots.push({
+        index: slotIndex,
         label: `${slotStart} - ${slotEnd}`,
         value: slotValue,
         isOccupied: Boolean(occupiedOrder),
-        occupiedLabel: occupiedOrder ? occupiedOrder.customerName || occupiedOrder.orderNo : ''
+        occupiedLabel: occupiedOrder ? occupiedOrder.customerName || occupiedOrder.orderNo : '',
+        order: occupiedOrder || null
       })
+      slotIndex += 1
     }
     return slots
   })
@@ -440,15 +765,13 @@ function firstAvailableSlotValue(storeName, day, excludingOrderId = null) {
 }
 
 function handleCalendarDayClick(day) {
-  selectedCalendarDay.value = day
-  if (!appointmentDialogVisible.value || !selectedOrderCanSchedule.value) {
+  syncCalendarDay(day)
+  if (!appointmentDialogVisible.value || !selectedOrderCanEditAppointment.value) {
     return
   }
   const nextValue = firstAvailableSlotValue(appointmentForm.storeName, day, selectedOrder.value?.id)
   if (nextValue) {
     appointmentForm.appointmentTime = nextValue
-  } else if (storeCapacity(appointmentForm.storeName) > 0) {
-    ElMessage.warning('所选日期已满，请改约其他日期')
   }
 }
 
@@ -462,29 +785,52 @@ function selectAppointmentSlot(slot) {
 function openAppointmentDialog(row) {
   selectedOrder.value = row
   appointmentForm.remark = row.remark || ''
-  appointmentForm.storeName = row.storeName || storeFilter.value || storeOptions.value[0] || ''
+  appointmentForm.storeName = row.storeName || activeStoreName.value || storeCards.value[0]?.storeName || ''
   if (appointmentForm.storeName) {
-    storeFilter.value = appointmentForm.storeName
+    selectedStoreName.value = appointmentForm.storeName
   }
   const preferredDay = formatDate(row.appointmentTime) || selectedCalendarDay.value || formatDate(new Date())
-  selectedCalendarDay.value = preferredDay
-  if (canSchedule(row)) {
-    appointmentForm.appointmentTime = row.appointmentTime || firstAvailableSlotValue(appointmentForm.storeName, preferredDay, row.id)
+  syncCalendarDay(preferredDay)
+  if (canEditAppointment(row)) {
+    appointmentForm.appointmentTime =
+      row.appointmentTime || firstAvailableSlotValue(appointmentForm.storeName, preferredDay, row.id)
   } else {
     appointmentForm.appointmentTime = row.appointmentTime || ''
   }
   appointmentDialogVisible.value = true
 }
 
-function handleStoreChange(value) {
-  storeFilter.value = value || ''
-  if (!selectedOrderCanSchedule.value) {
+function handleAppointmentStoreChange(value) {
+  selectedStoreName.value = value || ''
+  if (!selectedOrderCanEditAppointment.value) {
     return
   }
   const nextValue = firstAvailableSlotValue(value, selectedCalendarDay.value, selectedOrder.value?.id)
   if (nextValue) {
     appointmentForm.appointmentTime = nextValue
   }
+}
+
+function persistPreferredStore(order, storeName) {
+  if (!order?.clueId || !storeName) {
+    return
+  }
+  const nextProfiles = [...(consoleState.clueConsoleProfiles || [])]
+  const index = nextProfiles.findIndex((item) => item.clueId === order.clueId)
+  if (index >= 0) {
+    nextProfiles[index] = {
+      ...nextProfiles[index],
+      intendedStoreName: storeName
+    }
+  } else {
+    nextProfiles.push({
+      id: nextSystemId(nextProfiles),
+      clueId: order.clueId,
+      intendedStoreName: storeName
+    })
+  }
+  consoleState.clueConsoleProfiles = nextProfiles
+  saveSystemConsoleState(consoleState)
 }
 
 async function loadOrders() {
@@ -501,14 +847,16 @@ async function loadOrders() {
     }
     orders.value = nextOrders
     const routeDay = String(route.query.day || '').trim()
-    if (routeDay) {
-      selectedCalendarDay.value = routeDay
-    }
-    if (!storeFilter.value && storeOptions.value.length) {
+      if (routeDay) {
+        syncCalendarDay(routeDay)
+      }
+    if (!selectedStoreName.value && storeCards.value.length) {
       const routeStore = String(route.query.storeName || '').trim()
-      storeFilter.value = routeStore && storeOptions.value.includes(routeStore) ? routeStore : storeOptions.value[0]
+      selectedStoreName.value = routeStore && storeCards.value.some((item) => item.storeName === routeStore)
+        ? routeStore
+        : storeCards.value[0].storeName
     }
-    pagination.reset()
+    orderPagination.reset()
 
     if (pendingRouteOrderId.value) {
       const matched = mergedOrders.value.find((item) => item.id === pendingRouteOrderId.value)
@@ -525,7 +873,7 @@ async function loadOrders() {
 }
 
 async function handleSaveAppointment() {
-  if (!selectedOrderCanSchedule.value) {
+  if (!selectedOrderCanEditAppointment.value) {
     appointmentDialogVisible.value = false
     return
   }
@@ -549,39 +897,85 @@ async function handleSaveAppointment() {
       appointmentTime: appointmentForm.appointmentTime,
       remark: appointmentForm.remark || undefined
     })
-
-    if (selectedOrder.value.clueId) {
-      const nextProfiles = [...(consoleState.clueConsoleProfiles || [])]
-      const index = nextProfiles.findIndex((item) => item.clueId === selectedOrder.value.clueId)
-      const nextProfile = {
-        id: index >= 0 ? nextProfiles[index].id : Date.now(),
-        clueId: selectedOrder.value.clueId,
-        intendedStoreName: appointmentForm.storeName
-      }
-      if (index >= 0) {
-        nextProfiles[index] = {
-          ...nextProfiles[index],
-          intendedStoreName: appointmentForm.storeName
-        }
-      } else {
-        nextProfiles.push(nextProfile)
-      }
-      consoleState.clueConsoleProfiles = nextProfiles
-      saveSystemConsoleState(consoleState)
-    }
-
-    ElMessage.success('门店档期已保存')
+    persistPreferredStore(selectedOrder.value, appointmentForm.storeName)
+    ElMessage.success(isAppointedOrder(selectedOrder.value) ? '档期已更新' : '预约排档成功')
     appointmentDialogVisible.value = false
+    pendingRouteOrderId.value = 0
+    selectedOrder.value = null
     if (route.query.orderId) {
-      const nextQuery = {}
-      if (appointmentForm.storeName) {
-        nextQuery.storeName = appointmentForm.storeName
-      }
-      if (formatDate(appointmentForm.appointmentTime)) {
-        nextQuery.day = formatDate(appointmentForm.appointmentTime)
-      }
-      router.replace({ path: '/clues/scheduling', query: nextQuery })
+      await router.replace({
+        path: '/clues/scheduling',
+        query: {
+          storeName: appointmentForm.storeName,
+          day
+        }
+      })
     }
+    syncCalendarDay(day)
+    await loadOrders()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function handleCancelAppointment(row) {
+  saving.value = true
+  try {
+    await cancelOrderAppointment({
+      orderId: row.id,
+      remark: '取消预约'
+    })
+    ElMessage.success('已取消预约，客户已回到未预约状态')
+    await loadOrders()
+  } finally {
+    saving.value = false
+  }
+}
+
+function openStoreBookingDialog() {
+  if (!activeStoreName.value) {
+    ElMessage.warning('请先选择门店')
+    return
+  }
+  if (!availableStoreSlots.value.length) {
+    ElMessage.warning('当前日期已经约满，请更换日期后再添加')
+    return
+  }
+  storeBookingForm.keyword = ''
+  storeBookingForm.orderId = storeBookingCandidateOrders.value[0]?.id || null
+  storeBookingForm.slotValue = availableStoreSlots.value[0]?.value || ''
+  storeBookingDialogVisible.value = true
+}
+
+async function handleStoreBookingConfirm() {
+  const order = schedulingOrders.value.find((item) => item.id === storeBookingForm.orderId)
+  if (!order) {
+    ElMessage.warning('请先选择客户订单')
+    return
+  }
+  if (!storeBookingForm.slotValue) {
+    ElMessage.warning('请先选择空白档期')
+    return
+  }
+
+  saving.value = true
+  try {
+    await appointOrder({
+      orderId: order.id,
+      appointmentTime: storeBookingForm.slotValue,
+      remark: order.remark || undefined
+    })
+    persistPreferredStore(order, activeStoreName.value)
+    ElMessage.success('门店档期添加成功')
+    storeBookingDialogVisible.value = false
+    await router.replace({
+      path: '/clues/scheduling',
+      query: {
+        storeName: activeStoreName.value,
+        day: selectedCalendarDay.value
+      }
+    })
+    syncCalendarDay(selectedCalendarDay.value)
     await loadOrders()
   } finally {
     saving.value = false

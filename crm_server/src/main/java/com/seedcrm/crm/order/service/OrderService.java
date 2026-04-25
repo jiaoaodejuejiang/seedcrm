@@ -16,6 +16,8 @@ public interface OrderService extends IService<Order> {
 
     Order appointment(OrderAppointmentDTO orderAppointmentDTO);
 
+    Order cancelAppointment(OrderActionDTO orderActionDTO);
+
     Order arrive(OrderActionDTO orderActionDTO);
 
     Order serving(OrderActionDTO orderActionDTO);

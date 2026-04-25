@@ -138,11 +138,16 @@ export function formatLeadStage(stage) {
   return (
     {
       NEW: '新线索',
+      INTENT: '有意向',
+      ARRIVED: '到店',
+      DEAL: '成交',
+      CALLBACK_PENDING: '待再次沟通',
+      WECHAT_ADDED: '已加微信',
+      DEPOSIT_PAID: '预付定金',
+      INVALID: '无效',
       CONTACTED: '已联系',
-      INTENT: '高意向',
       APPOINTMENT_PENDING: '待预约',
       APPOINTED: '已预约',
-      ARRIVED: '已到店',
       CLOSED: '已成交'
     }[normalized] || stage || '--'
   )
@@ -274,6 +279,10 @@ export function statusTagType(value) {
       INVALID: 'danger',
       CONTACTED: 'primary',
       INTENT: 'success',
+      DEAL: 'success',
+      CALLBACK_PENDING: 'warning',
+      WECHAT_ADDED: 'primary',
+      DEPOSIT_PAID: 'warning',
       APPOINTMENT_PENDING: 'warning',
       APPOINTED: 'primary',
       PAID: 'warning',

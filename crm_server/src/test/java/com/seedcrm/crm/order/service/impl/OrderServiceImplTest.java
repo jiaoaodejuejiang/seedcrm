@@ -17,6 +17,7 @@ import com.seedcrm.crm.customer.service.CustomerService;
 import com.seedcrm.crm.customer.service.CustomerTagService;
 import com.seedcrm.crm.distributor.service.DistributorIncomeService;
 import com.seedcrm.crm.order.dto.OrderActionDTO;
+import com.seedcrm.crm.order.dto.OrderAppointmentDTO;
 import com.seedcrm.crm.order.dto.OrderCreateDTO;
 import com.seedcrm.crm.order.dto.OrderPayDTO;
 import com.seedcrm.crm.order.dto.OrderServiceDetailDTO;
@@ -190,6 +191,53 @@ class OrderServiceImplTest {
         assertThat(updated.getCustomerId()).isEqualTo(201L);
         assertThat(updated.getStatus()).isEqualTo(OrderStatus.PAID_DEPOSIT.name());
         verify(customerService).refreshCustomerLifecycle(201L);
+    }
+
+    @Test
+    void appointmentShouldAllowRescheduleWhenAlreadyAppointment() {
+        Order order = new Order();
+        order.setId(5L);
+        order.setOrderNo("ORD202604211234567895");
+        order.setCustomerId(205L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setAppointmentTime(LocalDateTime.of(2026, 4, 25, 10, 0));
+        when(orderMapper.selectById(5L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(205L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderAppointmentDTO dto = new OrderAppointmentDTO();
+        dto.setOrderId(5L);
+        dto.setAppointmentTime(LocalDateTime.of(2026, 4, 26, 11, 30));
+        dto.setRemark("reschedule");
+
+        Order updated = orderService.appointment(dto);
+
+        assertThat(updated.getStatus()).isEqualTo(OrderStatus.APPOINTMENT.name());
+        assertThat(updated.getAppointmentTime()).isEqualTo(LocalDateTime.of(2026, 4, 26, 11, 30));
+        verify(customerService).refreshCustomerLifecycle(205L);
+    }
+
+    @Test
+    void cancelAppointmentShouldRevertOrderToPaidDeposit() {
+        Order order = new Order();
+        order.setId(7L);
+        order.setOrderNo("ORD202604211234567897");
+        order.setCustomerId(207L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setAppointmentTime(LocalDateTime.of(2026, 4, 25, 15, 0));
+        when(orderMapper.selectById(7L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(207L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderActionDTO dto = new OrderActionDTO();
+        dto.setOrderId(7L);
+        dto.setRemark("cancel appointment");
+
+        Order updated = orderService.cancelAppointment(dto);
+
+        assertThat(updated.getStatus()).isEqualTo(OrderStatus.PAID_DEPOSIT.name());
+        assertThat(updated.getAppointmentTime()).isNull();
+        verify(customerService).refreshCustomerLifecycle(207L);
     }
 
     @Test

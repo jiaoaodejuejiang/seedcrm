@@ -1,5 +1,5 @@
 <template>
-  <div class="stack-page" v-loading="loading">
+  <div class="stack-page customer-detail-page" v-loading="loading">
     <section v-if="profile" class="metrics-row">
       <article class="metric-card">
         <span>客户</span>

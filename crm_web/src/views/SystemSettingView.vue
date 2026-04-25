@@ -18,45 +18,99 @@
       </article>
     </section>
 
+    <section class="panel compact-panel">
+      <div class="panel-heading compact">
+        <div>
+          <h3>系统设置工作台</h3>
+        </div>
+      </div>
+
+      <div class="workspace-board">
+        <section v-for="group in settingWorkbenchGroups" :key="group.key" class="workspace-board__group">
+          <div class="workspace-board__header">
+            <strong>{{ group.label }}</strong>
+          </div>
+          <div class="workspace-grid">
+            <button
+              v-for="item in group.items"
+              :key="item.key"
+              type="button"
+              class="workspace-card"
+              :class="{ 'is-active': item.active }"
+              @click="router.push(item.to)"
+            >
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.meta }}</span>
+            </button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section v-if="currentMode === 'jobs'" class="panel compact-panel">
+      <div class="toolbar toolbar--compact">
+        <div class="toolbar-tabs">
+          <el-radio-group v-model="jobWorkspace">
+            <el-radio-button value="schedule">任务配置</el-radio-button>
+            <el-radio-button value="logs">执行日志</el-radio-button>
+          </el-radio-group>
+        </div>
+      </div>
+    </section>
+
     <section v-if="currentMode === 'menu'" class="panel">
       <div class="panel-heading">
         <div>
           <h3>菜单管理</h3>
           <p>按角色编排页面权限，保持菜单入口和实际业务职责一致。</p>
         </div>
+        <div class="action-group">
+          <el-button type="primary" @click="openSettingEditor('menu')">新增菜单</el-button>
+        </div>
       </div>
 
-      <div class="form-grid">
-        <label>
-          <span>一级菜单</span>
-          <el-input v-model="menuForm.menuGroup" placeholder="如 系统设置" />
-        </label>
-        <label>
-          <span>菜单名称</span>
-          <el-input v-model="menuForm.menuName" placeholder="请输入菜单名称" />
-        </label>
-        <label>
-          <span>路由地址</span>
-          <el-input v-model="menuForm.routePath" placeholder="如 /settings/menu" />
-        </label>
-        <label>
-          <span>模块编码</span>
-          <el-select v-model="menuForm.moduleCode" placeholder="请选择模块">
-            <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </label>
-        <label class="full-span">
-          <span>可见角色</span>
-          <el-select v-model="menuForm.roleCodes" multiple placeholder="请选择角色">
-            <el-option v-for="item in state.roles" :key="item.id" :label="item.roleName" :value="item.roleCode" />
-          </el-select>
-        </label>
-      </div>
+      <el-collapse-transition>
+        <div v-show="settingEditorMode === 'menu'" class="inline-editor-shell">
+          <div class="panel-heading compact">
+            <div>
+              <h3>{{ menuForm.id ? '编辑菜单' : '新增菜单' }}</h3>
+            </div>
+          </div>
 
-      <div class="action-group">
-        <el-button type="primary" @click="saveMenu">保存菜单</el-button>
-        <el-button @click="resetMenuForm">重置表单</el-button>
-      </div>
+          <div class="form-grid">
+            <label>
+              <span>一级菜单</span>
+              <el-input v-model="menuForm.menuGroup" placeholder="如 系统设置" />
+            </label>
+            <label>
+              <span>菜单名称</span>
+              <el-input v-model="menuForm.menuName" placeholder="请输入菜单名称" />
+            </label>
+            <label>
+              <span>路由地址</span>
+              <el-input v-model="menuForm.routePath" placeholder="如 /settings/menu" />
+            </label>
+            <label>
+              <span>模块编码</span>
+              <el-select v-model="menuForm.moduleCode" placeholder="请选择模块">
+                <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </label>
+            <label class="full-span">
+              <span>可见角色</span>
+              <el-select v-model="menuForm.roleCodes" multiple placeholder="请选择角色">
+                <el-option v-for="item in state.roles" :key="item.id" :label="item.roleName" :value="item.roleCode" />
+              </el-select>
+            </label>
+          </div>
+
+          <div class="action-group">
+            <el-button type="primary" @click="saveMenu">保存菜单</el-button>
+            <el-button @click="resetMenuForm">重置表单</el-button>
+            <el-button plain @click="closeSettingEditor('menu')">收起</el-button>
+          </div>
+        </div>
+      </el-collapse-transition>
 
       <el-table :data="menuPagination.rows" stripe>
         <el-table-column label="菜单" min-width="220">
@@ -114,48 +168,62 @@
           <h3>三方接口</h3>
           <p>当前客资中心数据来源于三方拉取，这里可以配置接口地址、认证方式和同步模式。</p>
         </div>
+        <div class="action-group">
+          <el-button type="primary" @click="openSettingEditor('third-party')">新增接口</el-button>
+        </div>
       </div>
 
-      <div class="form-grid">
-        <label>
-          <span>接口名称</span>
-          <el-input v-model="thirdPartyForm.apiName" placeholder="请输入接口名称" />
-        </label>
-        <label>
-          <span>业务模块</span>
-          <el-select v-model="thirdPartyForm.moduleCode">
-            <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </label>
-        <label>
-          <span>请求方式</span>
-          <el-select v-model="thirdPartyForm.method">
-            <el-option label="GET" value="GET" />
-            <el-option label="POST" value="POST" />
-          </el-select>
-        </label>
-        <label>
-          <span>认证方式</span>
-          <el-input v-model="thirdPartyForm.authType" placeholder="如 Bearer Token" />
-        </label>
-        <label>
-          <span>同步模式</span>
-          <el-input v-model="thirdPartyForm.syncMode" placeholder="如 增量同步" />
-        </label>
-        <label>
-          <span>绑定任务编码</span>
-          <el-input v-model="thirdPartyForm.scheduleJobCode" placeholder="如 DOUYIN_CLUE_INCREMENTAL" />
-        </label>
-        <label class="full-span">
-          <span>接口地址</span>
-          <el-input v-model="thirdPartyForm.baseUrl" placeholder="请输入三方接口地址" />
-        </label>
-      </div>
+      <el-collapse-transition>
+        <div v-show="settingEditorMode === 'third-party'" class="inline-editor-shell">
+          <div class="panel-heading compact">
+            <div>
+              <h3>{{ thirdPartyForm.id ? '编辑接口' : '新增接口' }}</h3>
+            </div>
+          </div>
 
-      <div class="action-group">
-        <el-button type="primary" @click="saveCollectionItem('thirdPartyApis', thirdPartyForm, resetThirdPartyForm, '接口配置已保存')">保存接口</el-button>
-        <el-button @click="resetThirdPartyForm">重置表单</el-button>
-      </div>
+          <div class="form-grid">
+            <label>
+              <span>接口名称</span>
+              <el-input v-model="thirdPartyForm.apiName" placeholder="请输入接口名称" />
+            </label>
+            <label>
+              <span>业务模块</span>
+              <el-select v-model="thirdPartyForm.moduleCode">
+                <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </label>
+            <label>
+              <span>请求方式</span>
+              <el-select v-model="thirdPartyForm.method">
+                <el-option label="GET" value="GET" />
+                <el-option label="POST" value="POST" />
+              </el-select>
+            </label>
+            <label>
+              <span>认证方式</span>
+              <el-input v-model="thirdPartyForm.authType" placeholder="如 Bearer Token" />
+            </label>
+            <label>
+              <span>同步模式</span>
+              <el-input v-model="thirdPartyForm.syncMode" placeholder="如 增量同步" />
+            </label>
+            <label>
+              <span>绑定任务编码</span>
+              <el-input v-model="thirdPartyForm.scheduleJobCode" placeholder="如 DOUYIN_CLUE_INCREMENTAL" />
+            </label>
+            <label class="full-span">
+              <span>接口地址</span>
+              <el-input v-model="thirdPartyForm.baseUrl" placeholder="请输入三方接口地址" />
+            </label>
+          </div>
+
+          <div class="action-group">
+            <el-button type="primary" @click="saveCollectionItem('thirdPartyApis', thirdPartyForm, resetThirdPartyForm, '接口配置已保存')">保存接口</el-button>
+            <el-button @click="resetThirdPartyForm">重置表单</el-button>
+            <el-button plain @click="closeSettingEditor('third-party')">收起</el-button>
+          </div>
+        </div>
+      </el-collapse-transition>
 
       <el-table :data="thirdPartyPagination.rows" stripe>
         <el-table-column label="接口" min-width="220">
@@ -211,31 +279,45 @@
           <h3>回调接口</h3>
           <p>配置三方回调地址和签名校验方式，统一接收异步通知。</p>
         </div>
+        <div class="action-group">
+          <el-button type="primary" @click="openSettingEditor('callback')">新增回调</el-button>
+        </div>
       </div>
 
-      <div class="form-grid">
-        <label>
-          <span>回调名称</span>
-          <el-input v-model="callbackForm.callbackName" placeholder="请输入回调名称" />
-        </label>
-        <label>
-          <span>签名方式</span>
-          <el-input v-model="callbackForm.signatureMode" placeholder="如 HMAC-SHA256" />
-        </label>
-        <label class="full-span">
-          <span>回调地址</span>
-          <el-input v-model="callbackForm.callbackUrl" placeholder="请输入回调接口地址" />
-        </label>
-        <label class="full-span">
-          <span>备注</span>
-          <el-input v-model="callbackForm.remark" placeholder="请输入回调说明" />
-        </label>
-      </div>
+      <el-collapse-transition>
+        <div v-show="settingEditorMode === 'callback'" class="inline-editor-shell">
+          <div class="panel-heading compact">
+            <div>
+              <h3>{{ callbackForm.id ? '编辑回调' : '新增回调' }}</h3>
+            </div>
+          </div>
 
-      <div class="action-group">
-        <el-button type="primary" @click="saveCollectionItem('callbackApis', callbackForm, resetCallbackForm, '回调接口已保存')">保存回调</el-button>
-        <el-button @click="resetCallbackForm">重置表单</el-button>
-      </div>
+          <div class="form-grid">
+            <label>
+              <span>回调名称</span>
+              <el-input v-model="callbackForm.callbackName" placeholder="请输入回调名称" />
+            </label>
+            <label>
+              <span>签名方式</span>
+              <el-input v-model="callbackForm.signatureMode" placeholder="如 HMAC-SHA256" />
+            </label>
+            <label class="full-span">
+              <span>回调地址</span>
+              <el-input v-model="callbackForm.callbackUrl" placeholder="请输入回调接口地址" />
+            </label>
+            <label class="full-span">
+              <span>备注</span>
+              <el-input v-model="callbackForm.remark" placeholder="请输入回调说明" />
+            </label>
+          </div>
+
+          <div class="action-group">
+            <el-button type="primary" @click="saveCollectionItem('callbackApis', callbackForm, resetCallbackForm, '回调接口已保存')">保存回调</el-button>
+            <el-button @click="resetCallbackForm">重置表单</el-button>
+            <el-button plain @click="closeSettingEditor('callback')">收起</el-button>
+          </div>
+        </div>
+      </el-collapse-transition>
 
       <el-table :data="callbackPagination.rows" stripe>
         <el-table-column label="回调名称" min-width="180" prop="callbackName" />
@@ -273,62 +355,76 @@
     </section>
 
     <template v-else-if="currentMode === 'jobs'">
-      <section class="panel">
+      <section v-if="jobWorkspace === 'schedule'" class="panel">
         <div class="panel-heading">
           <div>
             <h3>任务调度</h3>
             <p>参考任务调度中心方式，管理三方接口调用、定时同步和失败重试。</p>
           </div>
+          <div class="action-group">
+            <el-button type="primary" @click="openSettingEditor('jobs')">新增任务</el-button>
+            <el-button @click="loadSchedulerData">刷新</el-button>
+          </div>
         </div>
 
-        <div class="form-grid">
-          <label>
-            <span>任务编码</span>
-            <el-input v-model="jobForm.jobCode" />
-          </label>
-          <label>
-            <span>模块</span>
-            <el-select v-model="jobForm.moduleCode">
-              <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
-          </label>
-          <label>
-            <span>同步方式</span>
-            <el-select v-model="jobForm.syncMode">
-              <el-option label="增量同步" value="INCREMENTAL" />
-              <el-option label="全量同步" value="FULL" />
-              <el-option label="手动触发" value="MANUAL" />
-            </el-select>
-          </label>
-          <label>
-            <span>间隔分钟</span>
-            <el-input-number v-model="jobForm.intervalMinutes" :min="1" controls-position="right" />
-          </label>
-          <label>
-            <span>重试次数</span>
-            <el-input-number v-model="jobForm.retryLimit" :min="0" controls-position="right" />
-          </label>
-          <label>
-            <span>状态</span>
-            <el-select v-model="jobForm.status">
-              <el-option label="启用" value="ENABLED" />
-              <el-option label="停用" value="DISABLED" />
-            </el-select>
-          </label>
-          <label>
-            <span>队列名</span>
-            <el-input v-model="jobForm.queueName" />
-          </label>
-          <label class="full-span">
-            <span>接口地址</span>
-            <el-input v-model="jobForm.endpoint" />
-          </label>
-        </div>
+        <el-collapse-transition>
+          <div v-show="settingEditorMode === 'jobs'" class="inline-editor-shell">
+            <div class="panel-heading compact">
+              <div>
+                <h3>任务配置</h3>
+              </div>
+            </div>
 
-        <div class="action-group">
-          <el-button type="primary" @click="handleSaveJob">保存任务</el-button>
-          <el-button @click="loadSchedulerData">刷新</el-button>
-        </div>
+            <div class="form-grid">
+              <label>
+                <span>任务编码</span>
+                <el-input v-model="jobForm.jobCode" />
+              </label>
+              <label>
+                <span>模块</span>
+                <el-select v-model="jobForm.moduleCode">
+                  <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
+                </el-select>
+              </label>
+              <label>
+                <span>同步方式</span>
+                <el-select v-model="jobForm.syncMode">
+                  <el-option label="增量同步" value="INCREMENTAL" />
+                  <el-option label="全量同步" value="FULL" />
+                  <el-option label="手动触发" value="MANUAL" />
+                </el-select>
+              </label>
+              <label>
+                <span>间隔分钟</span>
+                <el-input-number v-model="jobForm.intervalMinutes" :min="1" controls-position="right" />
+              </label>
+              <label>
+                <span>重试次数</span>
+                <el-input-number v-model="jobForm.retryLimit" :min="0" controls-position="right" />
+              </label>
+              <label>
+                <span>状态</span>
+                <el-select v-model="jobForm.status">
+                  <el-option label="启用" value="ENABLED" />
+                  <el-option label="停用" value="DISABLED" />
+                </el-select>
+              </label>
+              <label>
+                <span>队列名</span>
+                <el-input v-model="jobForm.queueName" />
+              </label>
+              <label class="full-span">
+                <span>接口地址</span>
+                <el-input v-model="jobForm.endpoint" />
+              </label>
+            </div>
+
+            <div class="action-group">
+              <el-button type="primary" @click="handleSaveJob">保存任务</el-button>
+              <el-button plain @click="closeSettingEditor('jobs')">收起</el-button>
+            </div>
+          </div>
+        </el-collapse-transition>
 
         <el-table :data="jobPagination.rows" stripe>
           <el-table-column label="任务编码" min-width="180" prop="jobCode" />
@@ -382,7 +478,7 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section v-else class="panel">
         <div class="panel-heading">
           <div>
             <h3>执行日志</h3>
@@ -431,39 +527,53 @@
           <h3>对外接口</h3>
           <p>选择数据源表或联合查询结果，统一做字段映射、限流、缓存和认证控制。</p>
         </div>
+        <div class="action-group">
+          <el-button type="primary" @click="openSettingEditor('public-api')">新增接口</el-button>
+        </div>
       </div>
 
-      <div class="form-grid">
-        <label>
-          <span>接口名称</span>
-          <el-input v-model="publicApiForm.apiName" placeholder="请输入对外接口名称" />
-        </label>
-        <label>
-          <span>数据源</span>
-          <el-input v-model="publicApiForm.sourceTable" placeholder="如 order + customer + plan_order" />
-        </label>
-        <label class="full-span">
-          <span>输出字段</span>
-          <el-input v-model="publicApiForm.outputFields" placeholder="如 orderNo, customerName, amount, statusLabel" />
-        </label>
-        <label>
-          <span>认证方式</span>
-          <el-input v-model="publicApiForm.authMode" placeholder="如 签名 + Token" />
-        </label>
-        <label>
-          <span>限流策略</span>
-          <el-input v-model="publicApiForm.rateLimit" placeholder="如 60 次/分钟" />
-        </label>
-        <label>
-          <span>缓存策略</span>
-          <el-input v-model="publicApiForm.cachePolicy" placeholder="如 30 秒缓存" />
-        </label>
-      </div>
+      <el-collapse-transition>
+        <div v-show="settingEditorMode === 'public-api'" class="inline-editor-shell">
+          <div class="panel-heading compact">
+            <div>
+              <h3>{{ publicApiForm.id ? '编辑对外接口' : '新增对外接口' }}</h3>
+            </div>
+          </div>
 
-      <div class="action-group">
-        <el-button type="primary" @click="saveCollectionItem('publicApis', publicApiForm, resetPublicApiForm, '对外接口已保存')">保存接口</el-button>
-        <el-button @click="resetPublicApiForm">重置表单</el-button>
-      </div>
+          <div class="form-grid">
+            <label>
+              <span>接口名称</span>
+              <el-input v-model="publicApiForm.apiName" placeholder="请输入对外接口名称" />
+            </label>
+            <label>
+              <span>数据源</span>
+              <el-input v-model="publicApiForm.sourceTable" placeholder="如 order + customer + plan_order" />
+            </label>
+            <label class="full-span">
+              <span>输出字段</span>
+              <el-input v-model="publicApiForm.outputFields" placeholder="如 orderNo, customerName, amount, statusLabel" />
+            </label>
+            <label>
+              <span>认证方式</span>
+              <el-input v-model="publicApiForm.authMode" placeholder="如 签名 + Token" />
+            </label>
+            <label>
+              <span>限流策略</span>
+              <el-input v-model="publicApiForm.rateLimit" placeholder="如 60 次/分钟" />
+            </label>
+            <label>
+              <span>缓存策略</span>
+              <el-input v-model="publicApiForm.cachePolicy" placeholder="如 30 秒缓存" />
+            </label>
+          </div>
+
+          <div class="action-group">
+            <el-button type="primary" @click="saveCollectionItem('publicApis', publicApiForm, resetPublicApiForm, '对外接口已保存')">保存接口</el-button>
+            <el-button @click="resetPublicApiForm">重置表单</el-button>
+            <el-button plain @click="closeSettingEditor('public-api')">收起</el-button>
+          </div>
+        </div>
+      </el-collapse-transition>
 
       <el-table :data="publicApiPagination.rows" stripe>
         <el-table-column label="接口名称" min-width="180" prop="apiName" />
@@ -511,31 +621,45 @@
           <h3>字典管理</h3>
           <p>维护编码和值的对应关系，让页面显示中文、数据存储编码。</p>
         </div>
+        <div class="action-group">
+          <el-button type="primary" @click="openSettingEditor('dictionary')">新增字典</el-button>
+        </div>
       </div>
 
-      <div class="form-grid">
-        <label>
-          <span>字典类型</span>
-          <el-input v-model="dictionaryForm.dictType" placeholder="如 order_status" />
-        </label>
-        <label>
-          <span>编码值</span>
-          <el-input v-model="dictionaryForm.itemCode" placeholder="如 APPOINTMENT" />
-        </label>
-        <label>
-          <span>显示值</span>
-          <el-input v-model="dictionaryForm.itemLabel" placeholder="如 已预约" />
-        </label>
-        <label>
-          <span>排序</span>
-          <el-input-number v-model="dictionaryForm.sortOrder" :min="1" controls-position="right" />
-        </label>
-      </div>
+      <el-collapse-transition>
+        <div v-show="settingEditorMode === 'dictionary'" class="inline-editor-shell">
+          <div class="panel-heading compact">
+            <div>
+              <h3>{{ dictionaryForm.id ? '编辑字典' : '新增字典' }}</h3>
+            </div>
+          </div>
 
-      <div class="action-group">
-        <el-button type="primary" @click="saveCollectionItem('dictionaries', dictionaryForm, resetDictionaryForm, '字典项已保存')">保存字典</el-button>
-        <el-button @click="resetDictionaryForm">重置表单</el-button>
-      </div>
+          <div class="form-grid">
+            <label>
+              <span>字典类型</span>
+              <el-input v-model="dictionaryForm.dictType" placeholder="如 order_status" />
+            </label>
+            <label>
+              <span>编码值</span>
+              <el-input v-model="dictionaryForm.itemCode" placeholder="如 APPOINTMENT" />
+            </label>
+            <label>
+              <span>显示值</span>
+              <el-input v-model="dictionaryForm.itemLabel" placeholder="如 已预约" />
+            </label>
+            <label>
+              <span>排序</span>
+              <el-input-number v-model="dictionaryForm.sortOrder" :min="1" controls-position="right" />
+            </label>
+          </div>
+
+          <div class="action-group">
+            <el-button type="primary" @click="saveCollectionItem('dictionaries', dictionaryForm, resetDictionaryForm, '字典项已保存')">保存字典</el-button>
+            <el-button @click="resetDictionaryForm">重置表单</el-button>
+            <el-button plain @click="closeSettingEditor('dictionary')">收起</el-button>
+          </div>
+        </div>
+      </el-collapse-transition>
 
       <el-table :data="dictionaryPagination.rows" stripe>
         <el-table-column label="字典类型" width="180" prop="dictType" />
@@ -579,31 +703,45 @@
           <h3>参数管理</h3>
           <p>维护系统参数键值，方便各模块统一调用。</p>
         </div>
+        <div class="action-group">
+          <el-button type="primary" @click="openSettingEditor('parameter')">新增参数</el-button>
+        </div>
       </div>
 
-      <div class="form-grid">
-        <label>
-          <span>参数键</span>
-          <el-input v-model="parameterForm.paramKey" placeholder="请输入参数键" />
-        </label>
-        <label>
-          <span>参数值</span>
-          <el-input v-model="parameterForm.paramValue" placeholder="请输入参数值" />
-        </label>
-        <label>
-          <span>分类</span>
-          <el-input v-model="parameterForm.category" placeholder="如 系统 / 客资 / 订单" />
-        </label>
-        <label class="full-span">
-          <span>备注</span>
-          <el-input v-model="parameterForm.remark" placeholder="请输入参数说明" />
-        </label>
-      </div>
+      <el-collapse-transition>
+        <div v-show="settingEditorMode === 'parameter'" class="inline-editor-shell">
+          <div class="panel-heading compact">
+            <div>
+              <h3>{{ parameterForm.id ? '编辑参数' : '新增参数' }}</h3>
+            </div>
+          </div>
 
-      <div class="action-group">
-        <el-button type="primary" @click="saveCollectionItem('parameters', parameterForm, resetParameterForm, '参数已保存')">保存参数</el-button>
-        <el-button @click="resetParameterForm">重置表单</el-button>
-      </div>
+          <div class="form-grid">
+            <label>
+              <span>参数键</span>
+              <el-input v-model="parameterForm.paramKey" placeholder="请输入参数键" />
+            </label>
+            <label>
+              <span>参数值</span>
+              <el-input v-model="parameterForm.paramValue" placeholder="请输入参数值" />
+            </label>
+            <label>
+              <span>分类</span>
+              <el-input v-model="parameterForm.category" placeholder="如 系统 / 客资 / 订单" />
+            </label>
+            <label class="full-span">
+              <span>备注</span>
+              <el-input v-model="parameterForm.remark" placeholder="请输入参数说明" />
+            </label>
+          </div>
+
+          <div class="action-group">
+            <el-button type="primary" @click="saveCollectionItem('parameters', parameterForm, resetParameterForm, '参数已保存')">保存参数</el-button>
+            <el-button @click="resetParameterForm">重置表单</el-button>
+            <el-button plain @click="closeSettingEditor('parameter')">收起</el-button>
+          </div>
+        </div>
+      </el-collapse-transition>
 
       <el-table :data="parameterPagination.rows" stripe>
         <el-table-column label="参数键" min-width="220" prop="paramKey" />
@@ -638,7 +776,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { fetchSchedulerJobs, fetchSchedulerLogs, retrySchedulerJob, saveSchedulerJob, triggerSchedulerJob } from '../api/scheduler'
 import { useTablePagination } from '../composables/useTablePagination'
 import {
@@ -652,10 +790,13 @@ import {
 import { loadSystemConsoleState, nextSystemId, saveSystemConsoleState } from '../utils/systemConsoleStore'
 
 const route = useRoute()
+const router = useRouter()
 const state = reactive(loadSystemConsoleState())
 const jobs = ref([])
 const logs = ref([])
 const selectedJobCode = ref('')
+const settingEditorMode = ref('')
+const jobWorkspace = ref('schedule')
 const menuPagination = useTablePagination(computed(() => state.menuConfigs))
 const thirdPartyPagination = useTablePagination(computed(() => state.thirdPartyApis))
 const callbackPagination = useTablePagination(computed(() => state.callbackApis))
@@ -693,6 +834,81 @@ const jobForm = reactive({
   endpoint: '/clue/add',
   status: 'ENABLED'
 })
+const settingWorkbenchGroups = computed(() => [
+  {
+    key: 'base',
+    label: '基础配置',
+    items: [
+      {
+        key: 'menu',
+        label: '菜单管理',
+        meta: `${state.menuConfigs.length} 项`,
+        to: '/settings/menu',
+        active: currentMode.value === 'menu'
+      },
+      {
+        key: 'dictionary',
+        label: '字典管理',
+        meta: `${state.dictionaries.length} 项`,
+        to: '/settings/dictionaries',
+        active: currentMode.value === 'dictionary'
+      },
+      {
+        key: 'parameter',
+        label: '参数管理',
+        meta: `${state.parameters.length} 项`,
+        to: '/settings/parameters',
+        active: currentMode.value === 'parameter'
+      }
+    ]
+  },
+  {
+    key: 'integration',
+    label: '集成接入',
+    items: [
+      {
+        key: 'third-party',
+        label: '三方接口',
+        meta: `${state.thirdPartyApis.length} 项`,
+        to: '/settings/integration/third-party',
+        active: currentMode.value === 'third-party'
+      },
+      {
+        key: 'callback',
+        label: '回调接口',
+        meta: `${state.callbackApis.length} 项`,
+        to: '/settings/integration/callback',
+        active: currentMode.value === 'callback'
+      }
+    ]
+  },
+  {
+    key: 'runtime',
+    label: '任务运行',
+    items: [
+      {
+        key: 'jobs',
+        label: '任务调度',
+        meta: `${jobs.value.length} 个任务`,
+        to: '/settings/integration/jobs',
+        active: currentMode.value === 'jobs'
+      }
+    ]
+  },
+  {
+    key: 'api',
+    label: '开放能力',
+    items: [
+      {
+        key: 'public-api',
+        label: '对外接口',
+        meta: `${state.publicApis.length} 项`,
+        to: '/settings/integration/public-api',
+        active: currentMode.value === 'public-api'
+      }
+    ]
+  }
+])
 
 const metrics = computed(() => {
   if (currentMode.value === 'menu') {
@@ -885,11 +1101,54 @@ function resetParameterForm() {
   Object.assign(parameterForm, createParameterForm())
 }
 
+function openSettingEditor(mode) {
+  settingEditorMode.value = mode
+  if (mode === 'menu') {
+    resetMenuForm()
+  }
+  if (mode === 'third-party') {
+    resetThirdPartyForm()
+  }
+  if (mode === 'callback') {
+    resetCallbackForm()
+  }
+  if (mode === 'jobs') {
+    Object.assign(jobForm, {
+      jobCode: 'DOUYIN_CLUE_INCREMENTAL',
+      moduleCode: 'CLUE',
+      syncMode: 'INCREMENTAL',
+      intervalMinutes: 1,
+      retryLimit: 3,
+      queueName: 'douyin-clue-sync',
+      endpoint: '/clue/add',
+      status: 'ENABLED'
+    })
+    jobWorkspace.value = 'schedule'
+  }
+  if (mode === 'public-api') {
+    resetPublicApiForm()
+  }
+  if (mode === 'dictionary') {
+    resetDictionaryForm()
+  }
+  if (mode === 'parameter') {
+    resetParameterForm()
+  }
+}
+
+function closeSettingEditor(mode) {
+  if (settingEditorMode.value !== mode) {
+    return
+  }
+  settingEditorMode.value = ''
+}
+
 function pickMenu(row) {
   Object.assign(menuForm, {
     ...row,
     roleCodes: [...(row.roleCodes || [])]
   })
+  settingEditorMode.value = 'menu'
 }
 
 function saveMenu() {
@@ -911,10 +1170,12 @@ function saveMenu() {
   replaceState({ ...state, menuConfigs: nextItems })
   ElMessage.success('菜单配置已保存')
   resetMenuForm()
+  closeSettingEditor('menu')
 }
 
 function pickCollectionItem(form, row) {
   Object.assign(form, { ...row })
+  settingEditorMode.value = currentMode.value
 }
 
 function saveCollectionItem(collectionName, form, resetForm, successMessage) {
@@ -934,6 +1195,7 @@ function saveCollectionItem(collectionName, form, resetForm, successMessage) {
   })
   ElMessage.success(successMessage)
   resetForm()
+  closeSettingEditor(currentMode.value)
 }
 
 function toggleCollectionItem(collectionName, id, fieldName) {
@@ -971,6 +1233,7 @@ async function handleSaveJob() {
   try {
     await saveSchedulerJob({ ...jobForm })
     ElMessage.success('调度任务已保存')
+    closeSettingEditor('jobs')
     await loadSchedulerData()
   } catch {
     // HTTP 层统一处理错误
@@ -985,6 +1248,7 @@ async function handleTrigger(row) {
     })
     ElMessage.success('任务已触发')
     selectedJobCode.value = row.jobCode
+    jobWorkspace.value = 'logs'
     await loadSchedulerData()
   } catch {
     // HTTP 层统一处理错误
@@ -996,6 +1260,7 @@ async function handleRetry(row) {
     await retrySchedulerJob(row.jobCode)
     ElMessage.success('失败日志已重新入队')
     selectedJobCode.value = row.jobCode
+    jobWorkspace.value = 'logs'
     await loadSchedulerData()
   } catch {
     // HTTP 层统一处理错误
@@ -1013,12 +1278,16 @@ function pickJob(row) {
     endpoint: row.endpoint,
     status: row.status
   })
+  jobWorkspace.value = 'schedule'
+  settingEditorMode.value = 'jobs'
 }
 
 watch(
   () => currentMode.value,
   async (mode) => {
+    settingEditorMode.value = ''
     if (mode === 'jobs') {
+      jobWorkspace.value = 'schedule'
       await loadSchedulerData()
     }
   },

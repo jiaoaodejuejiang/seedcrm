@@ -1,5 +1,5 @@
 <template>
-  <div class="stack-page">
+  <div class="stack-page clue-management-page">
     <section class="metrics-row">
       <article class="metric-card">
         <span>客资总数</span>
@@ -9,136 +9,323 @@
       <article class="metric-card">
         <span>已付款客资</span>
         <strong>{{ paidClueCount }}</strong>
-        <small>已进入付款链路的客资可直接安排门店档期。</small>
+        <small>已进入付款链路的客资，可直接进入顾客排档安排门店档期。</small>
       </article>
       <article class="metric-card">
-        <span>待回拨</span>
+        <span>待再次沟通</span>
         <strong>{{ callbackCount }}</strong>
-        <small>通话状态为待回拨的线索需要优先继续联系。</small>
+        <small>客服可直接在列表中补充跟进记录、调整线索阶段和补打标签。</small>
       </article>
     </section>
 
     <section class="panel">
       <div class="toolbar">
         <div class="toolbar-tabs">
-          <el-radio-group v-model="productSourceFilter" @change="loadClues">
+          <el-radio-group v-model="productSourceFilter" @change="applyFilters">
             <el-radio-button value="ALL">全部来源形式</el-radio-button>
             <el-radio-button value="GROUP_BUY">团购</el-radio-button>
             <el-radio-button value="FORM">表单</el-radio-button>
           </el-radio-group>
         </div>
-
-        <div class="action-group">
-          <span class="text-secondary">系统已接入自动拉取客资，本页每 15 秒自动刷新一次。</span>
-          <el-button v-if="canCreateClue" type="primary" @click="createDialogVisible = true">新增客资</el-button>
-        </div>
       </div>
 
       <div class="toolbar toolbar--compact">
+        <div class="toolbar-tabs">
+          <el-radio-group v-model="filters.queueStatus" @change="applyFilters">
+            <el-radio-button value="ALL">全部</el-radio-button>
+            <el-radio-button value="WAIT_ASSIGN">待分配</el-radio-button>
+            <el-radio-button value="WAIT_FOLLOW_UP">待跟进</el-radio-button>
+          </el-radio-group>
+        </div>
+
         <div class="toolbar__filters">
-          <el-select v-model="filters.sourceChannel" clearable placeholder="来源渠道" style="width: 160px">
-            <el-option label="抖音" value="DOUYIN" />
-            <el-option label="分销" value="DISTRIBUTOR" />
-          </el-select>
-          <el-select v-model="filters.status" clearable placeholder="线索状态" style="width: 160px">
-            <el-option label="新客资" value="NEW" />
-            <el-option label="已分配" value="ASSIGNED" />
-            <el-option label="跟进中" value="FOLLOWING" />
-            <el-option label="已转化" value="CONVERTED" />
-          </el-select>
-          <el-button @click="loadClues">筛选</el-button>
+          <el-input v-model="filters.phone" clearable placeholder="手机号搜索" style="width: 180px" />
+          <el-date-picker
+            v-model="filters.createdRange"
+            type="daterange"
+            unlink-panels
+            range-separator="至"
+            start-placeholder="创建开始"
+            end-placeholder="创建结束"
+            value-format="YYYY-MM-DD"
+            style="width: 260px"
+          />
+          <el-button @click="applyFilters">筛选</el-button>
+          <el-button plain @click="resetFilters">重置</el-button>
         </div>
       </div>
 
-      <el-table v-loading="loading" :data="pagination.rows" stripe>
-        <el-table-column label="姓名" min-width="180">
+      <el-table
+        class="clue-list-table"
+        v-loading="loading"
+        :data="pagination.rows"
+        row-key="id"
+        stripe
+        table-layout="fixed"
+        max-height="560"
+        scrollbar-always-on
+      >
+        <el-table-column label="姓名" width="160" fixed="left">
           <template #default="{ row }">
-            <el-input
-              v-model="row.editName"
-              size="small"
-              :placeholder="`线索#${row.id}`"
-              @blur="handleInlineUpdate(row, { displayName: row.editName })"
-            />
+            <div class="editable-cell">
+              <span class="editable-cell__text">{{ displayName(row) }}</span>
+              <el-popover placement="bottom-start" :width="260" trigger="click" @show="prepareCellDraft(row.id, 'displayName', row.editName)">
+                <template #reference>
+                  <el-button link class="editable-cell__trigger" title="编辑姓名">
+                    <el-icon><EditPen /></el-icon>
+                  </el-button>
+                </template>
+
+                <div class="editable-popover">
+                  <h4>编辑姓名</h4>
+                  <el-input
+                    :model-value="getCellDraft(row.id, 'displayName', row.editName)"
+                    :placeholder="`线索#${row.id}`"
+                    @update:model-value="setCellDraft(row.id, 'displayName', $event)"
+                  />
+                  <div class="action-group flex-end">
+                    <el-button type="primary" size="small" @click="saveCellEdit(row, 'displayName', row.editName, 'displayName')">
+                      保存
+                    </el-button>
+                  </div>
+                </div>
+              </el-popover>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="电话" min-width="160">
+
+        <el-table-column label="电话" width="150" fixed="left">
           <template #default="{ row }">
-            <el-input
-              v-model="row.editPhone"
-              size="small"
-              placeholder="请输入联系电话"
-              @blur="handleInlineUpdate(row, { phone: row.editPhone })"
-            />
+            <div class="editable-cell">
+              <span class="editable-cell__text">{{ row.editPhone || '--' }}</span>
+              <el-popover placement="bottom-start" :width="280" trigger="click" @show="prepareCellDraft(row.id, 'phone', row.editPhone)">
+                <template #reference>
+                  <el-button link class="editable-cell__trigger" title="编辑电话">
+                    <el-icon><EditPen /></el-icon>
+                  </el-button>
+                </template>
+
+                <div class="editable-popover">
+                  <h4>编辑电话</h4>
+                  <el-input
+                    :model-value="getCellDraft(row.id, 'phone', row.editPhone)"
+                    placeholder="请输入联系电话"
+                    @update:model-value="setCellDraft(row.id, 'phone', $event)"
+                  />
+                  <div class="action-group flex-end">
+                    <el-button type="primary" size="small" @click="saveCellEdit(row, 'phone', row.editPhone)">
+                      保存
+                    </el-button>
+                  </div>
+                </div>
+              </el-popover>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="通话状态" width="140">
+
+        <el-table-column label="通话状态" width="136">
           <template #default="{ row }">
-            <el-select
-              v-model="row.callStatus"
-              size="small"
-              placeholder="请选择"
-              @change="(value) => handleInlineUpdate(row, { callStatus: value })"
-            >
-              <el-option v-for="item in callStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
+            <div class="editable-cell">
+              <span class="editable-cell__text">{{ formatCallStatus(row.callStatus) }}</span>
+              <el-popover placement="bottom-start" :width="240" trigger="click" @show="prepareCellDraft(row.id, 'callStatus', row.callStatus)">
+                <template #reference>
+                  <el-button link class="editable-cell__trigger" title="编辑通话状态">
+                    <el-icon><EditPen /></el-icon>
+                  </el-button>
+                </template>
+
+                <div class="editable-popover">
+                  <h4>编辑通话状态</h4>
+                  <el-select
+                    :model-value="getCellDraft(row.id, 'callStatus', row.callStatus)"
+                    style="width: 100%"
+                    @update:model-value="setCellDraft(row.id, 'callStatus', $event)"
+                  >
+                    <el-option v-for="item in callStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                  <div class="action-group flex-end">
+                    <el-button type="primary" size="small" @click="saveCellEdit(row, 'callStatus', row.callStatus)">
+                      保存
+                    </el-button>
+                  </div>
+                </div>
+              </el-popover>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="线索阶段" width="140">
+
+        <el-table-column label="线索阶段" width="144">
           <template #default="{ row }">
-            <el-select
-              v-model="row.leadStage"
-              size="small"
-              placeholder="请选择"
-              @change="(value) => handleInlineUpdate(row, { leadStage: value })"
-            >
-              <el-option v-for="item in leadStageOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
+            <div class="editable-cell">
+              <span class="editable-cell__text">{{ formatLeadStage(row.leadStage) }}</span>
+              <el-popover placement="bottom-start" :width="260" trigger="click" @show="prepareCellDraft(row.id, 'leadStage', row.leadStage)">
+                <template #reference>
+                  <el-button link class="editable-cell__trigger" title="编辑线索阶段">
+                    <el-icon><EditPen /></el-icon>
+                  </el-button>
+                </template>
+
+                <div class="editable-popover">
+                  <h4>编辑线索阶段</h4>
+                  <el-select
+                    :model-value="getCellDraft(row.id, 'leadStage', row.leadStage)"
+                    style="width: 100%"
+                    @update:model-value="setCellDraft(row.id, 'leadStage', $event)"
+                  >
+                    <el-option v-for="item in leadStageOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                  <div class="action-group flex-end">
+                    <el-button type="primary" size="small" @click="saveCellEdit(row, 'leadStage', row.leadStage)">
+                      保存
+                    </el-button>
+                  </div>
+                </div>
+              </el-popover>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="线索标签" min-width="220">
+
+        <el-table-column label="跟进记录" width="220">
           <template #default="{ row }">
-            <el-select
-              v-model="row.leadTags"
-              multiple
-              filterable
-              allow-create
-              default-first-option
-              collapse-tags
-              collapse-tags-tooltip
-              size="small"
-              placeholder="可直接打标签"
-              @change="(value) => handleInlineUpdate(row, { leadTags: value })"
-            >
-              <el-option v-for="item in tagOptions" :key="item" :label="item" :value="item" />
-            </el-select>
+            <div class="editable-cell editable-cell--stack">
+              <div class="table-primary">
+                <strong>{{ latestFollowRecord(row) }}</strong>
+                <span>{{ row.followRecords.length ? `共 ${row.followRecords.length} 条` : '暂无跟进记录' }}</span>
+              </div>
+
+              <el-popover placement="bottom-start" :width="380" trigger="click" popper-class="follow-record-popover">
+                <template #reference>
+                  <el-button link class="editable-cell__trigger" title="编辑跟进记录">
+                    <el-icon><EditPen /></el-icon>
+                  </el-button>
+                </template>
+
+                <div class="follow-record-panel">
+                  <div class="panel-heading compact">
+                    <div>
+                      <h3>跟进记录</h3>
+                    </div>
+                  </div>
+
+                  <div v-if="row.followRecords.length" class="follow-record-list">
+                    <article v-for="record in row.followRecords" :key="record.id" class="follow-record-item">
+                      <div class="follow-record-item__header">
+                        <strong>{{ formatDateTime(record.createdAt) }}</strong>
+                        <el-popconfirm title="确认删除这条跟进记录吗？" @confirm="removeFollowRecord(row, record.id)">
+                          <template #reference>
+                            <el-button link type="danger">删除</el-button>
+                          </template>
+                        </el-popconfirm>
+                      </div>
+                      <p>{{ record.content }}</p>
+                    </article>
+                  </div>
+                  <p v-else class="text-secondary">暂无跟进记录</p>
+
+                  <div class="follow-record-editor">
+                    <el-input
+                      v-model="followRecordDrafts[row.id]"
+                      type="textarea"
+                      :rows="3"
+                      placeholder="请输入本次跟进内容"
+                    />
+                    <div class="action-group">
+                      <el-button type="primary" size="small" @click="addFollowRecord(row)">提交记录</el-button>
+                    </div>
+                  </div>
+                </div>
+              </el-popover>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="意向门店" min-width="150">
+
+        <el-table-column label="线索标签" width="180">
           <template #default="{ row }">
-            <el-select
-              v-model="row.intendedStoreName"
-              size="small"
-              placeholder="请选择门店"
-              @change="(value) => handleInlineUpdate(row, { intendedStoreName: value })"
-            >
-              <el-option v-for="item in storeOptions" :key="item" :label="item" :value="item" />
-            </el-select>
+            <div class="editable-cell">
+              <span class="editable-cell__text">{{ previewLeadTags(row.leadTags) }}</span>
+              <el-popover placement="bottom-start" :width="320" trigger="click" @show="prepareCellDraft(row.id, 'leadTags', row.leadTags)">
+                <template #reference>
+                  <el-button link class="editable-cell__trigger" title="编辑标签">
+                    <el-icon><EditPen /></el-icon>
+                  </el-button>
+                </template>
+
+                <div class="editable-popover">
+                  <h4>编辑标签</h4>
+                  <el-select
+                    :model-value="getCellDraft(row.id, 'leadTags', row.leadTags)"
+                    class="stack-field-cell__control"
+                    multiple
+                    filterable
+                    allow-create
+                    default-first-option
+                    collapse-tags
+                    collapse-tags-tooltip
+                    size="small"
+                    placeholder="标签"
+                    @update:model-value="setCellDraft(row.id, 'leadTags', $event)"
+                  >
+                    <el-option v-for="item in tagOptions" :key="item" :label="item" :value="item" />
+                  </el-select>
+                  <div class="action-group flex-end">
+                    <el-button type="primary" size="small" @click="saveCellEdit(row, 'leadTags', row.leadTags)">
+                      保存
+                    </el-button>
+                  </div>
+                </div>
+              </el-popover>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="线索分配时间" min-width="180">
+
+        <el-table-column label="意向门店" width="160">
+          <template #default="{ row }">
+            <div class="editable-cell">
+              <span class="editable-cell__text">{{ row.intendedStoreName || '--' }}</span>
+              <el-popover placement="bottom-start" :width="260" trigger="click" @show="prepareCellDraft(row.id, 'intendedStoreName', row.intendedStoreName)">
+                <template #reference>
+                  <el-button link class="editable-cell__trigger" title="编辑意向门店">
+                    <el-icon><EditPen /></el-icon>
+                  </el-button>
+                </template>
+
+                <div class="editable-popover">
+                  <h4>编辑意向门店</h4>
+                  <el-select
+                    :model-value="getCellDraft(row.id, 'intendedStoreName', row.intendedStoreName)"
+                    style="width: 100%"
+                    placeholder="请选择门店"
+                    @update:model-value="setCellDraft(row.id, 'intendedStoreName', $event)"
+                  >
+                    <el-option v-for="item in storeOptions" :key="item" :label="item" :value="item" />
+                  </el-select>
+                  <div class="action-group flex-end">
+                    <el-button type="primary" size="small" @click="saveCellEdit(row, 'intendedStoreName', row.intendedStoreName)">
+                      保存
+                    </el-button>
+                  </div>
+                </div>
+              </el-popover>
+            </div>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="分配时间" width="180">
           <template #default="{ row }">
             {{ formatDateTime(row.assignedAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="线索创建时间" min-width="180">
+
+        <el-table-column label="创建时间" width="180">
           <template #default="{ row }">
             {{ formatDateTime(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" min-width="320" fixed="right">
+
+        <el-table-column label="操作" width="220">
           <template #default="{ row }">
-            <div class="action-group">
-              <el-button size="small" @click="openDetailDrawer(row)">查看详情</el-button>
+            <div class="action-group action-group--compact">
+              <el-button size="small" @click="openDetailDrawer(row)">详情</el-button>
               <el-button
                 v-if="row.paidOrderId"
                 data-qa="clue-schedule-action"
@@ -149,14 +336,17 @@
                 {{ row.schedulingActionLabel }}
               </el-button>
               <el-dropdown v-if="canShowMoreActions(row)">
-                <el-button size="small" plain>
-                  更多操作
-                </el-button>
+                <el-button size="small" plain>更多操作</el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item v-if="canAssignClue" @click="openAssignDialog(row)">分配客服</el-dropdown-item>
-                    <el-dropdown-item v-if="canRecycleClue" :disabled="!row.currentOwnerId" @click="handleRecycle(row)">回收线索</el-dropdown-item>
-                    <el-dropdown-item v-if="canCreateOrderFromClue && !row.latestOrderId" @click="openOrderDialog(row)">转订单</el-dropdown-item>
+                    <el-dropdown-item
+                      v-if="canRecycleClue"
+                      :disabled="!row.currentOwnerId"
+                      @click="handleRecycle(row)"
+                    >
+                      回收线索
+                    </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
@@ -186,7 +376,7 @@
             <div class="detail-grid">
               <article class="detail-card">
                 <h3>基础信息</h3>
-                <p>线索编号：#{{ detailRow.id }}</p>
+                <p>线索编号：{{ detailRow.id }}</p>
                 <p>姓名：{{ displayName(detailRow) }}</p>
                 <p>电话：{{ detailRow.editPhone || '--' }}</p>
                 <p>来源形式：{{ formatProductSourceType(detailRow.productSourceType) }}</p>
@@ -202,16 +392,33 @@
           </section>
 
           <section class="panel">
-            <div class="panel-heading compact">
-              <div>
-                <h3>标签与备注</h3>
-                <p>这里展示客服在列表上补充的标签以及系统同步过来的线索信息。</p>
-              </div>
-            </div>
+                <div class="panel-heading compact">
+                  <div>
+                    <h3>线索标签</h3>
+                  </div>
+                </div>
             <div class="chip-row">
               <el-tag v-for="tag in detailRow.leadTags" :key="tag" effect="plain" type="success">{{ tag }}</el-tag>
               <span v-if="!detailRow.leadTags.length" class="text-secondary">暂无标签</span>
             </div>
+          </section>
+
+          <section class="panel">
+                <div class="panel-heading compact">
+                  <div>
+                    <h3>跟进记录</h3>
+                  </div>
+                </div>
+            <div v-if="detailRow.followRecords.length" class="follow-record-list">
+              <article v-for="record in detailRow.followRecords" :key="record.id" class="follow-record-item">
+                <div class="follow-record-item__header">
+                  <strong>{{ formatDateTime(record.createdAt) }}</strong>
+                </div>
+                <p>{{ record.content }}</p>
+              </article>
+            </div>
+            <p v-else class="text-secondary">暂无跟进记录</p>
+
             <div class="table-note">
               最近订单状态：{{ detailRow.latestOrderId ? detailRow.latestOrderStageLabel : '暂无订单' }}
               <span v-if="detailRow.paidOrderAppointmentTime">；预约时间：{{ formatDateTime(detailRow.paidOrderAppointmentTime) }}</span>
@@ -220,41 +427,6 @@
         </div>
       </template>
     </el-drawer>
-
-    <el-dialog v-model="createDialogVisible" title="新增客资" width="560px">
-      <el-form :model="clueForm" label-width="92px">
-        <el-form-item label="姓名">
-          <el-input v-model="clueForm.name" placeholder="可选" />
-        </el-form-item>
-        <el-form-item label="手机号">
-          <el-input v-model="clueForm.phone" placeholder="手机号和微信至少填写一个" />
-        </el-form-item>
-        <el-form-item label="微信">
-          <el-input v-model="clueForm.wechat" />
-        </el-form-item>
-        <el-form-item label="来源">
-          <el-select v-model="clueForm.sourceChannel" style="width: 100%">
-            <el-option label="抖音" value="DOUYIN" />
-            <el-option label="分销" value="DISTRIBUTOR" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="来源 ID">
-          <el-input v-model="clueForm.sourceId" placeholder="外部来源 ID 或分销商 ID" />
-        </el-form-item>
-        <el-form-item label="原始数据">
-          <el-input
-            v-model="clueForm.rawData"
-            type="textarea"
-            :rows="4"
-            placeholder="建议保留上游返回的 JSON 文本，便于后续追溯。"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreateClue">提交</el-button>
-      </template>
-    </el-dialog>
 
     <el-dialog v-model="assignDialogVisible" title="选择分配客服" width="520px">
       <div class="quick-button-row">
@@ -272,51 +444,19 @@
         <el-button @click="assignDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
-
-    <el-dialog v-model="orderDialogVisible" title="从线索创建订单" width="560px">
-      <el-form :model="orderForm" label-width="92px">
-        <el-form-item label="线索">
-          <el-input :model-value="selectedClueLabel" disabled />
-        </el-form-item>
-        <el-form-item label="订单类型">
-          <el-select v-model="orderForm.type" style="width: 100%">
-            <el-option label="定金" :value="1" />
-            <el-option label="卡券" :value="2" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="订单金额">
-          <el-input-number v-model="orderForm.amount" :min="1" :precision="2" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="定金金额">
-          <el-input-number
-            v-model="orderForm.deposit"
-            :min="0"
-            :precision="2"
-            :disabled="orderForm.type === 2"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="orderForm.remark" type="textarea" :rows="3" placeholder="填写转化说明或订单备注" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="orderDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreateOrder">提交</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { EditPen } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import { assignClue, createClue, createOrder, recycleClue } from '../api/actions'
+import { assignClue, recycleClue } from '../api/actions'
 import { fetchDutyCustomerServices } from '../api/clueManagement'
 import { fetchClues, fetchOrders } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
-import { currentUser, hasAccess } from '../utils/auth'
+import { currentUser } from '../utils/auth'
 import {
   formatCallStatus,
   formatDateTime,
@@ -333,14 +473,21 @@ const loading = ref(true)
 const clues = ref([])
 const paidOrders = ref([])
 const dutyStaff = ref([])
-const createDialogVisible = ref(false)
 const assignDialogVisible = ref(false)
-const orderDialogVisible = ref(false)
 const detailDrawerVisible = ref(false)
 const assignTarget = ref(null)
-const selectedClue = ref(null)
-const detailRow = ref(null)
+const detailRowId = ref(null)
 const productSourceFilter = ref('ALL')
+const followRecordDrafts = reactive({})
+const cellDrafts = reactive({})
+let refreshTimer = null
+
+const filters = reactive({
+  phone: '',
+  createdRange: [],
+  queueStatus: 'ALL'
+})
+
 const clueSourceRows = computed(() => {
   const existingClueIds = new Set(clues.value.map((item) => item.id))
   const fallbackRows = paidOrders.value
@@ -349,31 +496,10 @@ const clueSourceRows = computed(() => {
   return [...fallbackRows, ...clues.value].sort((left, right) => compareClueRecency(right, left))
 })
 const mergedClues = computed(() => clueSourceRows.value.map((item) => buildClueRow(item)))
-const pagination = useTablePagination(mergedClues)
-let refreshTimer = null
-
-const filters = reactive({
-  sourceChannel: '',
-  status: ''
-})
-
-const clueForm = reactive({
-  name: '',
-  phone: '',
-  wechat: '',
-  sourceChannel: 'DOUYIN',
-  sourceId: '',
-  rawData: ''
-})
-
-const orderForm = reactive({
-  type: 1,
-  amount: 1999,
-  deposit: 199,
-  remark: ''
-})
-
-const roleCode = computed(() => currentUser.value?.roleCode || '')
+const filteredClues = computed(() =>
+  mergedClues.value.filter((item) => matchesProductSource(item) && matchesPhone(item) && matchesCreatedRange(item) && matchesQueueStatus(item))
+)
+const pagination = useTablePagination(filteredClues)
 const storeOptions = computed(() => {
   const values = [
     ...listStoreNames(consoleState),
@@ -392,23 +518,15 @@ const latestPaidOrderByClueId = computed(() => {
     if (!current || compareOrderRecency(item, current) > 0) {
       orderMap.set(item.clueId, item)
     }
-  }
+    }
   return orderMap
 })
 const assignableStaff = computed(() => dutyStaff.value.filter((item) => item.onLeave !== 1))
-const canCreateClue = computed(() => ['ADMIN', 'CLUE_MANAGER'].includes(roleCode.value))
-const canAssignClue = computed(() => ['ADMIN', 'CLUE_MANAGER'].includes(roleCode.value))
-const canRecycleClue = computed(() => ['ADMIN', 'CLUE_MANAGER'].includes(roleCode.value))
-const canCreateOrderFromClue = computed(() => hasAccess('ORDER'))
+const canAssignClue = computed(() => ['ADMIN', 'CLUE_MANAGER'].includes(currentUser.value?.roleCode || ''))
+const canRecycleClue = computed(() => ['ADMIN', 'CLUE_MANAGER'].includes(currentUser.value?.roleCode || ''))
 const paidClueCount = computed(() => mergedClues.value.filter((item) => item.isPaidCustomer).length)
-const callbackCount = computed(() => mergedClues.value.filter((item) => item.callStatus === 'CALLBACK').length)
-
-const selectedClueLabel = computed(() => {
-  if (!selectedClue.value) {
-    return ''
-  }
-  return `${displayName(selectedClue.value)} / ${selectedClue.value.editPhone || '--'}`
-})
+const callbackCount = computed(() => mergedClues.value.filter((item) => item.leadStage === 'CALLBACK_PENDING').length)
+const detailRow = computed(() => mergedClues.value.find((item) => item.id === detailRowId.value) || null)
 
 const callStatusOptions = [
   { label: '未通话', value: 'NOT_CALLED' },
@@ -420,15 +538,16 @@ const callStatusOptions = [
 
 const leadStageOptions = [
   { label: '新线索', value: 'NEW' },
-  { label: '已联系', value: 'CONTACTED' },
-  { label: '高意向', value: 'INTENT' },
-  { label: '待预约', value: 'APPOINTMENT_PENDING' },
-  { label: '已预约', value: 'APPOINTED' },
-  { label: '已到店', value: 'ARRIVED' },
-  { label: '已成交', value: 'CLOSED' }
+  { label: '有意向', value: 'INTENT' },
+  { label: '到店', value: 'ARRIVED' },
+  { label: '成交', value: 'DEAL' },
+  { label: '待再次沟通', value: 'CALLBACK_PENDING' },
+  { label: '已加微信', value: 'WECHAT_ADDED' },
+  { label: '预付定金', value: 'DEPOSIT_PAID' },
+  { label: '无效', value: 'INVALID' }
 ]
 
-const tagOptions = ['高意向', '待回拨', '团购', '表单', '已付款', '待预约', '复诊']
+const tagOptions = ['高意向', '团购', '表单', '已付款', '已加微信', '待再次沟通', '待到店', '复诊']
 
 function parseDateValue(value) {
   const date = new Date(value)
@@ -437,6 +556,33 @@ function parseDateValue(value) {
 
 function compareClueRecency(left, right) {
   return parseDateValue(left?.createdAt) - parseDateValue(right?.createdAt)
+}
+
+function normalizeDraftValue(value) {
+  if (Array.isArray(value)) {
+    return [...value]
+  }
+  return value ?? ''
+}
+
+function buildCellDraftKey(rowId, field) {
+  return `${rowId}:${field}`
+}
+
+function prepareCellDraft(rowId, field, value) {
+  cellDrafts[buildCellDraftKey(rowId, field)] = normalizeDraftValue(value)
+}
+
+function getCellDraft(rowId, field, fallback = '') {
+  const key = buildCellDraftKey(rowId, field)
+  if (!Object.prototype.hasOwnProperty.call(cellDrafts, key)) {
+    prepareCellDraft(rowId, field, fallback)
+  }
+  return cellDrafts[key]
+}
+
+function setCellDraft(rowId, field, value) {
+  cellDrafts[buildCellDraftKey(rowId, field)] = normalizeDraftValue(value)
 }
 
 function compareOrderRecency(left, right) {
@@ -460,10 +606,6 @@ function resolveLatestOrderStatus(row) {
 function resolveLatestOrderId(row) {
   const paidOrder = resolvePaidOrder(row)
   return paidOrder?.id || row.latestOrderId || null
-}
-
-function canSchedulePaidOrder(status) {
-  return ['PAID', 'PAID_DEPOSIT'].includes(normalize(status))
 }
 
 function buildSyntheticClueFromOrder(order) {
@@ -500,6 +642,10 @@ function currentTimestampString() {
   return new Date(value.getTime() - offset).toISOString().slice(0, 19).replace('T', ' ')
 }
 
+function sortFollowRecords(records = []) {
+  return [...records].sort((left, right) => parseDateValue(right?.createdAt) - parseDateValue(left?.createdAt))
+}
+
 function defaultCallStatus(row) {
   if (isPaidCustomer(resolveLatestOrderStatus(row))) {
     return 'CONNECTED'
@@ -511,24 +657,21 @@ function defaultCallStatus(row) {
 }
 
 function defaultLeadStage(row) {
-  const latestOrderStatus = resolveLatestOrderStatus(row)
-  if (isPaidCustomer(latestOrderStatus)) {
-    if (['USED', 'COMPLETED', 'FINISHED'].includes(normalize(latestOrderStatus))) {
-      return 'CLOSED'
-    }
-    if (['ARRIVED', 'SERVING'].includes(normalize(latestOrderStatus))) {
-      return 'ARRIVED'
-    }
-    if (normalize(latestOrderStatus) === 'APPOINTMENT') {
-      return 'APPOINTED'
-    }
-    return 'APPOINTMENT_PENDING'
+  const latestOrderStatus = normalize(resolveLatestOrderStatus(row))
+  if (['USED', 'COMPLETED', 'FINISHED'].includes(latestOrderStatus)) {
+    return 'DEAL'
   }
-  if (normalize(row.status) === 'CONVERTED') {
-    return 'INTENT'
+  if (['ARRIVED', 'SERVING'].includes(latestOrderStatus)) {
+    return 'ARRIVED'
   }
-  if (['ASSIGNED', 'FOLLOWING'].includes(normalize(row.status))) {
-    return 'CONTACTED'
+  if (['PAID', 'PAID_DEPOSIT', 'APPOINTMENT'].includes(latestOrderStatus)) {
+    return 'DEPOSIT_PAID'
+  }
+  if (String(row.wechat || '').trim()) {
+    return 'WECHAT_ADDED'
+  }
+  if (['ASSIGNED', 'FOLLOWING', 'CONVERTED'].includes(normalize(row.status))) {
+    return 'CALLBACK_PENDING'
   }
   return 'NEW'
 }
@@ -539,11 +682,11 @@ function defaultLeadTags(row) {
   if (row.productSourceType) {
     values.push(formatProductSourceType(row.productSourceType))
   }
-  if (row.currentOwnerId) {
-    values.push('已分配')
-  }
   if (isPaidCustomer(latestOrderStatus)) {
     values.push('已付款')
+  }
+  if (String(row.wechat || '').trim()) {
+    values.push('已加微信')
   }
   return [...new Set(values.filter(Boolean))]
 }
@@ -565,6 +708,7 @@ function ensureClueProfile(row) {
     callStatus: defaultCallStatus(row),
     leadStage: defaultLeadStage(row),
     leadTags: defaultLeadTags(row),
+    followRecords: [],
     intendedStoreName: row.storeName || storeOptions.value[0] || '静安门店',
     assignedAt: row.currentOwnerId ? row.createdAt || currentTimestampString() : '',
     updatedAt: currentTimestampString()
@@ -576,9 +720,18 @@ function buildClueRow(row) {
   const profile = ensureClueProfile(row)
   const latestOrderId = resolveLatestOrderId(row)
   const latestOrderStatus = resolveLatestOrderStatus(row)
+  const normalizedOrderStatus = normalize(latestOrderStatus)
   const paidOrderAppointmentTime = paidOrder?.appointmentTime || ''
   const canViewScheduling = isPaidCustomer(latestOrderStatus)
   const orderStageLabel = latestOrderId ? formatOrderStage(latestOrderStatus) : '暂无订单'
+  let schedulingActionLabel = ''
+  if (normalizedOrderStatus === 'APPOINTMENT') {
+    schedulingActionLabel = '改档'
+  } else if (['PAID', 'PAID_DEPOSIT'].includes(normalizedOrderStatus)) {
+    schedulingActionLabel = '预约'
+  } else {
+    schedulingActionLabel = '查看'
+  }
   return {
     ...row,
     latestOrderId,
@@ -588,19 +741,78 @@ function buildClueRow(row) {
     callStatus: profile.callStatus,
     leadStage: profile.leadStage,
     leadTags: [...(profile.leadTags || [])],
+    followRecords: sortFollowRecords(profile.followRecords || []),
     intendedStoreName: profile.intendedStoreName || row.storeName || '',
     assignedAt: row.currentOwnerId ? profile.assignedAt || row.createdAt : '',
     latestOrderStageLabel: orderStageLabel,
     isPaidCustomer: canViewScheduling,
     paidOrderId: canViewScheduling ? latestOrderId : null,
     paidOrderAppointmentTime,
-    canDirectSchedule: canSchedulePaidOrder(latestOrderStatus),
-    schedulingActionLabel: canSchedulePaidOrder(latestOrderStatus) ? '预约门店档期' : '查看门店档期'
+    schedulingActionLabel
   }
 }
 
 function displayName(row) {
   return row.editName || row.name || `线索#${row.id}`
+}
+
+function latestFollowRecord(row) {
+  return row.followRecords?.[0]?.content || '暂无跟进记录'
+}
+
+function previewLeadTags(tags = []) {
+  const values = (tags || []).filter(Boolean)
+  if (!values.length) {
+    return '未打标签'
+  }
+  return values.slice(0, 2).join(' / ')
+}
+
+function hasOwner(row) {
+  return Boolean(row.currentOwnerId || row.currentOwnerName || row.assignedAt)
+}
+
+function resolveQueueStatus(row) {
+  if (!hasOwner(row)) {
+    return 'WAIT_ASSIGN'
+  }
+  if (['DEAL', 'INVALID'].includes(normalize(row.leadStage))) {
+    return 'DONE'
+  }
+  return 'WAIT_FOLLOW_UP'
+}
+
+function matchesProductSource(row) {
+  if (productSourceFilter.value === 'ALL') {
+    return true
+  }
+  return normalize(row.productSourceType) === normalize(productSourceFilter.value)
+}
+
+function matchesPhone(row) {
+  const keyword = String(filters.phone || '').trim()
+  if (!keyword) {
+    return true
+  }
+  return String(row.editPhone || row.phone || '').includes(keyword)
+}
+
+function matchesCreatedRange(row) {
+  const [start, end] = filters.createdRange || []
+  if (!start || !end) {
+    return true
+  }
+  const createdAt = parseDateValue(row.createdAt)
+  const startTime = parseDateValue(`${start} 00:00:00`)
+  const endTime = parseDateValue(`${end} 23:59:59`)
+  return createdAt >= startTime && createdAt <= endTime
+}
+
+function matchesQueueStatus(row) {
+  if (filters.queueStatus === 'ALL') {
+    return true
+  }
+  return resolveQueueStatus(row) === filters.queueStatus
 }
 
 function isPaidCustomer(status) {
@@ -610,7 +822,24 @@ function isPaidCustomer(status) {
 }
 
 function canShowMoreActions(row) {
-  return canAssignClue.value || canRecycleClue.value || (canCreateOrderFromClue.value && !row.latestOrderId)
+  return canAssignClue.value || (canRecycleClue.value && row.currentOwnerId)
+}
+
+function saveCellEdit(row, field, currentValue, patchKey = field) {
+  handleInlineUpdate(row, {
+    [patchKey]: getCellDraft(row.id, field, currentValue)
+  })
+}
+
+function applyFilters() {
+  pagination.reset()
+}
+
+function resetFilters() {
+  filters.phone = ''
+  filters.createdRange = []
+  filters.queueStatus = 'ALL'
+  pagination.reset()
 }
 
 function handleInlineUpdate(row, patch, options = {}) {
@@ -623,6 +852,17 @@ function handleInlineUpdate(row, patch, options = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(nextPatch, 'leadTags')) {
     nextPatch.leadTags = [...new Set((nextPatch.leadTags || []).map((item) => String(item || '').trim()).filter(Boolean))]
+  }
+  if (Object.prototype.hasOwnProperty.call(nextPatch, 'followRecords')) {
+    nextPatch.followRecords = sortFollowRecords(
+      (nextPatch.followRecords || [])
+        .map((item) => ({
+          id: item?.id,
+          content: String(item?.content || '').trim(),
+          createdAt: item?.createdAt || currentTimestampString()
+        }))
+        .filter((item) => item.content)
+    )
   }
 
   const profile = ensureClueProfile(row)
@@ -647,20 +887,44 @@ function handleInlineUpdate(row, patch, options = {}) {
     ...consoleState,
     clueConsoleProfiles: nextProfiles
   })
+
   if (!options.silent) {
     ElMessage.success('线索信息已更新')
   }
+}
+
+function addFollowRecord(row) {
+  const content = String(followRecordDrafts[row.id] || '').trim()
+  if (!content) {
+    ElMessage.warning('请先填写跟进内容')
+    return
+  }
+  const profile = ensureClueProfile(row)
+  const nextRecords = [
+    {
+      id: nextSystemId(profile.followRecords || []),
+      content,
+      createdAt: currentTimestampString()
+    },
+    ...(profile.followRecords || [])
+  ]
+  handleInlineUpdate(row, { followRecords: nextRecords }, { silent: true })
+  followRecordDrafts[row.id] = ''
+  ElMessage.success('跟进记录已添加')
+}
+
+function removeFollowRecord(row, recordId) {
+  const profile = ensureClueProfile(row)
+  const nextRecords = (profile.followRecords || []).filter((item) => item.id !== recordId)
+  handleInlineUpdate(row, { followRecords: nextRecords }, { silent: true })
+  ElMessage.success('跟进记录已删除')
 }
 
 async function loadClues() {
   loading.value = true
   try {
     const [clueResult, orderResult] = await Promise.allSettled([
-      fetchClues({
-        sourceChannel: filters.sourceChannel || undefined,
-        productSourceType: productSourceFilter.value === 'ALL' ? undefined : productSourceFilter.value,
-        status: filters.status || undefined
-      }),
+      fetchClues(),
       fetchOrders({
         status: 'paid'
       })
@@ -688,28 +952,6 @@ async function loadDutyStaff() {
   }
 }
 
-async function handleCreateClue() {
-  await createClue({
-    name: clueForm.name || undefined,
-    phone: clueForm.phone || undefined,
-    wechat: clueForm.wechat || undefined,
-    sourceChannel: clueForm.sourceChannel,
-    sourceId: clueForm.sourceId ? Number(clueForm.sourceId) : undefined,
-    rawData: clueForm.rawData || undefined
-  })
-  ElMessage.success('客资已创建')
-  createDialogVisible.value = false
-  Object.assign(clueForm, {
-    name: '',
-    phone: '',
-    wechat: '',
-    sourceChannel: 'DOUYIN',
-    sourceId: '',
-    rawData: ''
-  })
-  await loadClues()
-}
-
 function openAssignDialog(row) {
   assignTarget.value = row
   assignDialogVisible.value = true
@@ -723,10 +965,14 @@ async function handleAssign(row, userId) {
     clueId: row.id,
     userId
   })
-  handleInlineUpdate(row, {
-    assignedAt: currentTimestampString(),
-    callStatus: row.callStatus === 'NOT_CALLED' ? 'CALLBACK' : row.callStatus
-  }, { silent: true })
+  handleInlineUpdate(
+    row,
+    {
+      assignedAt: currentTimestampString(),
+      callStatus: row.callStatus === 'NOT_CALLED' ? 'CALLBACK' : row.callStatus
+    },
+    { silent: true }
+  )
   assignDialogVisible.value = false
   ElMessage.success('线索已分配')
   await loadClues()
@@ -734,46 +980,21 @@ async function handleAssign(row, userId) {
 
 async function handleRecycle(row) {
   await recycleClue(row.id)
-  handleInlineUpdate(row, {
-    assignedAt: '',
-    callStatus: 'NOT_CALLED'
-  }, { silent: true })
+  handleInlineUpdate(
+    row,
+    {
+      assignedAt: '',
+      callStatus: 'NOT_CALLED',
+      leadStage: 'NEW'
+    },
+    { silent: true }
+  )
   ElMessage.success('线索已回收到公海')
   await loadClues()
 }
 
-function openOrderDialog(row) {
-  selectedClue.value = row
-  orderForm.type = 1
-  orderForm.amount = 1999
-  orderForm.deposit = 199
-  orderForm.remark = ''
-  orderDialogVisible.value = true
-}
-
-async function handleCreateOrder() {
-  if (!selectedClue.value) {
-    return
-  }
-
-  const payload = {
-    clueId: selectedClue.value.id,
-    type: orderForm.type,
-    amount: orderForm.amount,
-    remark: orderForm.remark || undefined
-  }
-  if (orderForm.type === 1) {
-    payload.deposit = orderForm.deposit
-  }
-
-  const order = await createOrder(payload)
-  ElMessage.success(`订单已创建：${order.orderNo}`)
-  orderDialogVisible.value = false
-  await loadClues()
-}
-
 function openDetailDrawer(row) {
-  detailRow.value = row
+  detailRowId.value = row.id
   detailDrawerVisible.value = true
 }
 

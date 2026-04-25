@@ -35,7 +35,7 @@
       <div class="shell-topbar__actions">
         <div class="account-chip">
           <strong class="account-chip__name">{{ currentUser?.displayName || '--' }}</strong>
-          <span>{{ currentScopeLabel }} · {{ currentUser?.username || '--' }}</span>
+          <span>{{ currentRoleLabel }} · {{ currentUser?.username || '--' }}</span>
         </div>
         <el-button class="shell-topbar__logout" @click="handleLogout">退出</el-button>
       </div>
@@ -50,9 +50,7 @@
             </el-icon>
           </div>
           <div class="side-nav__hero-copy">
-            <span class="side-nav__hero-eyebrow">当前模块</span>
             <strong>{{ activeGroup.label }}</strong>
-            <p>{{ activeGroup.description }}</p>
           </div>
         </div>
 
@@ -111,24 +109,6 @@
           </section>
         </nav>
 
-        <section class="side-nav__meta">
-          <div class="side-nav__meta-card">
-            <span>当前角色</span>
-            <strong>{{ currentRoleLabel }}</strong>
-          </div>
-          <div class="side-nav__meta-card">
-            <span>数据范围</span>
-            <strong>{{ currentScopeLabel }}</strong>
-          </div>
-          <div class="side-nav__meta-card">
-            <span>门店 ID</span>
-            <strong>{{ currentUser?.storeId || '--' }}</strong>
-          </div>
-          <div class="side-nav__meta-card">
-            <span>账号</span>
-            <strong>{{ currentUser?.username || '--' }}</strong>
-          </div>
-        </section>
       </aside>
 
       <main class="main-panel">
@@ -136,12 +116,6 @@
           <div class="page-header__main">
             <p class="page-header__eyebrow">{{ route.meta.sectionTitle || activeGroup?.label || '系统模块' }}</p>
             <h2>{{ route.meta.title }}</h2>
-          </div>
-
-          <div class="page-header__summary">
-            <span class="summary-pill">角色：{{ currentRoleLabel }}</span>
-            <span class="summary-pill">范围：{{ currentScopeLabel }}</span>
-            <span class="summary-pill">主链：客资 → 客户 → 订单 → 排期履约</span>
           </div>
         </section>
 
@@ -564,8 +538,13 @@ function getGroupEntry(group) {
 }
 
 function isActive(item) {
-  const activePrefixes = item.activePrefixes || [item.to]
-  return activePrefixes.some((prefix) => route.path === prefix || route.path.startsWith(`${prefix}/`))
+  if (route.path === item.to) {
+    return true
+  }
+  if (!item.activePrefixes?.length) {
+    return false
+  }
+  return item.activePrefixes.some((prefix) => route.path === prefix || route.path.startsWith(`${prefix}/`))
 }
 
 function groupHasActive(group) {

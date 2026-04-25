@@ -166,7 +166,6 @@
       <div class="panel-heading">
         <div>
           <h3>三方接口</h3>
-          <p>当前客资中心数据来源于三方拉取，这里可以配置接口地址、认证方式和同步模式。</p>
         </div>
         <div class="action-group">
           <el-button type="primary" @click="openSettingEditor('third-party')">新增接口</el-button>
@@ -181,10 +180,30 @@
             </div>
           </div>
 
+          <div class="status-strip">
+            <div class="status-pill">
+              <span>授权状态</span>
+              <strong>{{ thirdPartyForm.authStatus || '未配置' }}</strong>
+            </div>
+            <div class="status-pill">
+              <span>最近回调</span>
+              <strong>{{ formatDateTime(thirdPartyForm.lastCallbackAt) || '--' }}</strong>
+            </div>
+            <div class="status-pill">
+              <span>最近检测</span>
+              <strong>{{ formatDateTime(thirdPartyForm.lastTestAt) || '--' }}</strong>
+            </div>
+          </div>
+
           <div class="form-grid">
+            <div class="full-span form-group-title">基础鉴权</div>
             <label>
-              <span>接口名称</span>
-              <el-input v-model="thirdPartyForm.apiName" placeholder="请输入接口名称" />
+              <span>平台编码</span>
+              <el-input v-model="thirdPartyForm.providerCode" placeholder="如 DOUYIN_LAIKE" />
+            </label>
+            <label>
+              <span>平台名称</span>
+              <el-input v-model="thirdPartyForm.providerName" placeholder="请输入平台名称" />
             </label>
             <label>
               <span>业务模块</span>
@@ -193,32 +212,128 @@
               </el-select>
             </label>
             <label>
-              <span>请求方式</span>
-              <el-select v-model="thirdPartyForm.method">
-                <el-option label="GET" value="GET" />
-                <el-option label="POST" value="POST" />
+              <span>执行模式</span>
+              <el-select v-model="thirdPartyForm.executionMode">
+                <el-option label="MOCK" value="MOCK" />
+                <el-option label="LIVE" value="LIVE" />
               </el-select>
             </label>
             <label>
               <span>认证方式</span>
-              <el-input v-model="thirdPartyForm.authType" placeholder="如 Bearer Token" />
+              <el-input v-model="thirdPartyForm.authType" placeholder="如 CLIENT_TOKEN" />
             </label>
             <label>
-              <span>同步模式</span>
-              <el-input v-model="thirdPartyForm.syncMode" placeholder="如 增量同步" />
+              <span>应用 AppId</span>
+              <el-input v-model="thirdPartyForm.appId" placeholder="可填抖音开放平台 AppId" />
             </label>
             <label>
-              <span>绑定任务编码</span>
-              <el-input v-model="thirdPartyForm.scheduleJobCode" placeholder="如 DOUYIN_CLUE_INCREMENTAL" />
+              <span>Base URL</span>
+              <el-input v-model="thirdPartyForm.baseUrl" placeholder="请输入 https 地址" />
+            </label>
+            <label>
+              <span>Token URL</span>
+              <el-input v-model="thirdPartyForm.tokenUrl" placeholder="如 https://open.douyin.com/oauth/client_token/" />
+            </label>
+            <label>
+              <span>接口路径</span>
+              <el-input v-model="thirdPartyForm.endpointPath" placeholder="如 /goodlife/v1/open_api/crm/clue/query/" />
+            </label>
+            <label>
+              <span>Client Key</span>
+              <el-input v-model="thirdPartyForm.clientKey" placeholder="请输入 client_key" />
+            </label>
+            <label>
+              <span>Client Secret</span>
+              <el-input
+                v-model="thirdPartyForm.clientSecret"
+                type="password"
+                show-password
+                :placeholder="thirdPartyForm.clientSecretMasked || '留空则保持原值'"
+              />
+            </label>
+            <label>
+              <span>授权码</span>
+              <el-input
+                v-model="thirdPartyForm.authCode"
+                :placeholder="thirdPartyForm.authCodeMasked || '由回调自动回填，留空则保持原值'"
+              />
+            </label>
+            <label>
+              <span>回调状态</span>
+              <el-input :model-value="thirdPartyForm.lastCallbackStatus || '--'" readonly />
+            </label>
+            <label>
+              <span>回调时间</span>
+              <el-input :model-value="formatDateTime(thirdPartyForm.lastCallbackAt) || '--'" readonly />
+            </label>
+            <label>
+              <span>授权码时间</span>
+              <el-input :model-value="formatDateTime(thirdPartyForm.lastAuthCodeAt) || '--'" readonly />
+            </label>
+            <label>
+              <span>Access Token</span>
+              <el-input
+                v-model="thirdPartyForm.accessToken"
+                type="password"
+                show-password
+                :placeholder="thirdPartyForm.accessTokenMasked || '回调或测试成功后自动写入'"
+              />
+            </label>
+            <label>
+              <span>Refresh Token</span>
+              <el-input
+                v-model="thirdPartyForm.refreshToken"
+                type="password"
+                show-password
+                :placeholder="thirdPartyForm.refreshTokenMasked || '如有回调返回则自动写入'"
+              />
+            </label>
+            <div class="full-span form-group-title">回调与同步</div>
+            <label>
+              <span>账号 ID</span>
+              <el-input v-model="thirdPartyForm.accountId" placeholder="请输入 account_id" />
+            </label>
+            <label>
+              <span>本地生活账号</span>
+              <el-input v-model="thirdPartyForm.lifeAccountIds" placeholder="多个逗号分隔" />
+            </label>
+            <label>
+              <span>Open ID</span>
+              <el-input v-model="thirdPartyForm.openId" placeholder="可选" />
+            </label>
+            <label>
+              <span>每页条数</span>
+              <el-input-number v-model="thirdPartyForm.pageSize" :min="1" controls-position="right" />
+            </label>
+            <label>
+              <span>超时毫秒</span>
+              <el-input-number v-model="thirdPartyForm.requestTimeoutMs" :min="1000" :step="1000" controls-position="right" />
+            </label>
+            <label>
+              <span>回调地址</span>
+              <el-input v-model="thirdPartyForm.callbackUrl" placeholder="可选" />
+            </label>
+            <label>
+              <span>重定向地址</span>
+              <el-input v-model="thirdPartyForm.redirectUri" placeholder="如第三方授权回跳地址" />
+            </label>
+            <label>
+              <span>Scope</span>
+              <el-input v-model="thirdPartyForm.scope" placeholder="可选，多个空格或逗号分隔" />
             </label>
             <label class="full-span">
-              <span>接口地址</span>
-              <el-input v-model="thirdPartyForm.baseUrl" placeholder="请输入三方接口地址" />
+              <span>最近回调结果</span>
+              <el-input :model-value="thirdPartyForm.lastCallbackMessage || '--'" readonly />
+            </label>
+            <label class="full-span">
+              <span>备注</span>
+              <el-input v-model="thirdPartyForm.remark" placeholder="请输入备注" />
             </label>
           </div>
 
           <div class="action-group">
-            <el-button type="primary" @click="saveCollectionItem('thirdPartyApis', thirdPartyForm, resetThirdPartyForm, '接口配置已保存')">保存接口</el-button>
+            <el-button type="primary" @click="handleSaveProvider">保存接口</el-button>
+            <el-button @click="handleTestProvider">测试连接</el-button>
             <el-button @click="resetThirdPartyForm">重置表单</el-button>
             <el-button plain @click="closeSettingEditor('third-party')">收起</el-button>
           </div>
@@ -229,8 +344,8 @@
         <el-table-column label="接口" min-width="220">
           <template #default="{ row }">
             <div class="table-primary">
-              <strong>{{ row.apiName }}</strong>
-              <span>{{ row.baseUrl }}</span>
+              <strong>{{ row.providerName }}</strong>
+              <span>{{ row.providerCode }} / {{ row.baseUrl }}</span>
             </div>
           </template>
         </el-table-column>
@@ -239,9 +354,19 @@
             {{ formatModuleCode(row.moduleCode) }}
           </template>
         </el-table-column>
-        <el-table-column label="方式" width="100" prop="method" />
+        <el-table-column label="模式" width="100" prop="executionMode" />
         <el-table-column label="认证" width="140" prop="authType" />
-        <el-table-column label="任务编码" min-width="180" prop="scheduleJobCode" />
+        <el-table-column label="授权状态" width="140" prop="authStatus" />
+        <el-table-column label="最近回调" min-width="190">
+          <template #default="{ row }">
+            {{ row.lastCallbackStatus || '--' }} / {{ formatDateTime(row.lastCallbackAt) || '--' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="检测结果" min-width="200">
+          <template #default="{ row }">
+            {{ row.lastTestStatus || '--' }}{{ row.lastTestMessage ? ` / ${row.lastTestMessage}` : '' }}
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="row.enabled === 1 ? 'success' : 'info'">{{ row.enabled === 1 ? '启用' : '停用' }}</el-tag>
@@ -250,8 +375,8 @@
         <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <div class="action-group">
-              <el-button size="small" @click="pickCollectionItem(thirdPartyForm, row)">编辑</el-button>
-              <el-button size="small" plain @click="toggleCollectionItem('thirdPartyApis', row.id, 'enabled')">
+              <el-button size="small" @click="pickProvider(row)">编辑</el-button>
+              <el-button size="small" plain @click="toggleProvider(row)">
                 {{ row.enabled === 1 ? '停用' : '启用' }}
               </el-button>
             </div>
@@ -277,7 +402,6 @@
       <div class="panel-heading">
         <div>
           <h3>回调接口</h3>
-          <p>配置三方回调地址和签名校验方式，统一接收异步通知。</p>
         </div>
         <div class="action-group">
           <el-button type="primary" @click="openSettingEditor('callback')">新增回调</el-button>
@@ -292,7 +416,26 @@
             </div>
           </div>
 
+          <div class="status-strip">
+            <div class="status-pill">
+              <span>最近状态</span>
+              <strong>{{ callbackForm.lastCallbackStatus || '--' }}</strong>
+            </div>
+            <div class="status-pill">
+              <span>最近时间</span>
+              <strong>{{ formatDateTime(callbackForm.lastCallbackAt) || '--' }}</strong>
+            </div>
+            <div class="status-pill">
+              <span>最近 TraceId</span>
+              <strong>{{ callbackForm.lastTraceId || '--' }}</strong>
+            </div>
+          </div>
+
           <div class="form-grid">
+            <label>
+              <span>平台编码</span>
+              <el-input v-model="callbackForm.providerCode" placeholder="如 WECOM / DOUYIN_LAIKE" />
+            </label>
             <label>
               <span>回调名称</span>
               <el-input v-model="callbackForm.callbackName" placeholder="请输入回调名称" />
@@ -305,14 +448,40 @@
               <span>回调地址</span>
               <el-input v-model="callbackForm.callbackUrl" placeholder="请输入回调接口地址" />
             </label>
+            <label>
+              <span>Token</span>
+              <el-input
+                v-model="callbackForm.tokenValue"
+                type="password"
+                show-password
+                :placeholder="callbackForm.tokenMasked || '留空则保持原值'"
+              />
+            </label>
+            <label>
+              <span>AES Key</span>
+              <el-input
+                v-model="callbackForm.aesKey"
+                type="password"
+                show-password
+                :placeholder="callbackForm.aesKeyMasked || '留空则保持原值'"
+              />
+            </label>
             <label class="full-span">
               <span>备注</span>
               <el-input v-model="callbackForm.remark" placeholder="请输入回调说明" />
             </label>
+            <label>
+              <span>最近授权码</span>
+              <el-input :model-value="callbackForm.lastAuthCodeMasked || '--'" readonly />
+            </label>
+            <label class="full-span">
+              <span>最近结果</span>
+              <el-input :model-value="callbackForm.lastCallbackMessage || '--'" readonly />
+            </label>
           </div>
 
           <div class="action-group">
-            <el-button type="primary" @click="saveCollectionItem('callbackApis', callbackForm, resetCallbackForm, '回调接口已保存')">保存回调</el-button>
+            <el-button type="primary" @click="handleSaveCallback">保存回调</el-button>
             <el-button @click="resetCallbackForm">重置表单</el-button>
             <el-button plain @click="closeSettingEditor('callback')">收起</el-button>
           </div>
@@ -320,9 +489,25 @@
       </el-collapse-transition>
 
       <el-table :data="callbackPagination.rows" stripe>
+        <el-table-column label="平台" width="120" prop="providerCode" />
         <el-table-column label="回调名称" min-width="180" prop="callbackName" />
         <el-table-column label="回调地址" min-width="260" prop="callbackUrl" />
         <el-table-column label="签名方式" width="160" prop="signatureMode" />
+        <el-table-column label="最近状态" width="140">
+          <template #default="{ row }">
+            {{ row.lastCallbackStatus || '--' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="最近时间" min-width="170">
+          <template #default="{ row }">
+            {{ formatDateTime(row.lastCallbackAt) || '--' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="最近结果" min-width="220">
+          <template #default="{ row }">
+            {{ row.lastCallbackMessage || '--' }}
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="row.enabled === 1 ? 'success' : 'info'">{{ row.enabled === 1 ? '启用' : '停用' }}</el-tag>
@@ -331,8 +516,8 @@
         <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <div class="action-group">
-              <el-button size="small" @click="pickCollectionItem(callbackForm, row)">编辑</el-button>
-              <el-button size="small" plain @click="toggleCollectionItem('callbackApis', row.id, 'enabled')">
+              <el-button size="small" @click="pickCallback(row)">编辑</el-button>
+              <el-button size="small" plain @click="toggleCallback(row)">
                 {{ row.enabled === 1 ? '停用' : '启用' }}
               </el-button>
             </div>
@@ -352,6 +537,52 @@
           @current-change="callbackPagination.handleCurrentChange"
         />
       </div>
+
+      <section class="panel panel--nested">
+        <div class="panel-heading compact">
+          <div>
+            <h3>最近回调记录</h3>
+          </div>
+        </div>
+
+        <el-table :data="callbackLogPagination.rows" stripe>
+          <el-table-column label="时间" min-width="170">
+            <template #default="{ row }">
+              {{ formatDateTime(row.receivedAt) || '--' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="平台" width="120" prop="providerCode" />
+          <el-table-column label="回调" min-width="160" prop="callbackName" />
+          <el-table-column label="状态" width="120">
+            <template #default="{ row }">
+              <el-tag :type="row.processStatus === 'SUCCESS' ? 'success' : row.processStatus === 'FAILED' ? 'danger' : 'info'">
+                {{ row.processStatus || '--' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="验签" width="120" prop="signatureStatus" />
+          <el-table-column label="授权码" min-width="150">
+            <template #default="{ row }">
+              {{ row.authCode ? `${row.authCode.slice(0, 2)}****${row.authCode.slice(-2)}` : '--' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="结果" min-width="220" prop="processMessage" />
+          <el-table-column label="TraceId" min-width="220" prop="traceId" />
+        </el-table>
+
+        <div class="table-pagination">
+          <el-pagination
+            background
+            layout="total, sizes, prev, pager, next"
+            :total="callbackLogPagination.total"
+            :current-page="callbackLogPagination.currentPage"
+            :page-size="callbackLogPagination.pageSize"
+            :page-sizes="callbackLogPagination.pageSizes"
+            @size-change="callbackLogPagination.handleSizeChange"
+            @current-change="callbackLogPagination.handleCurrentChange"
+          />
+        </div>
+      </section>
     </section>
 
     <template v-else-if="currentMode === 'jobs'">
@@ -403,6 +634,17 @@
                 <el-input-number v-model="jobForm.retryLimit" :min="0" controls-position="right" />
               </label>
               <label>
+                <span>绑定接口</span>
+                <el-select v-model="jobForm.providerId" clearable placeholder="请选择三方接口">
+                  <el-option
+                    v-for="item in providerConfigs"
+                    :key="item.id"
+                    :label="`${item.providerName}（${item.executionMode}）`"
+                    :value="item.id"
+                  />
+                </el-select>
+              </label>
+              <label>
                 <span>状态</span>
                 <el-select v-model="jobForm.status">
                   <el-option label="启用" value="ENABLED" />
@@ -431,6 +673,11 @@
           <el-table-column label="模块" width="120">
             <template #default="{ row }">
               {{ formatModuleCode(row.moduleCode) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="绑定接口" min-width="180">
+            <template #default="{ row }">
+              {{ formatProviderName(row.providerId) }}
             </template>
           </el-table-column>
           <el-table-column label="同步方式" width="130">
@@ -777,7 +1024,19 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { fetchSchedulerJobs, fetchSchedulerLogs, retrySchedulerJob, saveSchedulerJob, triggerSchedulerJob } from '../api/scheduler'
+import {
+  fetchIntegrationCallbacks,
+  fetchIntegrationCallbackLogs,
+  fetchIntegrationProviders,
+  fetchSchedulerJobs,
+  fetchSchedulerLogs,
+  retrySchedulerJob,
+  saveIntegrationCallback,
+  saveIntegrationProvider,
+  saveSchedulerJob,
+  testIntegrationProvider,
+  triggerSchedulerJob
+} from '../api/scheduler'
 import { useTablePagination } from '../composables/useTablePagination'
 import {
   formatDateTime,
@@ -792,14 +1051,18 @@ import { loadSystemConsoleState, nextSystemId, saveSystemConsoleState } from '..
 const route = useRoute()
 const router = useRouter()
 const state = reactive(loadSystemConsoleState())
+const providerConfigs = ref([])
+const callbackConfigs = ref([])
+const callbackLogs = ref([])
 const jobs = ref([])
 const logs = ref([])
 const selectedJobCode = ref('')
 const settingEditorMode = ref('')
 const jobWorkspace = ref('schedule')
 const menuPagination = useTablePagination(computed(() => state.menuConfigs))
-const thirdPartyPagination = useTablePagination(computed(() => state.thirdPartyApis))
-const callbackPagination = useTablePagination(computed(() => state.callbackApis))
+const thirdPartyPagination = useTablePagination(providerConfigs)
+const callbackPagination = useTablePagination(callbackConfigs)
+const callbackLogPagination = useTablePagination(callbackLogs)
 const jobPagination = useTablePagination(jobs)
 const logPagination = useTablePagination(logs)
 const publicApiPagination = useTablePagination(computed(() => state.publicApis))
@@ -831,6 +1094,7 @@ const jobForm = reactive({
   intervalMinutes: 1,
   retryLimit: 3,
   queueName: 'douyin-clue-sync',
+  providerId: null,
   endpoint: '/clue/add',
   status: 'ENABLED'
 })
@@ -869,14 +1133,14 @@ const settingWorkbenchGroups = computed(() => [
       {
         key: 'third-party',
         label: '三方接口',
-        meta: `${state.thirdPartyApis.length} 项`,
+        meta: `${providerConfigs.value.length} 项`,
         to: '/settings/integration/third-party',
         active: currentMode.value === 'third-party'
       },
       {
         key: 'callback',
         label: '回调接口',
-        meta: `${state.callbackApis.length} 项`,
+        meta: `${callbackConfigs.value.length} 项`,
         to: '/settings/integration/callback',
         active: currentMode.value === 'callback'
       }
@@ -910,6 +1174,10 @@ const settingWorkbenchGroups = computed(() => [
   }
 ])
 
+function currentDateKey() {
+  return new Intl.DateTimeFormat('sv-SE').format(new Date())
+}
+
 const metrics = computed(() => {
   if (currentMode.value === 'menu') {
     return {
@@ -927,27 +1195,27 @@ const metrics = computed(() => {
   if (currentMode.value === 'third-party') {
     return {
       primaryLabel: '三方接口',
-      primaryValue: state.thirdPartyApis.length,
+      primaryValue: providerConfigs.value.length,
       primaryHint: '当前接入的三方接口配置数',
       secondaryLabel: '启用接口',
-      secondaryValue: state.thirdPartyApis.filter((item) => item.enabled === 1).length,
+      secondaryValue: providerConfigs.value.filter((item) => item.enabled === 1).length,
       secondaryHint: '当前处于启用状态的接口',
       tertiaryLabel: '客资拉取任务',
-      tertiaryValue: state.thirdPartyApis.filter((item) => item.moduleCode === 'CLUE').length,
+      tertiaryValue: providerConfigs.value.filter((item) => item.moduleCode === 'CLUE').length,
       tertiaryHint: '客资中心自动拉取依赖这些接口'
     }
   }
   if (currentMode.value === 'callback') {
     return {
-      primaryLabel: '回调接口',
-      primaryValue: state.callbackApis.length,
-      primaryHint: '已配置的回调地址数量',
-      secondaryLabel: '启用回调',
-      secondaryValue: state.callbackApis.filter((item) => item.enabled === 1).length,
-      secondaryHint: '当前仍接收通知的回调',
-      tertiaryLabel: '签名方式',
-      tertiaryValue: new Set(state.callbackApis.map((item) => item.signatureMode)).size,
-      tertiaryHint: '确保不同回调都具备认证校验'
+      primaryLabel: '启用回调',
+      primaryValue: callbackConfigs.value.filter((item) => item.enabled === 1).length,
+      primaryHint: '当前仍在接收通知的回调',
+      secondaryLabel: '今日回调',
+      secondaryValue: callbackLogs.value.filter((item) => (item.receivedAt || '').startsWith(currentDateKey())).length,
+      secondaryHint: '今天已进入系统的回调数量',
+      tertiaryLabel: '异常回调',
+      tertiaryValue: callbackLogs.value.filter((item) => ['FAILED', 'INVALID'].includes(item.processStatus) || ['FAILED', 'INVALID'].includes(item.signatureStatus)).length,
+      tertiaryHint: '最近需要处理的失败或验签异常'
     }
   }
   if (currentMode.value === 'jobs') {
@@ -1016,23 +1284,59 @@ function createMenuForm() {
 function createThirdPartyForm() {
   return {
     id: null,
-    apiName: '',
+    providerCode: 'DOUYIN_LAIKE',
+    providerName: '抖音来客线索',
     moduleCode: 'CLUE',
+    executionMode: 'MOCK',
+    authType: 'CLIENT_TOKEN',
+    appId: '',
     baseUrl: '',
-    method: 'GET',
-    authType: '',
+    tokenUrl: '',
+    endpointPath: '/goodlife/v1/open_api/crm/clue/query/',
+    clientKey: '',
+    clientSecret: '',
+    clientSecretMasked: '',
+    redirectUri: '',
+    scope: '',
+    authCode: '',
+    authCodeMasked: '',
+    accessToken: '',
+    accessTokenMasked: '',
+    refreshToken: '',
+    refreshTokenMasked: '',
+    accountId: '',
+    lifeAccountIds: '',
+    openId: '',
+    pageSize: 20,
+    requestTimeoutMs: 10000,
+    callbackUrl: '',
+    authStatus: '',
+    lastCallbackStatus: '',
+    lastCallbackMessage: '',
+    lastCallbackAt: '',
+    lastAuthCodeAt: '',
     enabled: 1,
-    syncMode: '增量同步',
-    scheduleJobCode: ''
+    remark: ''
   }
 }
 
 function createCallbackForm() {
   return {
     id: null,
+    providerCode: 'WECOM',
     callbackName: '',
     callbackUrl: '',
-    signatureMode: '',
+    signatureMode: 'WECOM_CALLBACK',
+    tokenValue: '',
+    tokenMasked: '',
+    aesKey: '',
+    aesKeyMasked: '',
+    lastCallbackStatus: '',
+    lastCallbackMessage: '',
+    lastCallbackAt: '',
+    lastTraceId: '',
+    lastAuthCode: '',
+    lastAuthCodeMasked: '',
     enabled: 1,
     remark: ''
   }
@@ -1120,6 +1424,7 @@ function openSettingEditor(mode) {
       intervalMinutes: 1,
       retryLimit: 3,
       queueName: 'douyin-clue-sync',
+      providerId: providerConfigs.value[0]?.id || null,
       endpoint: '/clue/add',
       status: 'ENABLED'
     })
@@ -1217,6 +1522,33 @@ async function loadJobs() {
   }
 }
 
+async function loadProviders() {
+  try {
+    providerConfigs.value = await fetchIntegrationProviders()
+    thirdPartyPagination.reset()
+  } catch {
+    providerConfigs.value = []
+  }
+}
+
+async function loadCallbacks() {
+  try {
+    callbackConfigs.value = await fetchIntegrationCallbacks()
+    callbackPagination.reset()
+  } catch {
+    callbackConfigs.value = []
+  }
+}
+
+async function loadCallbackLogs(providerCode) {
+  try {
+    callbackLogs.value = await fetchIntegrationCallbackLogs(providerCode || undefined)
+    callbackLogPagination.reset()
+  } catch {
+    callbackLogs.value = []
+  }
+}
+
 async function loadLogs() {
   try {
     logs.value = await fetchSchedulerLogs(selectedJobCode.value || undefined)
@@ -1226,7 +1558,78 @@ async function loadLogs() {
 }
 
 async function loadSchedulerData() {
-  await Promise.all([loadJobs(), loadLogs()])
+  await Promise.all([loadJobs(), loadLogs(), loadProviders()])
+}
+
+async function handleSaveProvider() {
+  const payload = await saveIntegrationProvider({ ...thirdPartyForm })
+  Object.assign(thirdPartyForm, createThirdPartyForm(), payload, {
+    clientSecret: '',
+    authCode: '',
+    accessToken: '',
+    refreshToken: ''
+  })
+  await loadProviders()
+  ElMessage.success('接口配置已保存')
+}
+
+async function handleTestProvider() {
+  const payload = await testIntegrationProvider({ ...thirdPartyForm })
+  Object.assign(thirdPartyForm, createThirdPartyForm(), payload, {
+    clientSecret: '',
+    authCode: '',
+    accessToken: '',
+    refreshToken: ''
+  })
+  ElMessage.success(payload.lastTestMessage || '接口连接检测完成')
+}
+
+function pickProvider(row) {
+  Object.assign(thirdPartyForm, createThirdPartyForm(), row, {
+    clientSecret: '',
+    authCode: '',
+    accessToken: '',
+    refreshToken: ''
+  })
+  settingEditorMode.value = 'third-party'
+}
+
+async function toggleProvider(row) {
+  await saveIntegrationProvider({
+    ...row,
+    enabled: row.enabled === 1 ? 0 : 1
+  })
+  await loadProviders()
+  ElMessage.success('接口状态已更新')
+}
+
+async function handleSaveCallback() {
+  const payload = await saveIntegrationCallback({ ...callbackForm })
+  Object.assign(callbackForm, createCallbackForm(), payload, {
+    tokenValue: '',
+    aesKey: ''
+  })
+  await loadCallbacks()
+  await loadCallbackLogs(callbackForm.providerCode || payload.providerCode)
+  ElMessage.success('回调接口已保存')
+}
+
+function pickCallback(row) {
+  Object.assign(callbackForm, createCallbackForm(), row, {
+    tokenValue: '',
+    aesKey: ''
+  })
+  settingEditorMode.value = 'callback'
+}
+
+async function toggleCallback(row) {
+  await saveIntegrationCallback({
+    ...row,
+    enabled: row.enabled === 1 ? 0 : 1
+  })
+  await loadCallbacks()
+  await loadCallbackLogs(row.providerCode)
+  ElMessage.success('回调状态已更新')
 }
 
 async function handleSaveJob() {
@@ -1275,6 +1678,7 @@ function pickJob(row) {
     intervalMinutes: row.intervalMinutes,
     retryLimit: row.retryLimit,
     queueName: row.queueName,
+    providerId: row.providerId || null,
     endpoint: row.endpoint,
     status: row.status
   })
@@ -1282,10 +1686,21 @@ function pickJob(row) {
   settingEditorMode.value = 'jobs'
 }
 
+function formatProviderName(providerId) {
+  const matched = providerConfigs.value.find((item) => item.id === providerId)
+  return matched ? matched.providerName : '--'
+}
+
 watch(
   () => currentMode.value,
   async (mode) => {
     settingEditorMode.value = ''
+    if (mode === 'third-party') {
+      await loadProviders()
+    }
+    if (mode === 'callback') {
+      await Promise.all([loadCallbacks(), loadCallbackLogs()])
+    }
     if (mode === 'jobs') {
       jobWorkspace.value = 'schedule'
       await loadSchedulerData()

@@ -138,6 +138,8 @@ public class PermissionSchemaInitializer {
         seedPolicy("SCHEDULER", "VIEW", "CLUE_MANAGER", "ALL", "scheduler monitor");
         seedPolicy("SCHEDULER", "UPDATE", "CLUE_MANAGER", "ALL", "scheduler config");
         seedPolicy("SCHEDULER", "TRIGGER", "CLUE_MANAGER", "ALL", "scheduler trigger");
+        seedPolicy("WECOM", "VIEW", "PRIVATE_DOMAIN_SERVICE", "ALL", "wecom workspace");
+        seedPolicy("WECOM", "UPDATE", "PRIVATE_DOMAIN_SERVICE", "ALL", "wecom workspace");
 
         seedPolicy("PERMISSION", "VIEW", "ADMIN", "ALL", null);
         seedPolicy("PERMISSION", "UPDATE", "ADMIN", "ALL", null);

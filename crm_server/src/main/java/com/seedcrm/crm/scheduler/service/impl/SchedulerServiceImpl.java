@@ -5,10 +5,12 @@ import com.seedcrm.crm.clue.service.DouyinClueSyncService;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.scheduler.dto.SchedulerJobUpsertRequest;
 import com.seedcrm.crm.scheduler.dto.SchedulerTriggerRequest;
+import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
 import com.seedcrm.crm.scheduler.entity.SchedulerJob;
 import com.seedcrm.crm.scheduler.entity.SchedulerJobLog;
 import com.seedcrm.crm.scheduler.mapper.SchedulerJobLogMapper;
 import com.seedcrm.crm.scheduler.mapper.SchedulerJobMapper;
+import com.seedcrm.crm.scheduler.service.SchedulerIntegrationService;
 import com.seedcrm.crm.scheduler.service.SchedulerService;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,21 +25,25 @@ public class SchedulerServiceImpl implements SchedulerService {
     private final SchedulerJobMapper schedulerJobMapper;
     private final SchedulerJobLogMapper schedulerJobLogMapper;
     private final DouyinClueSyncService douyinClueSyncService;
+    private final SchedulerIntegrationService schedulerIntegrationService;
 
     public SchedulerServiceImpl(SchedulerJobMapper schedulerJobMapper,
                                 SchedulerJobLogMapper schedulerJobLogMapper,
-                                DouyinClueSyncService douyinClueSyncService) {
+                                DouyinClueSyncService douyinClueSyncService,
+                                SchedulerIntegrationService schedulerIntegrationService) {
         this.schedulerJobMapper = schedulerJobMapper;
         this.schedulerJobLogMapper = schedulerJobLogMapper;
         this.douyinClueSyncService = douyinClueSyncService;
+        this.schedulerIntegrationService = schedulerIntegrationService;
     }
 
     @Override
     public List<SchedulerJob> listJobs() {
         return schedulerJobMapper.selectList(Wrappers.<SchedulerJob>lambdaQuery()
-                .orderByAsc(SchedulerJob::getModuleCode)
-                .orderByAsc(SchedulerJob::getJobCode)
-                .orderByAsc(SchedulerJob::getId)).stream()
+                        .orderByAsc(SchedulerJob::getModuleCode)
+                        .orderByAsc(SchedulerJob::getJobCode)
+                        .orderByAsc(SchedulerJob::getId))
+                .stream()
                 .peek(job -> job.setStatus(canonicalStatus(job.getStatus())))
                 .toList();
     }
@@ -172,24 +178,32 @@ public class SchedulerServiceImpl implements SchedulerService {
 
     private void execute(SchedulerJobLog log) {
         SchedulerJob job = getJobOrThrow(log.getJobCode());
+        IntegrationProviderConfig provider = schedulerIntegrationService.getEnabledProviderOrNull(job.getProviderId());
         log.setStatus("RUNNING");
         log.setErrorMessage(null);
         schedulerJobLogMapper.updateById(log);
         try {
-            if ("DOUYIN_CLUE_INCREMENTAL".equals(job.getJobCode())) {
-                int importedCount = douyinClueSyncService.syncIncremental();
-                log.setStatus("SUCCESS");
-                log.setPayload("{\"source\":\"sync\",\"importedCount\":" + importedCount + "}");
-            } else {
-                log.setStatus("FAILED");
-                log.setErrorMessage("unsupported scheduler job");
-            }
+            int importedCount = executeSupportedJob(job, provider);
+            log.setStatus("SUCCESS");
+            log.setPayload("{\"source\":\"sync\",\"importedCount\":" + importedCount + "}");
+            schedulerIntegrationService.markSyncResult(job.getProviderId(), true, "同步成功，导入 " + importedCount + " 条客资");
         } catch (Exception exception) {
             log.setStatus("FAILED");
             log.setErrorMessage(exception.getMessage());
             log.setNextRetryTime(LocalDateTime.now().plusMinutes(1));
+            schedulerIntegrationService.markSyncResult(job.getProviderId(), false, exception.getMessage());
         }
         schedulerJobLogMapper.updateById(log);
+    }
+
+    private int executeSupportedJob(SchedulerJob job, IntegrationProviderConfig provider) {
+        if (provider != null && "DOUYIN_LAIKE".equalsIgnoreCase(provider.getProviderCode())) {
+            return douyinClueSyncService.syncIncremental(provider);
+        }
+        if ("DOUYIN_CLUE_INCREMENTAL".equals(job.getJobCode())) {
+            return douyinClueSyncService.syncIncremental();
+        }
+        throw new BusinessException("unsupported scheduler job");
     }
 
     private boolean hasPendingLog(String jobCode) {
@@ -216,6 +230,7 @@ public class SchedulerServiceImpl implements SchedulerService {
         job.setIntervalMinutes(request.getIntervalMinutes() == null || request.getIntervalMinutes() <= 0 ? 1 : request.getIntervalMinutes());
         job.setRetryLimit(request.getRetryLimit() == null || request.getRetryLimit() < 0 ? 3 : request.getRetryLimit());
         job.setQueueName(StringUtils.hasText(request.getQueueName()) ? request.getQueueName().trim() : "default");
+        job.setProviderId(request.getProviderId());
         job.setEndpoint(StringUtils.hasText(request.getEndpoint()) ? request.getEndpoint().trim() : null);
         job.setStatus(canonicalStatus(request.getStatus()));
     }

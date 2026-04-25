@@ -32,6 +32,9 @@ public class SchedulerJob {
     @TableField("queue_name")
     private String queueName;
 
+    @TableField("provider_id")
+    private Long providerId;
+
     @TableField("endpoint")
     private String endpoint;
 

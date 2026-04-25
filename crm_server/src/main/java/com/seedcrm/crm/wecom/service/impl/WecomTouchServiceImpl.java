@@ -1,27 +1,37 @@
 package com.seedcrm.crm.wecom.service.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.customer.entity.Customer;
 import com.seedcrm.crm.customer.mapper.CustomerMapper;
 import com.seedcrm.crm.wecom.dto.WecomLiveCodeGenerateResponse;
 import com.seedcrm.crm.wecom.entity.CustomerWecomRelation;
+import com.seedcrm.crm.wecom.entity.WecomAppConfig;
+import com.seedcrm.crm.wecom.entity.WecomLiveCodeConfig;
 import com.seedcrm.crm.wecom.entity.WecomTouchLog;
 import com.seedcrm.crm.wecom.entity.WecomTouchRule;
 import com.seedcrm.crm.wecom.mapper.CustomerWecomRelationMapper;
+import com.seedcrm.crm.wecom.mapper.WecomLiveCodeConfigMapper;
 import com.seedcrm.crm.wecom.mapper.WecomTouchLogMapper;
 import com.seedcrm.crm.wecom.mapper.WecomTouchRuleMapper;
+import com.seedcrm.crm.wecom.service.WecomConsoleService;
 import com.seedcrm.crm.wecom.service.WecomTouchService;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestClient;
 
 @Slf4j
 @Service
@@ -38,15 +48,24 @@ public class WecomTouchServiceImpl implements WecomTouchService {
     private final CustomerWecomRelationMapper customerWecomRelationMapper;
     private final WecomTouchRuleMapper wecomTouchRuleMapper;
     private final WecomTouchLogMapper wecomTouchLogMapper;
+    private final WecomConsoleService wecomConsoleService;
+    private final WecomLiveCodeConfigMapper wecomLiveCodeConfigMapper;
+    private final ObjectMapper objectMapper;
 
     public WecomTouchServiceImpl(CustomerMapper customerMapper,
                                  CustomerWecomRelationMapper customerWecomRelationMapper,
                                  WecomTouchRuleMapper wecomTouchRuleMapper,
-                                 WecomTouchLogMapper wecomTouchLogMapper) {
+                                 WecomTouchLogMapper wecomTouchLogMapper,
+                                 WecomConsoleService wecomConsoleService,
+                                 WecomLiveCodeConfigMapper wecomLiveCodeConfigMapper,
+                                 ObjectMapper objectMapper) {
         this.customerMapper = customerMapper;
         this.customerWecomRelationMapper = customerWecomRelationMapper;
         this.wecomTouchRuleMapper = wecomTouchRuleMapper;
         this.wecomTouchLogMapper = wecomTouchLogMapper;
+        this.wecomConsoleService = wecomConsoleService;
+        this.wecomLiveCodeConfigMapper = wecomLiveCodeConfigMapper;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -88,25 +107,97 @@ public class WecomTouchServiceImpl implements WecomTouchService {
         if (!StringUtils.hasText(codeName)) {
             throw new BusinessException("活码名称不能为空");
         }
-        if (employeeNames == null || employeeNames.isEmpty()) {
+        List<String> finalEmployeeAccounts = safeList(employeeAccounts);
+        List<String> finalEmployeeNames = safeList(employeeNames);
+        if (finalEmployeeNames.isEmpty() && !finalEmployeeAccounts.isEmpty()) {
+            finalEmployeeNames = finalEmployeeAccounts;
+        }
+        if (finalEmployeeNames.isEmpty()) {
             throw new BusinessException("请至少选择一名轮询员工");
         }
 
-        String finalScene = StringUtils.hasText(scene) ? scene.trim() : "营销引流";
+        String finalScene = StringUtils.hasText(scene) ? scene.trim() : "门店引流";
         String finalStrategy = StringUtils.hasText(strategy) ? strategy.trim() : STRATEGY_ROUND_ROBIN;
+        WecomAppConfig config = wecomConsoleService.getConfig();
+        boolean useLiveMode = config != null
+                && config.getEnabled() != null
+                && config.getEnabled() == 1
+                && "LIVE".equalsIgnoreCase(config.getExecutionMode());
+
+        WecomLiveCodeGenerateResponse response = useLiveMode
+                ? generateLiveCodeFromWecom(config, codeName.trim(), finalScene, finalStrategy, finalEmployeeNames, finalEmployeeAccounts)
+                : simulateLiveCode(codeName.trim(), finalScene, finalStrategy, finalEmployeeNames, finalEmployeeAccounts);
+        syncGeneratedConfig(codeName.trim(), finalScene, finalStrategy, finalEmployeeNames, finalEmployeeAccounts, response);
+        return response;
+    }
+
+    private WecomLiveCodeGenerateResponse generateLiveCodeFromWecom(WecomAppConfig config,
+                                                                    String codeName,
+                                                                    String scene,
+                                                                    String strategy,
+                                                                    List<String> employeeNames,
+                                                                    List<String> employeeAccounts) {
+        if (employeeAccounts == null || employeeAccounts.isEmpty()) {
+            throw new BusinessException("LIVE 模式下必须传入员工企微账号");
+        }
+        String accessToken = wecomConsoleService.resolveAccessToken(config);
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("type", config.getLiveCodeType() == null ? 2 : config.getLiveCodeType());
+        request.put("scene", config.getLiveCodeScene() == null ? 2 : config.getLiveCodeScene());
+        request.put("style", config.getLiveCodeStyle() == null ? 1 : config.getLiveCodeStyle());
+        request.put("remark", codeName);
+        request.put("skip_verify", config.getSkipVerify() == null || config.getSkipVerify() == 1);
+        request.put("state", resolveState(config.getStateTemplate(), scene, strategy, codeName));
+        request.put("user", employeeAccounts);
+
+        JsonNode response = RestClient.create()
+                .post()
+                .uri("https://qyapi.weixin.qq.com/cgi-bin/externalcontact/add_contact_way?access_token={token}", accessToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(request)
+                .retrieve()
+                .body(JsonNode.class);
+        int errorCode = response == null ? -1 : response.path("errcode").asInt(-1);
+        if (errorCode != 0) {
+            String message = response == null ? "企业微信活码生成失败" : response.path("errmsg").asText("企业微信活码生成失败");
+            throw new BusinessException(message);
+        }
+        String contactWayId = extractText(response, "config_id", "contact_way_id");
+        String qrCodeUrl = extractText(response, "qr_code", "data.qr_code");
+        String generatedAt = LocalDateTime.now().format(LIVE_CODE_TIME_FORMATTER);
+        String shortLink = StringUtils.hasText(qrCodeUrl) ? qrCodeUrl : null;
+        String summary = "企业微信 LIVE 模式已生成联系我活码，后续客户扫码会按联系我配置承接。";
+        return new WecomLiveCodeGenerateResponse(
+                codeName,
+                scene,
+                strategy,
+                contactWayId,
+                qrCodeUrl,
+                shortLink,
+                employeeNames.size(),
+                employeeNames,
+                generatedAt,
+                summary);
+    }
+
+    private WecomLiveCodeGenerateResponse simulateLiveCode(String codeName,
+                                                           String scene,
+                                                           String strategy,
+                                                           List<String> employeeNames,
+                                                           List<String> employeeAccounts) {
         String contactWayId = "cw_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String generatedAt = LocalDateTime.now().format(LIVE_CODE_TIME_FORMATTER);
-        String summary = String.format("活码已生成，当前按轮询策略分配给 %d 名私域客服", employeeNames.size());
-        String qrCodeUrl = buildLiveCodeQrCode(codeName.trim(), employeeNames, contactWayId);
+        String summary = String.format("当前为 MOCK 模式，已生成演示活码并按轮询策略分配给 %d 名私域客服。", employeeNames.size());
+        String qrCodeUrl = buildLiveCodeQrCode(codeName, employeeNames, contactWayId);
         String shortLink = "https://wecom.seedcrm.local/contact/" + contactWayId;
 
         log.info("simulate wecom live code generate, codeName={}, scene={}, strategy={}, employeeNames={}, employeeAccounts={}, contactWayId={}",
-                codeName, finalScene, finalStrategy, employeeNames, employeeAccounts, contactWayId);
+                codeName, scene, strategy, employeeNames, employeeAccounts, contactWayId);
 
         return new WecomLiveCodeGenerateResponse(
-                codeName.trim(),
-                finalScene,
-                finalStrategy,
+                codeName,
+                scene,
+                strategy,
                 contactWayId,
                 qrCodeUrl,
                 shortLink,
@@ -148,6 +239,7 @@ public class WecomTouchServiceImpl implements WecomTouchService {
         return wecomTouchRuleMapper.selectOne(Wrappers.<WecomTouchRule>lambdaQuery()
                 .eq(WecomTouchRule::getTag, tag)
                 .eq(WecomTouchRule::getTriggerType, triggerType)
+                .eq(WecomTouchRule::getIsEnabled, 1)
                 .orderByAsc(WecomTouchRule::getId)
                 .last("LIMIT 1"));
     }
@@ -185,6 +277,75 @@ public class WecomTouchServiceImpl implements WecomTouchService {
     private void simulateSend(Customer customer, CustomerWecomRelation relation, String message) {
         log.info("simulate wecom send, customerId={}, externalUserid={}, wecomUserId={}, message={}",
                 customer.getId(), relation.getExternalUserid(), relation.getWecomUserId(), message);
+    }
+
+    private void syncGeneratedConfig(String codeName,
+                                     String scene,
+                                     String strategy,
+                                     List<String> employeeNames,
+                                     List<String> employeeAccounts,
+                                     WecomLiveCodeGenerateResponse response) {
+        WecomLiveCodeConfig config = wecomLiveCodeConfigMapper.selectOne(Wrappers.<WecomLiveCodeConfig>lambdaQuery()
+                .eq(WecomLiveCodeConfig::getCodeName, codeName)
+                .last("LIMIT 1"));
+        if (config == null) {
+            return;
+        }
+        config.setScene(scene);
+        config.setStrategy(strategy);
+        config.setEmployeeNamesJson(writeStringList(employeeNames));
+        config.setEmployeeAccountsJson(writeStringList(employeeAccounts));
+        config.setContactWayId(response.getContactWayId());
+        config.setQrCodeUrl(response.getQrCodeUrl());
+        config.setShortLink(response.getShortLink());
+        config.setGeneratedAt(LocalDateTime.now());
+        config.setUpdatedAt(LocalDateTime.now());
+        wecomLiveCodeConfigMapper.updateById(config);
+    }
+
+    private String resolveState(String template, String scene, String strategy, String codeName) {
+        String stateTemplate = StringUtils.hasText(template)
+                ? template.trim()
+                : "seedcrm:{scene}:{strategy}:{codeName}";
+        return stateTemplate
+                .replace("{scene}", scene)
+                .replace("{strategy}", strategy)
+                .replace("{codeName}", codeName);
+    }
+
+    private List<String> safeList(List<String> values) {
+        return values == null ? List.of() : values.stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .distinct()
+                .toList();
+    }
+
+    private String extractText(JsonNode node, String... candidates) {
+        if (node == null || candidates == null) {
+            return null;
+        }
+        for (String candidate : candidates) {
+            JsonNode current = node;
+            for (String part : candidate.split("\\.")) {
+                current = current == null ? null : current.path(part);
+            }
+            if (current != null && !current.isMissingNode() && !current.isNull()) {
+                String value = current.asText();
+                if (StringUtils.hasText(value)) {
+                    return value.trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    private String writeStringList(List<String> values) {
+        try {
+            return objectMapper.writeValueAsString(values == null ? List.of() : values);
+        } catch (Exception exception) {
+            throw new BusinessException("活码员工列表序列化失败");
+        }
     }
 
     private String buildLiveCodeQrCode(String codeName, List<String> employeeNames, String contactWayId) {

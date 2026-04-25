@@ -83,8 +83,10 @@ public class WecomTouchRuleTableInitializer {
                 CREATE TABLE wecom_touch_rule (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
                     tag VARCHAR(64) NOT NULL,
+                    rule_name VARCHAR(128),
                     message_template TEXT,
                     trigger_type VARCHAR(16) NOT NULL,
+                    is_enabled TINYINT DEFAULT 1,
                     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                     KEY idx_wecom_touch_rule_tag_trigger (tag, trigger_type)
                 )
@@ -95,8 +97,10 @@ public class WecomTouchRuleTableInitializer {
         Map<String, String> columns = new LinkedHashMap<>();
         columns.put("id", "id BIGINT PRIMARY KEY AUTO_INCREMENT");
         columns.put("tag", "tag VARCHAR(64) NOT NULL");
+        columns.put("rule_name", "rule_name VARCHAR(128)");
         columns.put("message_template", "message_template TEXT");
         columns.put("trigger_type", "trigger_type VARCHAR(16) NOT NULL");
+        columns.put("is_enabled", "is_enabled TINYINT DEFAULT 1");
         columns.put("create_time", "create_time DATETIME DEFAULT CURRENT_TIMESTAMP");
         return columns;
     }

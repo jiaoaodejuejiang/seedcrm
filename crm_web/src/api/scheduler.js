@@ -1,5 +1,33 @@
 import http from './http'
 
+export function fetchIntegrationProviders() {
+  return http.get('/scheduler/providers')
+}
+
+export function saveIntegrationProvider(payload) {
+  return http.post('/scheduler/provider/save', payload)
+}
+
+export function testIntegrationProvider(payload) {
+  return http.post('/scheduler/provider/test', payload)
+}
+
+export function fetchIntegrationCallbacks() {
+  return http.get('/scheduler/callbacks')
+}
+
+export function fetchIntegrationCallbackLogs(providerCode) {
+  return http.get('/scheduler/callback/logs', {
+    params: {
+      providerCode: providerCode || undefined
+    }
+  })
+}
+
+export function saveIntegrationCallback(payload) {
+  return http.post('/scheduler/callback/save', payload)
+}
+
 export function fetchSchedulerJobs() {
   return http.get('/scheduler/jobs')
 }

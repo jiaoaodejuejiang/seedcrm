@@ -3,18 +3,18 @@
     <section class="metrics-row">
       <article class="metric-card">
         <span>活码配置</span>
-        <strong>{{ state.wecomLiveCodeConfigs.length }}</strong>
-        <small>已保存的私域活码配置数量</small>
+        <strong>{{ configs.length }}</strong>
+        <small>已保存</small>
       </article>
       <article class="metric-card">
-        <span>在职私域客服</span>
+        <span>轮询员工</span>
         <strong>{{ availableEmployees.length }}</strong>
-        <small>当前可参与轮询接待的私域客服员工</small>
+        <small>当前可选</small>
       </article>
       <article class="metric-card">
         <span>最近生成</span>
         <strong>{{ generatedCount }}</strong>
-        <small>已生成并保留二维码结果的活码数量</small>
+        <small>已生成二维码</small>
       </article>
     </section>
 
@@ -22,13 +22,28 @@
       <div class="panel-heading">
         <div>
           <h3>活码配置</h3>
-          <p>营销投放时可让客户扫码，系统按轮询策略将客户分配给所选私域客服企业微信。</p>
+        </div>
+        <div class="action-group">
+          <el-button type="primary" @click="handleSaveConfig">保存配置</el-button>
+          <el-button type="success" :loading="generating" @click="handleGenerate">生成活码</el-button>
+          <el-button @click="resetLiveCodeForm">重置</el-button>
         </div>
       </div>
 
-      <p class="table-note">
-        {{ employeeTip }}
-      </p>
+      <div class="status-strip">
+        <div class="status-pill">
+          <span>企业微信模式</span>
+          <strong>{{ wecomConfig.executionMode || 'MOCK' }}</strong>
+        </div>
+        <div class="status-pill">
+          <span>回调状态</span>
+          <strong>{{ wecomConfig.lastCallbackStatus || '未收到' }}</strong>
+        </div>
+        <div class="status-pill">
+          <span>联系我参数</span>
+          <strong>{{ liveCodeSummary }}</strong>
+        </div>
+      </div>
 
       <div class="form-grid">
         <label>
@@ -37,7 +52,7 @@
         </label>
         <label>
           <span>应用场景</span>
-          <el-input v-model="liveCodeForm.scene" placeholder="例如：门店服务引流 / 活动投放" />
+          <el-input v-model="liveCodeForm.scene" placeholder="例如：活动投放 / 门店承接" />
         </label>
         <label>
           <span>分配策略</span>
@@ -51,7 +66,7 @@
           </el-select>
         </label>
         <label class="full-span">
-          <span>轮询员工列表</span>
+          <span>轮询员工</span>
           <el-select
             v-model="liveCodeForm.employeeIds"
             multiple
@@ -69,12 +84,7 @@
         </label>
         <label class="full-span">
           <span>投放说明</span>
-          <el-input
-            v-model="liveCodeForm.remark"
-            type="textarea"
-            :rows="3"
-            placeholder="例如：门店服务人员在活动现场出示，扫码后轮询添加私域客服企业微信。"
-          />
+          <el-input v-model="liveCodeForm.remark" type="textarea" :rows="3" placeholder="请输入投放说明" />
         </label>
       </div>
 
@@ -89,19 +99,12 @@
           {{ employee.userName }} / {{ employee.accountName }}
         </el-tag>
       </div>
-
-      <div class="action-group">
-        <el-button type="primary" @click="saveLiveCodeConfig">保存配置</el-button>
-        <el-button type="success" :loading="generating" @click="generateLiveCode()">生成活码</el-button>
-        <el-button @click="resetLiveCodeForm">重置表单</el-button>
-      </div>
     </section>
 
     <section v-if="generatedResult" class="panel">
       <div class="panel-heading">
         <div>
           <h3>生成结果</h3>
-          <p>可将当前活码用于营销投放，由店铺服务人员引导客户扫码后进入私域承接。</p>
         </div>
       </div>
 
@@ -113,9 +116,9 @@
         <div class="detail-card">
           <h3>{{ generatedResult.codeName }}</h3>
           <p>应用场景：{{ generatedResult.scene }}</p>
-          <p>分配策略：{{ generatedResult.strategyLabel }}</p>
+          <p>分配策略：{{ strategyLabel(generatedResult.strategy) }}</p>
           <p>联系我 ID：{{ generatedResult.contactWayId }}</p>
-          <p>短链地址：{{ generatedResult.shortLink }}</p>
+          <p>短链地址：{{ generatedResult.shortLink || '--' }}</p>
           <p>生成时间：{{ formatDateTime(generatedResult.generatedAt) }}</p>
           <p>轮询员工：{{ generatedResult.employeeNames.join(' / ') }}</p>
           <p>{{ generatedResult.summary }}</p>
@@ -127,7 +130,6 @@
       <div class="panel-heading">
         <div>
           <h3>配置列表</h3>
-          <p>保存后可反复生成活码，方便不同活动、门店或渠道分别投放。</p>
         </div>
       </div>
 
@@ -142,7 +144,7 @@
         </el-table-column>
         <el-table-column label="轮询员工" min-width="220">
           <template #default="{ row }">
-            {{ employeeNamesFromConfig(row).join(' / ') || '--' }}
+            {{ (row.employeeNames || []).join(' / ') || '--' }}
           </template>
         </el-table-column>
         <el-table-column label="策略" width="120">
@@ -166,7 +168,9 @@
           <template #default="{ row }">
             <div class="action-group">
               <el-button size="small" @click="pickLiveCodeConfig(row)">编辑</el-button>
-              <el-button size="small" type="success" :loading="generatingRowId === row.id" @click="generateLiveCode(row)">生成活码</el-button>
+              <el-button size="small" type="success" :loading="generatingRowId === row.id" @click="handleGenerate(row)">
+                生成活码
+              </el-button>
               <el-button size="small" plain @click="toggleLiveCodeConfig(row)">
                 {{ row.isEnabled === 1 ? '停用' : '启用' }}
               </el-button>
@@ -192,23 +196,29 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { generateWecomLiveCode } from '../api/wecom'
+import { fetchWecomConfig, fetchWecomLiveCodeConfigs, generateWecomLiveCode, saveWecomLiveCodeConfig } from '../api/wecom'
 import { useTablePagination } from '../composables/useTablePagination'
 import { formatDateTime } from '../utils/format'
-import { loadSystemConsoleState, nextSystemId, saveSystemConsoleState } from '../utils/systemConsoleStore'
+import { loadSystemConsoleState } from '../utils/systemConsoleStore'
 
 const STRATEGY_ROUND_ROBIN = 'ROUND_ROBIN'
 
 const state = reactive(loadSystemConsoleState())
+const configs = ref([])
 const generating = ref(false)
 const generatingRowId = ref(null)
 const generatedResult = ref(null)
+const wecomConfig = ref({
+  executionMode: 'MOCK',
+  liveCodeType: 2,
+  liveCodeScene: 2,
+  liveCodeStyle: 1,
+  lastCallbackStatus: ''
+})
 const liveCodeForm = reactive(createLiveCodeForm())
-const pagination = useTablePagination(computed(() => state.wecomLiveCodeConfigs))
-
-ensureLiveCodeState()
+const pagination = useTablePagination(configs)
 
 const availableEmployees = computed(() => {
   const privateDomainEmployees = state.employees.filter(
@@ -224,15 +234,13 @@ const selectedEmployees = computed(() =>
   availableEmployees.value.filter((item) => liveCodeForm.employeeIds.includes(item.id))
 )
 
-const generatedCount = computed(() =>
-  state.wecomLiveCodeConfigs.filter((item) => item.generatedAt && item.generatedQrCodeUrl).length
+const generatedCount = computed(() => configs.value.filter((item) => item.generatedAt && item.qrCodeUrl).length)
+const liveCodeSummary = computed(
+  () => `${wecomConfig.value.liveCodeType || 2} / ${wecomConfig.value.liveCodeScene || 2} / ${wecomConfig.value.liveCodeStyle || 1}`
 )
 
-const employeeTip = computed(() => {
-  if (availableEmployees.value.length >= 2) {
-    return '当前默认读取在职私域客服员工，可按轮询策略生成营销活码。'
-  }
-  return '当前可轮询员工不足 2 人，仍可先生成单人活码；如需真正轮询，请先在系统管理中补充更多私域客服员工。'
+onMounted(async () => {
+  await Promise.all([loadConfigs(), loadWecomConfig()])
 })
 
 watch(
@@ -257,18 +265,13 @@ function createLiveCodeForm() {
   }
 }
 
-function ensureLiveCodeState() {
-  if (!Array.isArray(state.wecomLiveCodeConfigs)) {
-    replaceState({
-      ...state,
-      wecomLiveCodeConfigs: []
-    })
-  }
+async function loadConfigs() {
+  configs.value = await fetchWecomLiveCodeConfigs()
+  pagination.reset()
 }
 
-function replaceState(nextState) {
-  saveSystemConsoleState(nextState)
-  Object.assign(state, loadSystemConsoleState())
+async function loadWecomConfig() {
+  wecomConfig.value = (await fetchWecomConfig()) || wecomConfig.value
 }
 
 function resetLiveCodeForm() {
@@ -284,99 +287,86 @@ function strategyLabel(strategy) {
   return strategy === STRATEGY_ROUND_ROBIN ? '轮询分配' : strategy || '--'
 }
 
-function employeeNamesFromConfig(config) {
-  return availableEmployees.value
-    .filter((item) => (config.employeeIds || []).includes(item.id))
-    .map((item) => item.userName)
+function resolveEmployeeIds(payload) {
+  const accountSet = new Set(payload.employeeAccounts || [])
+  if (accountSet.size) {
+    const ids = availableEmployees.value.filter((item) => accountSet.has(item.accountName)).map((item) => item.id)
+    if (ids.length) {
+      return ids
+    }
+  }
+  const nameSet = new Set(payload.employeeNames || [])
+  return availableEmployees.value.filter((item) => nameSet.has(item.userName)).map((item) => item.id)
 }
 
-function saveLiveCodeConfig() {
-  const saved = upsertLiveCodeConfig({
-    ...liveCodeForm,
-    employeeIds: [...liveCodeForm.employeeIds]
-  })
-  if (!saved) {
+function buildPayload(formLike) {
+  const employees = availableEmployees.value.filter((item) => formLike.employeeIds.includes(item.id))
+  return {
+    id: formLike.id,
+    codeName: formLike.codeName,
+    scene: formLike.scene,
+    strategy: formLike.strategy || STRATEGY_ROUND_ROBIN,
+    employeeNames: employees.map((item) => item.userName),
+    employeeAccounts: employees.map((item) => item.accountName),
+    remark: formLike.remark,
+    isEnabled: formLike.isEnabled
+  }
+}
+
+async function handleSaveConfig() {
+  if (!liveCodeForm.codeName || !liveCodeForm.employeeIds.length) {
+    ElMessage.warning('请先填写活码名称并选择轮询员工')
     return
   }
-  ElMessage.success('活码配置已保存')
-  pickLiveCodeConfig(saved)
-}
-
-function upsertLiveCodeConfig(config) {
-  if (!config.codeName || !(config.employeeIds || []).length) {
-    ElMessage.warning('请先填写活码名称并选择轮询员工')
-    return null
-  }
-
-  const nextConfigs = [...state.wecomLiveCodeConfigs]
-  let saved
-  if (config.id) {
-    const index = nextConfigs.findIndex((item) => item.id === config.id)
-    if (index === -1) {
-      return null
-    }
-    saved = {
-      ...nextConfigs[index],
-      ...config
-    }
-    nextConfigs[index] = saved
-  } else {
-    saved = {
-      ...config,
-      id: nextSystemId(nextConfigs)
-    }
-    nextConfigs.push(saved)
-  }
-
-  replaceState({
-    ...state,
-    wecomLiveCodeConfigs: nextConfigs
+  const saved = await saveWecomLiveCodeConfig(buildPayload(liveCodeForm))
+  Object.assign(liveCodeForm, {
+    ...saved,
+    employeeIds: resolveEmployeeIds(saved)
   })
-  pagination.reset()
-
-  return saved
+  await loadConfigs()
+  ElMessage.success('活码配置已保存')
 }
 
 function pickLiveCodeConfig(row) {
   Object.assign(liveCodeForm, {
-    ...row,
-    employeeIds: [...(row.employeeIds || [])]
+    id: row.id,
+    codeName: row.codeName,
+    scene: row.scene || '门店引流',
+    strategy: row.strategy || STRATEGY_ROUND_ROBIN,
+    employeeIds: resolveEmployeeIds(row),
+    remark: row.remark || '',
+    isEnabled: row.isEnabled ?? 1
   })
-  if (row.generatedQrCodeUrl) {
-    generatedResult.value = normalizeGeneratedResult({
-      ...row,
-      qrCodeUrl: row.generatedQrCodeUrl,
-      employeeNames: employeeNamesFromConfig(row)
-    })
-  } else {
-    generatedResult.value = null
-  }
+  generatedResult.value = row.qrCodeUrl
+    ? {
+        ...row,
+        strategyLabel: strategyLabel(row.strategy)
+      }
+    : null
 }
 
-function toggleLiveCodeConfig(row) {
-  const nextConfigs = state.wecomLiveCodeConfigs.map((item) =>
-    item.id === row.id ? { ...item, isEnabled: item.isEnabled === 1 ? 0 : 1 } : item
-  )
-  replaceState({
-    ...state,
-    wecomLiveCodeConfigs: nextConfigs
+async function toggleLiveCodeConfig(row) {
+  await saveWecomLiveCodeConfig({
+    ...row,
+    isEnabled: row.isEnabled === 1 ? 0 : 1
   })
+  await loadConfigs()
   ElMessage.success('活码状态已更新')
 }
 
-async function generateLiveCode(row = null) {
-  const draft = row
+async function handleGenerate(row = null) {
+  const formLike = row
     ? {
-        ...row,
-        employeeIds: [...(row.employeeIds || [])]
+        id: row.id,
+        codeName: row.codeName,
+        scene: row.scene || '门店引流',
+        strategy: row.strategy || STRATEGY_ROUND_ROBIN,
+        employeeIds: resolveEmployeeIds(row),
+        remark: row.remark || '',
+        isEnabled: row.isEnabled ?? 1
       }
-    : {
-        ...liveCodeForm,
-        employeeIds: [...liveCodeForm.employeeIds]
-      }
-
-  const selected = availableEmployees.value.filter((item) => draft.employeeIds.includes(item.id))
-  if (!draft.codeName || !selected.length) {
+    : liveCodeForm
+  if (!formLike.codeName || !formLike.employeeIds.length) {
     ElMessage.warning('请先填写活码名称并选择轮询员工')
     return
   }
@@ -384,43 +374,27 @@ async function generateLiveCode(row = null) {
   generating.value = !row
   generatingRowId.value = row?.id || null
   try {
+    const saved = await saveWecomLiveCodeConfig(buildPayload(formLike))
     const result = await generateWecomLiveCode({
-      codeName: draft.codeName,
-      scene: draft.scene,
-      strategy: draft.strategy || STRATEGY_ROUND_ROBIN,
-      employeeNames: selected.map((item) => item.userName),
-      employeeAccounts: selected.map((item) => item.accountName)
+      codeName: saved.codeName,
+      scene: saved.scene,
+      strategy: saved.strategy,
+      employeeNames: saved.employeeNames,
+      employeeAccounts: saved.employeeAccounts
     })
-
-    const saved = upsertLiveCodeConfig({
-      ...draft,
-      generatedAt: result.generatedAt,
-      generatedQrCodeUrl: result.qrCodeUrl,
-      contactWayId: result.contactWayId,
-      shortLink: result.shortLink,
-      summary: result.summary
-    })
-
-    if (!saved) {
-      return
-    }
-
-    generatedResult.value = normalizeGeneratedResult({
+    generatedResult.value = {
       ...result,
-      employeeNames: selected.map((item) => item.userName)
-    })
-    pickLiveCodeConfig(saved)
+      strategyLabel: strategyLabel(result.strategy)
+    }
+    await loadConfigs()
+    const latest = configs.value.find((item) => item.codeName === saved.codeName)
+    if (latest) {
+      pickLiveCodeConfig(latest)
+    }
     ElMessage.success('活码已生成')
   } finally {
     generating.value = false
     generatingRowId.value = null
-  }
-}
-
-function normalizeGeneratedResult(result) {
-  return {
-    ...result,
-    strategyLabel: strategyLabel(result.strategy)
   }
 }
 </script>

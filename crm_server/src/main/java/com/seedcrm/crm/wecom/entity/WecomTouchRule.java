@@ -18,11 +18,17 @@ public class WecomTouchRule {
     @TableField("tag")
     private String tag;
 
+    @TableField("rule_name")
+    private String ruleName;
+
     @TableField("message_template")
     private String messageTemplate;
 
     @TableField("trigger_type")
     private String triggerType;
+
+    @TableField("is_enabled")
+    private Integer isEnabled;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("create_time")

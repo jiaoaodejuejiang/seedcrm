@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.customer.entity.Customer;
 import com.seedcrm.crm.customer.mapper.CustomerMapper;
@@ -13,8 +14,10 @@ import com.seedcrm.crm.wecom.entity.CustomerWecomRelation;
 import com.seedcrm.crm.wecom.entity.WecomTouchLog;
 import com.seedcrm.crm.wecom.entity.WecomTouchRule;
 import com.seedcrm.crm.wecom.mapper.CustomerWecomRelationMapper;
+import com.seedcrm.crm.wecom.mapper.WecomLiveCodeConfigMapper;
 import com.seedcrm.crm.wecom.mapper.WecomTouchLogMapper;
 import com.seedcrm.crm.wecom.mapper.WecomTouchRuleMapper;
+import com.seedcrm.crm.wecom.service.WecomConsoleService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,12 +39,24 @@ class WecomTouchServiceImplTest {
     @Mock
     private WecomTouchLogMapper wecomTouchLogMapper;
 
+    @Mock
+    private WecomConsoleService wecomConsoleService;
+
+    @Mock
+    private WecomLiveCodeConfigMapper wecomLiveCodeConfigMapper;
+
     private WecomTouchServiceImpl wecomTouchService;
 
     @BeforeEach
     void setUp() {
         wecomTouchService = new WecomTouchServiceImpl(
-                customerMapper, customerWecomRelationMapper, wecomTouchRuleMapper, wecomTouchLogMapper);
+                customerMapper,
+                customerWecomRelationMapper,
+                wecomTouchRuleMapper,
+                wecomTouchLogMapper,
+                wecomConsoleService,
+                wecomLiveCodeConfigMapper,
+                new ObjectMapper());
     }
 
     @Test
@@ -133,6 +148,20 @@ class WecomTouchServiceImplTest {
         verify(wecomTouchLogMapper).insert(any(WecomTouchLog.class));
     }
 
+    @Test
+    void generateLiveCodeShouldReturnMockResultWhenLiveModeNotConfigured() {
+        var response = wecomTouchService.generateLiveCode(
+                "门店引流活码",
+                "活动投放",
+                "ROUND_ROBIN",
+                java.util.List.of("私域客服A", "私域客服B"),
+                java.util.List.of("private_domain_a", "private_domain_b"));
+
+        assertThat(response.getCodeName()).isEqualTo("门店引流活码");
+        assertThat(response.getContactWayId()).startsWith("cw_");
+        assertThat(response.getQrCodeUrl()).startsWith("data:image/svg+xml");
+    }
+
     private Customer customer(Long id, String tag) {
         Customer customer = new Customer();
         customer.setId(id);
@@ -153,6 +182,7 @@ class WecomTouchServiceImplTest {
         rule.setTag(tag);
         rule.setTriggerType(triggerType);
         rule.setMessageTemplate(messageTemplate);
+        rule.setIsEnabled(1);
         return rule;
     }
 }

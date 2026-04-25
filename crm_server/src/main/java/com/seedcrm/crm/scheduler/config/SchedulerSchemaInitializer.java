@@ -71,6 +71,7 @@ public class SchedulerSchemaInitializer {
                     interval_minutes INT DEFAULT 1,
                     retry_limit INT DEFAULT 3,
                     queue_name VARCHAR(64),
+                    provider_id BIGINT,
                     endpoint VARCHAR(255),
                     status VARCHAR(32) DEFAULT 'ENABLED',
                     last_run_time DATETIME,
@@ -108,6 +109,7 @@ public class SchedulerSchemaInitializer {
         columns.put("interval_minutes", "interval_minutes INT DEFAULT 1");
         columns.put("retry_limit", "retry_limit INT DEFAULT 3");
         columns.put("queue_name", "queue_name VARCHAR(64)");
+        columns.put("provider_id", "provider_id BIGINT");
         columns.put("endpoint", "endpoint VARCHAR(255)");
         columns.put("status", "status VARCHAR(32) DEFAULT 'ENABLED'");
         columns.put("last_run_time", "last_run_time DATETIME");
@@ -141,10 +143,10 @@ public class SchedulerSchemaInitializer {
         }
         LocalDateTime now = LocalDateTime.now();
         jdbcTemplate.update("""
-                INSERT INTO scheduler_job(job_code, module_code, sync_mode, interval_minutes, retry_limit, queue_name, endpoint, status, next_run_time, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO scheduler_job(job_code, module_code, sync_mode, interval_minutes, retry_limit, queue_name, provider_id, endpoint, status, next_run_time, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                "DOUYIN_CLUE_INCREMENTAL", "CLUE", "INCREMENTAL", 1, 3, "douyin-clue-sync",
+                "DOUYIN_CLUE_INCREMENTAL", "CLUE", "INCREMENTAL", 1, 3, "douyin-clue-sync", null,
                 "/clue/add", "ENABLED", now.plusMinutes(1), now, now);
     }
 }

@@ -17,6 +17,8 @@ public class SchedulerJobUpsertRequest {
 
     private String queueName;
 
+    private Long providerId;
+
     private String endpoint;
 
     private String status;

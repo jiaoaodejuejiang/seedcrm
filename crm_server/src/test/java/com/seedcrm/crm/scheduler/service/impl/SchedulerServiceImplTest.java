@@ -12,6 +12,7 @@ import com.seedcrm.crm.scheduler.entity.SchedulerJob;
 import com.seedcrm.crm.scheduler.entity.SchedulerJobLog;
 import com.seedcrm.crm.scheduler.mapper.SchedulerJobLogMapper;
 import com.seedcrm.crm.scheduler.mapper.SchedulerJobMapper;
+import com.seedcrm.crm.scheduler.service.SchedulerIntegrationService;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,11 +32,15 @@ class SchedulerServiceImplTest {
     @Mock
     private DouyinClueSyncService douyinClueSyncService;
 
+    @Mock
+    private SchedulerIntegrationService schedulerIntegrationService;
+
     private SchedulerServiceImpl schedulerService;
 
     @BeforeEach
     void setUp() {
-        schedulerService = new SchedulerServiceImpl(schedulerJobMapper, schedulerJobLogMapper, douyinClueSyncService);
+        schedulerService = new SchedulerServiceImpl(
+                schedulerJobMapper, schedulerJobLogMapper, douyinClueSyncService, schedulerIntegrationService);
     }
 
     @Test
@@ -50,6 +55,7 @@ class SchedulerServiceImplTest {
         SchedulerJobUpsertRequest request = new SchedulerJobUpsertRequest();
         request.setJobCode("douyin_clue_sync");
         request.setModuleCode("scheduler");
+        request.setProviderId(88L);
 
         SchedulerJob job = schedulerService.saveJob(request);
 
@@ -57,6 +63,7 @@ class SchedulerServiceImplTest {
         assertThat(job.getIntervalMinutes()).isEqualTo(1);
         assertThat(job.getRetryLimit()).isEqualTo(3);
         assertThat(job.getStatus()).isEqualTo("ENABLED");
+        assertThat(job.getProviderId()).isEqualTo(88L);
     }
 
     @Test

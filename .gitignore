@@ -3,3 +3,4 @@
 .git/
 *.txt
 output/*.log
+output/

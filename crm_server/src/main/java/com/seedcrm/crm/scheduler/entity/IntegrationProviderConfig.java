@@ -43,6 +43,15 @@ public class IntegrationProviderConfig {
     @TableField("endpoint_path")
     private String endpointPath;
 
+    @TableField("voucher_prepare_path")
+    private String voucherPreparePath;
+
+    @TableField("voucher_verify_path")
+    private String voucherVerifyPath;
+
+    @TableField("voucher_cancel_path")
+    private String voucherCancelPath;
+
     @TableField("client_key")
     private String clientKey;
 
@@ -94,6 +103,12 @@ public class IntegrationProviderConfig {
 
     @TableField("open_id")
     private String openId;
+
+    @TableField("poi_id")
+    private String poiId;
+
+    @TableField("verify_code_field")
+    private String verifyCodeField;
 
     @TableField("page_size")
     private Integer pageSize;

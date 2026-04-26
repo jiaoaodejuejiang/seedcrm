@@ -184,13 +184,22 @@ public class WorkbenchServiceImpl implements WorkbenchService {
     }
 
     @Override
-    public List<OrderItemResponse> listOrders(String status) {
+    public List<OrderItemResponse> listOrders(String status, String customerName, String customerPhone) {
         List<Order> orders = orderMapper.selectList(Wrappers.<Order>lambdaQuery()
                 .orderByDesc(Order::getCreateTime)
                 .orderByDesc(Order::getId));
         String normalizedStatus = normalize(status);
+        String normalizedCustomerName = normalize(customerName);
+        String normalizedCustomerPhone = normalize(customerPhone);
+        Map<Long, Customer> customerMap = loadCustomers(orders.stream()
+                .map(Order::getCustomerId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList());
         List<Order> filteredOrders = orders.stream()
                 .filter(order -> matchesWorkbenchOrderStatus(order, normalizedStatus))
+                .filter(order -> matchesCustomerName(order, customerMap.get(order.getCustomerId()), normalizedCustomerName))
+                .filter(order -> matchesCustomerPhone(order, customerMap.get(order.getCustomerId()), normalizedCustomerPhone))
                 .limit(20)
                 .toList();
         return buildOrderResponses(filteredOrders);
@@ -441,7 +450,29 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 order.getArriveTime(),
                 order.getCompleteTime(),
                 order.getRemark(),
+                order.getServiceDetailJson(),
+                StringUtils.hasText(order.getVerificationStatus()) ? order.getVerificationStatus() : "UNVERIFIED",
+                order.getVerificationMethod(),
+                order.getVerificationCode(),
+                order.getVerificationTime(),
+                order.getVerificationOperatorId(),
                 order.getCreateTime());
+    }
+
+    private boolean matchesCustomerName(Order order, Customer customer, String normalizedCustomerName) {
+        if (!StringUtils.hasText(normalizedCustomerName)) {
+            return true;
+        }
+        String target = normalize(customer == null ? null : customer.getName());
+        return target.contains(normalizedCustomerName);
+    }
+
+    private boolean matchesCustomerPhone(Order order, Customer customer, String normalizedCustomerPhone) {
+        if (!StringUtils.hasText(normalizedCustomerPhone)) {
+            return true;
+        }
+        String target = normalize(customer == null ? null : customer.getPhone());
+        return target.contains(normalizedCustomerPhone);
     }
 
     private List<PlanOrderItemResponse> buildPlanOrderSummaries(List<PlanOrder> planOrders) {

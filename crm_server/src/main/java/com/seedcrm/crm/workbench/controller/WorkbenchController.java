@@ -60,9 +60,11 @@ public class WorkbenchController {
 
     @GetMapping("/orders")
     public ApiResponse<List<OrderItemResponse>> orders(@RequestParam(required = false) String status,
+                                                       @RequestParam(required = false) String customerName,
+                                                       @RequestParam(required = false) String customerPhone,
                                                        HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
-        List<OrderItemResponse> orders = workbenchService.listOrders(status).stream()
+        List<OrderItemResponse> orders = workbenchService.listOrders(status, customerName, customerPhone).stream()
                 .filter(order -> orderPermissionGuard.canView(context, order.getId()))
                 .collect(Collectors.toList());
         return ApiResponse.success(orders);

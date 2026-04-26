@@ -15,6 +15,7 @@ import com.seedcrm.crm.order.dto.OrderAppointmentDTO;
 import com.seedcrm.crm.order.dto.OrderCreateDTO;
 import com.seedcrm.crm.order.dto.OrderPayDTO;
 import com.seedcrm.crm.order.dto.OrderServiceDetailDTO;
+import com.seedcrm.crm.order.dto.OrderVoucherVerifyDTO;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.enums.OrderType;
@@ -217,12 +218,49 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Override
     @Transactional
+    public Order verifyVoucher(OrderVoucherVerifyDTO orderVoucherVerifyDTO, Long operatorUserId) {
+        validateOrderId(orderVoucherVerifyDTO == null ? null : orderVoucherVerifyDTO.getOrderId());
+        Order order = getOrderById(orderVoucherVerifyDTO.getOrderId());
+        ensureOrderCustomerBound(order);
+        OrderStatus currentStatus = getCurrentStatus(order);
+        if (!currentStatus.isPaidStage()) {
+            throw new BusinessException("only paid orders can be verified");
+        }
+        String verificationCode = normalizeVerificationCode(orderVoucherVerifyDTO.getVerificationCode(), order.getId());
+        if (StringUtils.hasText(order.getVerificationStatus()) && "VERIFIED".equalsIgnoreCase(order.getVerificationStatus())) {
+            if (!verificationCode.equals(order.getVerificationCode())) {
+                throw new BusinessException("order already verified with a different code");
+            }
+            return order;
+        }
+
+        order.setVerificationStatus("VERIFIED");
+        order.setVerificationMethod(normalizeVerificationMethod(orderVoucherVerifyDTO.getVerificationMethod()));
+        order.setVerificationCode(verificationCode);
+        order.setVerificationTime(LocalDateTime.now());
+        order.setVerificationOperatorId(operatorUserId);
+        order.setUpdateTime(LocalDateTime.now());
+        if (orderMapper.updateById(order) <= 0) {
+            throw new BusinessException("failed to verify order");
+        }
+        refreshCustomerLifecycle(order.getCustomerId());
+        return order;
+    }
+
+    @Override
+    @Transactional
     public Order updateServiceDetail(OrderServiceDetailDTO orderServiceDetailDTO) {
         validateOrderId(orderServiceDetailDTO == null ? null : orderServiceDetailDTO.getOrderId());
         Order order = getOrderById(orderServiceDetailDTO.getOrderId());
         ensureOrderCustomerBound(order);
+        if (!"VERIFIED".equalsIgnoreCase(order.getVerificationStatus())) {
+            throw new BusinessException("order must be verified before filling service form");
+        }
         order.setRemark(StringUtils.hasText(orderServiceDetailDTO.getServiceRequirement())
                 ? orderServiceDetailDTO.getServiceRequirement().trim()
+                : null);
+        order.setServiceDetailJson(StringUtils.hasText(orderServiceDetailDTO.getServiceDetailJson())
+                ? orderServiceDetailDTO.getServiceDetailJson().trim()
                 : null);
         order.setUpdateTime(LocalDateTime.now());
         if (orderMapper.updateById(order) <= 0) {
@@ -408,6 +446,24 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (StringUtils.hasText(remark)) {
             order.setRemark(remark);
         }
+    }
+
+    private String normalizeVerificationCode(String verificationCode, Long orderId) {
+        String normalized = StringUtils.hasText(verificationCode)
+                ? verificationCode.trim()
+                : "MOCK-" + orderId;
+        if (normalized.length() < 4) {
+            throw new BusinessException("verification code is invalid");
+        }
+        return normalized;
+    }
+
+    private String normalizeVerificationMethod(String verificationMethod) {
+        String normalized = StringUtils.hasText(verificationMethod) ? verificationMethod.trim().toUpperCase() : "MANUAL";
+        return switch (normalized) {
+            case "SCAN", "SCAN_CAMERA", "CODE", "MANUAL", "EXTERNAL_PROVIDER" -> normalized;
+            default -> "MANUAL";
+        };
     }
 
     private void inheritSource(Order order, Clue clue, Customer customer) {

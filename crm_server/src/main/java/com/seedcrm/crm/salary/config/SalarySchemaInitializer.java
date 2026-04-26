@@ -29,6 +29,11 @@ public class SalarySchemaInitializer {
         ensureDefaultRule("CONSULTANT", "PERCENT", "0.0800");
         ensureDefaultRule("DOCTOR", "PERCENT", "0.1200");
         ensureDefaultRule("ASSISTANT", "PERCENT", "0.0500");
+        ensureDefaultRule("STORE_SERVICE", "PERCENT", "0.0800");
+        ensureDefaultRule("STORE_MANAGER", "PERCENT", "0.1000");
+        ensureDefaultRule("PHOTOGRAPHER", "PERCENT", "0.1200");
+        ensureDefaultRule("MAKEUP_ARTIST", "PERCENT", "0.0600");
+        ensureDefaultRule("PHOTO_SELECTOR", "PERCENT", "0.0700");
     }
 
     private void ensureTable(String tableName, String createSql, Map<String, String> expectedColumns) {

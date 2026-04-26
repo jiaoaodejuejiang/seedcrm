@@ -125,11 +125,30 @@ public class PermissionSchemaInitializer {
         seedPolicy("ORDER", "VIEW", "STORE_SERVICE", "STORE", null);
         seedPolicy("ORDER", "UPDATE", "STORE_SERVICE", "STORE", null);
         seedPolicy("ORDER", "FINISH", "STORE_SERVICE", "STORE", "order(status=finished)");
+        seedPolicy("ORDER", "VIEW", "STORE_MANAGER", "STORE", null);
+        seedPolicy("ORDER", "UPDATE", "STORE_MANAGER", "STORE", null);
+        seedPolicy("ORDER", "FINISH", "STORE_MANAGER", "STORE", "order(status=finished)");
+        seedPolicy("ORDER", "VIEW", "PHOTOGRAPHER", "STORE", null);
+        seedPolicy("ORDER", "UPDATE", "PHOTOGRAPHER", "STORE", null);
+        seedPolicy("ORDER", "VIEW", "MAKEUP_ARTIST", "STORE", null);
+        seedPolicy("ORDER", "UPDATE", "MAKEUP_ARTIST", "STORE", null);
+        seedPolicy("ORDER", "VIEW", "PHOTO_SELECTOR", "STORE", null);
+        seedPolicy("ORDER", "UPDATE", "PHOTO_SELECTOR", "STORE", null);
 
         seedPolicy("PLANORDER", "CREATE", "STORE_SERVICE", "STORE", null);
         seedPolicy("PLANORDER", "VIEW", "STORE_SERVICE", "STORE", null);
         seedPolicy("PLANORDER", "UPDATE", "STORE_SERVICE", "STORE", null);
         seedPolicy("PLANORDER", "ASSIGN_ROLE", "STORE_SERVICE", "STORE", null);
+        seedPolicy("PLANORDER", "CREATE", "STORE_MANAGER", "STORE", null);
+        seedPolicy("PLANORDER", "VIEW", "STORE_MANAGER", "STORE", null);
+        seedPolicy("PLANORDER", "UPDATE", "STORE_MANAGER", "STORE", null);
+        seedPolicy("PLANORDER", "ASSIGN_ROLE", "STORE_MANAGER", "STORE", null);
+        seedPolicy("PLANORDER", "VIEW", "PHOTOGRAPHER", "STORE", null);
+        seedPolicy("PLANORDER", "UPDATE", "PHOTOGRAPHER", "STORE", null);
+        seedPolicy("PLANORDER", "VIEW", "MAKEUP_ARTIST", "STORE", null);
+        seedPolicy("PLANORDER", "UPDATE", "MAKEUP_ARTIST", "STORE", null);
+        seedPolicy("PLANORDER", "VIEW", "PHOTO_SELECTOR", "STORE", null);
+        seedPolicy("PLANORDER", "UPDATE", "PHOTO_SELECTOR", "STORE", null);
 
         seedPolicy("PLANORDER", "VIEW", "PRIVATE_DOMAIN_SERVICE", "SELF", "bound customer");
         seedPolicy("ORDER", "VIEW", "PRIVATE_DOMAIN_SERVICE", "SELF", "bound customer");

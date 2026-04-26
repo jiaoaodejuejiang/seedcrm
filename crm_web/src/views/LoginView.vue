@@ -6,7 +6,7 @@
       <p class="login-showcase__summary">按角色登录后自动进入对应工作台与权限范围。</p>
 
       <div class="login-showcase__roles">
-        <span v-for="account in demoAccounts" :key="account.username" class="login-role-pill">
+        <span v-for="account in visibleDemoAccounts" :key="account.username" class="login-role-pill">
           {{ account.title }}
         </span>
       </div>
@@ -15,8 +15,17 @@
     <section class="login-panel">
       <div class="login-panel__card">
         <div class="login-panel__header">
-          <h2>账号登录</h2>
-          <p>请输入账号和密码进入系统</p>
+          <h2>{{ loginMode === 'store' ? '门店登录' : '总部登录' }}</h2>
+          <p>{{ loginMode === 'store' ? '登录后直接进入门店服务工作台。' : '登录后进入总部业务与管理后台。' }}</p>
+        </div>
+
+        <div class="toolbar toolbar--compact">
+          <div class="toolbar-tabs">
+            <el-radio-group v-model="loginMode">
+              <el-radio-button value="hq">总部登录</el-radio-button>
+              <el-radio-button value="store">门店登录</el-radio-button>
+            </el-radio-group>
+          </div>
         </div>
 
         <el-form :model="form" label-position="top" @submit.prevent="handleLogin">
@@ -46,7 +55,7 @@
 
         <div class="login-demo-grid">
           <button
-            v-for="account in demoAccounts"
+            v-for="account in visibleDemoAccounts"
             :key="account.username"
             type="button"
             class="demo-account"
@@ -62,7 +71,7 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { demoAccounts, getFirstAccessibleRoute, login } from '../utils/auth'
@@ -70,11 +79,16 @@ import { demoAccounts, getFirstAccessibleRoute, login } from '../utils/auth'
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
+const loginMode = ref('hq')
 
 const form = reactive({
   username: 'admin',
   password: '123456'
 })
+
+const visibleDemoAccounts = computed(() =>
+  demoAccounts.filter((account) => (loginMode.value === 'store' ? isStoreAccount(account.username) : !isStoreAccount(account.username)))
+)
 
 function pickDemo(account) {
   form.username = account.username
@@ -93,5 +107,20 @@ async function handleLogin() {
   } finally {
     loading.value = false
   }
+}
+
+watch(
+  loginMode,
+  () => {
+    const fallback = visibleDemoAccounts.value[0]
+    if (fallback) {
+      pickDemo(fallback)
+    }
+  },
+  { immediate: true }
+)
+
+function isStoreAccount(username) {
+  return ['store_service', 'store_manager', 'photo_a', 'makeup_a', 'selector_a'].includes(username)
 }
 </script>

@@ -2,67 +2,73 @@
   <div class="stack-page order-management-page">
     <section class="metrics-row">
       <article class="metric-card">
-        <span>当前列表订单</span>
+        <span>订单总数</span>
         <strong>{{ orders.length }}</strong>
-        <small>门店服务入口只围绕订单和服务单主链开展工作。</small>
       </article>
       <article class="metric-card">
-        <span>已预约</span>
-        <strong>{{ appointmentCount }}</strong>
-        <small>已完成预约，待到店或待服务的订单。</small>
+        <span>待核验</span>
+        <strong>{{ pendingVerificationCount }}</strong>
       </article>
       <article class="metric-card">
         <span>已完成</span>
         <strong>{{ completedCount }}</strong>
-        <small>服务已闭环的订单，可继续回看确认单和历史记录。</small>
       </article>
     </section>
 
     <section class="panel">
       <div class="toolbar">
-        <div class="toolbar-tabs">
-          <el-radio-group v-model="statusFilter" @change="loadOrders">
-            <el-radio-button value="">全部状态</el-radio-button>
-            <el-radio-button value="appointment">已预约</el-radio-button>
-            <el-radio-button value="completed">已完成</el-radio-button>
-          </el-radio-group>
+        <div class="toolbar__filters">
+          <el-select v-model="statusFilter" clearable placeholder="订单状态" style="width: 160px" @change="loadOrders">
+            <el-option label="全部状态" value="" />
+            <el-option label="已预约" value="appointment" />
+            <el-option label="已完成" value="completed" />
+          </el-select>
+          <el-input v-model="customerPhoneKeyword" placeholder="手机号搜索" clearable style="width: 180px" />
+          <el-input v-model="customerNameKeyword" placeholder="姓名搜索" clearable style="width: 180px" />
         </div>
-
         <div class="action-group">
-          <el-button @click="loadOrders">刷新列表</el-button>
+          <el-button type="primary" @click="loadOrders">查询</el-button>
         </div>
       </div>
 
       <el-table v-loading="loading" :data="pagination.rows" stripe>
-        <el-table-column label="订单" min-width="180">
+        <el-table-column label="手机号" min-width="150">
           <template #default="{ row }">
-            <div class="table-primary">
-              <strong>{{ row.orderNo }}</strong>
-              <span>#{{ row.id }}</span>
-            </div>
+            <strong>{{ row.customerPhone || '--' }}</strong>
           </template>
         </el-table-column>
-        <el-table-column label="客户" min-width="180">
+        <el-table-column label="姓名" min-width="120">
           <template #default="{ row }">
-            <div class="table-primary">
-              <strong>{{ row.customerName || '待绑定客户' }}</strong>
-              <span>{{ row.customerPhone || '--' }}</span>
-            </div>
+            {{ row.customerName || '--' }}
           </template>
         </el-table-column>
-        <el-table-column label="类型" width="110">
-          <template #default="{ row }">
-            <el-tag>{{ formatOrderType(row.type) }}</el-tag>
-          </template>
-        </el-table-column>
+        <el-table-column label="门店" min-width="140" prop="storeName" />
         <el-table-column label="金额" width="120">
           <template #default="{ row }">
             {{ formatMoney(row.amount) }}
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="120">
+        <el-table-column label="订单状态" width="120">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)">{{ formatOrderStatus(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="核验状态" width="110">
+          <template #default="{ row }">
+            <el-tag :type="statusTagType(row.verificationStatus || 'UNVERIFIED')">
+              {{ formatVerificationStatus(row.verificationStatus || 'UNVERIFIED') }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="服务单状态" min-width="140">
+          <template #default="{ row }">
+            <span v-if="row.planOrderId">{{ row.serviceDetailJson ? '已填写' : '待填写' }}</span>
+            <span v-else>待创建</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="付款时间" min-width="170">
+          <template #default="{ row }">
+            {{ formatDateTime(row.createTime) }}
           </template>
         </el-table-column>
         <el-table-column label="预约时间" min-width="170">
@@ -70,30 +76,13 @@
             {{ formatDateTime(row.appointmentTime) }}
           </template>
         </el-table-column>
-        <el-table-column label="服务单" min-width="140">
-          <template #default="{ row }">
-            <span v-if="row.planOrderId">#{{ row.planOrderId }} / {{ formatPlanOrderStatus(row.planOrderStatus) }}</span>
-            <span v-else class="text-secondary">未创建</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="确认单" min-width="180">
-          <template #default="{ row }">
-            <div class="editable-cell">
-              <span class="editable-cell__text">{{ confirmationSummary(row) }}</span>
-              <el-button link class="editable-cell__trigger" :title="confirmationTriggerTitle(row)" @click="openServiceDrawer(row)">
-                <el-icon>
-                  <component :is="isCompletedOrder(row) ? View : EditPen" />
-                </el-icon>
-              </el-button>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" min-width="220" fixed="right">
+        <el-table-column label="操作" min-width="280" fixed="right">
           <template #default="{ row }">
             <div class="action-group">
-              <el-button type="primary" size="small" @click="enterService(row)">
+              <el-button type="primary" size="small" :disabled="!canOpenServiceForm(row)" @click="openServiceForm(row)">
                 {{ serviceButtonLabel(row) }}
               </el-button>
+              <el-button v-if="row.planOrderId" size="small" plain @click="openQrDialog(row)">服务单扫码页</el-button>
               <el-button v-if="row.customerId" link @click="router.push(`/customers/${row.customerId}`)">客户详情</el-button>
             </div>
           </template>
@@ -114,88 +103,70 @@
       </div>
     </section>
 
-    <el-drawer v-model="serviceDrawerVisible" :title="selectedOrderReadOnly ? '订单确认单查看' : '订单确认单确认'" size="560px">
-      <template v-if="selectedOrder">
-        <div class="stack-page">
-          <section class="panel">
-            <div class="detail-grid">
-              <article class="detail-card">
-                <h3>订单信息</h3>
-                <p>订单号：{{ selectedOrder.orderNo }}</p>
-                <p>订单状态：{{ formatOrderStatus(selectedOrder.status) }}</p>
-                <p>订单金额：{{ formatMoney(selectedOrder.amount) }}</p>
-              </article>
-              <article class="detail-card">
-                <h3>客户信息</h3>
-                <p>客户姓名：{{ selectedOrder.customerName || '--' }}</p>
-                <p>联系电话：{{ selectedOrder.customerPhone || '--' }}</p>
-                <p>预约时间：{{ formatDateTime(selectedOrder.appointmentTime) }}</p>
-              </article>
-            </div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-heading compact">
-              <div>
-                <h3>到店详细需求</h3>
-                <p>{{ selectedOrderReadOnly ? '该订单已完成，当前仅支持查看确认单内容。' : '此内容会作为门店确认单保存，支持后续服务人员继续补充。' }}</p>
-              </div>
-            </div>
-            <el-input
-              v-model="serviceRequirementForm.serviceRequirement"
-              type="textarea"
-              :rows="8"
-              :readonly="selectedOrderReadOnly"
-              placeholder="请输入客户到店需求、注意事项、服务偏好、禁忌项或到店确认内容"
-            />
-          </section>
-
-          <div class="action-group flex-end">
-            <el-button @click="serviceDrawerVisible = false">关闭</el-button>
-            <el-button v-if="!selectedOrderReadOnly" type="primary" :loading="savingServiceRequirement" @click="saveCurrentOrderDetail">保存确认单</el-button>
-            <el-button type="success" @click="enterService(selectedOrder)">
-              {{ serviceButtonLabel(selectedOrder, true) }}
-            </el-button>
+    <el-dialog v-model="qrDialogVisible" title="服务单扫码页" width="420px">
+      <div v-if="qrPreview.orderNo" class="stack-page">
+        <section class="panel compact-panel qr-panel">
+          <div class="qr-panel__code">
+            <img v-if="qrPreview.image" :src="qrPreview.image" alt="服务单扫码页二维码" />
           </div>
-        </div>
-      </template>
-    </el-drawer>
+          <div class="qr-panel__meta">
+            <strong>{{ qrPreview.customerName || '未绑定客户' }}</strong>
+            <span>{{ qrPreview.customerPhone || '--' }} / {{ qrPreview.storeName || '--' }}</span>
+            <small>订单号 {{ qrPreview.orderNo || '--' }}</small>
+            <el-button text type="primary" @click="copyQrLink">复制扫码页链接</el-button>
+          </div>
+        </section>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
-import { EditPen, View } from '@element-plus/icons-vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import QRCode from 'qrcode'
 import { useRouter } from 'vue-router'
 import { createPlanOrder } from '../api/actions'
-import { saveOrderServiceDetail } from '../api/order'
 import { fetchOrders } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
-import { formatDateTime, formatMoney, formatOrderStatus, formatOrderType, formatPlanOrderStatus, normalize, statusTagType } from '../utils/format'
+import {
+  formatDateTime,
+  formatMoney,
+  formatOrderStatus,
+  formatVerificationStatus,
+  normalize,
+  statusTagType
+} from '../utils/format'
 
 const router = useRouter()
 const loading = ref(true)
 const orders = ref([])
 const pagination = useTablePagination(orders)
 const statusFilter = ref('')
-const serviceDrawerVisible = ref(false)
-const selectedOrder = ref(null)
-const savingServiceRequirement = ref(false)
-
-const serviceRequirementForm = reactive({
-  serviceRequirement: ''
+const customerNameKeyword = ref('')
+const customerPhoneKeyword = ref('')
+const qrDialogVisible = ref(false)
+const qrPreview = ref({
+  orderNo: '',
+  customerName: '',
+  customerPhone: '',
+  storeName: '',
+  url: '',
+  image: ''
 })
 
-const appointmentCount = computed(() => orders.value.filter((item) => normalize(item.status) === 'APPOINTMENT').length)
+const pendingVerificationCount = computed(
+  () => orders.value.filter((item) => normalize(item.verificationStatus || 'UNVERIFIED') !== 'VERIFIED').length
+)
 const completedCount = computed(() => orders.value.filter((item) => normalize(item.status) === 'COMPLETED').length)
-const selectedOrderReadOnly = computed(() => isCompletedOrder(selectedOrder.value))
 
 async function loadOrders() {
   loading.value = true
   try {
     orders.value = await fetchOrders({
-      status: statusFilter.value || undefined
+      status: statusFilter.value || undefined,
+      customerName: customerNameKeyword.value || undefined,
+      customerPhone: customerPhoneKeyword.value || undefined
     })
     pagination.reset()
   } catch {
@@ -205,68 +176,131 @@ async function loadOrders() {
   }
 }
 
-function openServiceDrawer(row) {
-  selectedOrder.value = { ...row }
-  serviceRequirementForm.serviceRequirement = row.remark || ''
-  serviceDrawerVisible.value = true
+async function ensurePlanOrder(row) {
+  if (row.planOrderId) {
+    return row.planOrderId
+  }
+  if (!canCreatePlanOrder(row)) {
+    throw new Error('当前订单状态暂不支持创建服务单')
+  }
+  const planOrder = await createPlanOrder({ orderId: row.id })
+  await loadOrders()
+  ElMessage.success('服务单已创建')
+  return planOrder.id
 }
 
-async function saveCurrentOrderDetail() {
-  if (!selectedOrder.value?.id || selectedOrderReadOnly.value) {
+async function openServiceForm(row) {
+  if (!canOpenServiceForm(row)) {
+    ElMessage.warning(serviceButtonLabel(row))
     return
   }
-  savingServiceRequirement.value = true
-  try {
-    await saveOrderServiceDetail({
-      orderId: selectedOrder.value.id,
-      serviceRequirement: serviceRequirementForm.serviceRequirement || ''
+  const planOrderId = await ensurePlanOrder(row)
+  if (row.serviceDetailJson) {
+    await router.push({
+      path: `/plan-orders/${planOrderId}`,
+      query: {
+        mode: 'view'
+      }
     })
-    ElMessage.success('确认单已保存')
-    selectedOrder.value.remark = serviceRequirementForm.serviceRequirement || ''
-    await loadOrders()
-  } finally {
-    savingServiceRequirement.value = false
-  }
-}
-
-async function enterService(row) {
-  let planOrderId = row.planOrderId
-  if (!planOrderId) {
-    if (row.statusCategory !== 'paid') {
-      ElMessage.warning('只有已支付链路中的订单才能创建服务单')
-      return
-    }
-    const planOrder = await createPlanOrder({ orderId: row.id })
-    planOrderId = planOrder.id
-    ElMessage.success('服务单已创建')
-    await loadOrders()
+    return
   }
   await router.push(`/plan-orders/${planOrderId}`)
 }
 
-function isCompletedOrder(row) {
-  const status = normalize(row?.status)
-  return ['COMPLETED', 'USED', 'FINISHED'].includes(status)
-}
-
-function confirmationButtonLabel(row) {
-  return isCompletedOrder(row) ? '查看确认单' : '确认单'
-}
-
-function confirmationSummary(row) {
-  return row?.remark || '未填写'
-}
-
-function confirmationTriggerTitle(row) {
-  return confirmationButtonLabel(row)
-}
-
-function serviceButtonLabel(row, inDrawer = false) {
-  if (row?.planOrderId) {
-    return isCompletedOrder(row) ? '查看服务单' : '打开服务单'
+async function openQrDialog(row) {
+  if (!row.planOrderId) {
+    ElMessage.warning('请先打开服务单，创建后再生成扫码页')
+    return
   }
-  return inDrawer ? '创建并进入服务单' : '创建服务单'
+  const planOrderId = row.planOrderId
+  const url = `${window.location.origin}/service-scan/${planOrderId}`
+  qrPreview.value = {
+    orderNo: row.orderNo,
+    customerName: row.customerName,
+    customerPhone: row.customerPhone,
+    storeName: row.storeName,
+    url,
+    image: await QRCode.toDataURL(url, { margin: 1, width: 240 })
+  }
+  qrDialogVisible.value = true
+}
+
+function serviceButtonLabel(row) {
+  if (!canOpenServiceForm(row)) {
+    if (isAwaitingPayment(row)) {
+      return '待付款'
+    }
+    if (!row.planOrderId) {
+      return '无服务单'
+    }
+    return '暂不可用'
+  }
+  if (normalize(row.verificationStatus || 'UNVERIFIED') !== 'VERIFIED') {
+    return '去核验'
+  }
+  if (row.serviceDetailJson) {
+    return '查看服务单'
+  }
+  return '填写服务单'
+}
+
+function canOpenServiceForm(row) {
+  return Boolean(row?.planOrderId) || canCreatePlanOrder(row)
+}
+
+function canCreatePlanOrder(row) {
+  const normalizedStatus = normalize(row?.status)
+  return ['PAID', 'PAID_DEPOSIT', 'APPOINTMENT', 'ARRIVED', 'SERVING', 'SERVICING'].includes(normalizedStatus)
+}
+
+function isAwaitingPayment(row) {
+  return normalize(row?.status) === 'CREATED'
+}
+
+async function copyQrLink() {
+  if (!qrPreview.value.url) {
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(qrPreview.value.url)
+    ElMessage.success('链接已复制')
+  } catch {
+    ElMessage.warning('当前环境不支持自动复制')
+  }
 }
 
 onMounted(loadOrders)
 </script>
+
+<style scoped>
+.qr-panel {
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+}
+
+.qr-panel__code {
+  padding: 12px;
+  border-radius: 20px;
+  background: #f6f8fa;
+}
+
+.qr-panel__code img {
+  display: block;
+  width: 240px;
+  height: 240px;
+}
+
+.qr-panel__meta {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  text-align: center;
+  color: #69788a;
+  word-break: break-all;
+}
+
+.qr-panel__meta small {
+  color: #94a3b8;
+}
+</style>

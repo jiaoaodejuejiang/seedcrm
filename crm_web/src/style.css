@@ -1418,6 +1418,26 @@ body {
   background: transparent;
 }
 
+.admin-shell.app-shell--standalone {
+  grid-template-rows: 1fr;
+}
+
+.admin-shell .shell-body--standalone {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 24px;
+}
+
+.admin-shell .main-panel--standalone {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+}
+
+.admin-shell .page-body--standalone {
+  margin-top: 0;
+  display: block;
+  width: 100%;
+}
+
 .admin-shell .shell-topbar {
   grid-template-columns: minmax(164px, 196px) minmax(0, 1fr) auto;
   gap: 12px;
@@ -1551,6 +1571,17 @@ body {
   grid-template-columns: 224px minmax(0, 1fr);
   gap: 14px;
   padding: 14px 16px 16px;
+}
+
+.admin-shell .shell-body.shell-body--standalone {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 24px;
+}
+
+.admin-shell .main-panel.main-panel--standalone {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
 }
 
 .admin-shell .side-nav {
@@ -1874,6 +1905,10 @@ body {
   .admin-shell .shell-topbar,
   .admin-shell .shell-body,
   .admin-login-shell {
+    padding: 16px;
+  }
+
+  .admin-shell .shell-body--standalone {
     padding: 16px;
   }
 

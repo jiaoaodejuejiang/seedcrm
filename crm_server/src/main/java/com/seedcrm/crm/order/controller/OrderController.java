@@ -7,6 +7,7 @@ import com.seedcrm.crm.order.dto.OrderCreateDTO;
 import com.seedcrm.crm.order.dto.OrderPayDTO;
 import com.seedcrm.crm.order.dto.OrderResponse;
 import com.seedcrm.crm.order.dto.OrderServiceDetailDTO;
+import com.seedcrm.crm.order.dto.OrderVoucherVerifyDTO;
 import com.seedcrm.crm.order.service.OrderService;
 import com.seedcrm.crm.permission.support.OrderPermissionGuard;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
@@ -95,6 +96,14 @@ public class OrderController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         orderPermissionGuard.checkUpdate(context, orderActionDTO == null ? null : orderActionDTO.getOrderId());
         return ApiResponse.success(OrderResponse.from(orderService.refund(orderActionDTO)));
+    }
+
+    @PostMapping("/verify")
+    public ApiResponse<OrderResponse> verify(@RequestBody OrderVoucherVerifyDTO orderVoucherVerifyDTO,
+                                             HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        orderPermissionGuard.checkUpdate(context, orderVoucherVerifyDTO == null ? null : orderVoucherVerifyDTO.getOrderId());
+        return ApiResponse.success(OrderResponse.from(orderService.verifyVoucher(orderVoucherVerifyDTO, context.getCurrentUserId())));
     }
 
     @PostMapping("/service-detail")

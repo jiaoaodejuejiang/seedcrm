@@ -15,7 +15,7 @@ export function formatDateTime(value) {
     return '--'
   }
 
-  const date = new Date(value)
+  const date = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(date.getTime())) {
     return value
   }
@@ -53,9 +53,9 @@ export function formatOrderType(value) {
   return (
     {
       1: '定金',
-      2: '卡券',
+      2: '团购券',
       DEPOSIT: '定金',
-      COUPON: '卡券'
+      COUPON: '团购券'
     }[normalized] || value || '--'
   )
 }
@@ -64,12 +64,13 @@ export function formatOrderStatus(status) {
   const normalized = normalize(status)
   return (
     {
-      CREATED: '待支付',
-      PAID: '已支付',
-      PAID_DEPOSIT: '已支付',
+      CREATED: '待付款',
+      PAID: '已付款',
+      PAID_DEPOSIT: '已付款',
       APPOINTMENT: '已预约',
       ARRIVED: '已到店',
       SERVING: '服务中',
+      SERVICING: '服务中',
       USED: '已完成',
       COMPLETED: '已完成',
       FINISHED: '已完成',
@@ -77,13 +78,15 @@ export function formatOrderStatus(status) {
       REFUNDED: '已退款',
       APPROVED: '已通过',
       PENDING: '待处理',
+      INIT: '待确认',
       CONFIRMED: '已确认',
       PAID_OUT: '已打款',
       DRAFT: '草稿',
       ENABLED: '启用',
       DISABLED: '停用',
       SUCCESS: '成功',
-      FAIL: '失败'
+      FAIL: '失败',
+      FAILED: '失败'
     }[normalized] || status || '--'
   )
 }
@@ -93,7 +96,7 @@ export function formatOrderStage(status) {
   if (!normalized) {
     return '--'
   }
-  if (['CREATED', 'PAID', 'PAID_DEPOSIT', 'APPOINTMENT', 'ARRIVED', 'SERVING'].includes(normalized)) {
+  if (['CREATED', 'PAID', 'PAID_DEPOSIT', 'APPOINTMENT', 'ARRIVED', 'SERVING', 'SERVICING'].includes(normalized)) {
     return '进行中'
   }
   if (['USED', 'COMPLETED', 'FINISHED'].includes(normalized)) {
@@ -236,11 +239,39 @@ export function formatRoleCode(value) {
       ONLINE_CUSTOMER_SERVICE: '在线客服',
       CLUE_MANAGER: '客资主管',
       STORE_SERVICE: '门店服务',
+      STORE_MANAGER: '店长',
+      PHOTOGRAPHER: '摄影',
+      MAKEUP_ARTIST: '化妆师',
+      PHOTO_SELECTOR: '选片负责人',
       FINANCE: '财务',
-      PRIVATE_DOMAIN_SERVICE: '私域服务',
+      PRIVATE_DOMAIN_SERVICE: '私域客服',
+      NORMAL_CS: '普通客服',
+      SENIOR_CS: '资深客服',
+      LEADER: '组长',
       CONSULTANT: '顾问',
       DOCTOR: '医生',
       ASSISTANT: '助理'
+    }[normalized] || value || '--'
+  )
+}
+
+export function formatVerificationStatus(value) {
+  const normalized = normalize(value)
+  return (
+    {
+      VERIFIED: '已完成核验',
+      UNVERIFIED: '待核验'
+    }[normalized] || value || '--'
+  )
+}
+
+export function formatSettlementMode(value) {
+  const normalized = normalize(value)
+  return (
+    {
+      WITHDRAW_AUDIT: '提现审核',
+      WITHDRAW_DIRECT: '提现不审核',
+      LEDGER_ONLY: '只记账'
     }[normalized] || value || '--'
   )
 }
@@ -307,6 +338,9 @@ export function statusTagType(value) {
       QUEUED: 'warning',
       RUNNING: 'primary',
       APPROVED: 'success',
+      VERIFIED: 'success',
+      UNVERIFIED: 'warning',
+      INIT: 'warning',
       PENDING: 'warning',
       CONFIRMED: 'primary',
       PAID_OUT: 'success',

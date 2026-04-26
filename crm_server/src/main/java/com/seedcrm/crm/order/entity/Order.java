@@ -58,6 +58,25 @@ public class Order {
     @TableField("remark")
     private String remark;
 
+    @TableField("service_detail_json")
+    private String serviceDetailJson;
+
+    @TableField("verification_status")
+    private String verificationStatus;
+
+    @TableField("verification_method")
+    private String verificationMethod;
+
+    @TableField("verification_code")
+    private String verificationCode;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("verification_time")
+    private LocalDateTime verificationTime;
+
+    @TableField("verification_operator_id")
+    private Long verificationOperatorId;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("create_time")
     private LocalDateTime createTime;

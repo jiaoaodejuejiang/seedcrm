@@ -45,8 +45,7 @@ public enum OrderStatus {
         return this == PAID_DEPOSIT
                 || this == APPOINTMENT
                 || this == ARRIVED
-                || this == SERVING
-                || this == COMPLETED;
+                || this == SERVING;
     }
 
     public static String toApiValue(String status) {

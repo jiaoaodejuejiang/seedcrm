@@ -34,8 +34,12 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     private static final String MODE_LIVE = "LIVE";
     private static final String PROVIDER_DOUYIN = "DOUYIN_LAIKE";
     private static final String AUTH_TYPE_AUTH_CODE = "AUTH_CODE";
-    private static final String DOUYIN_TOKEN_URL = "https://api.oceanengine.com/open_api/oauth2/access_token/";
-    private static final String DOUYIN_REFRESH_TOKEN_URL = "https://api.oceanengine.com/open_api/oauth2/refresh_token/";
+    private static final String DOUYIN_TOKEN_URL = "https://open.douyin.com/oauth/access_token/";
+    private static final String DOUYIN_REFRESH_TOKEN_URL = "https://open.douyin.com/oauth/refresh_token/";
+    private static final String DOUYIN_DEFAULT_VOUCHER_PREPARE_PATH = "/goodlife/v1/fulfilment/certificate/prepare/";
+    private static final String DOUYIN_DEFAULT_VOUCHER_VERIFY_PATH = "/goodlife/v1/fulfilment/certificate/verify/";
+    private static final String DOUYIN_DEFAULT_VOUCHER_CANCEL_PATH = "/goodlife/v1/fulfilment/certificate/cancel/";
+    private static final String DOUYIN_DEFAULT_VERIFY_CODE_FIELD = "encrypted_codes";
 
     private final IntegrationProviderConfigMapper providerConfigMapper;
     private final IntegrationCallbackConfigMapper callbackConfigMapper;
@@ -99,13 +103,13 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         IntegrationProviderConfig working = mergeProvider(config);
         if (MODE_MOCK.equals(working.getExecutionMode())) {
             working.setLastTestStatus("SUCCESS");
-            working.setLastTestMessage("当前为 MOCK 模式，可直接用于联调与调度测试");
+            working.setLastTestMessage("当前为 MOCK 模式，可直接保存后继续联调与测试");
             working.setLastTestAt(LocalDateTime.now());
             updateProviderTestStateIfPersisted(working);
             return maskProvider(working);
         }
         if (!StringUtils.hasText(working.getBaseUrl())) {
-            throw new BusinessException("LIVE 模式必须配置 baseUrl");
+            throw new BusinessException("LIVE 模式下必须填写 baseUrl");
         }
         assertHttps(working.getBaseUrl(), "baseUrl");
         if (PROVIDER_DOUYIN.equals(working.getProviderCode())) {
@@ -117,7 +121,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             return maskProvider(working);
         }
         working.setLastTestStatus("SUCCESS");
-        working.setLastTestMessage("配置校验通过，当前未配置专属探测逻辑");
+        working.setLastTestMessage("配置校验通过，当前未配置专用探测逻辑");
         working.setLastTestAt(LocalDateTime.now());
         updateProviderTestStateIfPersisted(working);
         return maskProvider(working);
@@ -224,9 +228,9 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         String callbackMessage = StringUtils.hasText(errorMessage)
                 ? errorMessage
                 : !trustedCallback && MODE_LIVE.equals(provider == null ? null : provider.getExecutionMode())
-                ? "已收到回调，但未完成验签，仅记录审计日志"
+                ? "收到回调请求但未通过签名校验，已记录日志"
                 : StringUtils.hasText(authCode)
-                ? "已接收授权码回调"
+                ? "已接收授权回调"
                 : "已接收回调请求";
         String callbackPayload = buildCallbackPayload(normalizedParameters, payload);
         if (provider != null) {
@@ -243,7 +247,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
                     if (PROVIDER_DOUYIN.equals(normalizedProviderCode)) {
                         resolveDouyinAccessToken(provider);
                         if (StringUtils.hasText(authCode)) {
-                            callbackMessage = "已接收 auth_code 并完成 access_token 换取";
+                            callbackMessage = "已将 auth_code 换取为 access_token";
                         }
                     }
                 } catch (BusinessException exception) {
@@ -351,6 +355,9 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             working.setBaseUrl(existing.getBaseUrl());
             working.setTokenUrl(existing.getTokenUrl());
             working.setEndpointPath(existing.getEndpointPath());
+            working.setVoucherPreparePath(existing.getVoucherPreparePath());
+            working.setVoucherVerifyPath(existing.getVoucherVerifyPath());
+            working.setVoucherCancelPath(existing.getVoucherCancelPath());
             working.setClientKey(existing.getClientKey());
             working.setClientSecret(existing.getClientSecret());
             working.setRedirectUri(existing.getRedirectUri());
@@ -366,6 +373,8 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             working.setLifeAccountIds(existing.getLifeAccountIds());
             working.setLocalAccountIds(existing.getLocalAccountIds());
             working.setOpenId(existing.getOpenId());
+            working.setPoiId(existing.getPoiId());
+            working.setVerifyCodeField(existing.getVerifyCodeField());
             working.setPageSize(existing.getPageSize());
             working.setPullWindowMinutes(existing.getPullWindowMinutes());
             working.setOverlapMinutes(existing.getOverlapMinutes());
@@ -422,13 +431,25 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         target.setProviderName(source.getProviderName().trim());
         target.setModuleCode(normalize(source.getModuleCode()));
         target.setExecutionMode(normalizeExecutionMode(source.getExecutionMode()));
-        target.setAuthType(StringUtils.hasText(source.getAuthType())
-                ? source.getAuthType().trim()
-                : PROVIDER_DOUYIN.equals(normalize(source.getProviderCode())) ? AUTH_TYPE_AUTH_CODE : "CLIENT_TOKEN");
+        target.setAuthType(PROVIDER_DOUYIN.equals(normalize(source.getProviderCode()))
+                ? AUTH_TYPE_AUTH_CODE
+                : StringUtils.hasText(source.getAuthType()) ? source.getAuthType().trim() : "CLIENT_TOKEN");
         target.setAppId(trimToNull(source.getAppId()));
         target.setBaseUrl(trimToNull(source.getBaseUrl()));
         target.setTokenUrl(trimToNull(source.getTokenUrl()));
         target.setEndpointPath(trimToNull(source.getEndpointPath()));
+        target.setVoucherPreparePath(resolveDouyinPathConfig(
+                source.getVoucherPreparePath(),
+                existing == null ? null : existing.getVoucherPreparePath(),
+                DOUYIN_DEFAULT_VOUCHER_PREPARE_PATH));
+        target.setVoucherVerifyPath(resolveDouyinPathConfig(
+                source.getVoucherVerifyPath(),
+                existing == null ? null : existing.getVoucherVerifyPath(),
+                DOUYIN_DEFAULT_VOUCHER_VERIFY_PATH));
+        target.setVoucherCancelPath(resolveDouyinPathConfig(
+                source.getVoucherCancelPath(),
+                existing == null ? null : existing.getVoucherCancelPath(),
+                DOUYIN_DEFAULT_VOUCHER_CANCEL_PATH));
         target.setClientKey(trimToNull(source.getClientKey()));
         target.setClientSecret(resolveSensitiveValue(source.getClientSecret(), existing == null ? null : existing.getClientSecret()));
         target.setRedirectUri(trimToNull(source.getRedirectUri()));
@@ -446,6 +467,10 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         target.setLifeAccountIds(trimToNull(source.getLifeAccountIds()));
         target.setLocalAccountIds(trimToNull(source.getLocalAccountIds()));
         target.setOpenId(trimToNull(source.getOpenId()));
+        target.setPoiId(resolveOptionalConfigValue(source.getPoiId(), existing == null ? null : existing.getPoiId()));
+        target.setVerifyCodeField(resolveOptionalConfigValue(
+                firstNonBlank(source.getVerifyCodeField(), DOUYIN_DEFAULT_VERIFY_CODE_FIELD),
+                existing == null ? null : existing.getVerifyCodeField()));
         target.setPageSize(source.getPageSize() == null || source.getPageSize() <= 0 ? 20 : source.getPageSize());
         target.setPullWindowMinutes(source.getPullWindowMinutes() == null || source.getPullWindowMinutes() <= 0 ? 60 : source.getPullWindowMinutes());
         target.setOverlapMinutes(source.getOverlapMinutes() == null || source.getOverlapMinutes() < 0 ? 10 : source.getOverlapMinutes());
@@ -456,6 +481,14 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         if (!StringUtils.hasText(target.getAuthStatus())) {
             target.setAuthStatus(MODE_MOCK.equals(target.getExecutionMode()) ? "MOCK" : "UNAUTHORIZED");
         }
+    }
+
+    private String resolveDouyinPathConfig(String incoming, String existing, String defaultValue) {
+        return firstNonBlank(trimToNull(incoming), trimToNull(existing), defaultValue);
+    }
+
+    private String resolveOptionalConfigValue(String incoming, String existing) {
+        return firstNonBlank(trimToNull(incoming), trimToNull(existing));
     }
 
     private void applyCallback(IntegrationCallbackConfig target,
@@ -548,7 +581,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         if (StringUtils.hasText(config.getAuthCode())) {
             return exchangeDouyinAuthCode(config);
         }
-        throw new BusinessException("抖音来客 LIVE 模式必须先完成 auth_code 授权");
+        throw new BusinessException("当前为 LIVE 模式，请先完成 auth_code 授权");
     }
 
     private String exchangeDouyinAuthCode(IntegrationProviderConfig config) {
@@ -565,7 +598,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
                         "auth_code", config.getAuthCode().trim()))
                 .retrieve()
                 .body(JsonNode.class);
-        return applyDouyinTokenResponse(config, response, "换取 access_token 失败", "EXCHANGED");
+        return applyDouyinTokenResponse(config, response, "获取 access_token 失败", "EXCHANGED");
     }
 
     private String refreshDouyinAccessToken(IntegrationProviderConfig config) {
@@ -619,7 +652,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     private String resolveDouyinAppId(IntegrationProviderConfig config) {
         String appId = firstNonBlank(config.getAppId(), config.getClientKey());
         if (!StringUtils.hasText(appId)) {
-            throw new BusinessException("抖音来客必须配置 appId");
+            throw new BusinessException("抖音来客配置必须填写 appId");
         }
         return appId.trim();
     }
@@ -627,7 +660,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     private String resolveDouyinSecret(IntegrationProviderConfig config) {
         String secret = config.getClientSecret();
         if (!StringUtils.hasText(secret)) {
-            throw new BusinessException("抖音来客必须配置应用 Secret");
+            throw new BusinessException("抖音来客配置必须填写应用 Secret");
         }
         return secret.trim();
     }

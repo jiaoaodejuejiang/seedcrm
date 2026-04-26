@@ -126,6 +126,17 @@ public class WithdrawServiceImpl implements WithdrawService {
         }
     }
 
+    @Override
+    public List<WithdrawRecord> listWithdraws(Long userId) {
+        LambdaQueryWrapper<WithdrawRecord> wrapper = new LambdaQueryWrapper<WithdrawRecord>()
+                .orderByDesc(WithdrawRecord::getCreateTime)
+                .orderByDesc(WithdrawRecord::getId);
+        if (userId != null && userId > 0) {
+            wrapper.eq(WithdrawRecord::getUserId, userId);
+        }
+        return withdrawRecordMapper.selectList(wrapper);
+    }
+
     private void ensureStatusTransition(WithdrawStatus currentStatus, WithdrawStatus targetStatus) {
         if (currentStatus == targetStatus) {
             return;

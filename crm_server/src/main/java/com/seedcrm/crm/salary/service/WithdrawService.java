@@ -4,6 +4,7 @@ import com.seedcrm.crm.salary.dto.WithdrawCreateRequest;
 import com.seedcrm.crm.salary.entity.WithdrawRecord;
 import com.seedcrm.crm.salary.enums.WithdrawStatus;
 import java.math.BigDecimal;
+import java.util.List;
 
 public interface WithdrawService {
 
@@ -12,4 +13,6 @@ public interface WithdrawService {
     WithdrawRecord createWithdraw(WithdrawCreateRequest request);
 
     WithdrawRecord approveWithdraw(Long withdrawId, WithdrawStatus targetStatus);
+
+    List<WithdrawRecord> listWithdraws(Long userId);
 }

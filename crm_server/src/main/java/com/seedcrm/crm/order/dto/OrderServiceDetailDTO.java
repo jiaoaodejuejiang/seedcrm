@@ -7,4 +7,5 @@ public class OrderServiceDetailDTO {
 
     private Long orderId;
     private String serviceRequirement;
+    private String serviceDetailJson;
 }

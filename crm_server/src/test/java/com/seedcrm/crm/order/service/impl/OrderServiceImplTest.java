@@ -21,6 +21,7 @@ import com.seedcrm.crm.order.dto.OrderAppointmentDTO;
 import com.seedcrm.crm.order.dto.OrderCreateDTO;
 import com.seedcrm.crm.order.dto.OrderPayDTO;
 import com.seedcrm.crm.order.dto.OrderServiceDetailDTO;
+import com.seedcrm.crm.order.dto.OrderVoucherVerifyDTO;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
@@ -299,17 +300,39 @@ class OrderServiceImplTest {
         order.setId(6L);
         order.setCustomerId(206L);
         order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setVerificationStatus("VERIFIED");
         when(orderMapper.selectById(6L)).thenReturn(order);
         when(customerService.getByIdOrThrow(206L)).thenReturn(new Customer());
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
 
         OrderServiceDetailDTO dto = new OrderServiceDetailDTO();
         dto.setOrderId(6L);
-        dto.setServiceRequirement("客户到店后先做面诊，再确认套餐细项");
+        dto.setServiceRequirement("customer must complete consult before package confirmation");
+        dto.setServiceDetailJson("{\"serviceRequirement\":\"customer must complete consult before package confirmation\"}");
 
         Order updated = orderService.updateServiceDetail(dto);
 
-        assertThat(updated.getRemark()).isEqualTo("客户到店后先做面诊，再确认套餐细项");
+        assertThat(updated.getRemark()).isEqualTo("customer must complete consult before package confirmation");
+        assertThat(updated.getServiceDetailJson()).isEqualTo("{\"serviceRequirement\":\"customer must complete consult before package confirmation\"}");
         verify(customerService).refreshCustomerLifecycle(206L);
+    }
+
+    @Test
+    void verifyVoucherShouldRejectCompletedOrder() {
+        Order order = new Order();
+        order.setId(8L);
+        order.setCustomerId(208L);
+        order.setStatus(OrderStatus.COMPLETED.name());
+        when(orderMapper.selectById(8L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(208L)).thenReturn(new Customer());
+
+        OrderVoucherVerifyDTO dto = new OrderVoucherVerifyDTO();
+        dto.setOrderId(8L);
+        dto.setVerificationCode("DONE-8801");
+        dto.setVerificationMethod("CODE");
+
+        assertThatThrownBy(() -> orderService.verifyVoucher(dto, 9001L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("only paid orders can be verified");
     }
 }

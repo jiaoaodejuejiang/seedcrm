@@ -6,6 +6,7 @@ import com.seedcrm.crm.order.dto.OrderAppointmentDTO;
 import com.seedcrm.crm.order.dto.OrderCreateDTO;
 import com.seedcrm.crm.order.dto.OrderPayDTO;
 import com.seedcrm.crm.order.dto.OrderServiceDetailDTO;
+import com.seedcrm.crm.order.dto.OrderVoucherVerifyDTO;
 import com.seedcrm.crm.order.entity.Order;
 
 public interface OrderService extends IService<Order> {
@@ -27,6 +28,8 @@ public interface OrderService extends IService<Order> {
     Order cancel(OrderActionDTO orderActionDTO);
 
     Order refund(OrderActionDTO orderActionDTO);
+
+    Order verifyVoucher(OrderVoucherVerifyDTO orderVoucherVerifyDTO, Long operatorUserId);
 
     Order updateServiceDetail(OrderServiceDetailDTO orderServiceDetailDTO);
 }

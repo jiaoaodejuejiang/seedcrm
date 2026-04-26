@@ -1,6 +1,6 @@
 <template>
-  <div class="app-shell admin-shell">
-    <header class="shell-topbar">
+  <div class="app-shell admin-shell" :class="{ 'app-shell--standalone': standalonePage }">
+    <header v-if="!standalonePage" class="shell-topbar">
       <div class="shell-topbar__brand">
         <div class="brand-mark">CRM</div>
         <div class="brand-copy">
@@ -41,8 +41,8 @@
       </div>
     </header>
 
-    <div class="shell-body">
-      <aside v-if="activeGroup" class="side-nav">
+    <div class="shell-body" :class="{ 'shell-body--standalone': standalonePage }">
+      <aside v-if="activeGroup && !standalonePage" class="side-nav">
         <div class="side-nav__hero">
           <div class="side-nav__hero-icon">
             <el-icon>
@@ -108,18 +108,17 @@
             </RouterLink>
           </section>
         </nav>
-
       </aside>
 
-      <main class="main-panel">
-        <section class="page-header">
+      <main class="main-panel" :class="{ 'main-panel--standalone': standalonePage }">
+        <section v-if="!standalonePage && !route.meta?.hidePageHeader" class="page-header">
           <div class="page-header__main">
             <p class="page-header__eyebrow">{{ route.meta.sectionTitle || activeGroup?.label || '系统模块' }}</p>
             <h2>{{ route.meta.title }}</h2>
           </div>
         </section>
 
-        <section class="page-body">
+        <section class="page-body" :class="{ 'page-body--standalone': standalonePage }">
           <router-view />
         </section>
       </main>
@@ -159,19 +158,19 @@ import {
 } from '@element-plus/icons-vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { currentUser, hasAccess, logout } from '../utils/auth'
-import { formatRoleCode, formatScope } from '../utils/format'
+import { formatRoleCode } from '../utils/format'
 
 const route = useRoute()
 const router = useRouter()
 
 const icon = (component) => markRaw(component)
+const storeRoleCodes = ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR', 'ADMIN']
 
 const navGroups = [
   {
     key: 'clue-center',
     label: '客资中心',
     icon: icon(House),
-    description: '统一查看客资、付款线索和排档进度。',
     sections: [
       {
         key: 'clue-center-main',
@@ -232,7 +231,6 @@ const navGroups = [
     key: 'store-service',
     label: '门店服务',
     icon: icon(Shop),
-    description: '围绕订单、确认单和服务履约完成门店服务。',
     items: [
       {
         key: 'store-service-orders',
@@ -240,8 +238,32 @@ const navGroups = [
         label: '订单列表',
         icon: icon(Van),
         moduleCode: 'ORDER',
-        roleCodes: ['STORE_SERVICE', 'ADMIN'],
+        roleCodes: storeRoleCodes,
         activePrefixes: ['/store-service/orders', '/orders', '/plan-orders', '/customers']
+      },
+      {
+        key: 'store-service-design',
+        to: '/store-service/service-design',
+        label: '服务单设计',
+        icon: icon(Picture),
+        moduleCode: 'PLANORDER',
+        roleCodes: ['STORE_MANAGER', 'ADMIN']
+      },
+      {
+        key: 'store-service-personnel',
+        to: '/store-service/personnel',
+        label: '人员管理',
+        icon: icon(User),
+        moduleCode: 'SYSTEM',
+        roleCodes: ['STORE_MANAGER', 'ADMIN']
+      },
+      {
+        key: 'store-service-roles',
+        to: '/store-service/roles',
+        label: '门店角色',
+        icon: icon(Key),
+        moduleCode: 'SYSTEM',
+        roleCodes: ['STORE_MANAGER', 'ADMIN']
       }
     ]
   },
@@ -249,7 +271,6 @@ const navGroups = [
     key: 'private-domain',
     label: '私域客服',
     icon: icon(ChatDotRound),
-    description: '统一管理企业微信触达、活码、画像和标签能力。',
     items: [
       {
         key: 'private-domain-wecom',
@@ -297,7 +318,6 @@ const navGroups = [
     key: 'finance',
     label: '财务管理',
     icon: icon(WalletFilled),
-    description: '查看财务看板、薪酬中心和薪酬配置。',
     sections: [
       {
         key: 'finance-dashboard',
@@ -310,14 +330,7 @@ const navGroups = [
             label: '财务看板',
             icon: icon(DataAnalysis),
             moduleCode: 'FINANCE'
-          }
-        ]
-      },
-      {
-        key: 'finance-salary',
-        label: '薪酬中心',
-        icon: icon(Money),
-        items: [
+          },
           {
             key: 'salary-center',
             to: '/finance/salary-center',
@@ -347,6 +360,14 @@ const navGroups = [
             icon: icon(Suitcase),
             moduleCode: 'SALARY',
             roleCodes: ['ADMIN']
+          },
+          {
+            key: 'salary-config-distributor',
+            to: '/finance/salary-config/distributor',
+            label: '分销配置',
+            icon: icon(Link),
+            moduleCode: 'SALARY',
+            roleCodes: ['ADMIN']
           }
         ]
       }
@@ -356,7 +377,6 @@ const navGroups = [
     key: 'system-management',
     label: '系统管理',
     icon: icon(Grid),
-    description: '维护组织架构、员工、岗位与角色关系。',
     items: [
       {
         key: 'system-departments',
@@ -396,7 +416,6 @@ const navGroups = [
     key: 'system-settings',
     label: '系统设置',
     icon: icon(SetUp),
-    description: '统一管理菜单、参数、字典和调度中心。',
     sections: [
       {
         key: 'system-setting-base',
@@ -424,6 +443,14 @@ const navGroups = [
             to: '/settings/parameters',
             label: '参数管理',
             icon: icon(SetUp),
+            moduleCode: 'SETTING',
+            roleCodes: ['ADMIN']
+          },
+          {
+            key: 'settings-payment',
+            to: '/settings/payment',
+            label: '支付设置',
+            icon: icon(WalletFilled),
             moduleCode: 'SETTING',
             roleCodes: ['ADMIN']
           }
@@ -501,7 +528,7 @@ const visibleGroups = computed(() =>
 
 const activeGroup = computed(() => visibleGroups.value.find((group) => groupHasActive(group)) || visibleGroups.value[0] || null)
 const currentRoleLabel = computed(() => formatRoleCode(currentUser.value?.roleCode))
-const currentScopeLabel = computed(() => formatScope(currentUser.value?.dataScope))
+const standalonePage = computed(() => Boolean(route.meta?.standalone) || String(route.query.scan || '') === '1')
 const breadcrumbItems = computed(() => {
   const parts = String(route.meta.sectionTitle || activeGroup.value?.label || '系统模块')
     .split(/\s*\/\s*/)

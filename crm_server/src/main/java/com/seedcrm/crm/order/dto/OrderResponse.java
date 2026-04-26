@@ -28,6 +28,13 @@ public class OrderResponse {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime completeTime;
     private String remark;
+    private String serviceDetailJson;
+    private String verificationStatus;
+    private String verificationMethod;
+    private String verificationCode;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime verificationTime;
+    private Long verificationOperatorId;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createTime;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -52,6 +59,12 @@ public class OrderResponse {
         response.setArriveTime(order.getArriveTime());
         response.setCompleteTime(order.getCompleteTime());
         response.setRemark(order.getRemark());
+        response.setServiceDetailJson(order.getServiceDetailJson());
+        response.setVerificationStatus(order.getVerificationStatus());
+        response.setVerificationMethod(order.getVerificationMethod());
+        response.setVerificationCode(order.getVerificationCode());
+        response.setVerificationTime(order.getVerificationTime());
+        response.setVerificationOperatorId(order.getVerificationOperatorId());
         response.setCreateTime(order.getCreateTime());
         response.setUpdateTime(order.getUpdateTime());
         return response;

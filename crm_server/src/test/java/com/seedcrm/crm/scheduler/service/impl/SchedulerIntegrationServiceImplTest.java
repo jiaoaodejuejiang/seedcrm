@@ -88,4 +88,47 @@ class SchedulerIntegrationServiceImplTest {
         assertThat(logCaptor.getValue().getAuthCode()).contains("****");
         assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("SUCCESS");
     }
+
+    @Test
+    void shouldPreserveVoucherConfigWhenLegacyUpdateOmitsNewFields() {
+        IntegrationProviderConfig existing = new IntegrationProviderConfig();
+        existing.setId(9L);
+        existing.setProviderCode("DOUYIN_LAIKE");
+        existing.setProviderName("抖音来客");
+        existing.setModuleCode("CLUE");
+        existing.setExecutionMode("LIVE");
+        existing.setVoucherPreparePath("/goodlife/v1/fulfilment/certificate/prepare/");
+        existing.setVoucherVerifyPath("/goodlife/v1/fulfilment/certificate/verify/");
+        existing.setVoucherCancelPath("/goodlife/v1/fulfilment/certificate/cancel/");
+        existing.setPoiId("poi-001");
+        existing.setVerifyCodeField("encrypted_codes");
+
+        IntegrationProviderConfig request = new IntegrationProviderConfig();
+        request.setProviderCode("DOUYIN_LAIKE");
+        request.setProviderName("抖音来客");
+        request.setModuleCode("CLUE");
+        request.setExecutionMode("LIVE");
+        request.setAppId("app-001");
+
+        when(providerConfigMapper.selectOne(any())).thenReturn(existing);
+        when(providerConfigMapper.updateById(any(IntegrationProviderConfig.class))).thenReturn(1);
+
+        IntegrationProviderConfig result = schedulerIntegrationService.saveProvider(request);
+
+        ArgumentCaptor<IntegrationProviderConfig> providerCaptor = ArgumentCaptor.forClass(IntegrationProviderConfig.class);
+        verify(providerConfigMapper).updateById(providerCaptor.capture());
+
+        IntegrationProviderConfig persisted = providerCaptor.getValue();
+        assertThat(persisted.getVoucherPreparePath()).isEqualTo(existing.getVoucherPreparePath());
+        assertThat(persisted.getVoucherVerifyPath()).isEqualTo(existing.getVoucherVerifyPath());
+        assertThat(persisted.getVoucherCancelPath()).isEqualTo(existing.getVoucherCancelPath());
+        assertThat(persisted.getPoiId()).isEqualTo(existing.getPoiId());
+        assertThat(persisted.getVerifyCodeField()).isEqualTo(existing.getVerifyCodeField());
+
+        assertThat(result.getVoucherPreparePath()).isEqualTo(existing.getVoucherPreparePath());
+        assertThat(result.getVoucherVerifyPath()).isEqualTo(existing.getVoucherVerifyPath());
+        assertThat(result.getVoucherCancelPath()).isEqualTo(existing.getVoucherCancelPath());
+        assertThat(result.getPoiId()).isEqualTo(existing.getPoiId());
+        assertThat(result.getVerifyCodeField()).isEqualTo(existing.getVerifyCodeField());
+    }
 }

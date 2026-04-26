@@ -56,6 +56,16 @@ public class SalaryController {
         return ApiResponse.success(withdrawService.getWithdrawableAmount(userId));
     }
 
+    @GetMapping("/settlements")
+    public ApiResponse<List<SalarySettlement>> settlements(@RequestParam(required = false) Long userId) {
+        return ApiResponse.success(settlementService.listSettlements(userId));
+    }
+
+    @GetMapping("/withdraws")
+    public ApiResponse<List<WithdrawRecord>> withdraws(@RequestParam(required = false) Long userId) {
+        return ApiResponse.success(withdrawService.listWithdraws(userId));
+    }
+
     @PostMapping("/recalculate")
     public ApiResponse<List<SalaryDetail>> recalculate(@RequestBody SalaryRecalculateRequest request) {
         return ApiResponse.success(salaryService.recalculateForPlanOrder(request == null ? null : request.getPlanOrderId()));

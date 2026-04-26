@@ -25,21 +25,60 @@
 
       <el-tabs v-model="activeTab" class="platform-tabs">
         <el-tab-pane label="概览" name="overview">
+          <div class="status-strip">
+            <div class="status-pill">
+              <span>运行模式</span>
+              <strong>{{ formatExecutionMode(provider.executionMode) }}</strong>
+            </div>
+            <div class="status-pill">
+              <span>授权方式</span>
+              <strong>{{ formatAuthType(provider.authType) }}</strong>
+            </div>
+            <div class="status-pill">
+              <span>授权状态</span>
+              <strong>{{ provider.authStatus || '未授权' }}</strong>
+            </div>
+            <div class="status-pill">
+              <span>任务状态</span>
+              <strong>{{ formatJobStatus(jobForm.status) }}</strong>
+            </div>
+          </div>
+
           <div class="overview-grid">
             <article class="detail-card">
-              <h3>授权状态</h3>
-              <p>Auth Code 状态：{{ provider.authCodeStatus || '--' }}</p>
-              <p>授权状态：{{ provider.authStatus || '--' }}</p>
+              <h3>授权信息</h3>
+              <p>AuthCode 状态：{{ provider.authCodeStatus || '--' }}</p>
               <p>Access Token：{{ provider.accessTokenMasked || '--' }}</p>
               <p>Refresh Token：{{ provider.refreshTokenMasked || '--' }}</p>
+              <p>到期时间：{{ formatDateTime(provider.tokenExpiresAt) || '--' }}</p>
+              <p>刷新到期：{{ formatDateTime(provider.refreshTokenExpiresAt) || '--' }}</p>
             </article>
 
             <article class="detail-card">
-              <h3>同步状态</h3>
+              <h3>同步与回调</h3>
               <p>最近测试：{{ provider.lastTestStatus || '--' }}</p>
               <p>最近回调：{{ provider.lastCallbackStatus || '--' }}</p>
               <p>最近同步：{{ formatDateTime(provider.lastSyncTime) || '--' }}</p>
               <p>下次执行：{{ formatDateTime(jobForm.nextRunTime) || '--' }}</p>
+              <p>队列名称：{{ jobForm.queueName || '--' }}</p>
+            </article>
+
+            <article class="detail-card">
+              <h3>线索拉取</h3>
+              <p>线索接口：{{ provider.endpointPath || '--' }}</p>
+              <p>本地账号：{{ provider.localAccountIds || '--' }}</p>
+              <p>来客账号：{{ provider.lifeAccountIds || '--' }}</p>
+              <p>拉取窗口：{{ provider.pullWindowMinutes || 0 }} 分钟</p>
+              <p>超时时间：{{ provider.requestTimeoutMs || 0 }} 毫秒</p>
+            </article>
+
+            <article class="detail-card">
+              <h3>券核销</h3>
+              <p>预查询接口：{{ provider.voucherPreparePath || '--' }}</p>
+              <p>核销接口：{{ provider.voucherVerifyPath || '--' }}</p>
+              <p>撤销接口：{{ provider.voucherCancelPath || '--' }}</p>
+              <p>默认 POI：{{ provider.poiId || '--' }}</p>
+              <p>券码字段：{{ provider.verifyCodeField || '--' }}</p>
             </article>
           </div>
 
@@ -50,7 +89,7 @@
               </template>
             </el-table-column>
             <el-table-column label="状态" width="120" prop="processStatus" />
-            <el-table-column label="可信度" width="140" prop="signatureStatus" />
+            <el-table-column label="验签" width="120" prop="signatureStatus" />
             <el-table-column label="事件" min-width="160" prop="eventType" />
             <el-table-column label="结果" min-width="220" prop="processMessage" />
           </el-table>
@@ -69,33 +108,48 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="API 接入" name="api">
+        <el-tab-pane label="接入配置" name="access">
           <div class="form-grid">
-            <div class="full-span form-group-title">基础接入</div>
+            <div class="full-span form-group-title">基础信息</div>
             <label>
-              <span>Provider Code</span>
+              <span>供应商编码</span>
               <el-input v-model="provider.providerCode" readonly />
             </label>
             <label>
-              <span>接口名称</span>
-              <el-input :model-value="provider.providerName" readonly />
+              <span>供应商名称</span>
+              <el-input v-model="provider.providerName" readonly />
+            </label>
+            <label>
+              <span>模块编码</span>
+              <el-input v-model="provider.moduleCode" readonly />
+            </label>
+            <label>
+              <span>启用状态</span>
+              <el-select v-model="provider.enabled">
+                <el-option :value="1" label="启用" />
+                <el-option :value="0" label="停用" />
+              </el-select>
             </label>
             <label>
               <span>运行模式</span>
               <el-select v-model="provider.executionMode">
-                <el-option label="MOCK" value="MOCK" />
-                <el-option label="LIVE" value="LIVE" />
+                <el-option label="模拟" value="MOCK" />
+                <el-option label="真实" value="LIVE" />
               </el-select>
             </label>
             <label>
-              <span>授权类型</span>
+              <span>授权方式</span>
               <el-input :model-value="formatAuthType(provider.authType)" readonly />
             </label>
             <label>
               <span>AppId</span>
-              <el-input v-model="provider.appId" placeholder="开放平台 app_id" />
+              <el-input v-model="provider.appId" placeholder="请输入抖音开放平台 AppId" />
             </label>
             <label>
+              <span>ClientKey</span>
+              <el-input v-model="provider.clientKey" placeholder="兼容旧配置时可补录" />
+            </label>
+            <label class="full-span">
               <span>应用 Secret</span>
               <el-input
                 v-model="provider.clientSecret"
@@ -104,113 +158,119 @@
                 :placeholder="provider.clientSecretMasked || '留空则保持原值'"
               />
             </label>
-            <label>
-              <span>Base URL</span>
-              <el-input v-model="provider.baseUrl" placeholder="https://api.oceanengine.com" />
-            </label>
-            <label>
-              <span>Token URL</span>
-              <el-input v-model="provider.tokenUrl" placeholder="https://api.oceanengine.com/open_api/oauth2/access_token/" />
-            </label>
-            <label class="full-span">
-              <span>拉取接口</span>
-              <el-input v-model="provider.endpointPath" placeholder="/open_api/2/tools/clue/life/get/" />
-            </label>
-          </div>
-        </el-tab-pane>
 
-        <el-tab-pane label="OAuth 回调" name="oauth">
-          <div class="form-grid">
-            <label class="full-span">
-              <span>固定回调入口</span>
-              <el-input :model-value="backendCallbackUrl" readonly />
+            <div class="full-span form-group-title">请求地址</div>
+            <label>
+              <span>基础域名</span>
+              <el-input v-model="provider.baseUrl" placeholder="例如 https://open.douyin.com" />
             </label>
-            <label class="full-span">
-              <span>Redirect URI</span>
-              <el-input v-model="provider.redirectUri" placeholder="开放平台授权回跳地址" />
+            <label>
+              <span>授权换 Token 地址</span>
+              <el-input v-model="provider.tokenUrl" placeholder="请输入 access_token 接口地址" />
             </label>
             <label class="full-span">
               <span>回调登记地址</span>
-              <el-input v-model="provider.callbackUrl" placeholder="用于页面展示和审计的回调地址" />
+              <el-input v-model="provider.callbackUrl" placeholder="保存当前配置在平台登记的回调地址" />
+            </label>
+            <label class="full-span">
+              <span>固定后端回调地址</span>
+              <el-input :model-value="backendCallbackUrl" readonly />
+            </label>
+            <label class="full-span">
+              <span>授权回跳地址</span>
+              <el-input v-model="provider.redirectUri" placeholder="请输入平台授权回跳地址" />
             </label>
             <label>
-              <span>Scope</span>
+              <span>授权范围</span>
               <el-input v-model="provider.scope" placeholder="可选" />
             </label>
             <label>
-              <span>AuthCode</span>
-              <el-input v-model="provider.authCode" :placeholder="provider.authCodeMasked || '回调后自动回填'" />
-            </label>
-            <label>
-              <span>AuthCode 状态</span>
-              <el-input :model-value="provider.authCodeStatus || '--'" readonly />
-            </label>
-            <label>
-              <span>Access Token</span>
-              <el-input :model-value="provider.accessTokenMasked || '--'" readonly />
-            </label>
-            <label>
-              <span>Refresh Token</span>
-              <el-input :model-value="provider.refreshTokenMasked || '--'" readonly />
-            </label>
-            <label>
-              <span>Token 到期</span>
-              <el-input :model-value="formatDateTime(provider.tokenExpiresAt) || '--'" readonly />
-            </label>
-            <label>
-              <span>Refresh 到期</span>
-              <el-input :model-value="formatDateTime(provider.refreshTokenExpiresAt) || '--'" readonly />
-            </label>
-            <label class="full-span">
-              <span>最近回调结果</span>
-              <el-input :model-value="provider.lastCallbackMessage || '--'" readonly />
+              <span>授权码</span>
+              <el-input v-model="provider.authCode" :placeholder="provider.authCodeMasked || '回调后自动回填，也可手动补录'" />
             </label>
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="同步任务" name="sync">
+        <el-tab-pane label="线索拉取" name="clue">
           <div class="form-grid">
+            <div class="full-span form-group-title">账号配置</div>
+            <label>
+              <span>平台账号 ID</span>
+              <el-input v-model="provider.accountId" placeholder="可按平台实际字段填写" />
+            </label>
+            <label>
+              <span>来客账号 ID</span>
+              <el-input v-model="provider.lifeAccountIds" placeholder="多个账号用英文逗号分隔" />
+            </label>
+            <label class="full-span">
+              <span>本地账号映射</span>
+              <el-input v-model="provider.localAccountIds" placeholder="多个账号用英文逗号分隔" />
+            </label>
+
             <div class="full-span form-group-title">拉取参数</div>
             <label class="full-span">
-              <span>Local Account Ids</span>
-              <el-input v-model="provider.localAccountIds" placeholder="多个以英文逗号分隔" />
+              <span>线索接口路径</span>
+              <el-input v-model="provider.endpointPath" placeholder="/goodlife/v1/clue/douyin/list/" />
             </label>
             <label>
-              <span>兼容 AccountId</span>
-              <el-input v-model="provider.accountId" placeholder="兼容旧字段，可留空" />
-            </label>
-            <label>
-              <span>兼容 Life AccountIds</span>
-              <el-input v-model="provider.lifeAccountIds" placeholder="兼容旧字段，可留空" />
-            </label>
-            <label>
-              <span>每页条数</span>
+              <span>每页数量</span>
               <el-input-number v-model="provider.pageSize" :min="1" :max="100" controls-position="right" />
             </label>
             <label>
-              <span>拉取窗口(分钟)</span>
-              <el-input-number v-model="provider.pullWindowMinutes" :min="10" controls-position="right" />
+              <span>拉取窗口（分钟）</span>
+              <el-input-number v-model="provider.pullWindowMinutes" :min="1" controls-position="right" />
             </label>
             <label>
-              <span>重叠窗口(分钟)</span>
+              <span>重叠窗口（分钟）</span>
               <el-input-number v-model="provider.overlapMinutes" :min="0" controls-position="right" />
             </label>
             <label>
-              <span>超时(毫秒)</span>
+              <span>超时时间（毫秒）</span>
               <el-input-number v-model="provider.requestTimeoutMs" :min="1000" :step="1000" controls-position="right" />
             </label>
+          </div>
+        </el-tab-pane>
 
-            <div class="full-span form-group-title">调度任务</div>
+        <el-tab-pane label="券核销" name="voucher">
+          <div class="form-grid">
+            <div class="full-span form-group-title">接口路径</div>
+            <label class="full-span">
+              <span>核销预查询路径</span>
+              <el-input v-model="provider.voucherPreparePath" placeholder="/goodlife/v1/fulfilment/certificate/prepare/" />
+            </label>
+            <label class="full-span">
+              <span>核销提交路径</span>
+              <el-input v-model="provider.voucherVerifyPath" placeholder="/goodlife/v1/fulfilment/certificate/verify/" />
+            </label>
+            <label class="full-span">
+              <span>核销撤销路径</span>
+              <el-input v-model="provider.voucherCancelPath" placeholder="/goodlife/v1/fulfilment/certificate/cancel/" />
+            </label>
+
+            <div class="full-span form-group-title">门店参数</div>
             <label>
-              <span>JobCode</span>
+              <span>默认 POI ID</span>
+              <el-input v-model="provider.poiId" placeholder="按门店或接口要求填写" />
+            </label>
+            <label>
+              <span>券码字段名</span>
+              <el-input v-model="provider.verifyCodeField" placeholder="例如 encrypted_codes" />
+            </label>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="任务调度" name="job">
+          <div class="form-grid">
+            <label>
+              <span>任务编码</span>
               <el-input v-model="jobForm.jobCode" readonly />
             </label>
             <label>
-              <span>同步模式</span>
+              <span>同步方式</span>
               <el-input v-model="jobForm.syncMode" readonly />
             </label>
             <label>
-              <span>间隔(分钟)</span>
+              <span>执行间隔（分钟）</span>
               <el-input-number v-model="jobForm.intervalMinutes" :min="1" controls-position="right" />
             </label>
             <label>
@@ -218,20 +278,20 @@
               <el-input-number v-model="jobForm.retryLimit" :min="0" controls-position="right" />
             </label>
             <label>
-              <span>队列名</span>
-              <el-input v-model="jobForm.queueName" />
+              <span>队列名称</span>
+              <el-input v-model="jobForm.queueName" placeholder="请输入队列名称" />
             </label>
             <label>
-              <span>状态</span>
+              <span>任务状态</span>
               <el-select v-model="jobForm.status">
-                <el-option label="ENABLED" value="ENABLED" />
-                <el-option label="DISABLED" value="DISABLED" />
+                <el-option label="启用" value="ENABLED" />
+                <el-option label="停用" value="DISABLED" />
               </el-select>
             </label>
           </div>
 
           <div class="action-group action-group--section">
-            <el-button type="primary" :loading="savingJob" @click="handleSaveJob">保存任务</el-button>
+            <el-button type="primary" :loading="savingJob" @click="handleSaveJob">保存调度</el-button>
             <el-button :loading="triggering" @click="handleTrigger">立即执行</el-button>
           </div>
         </el-tab-pane>
@@ -284,41 +344,41 @@ const verificationWarning = computed(() => {
     return ''
   }
   if (latest.signatureStatus === 'NOT_VERIFIED' || latest.signatureStatus === 'LOCAL_BYPASS') {
-    return '当前回调可信度仍是本地放行/未验证，请在正式环境完成平台侧回调校验后再作为正式接入。'
+    return '当前真实模式仍在本地回调或跳过验签状态，正式接入前请确认平台侧验签与公网回调。'
   }
   return ''
 })
 
 const overviewCards = computed(() => [
   {
-    label: '接入模式',
-    value: formatAuthType(provider.authType),
+    label: '运行模式',
+    value: formatExecutionMode(provider.executionMode),
     hint: provider.enabled === 1 ? '当前已启用' : '当前已停用'
   },
   {
-    label: '后端模式',
-    value: provider.executionMode || 'MOCK',
-    hint: provider.providerCode || DOUYIN_CODE
-  },
-  {
     label: '授权状态',
-    value: provider.authStatus || 'UNAUTHORIZED',
+    value: provider.authStatus || '未授权',
     hint: provider.authCodeStatus || '未收到授权码'
   },
   {
     label: '最近测试',
     value: provider.lastTestStatus || '--',
-    hint: formatDateTime(provider.lastTestAt) || '未测试'
+    hint: formatDateTime(provider.lastTestAt) || '尚未测试'
   },
   {
     label: '最近回调',
     value: provider.lastCallbackStatus || '--',
-    hint: formatDateTime(provider.lastCallbackAt) || '未收到'
+    hint: formatDateTime(provider.lastCallbackAt) || '尚未收到'
   },
   {
     label: '最近同步',
     value: formatDateTime(provider.lastSyncTime) || '--',
-    hint: formatDateTime(jobForm.nextRunTime) || '未排程'
+    hint: formatDateTime(jobForm.nextRunTime) || '未排期'
+  },
+  {
+    label: '核销接口',
+    value: provider.voucherVerifyPath || '--',
+    hint: provider.verifyCodeField || '未配置字段'
   }
 ])
 
@@ -330,17 +390,21 @@ function createProvider() {
   return {
     id: null,
     providerCode: DOUYIN_CODE,
-    providerName: '抖音来客线索',
+    providerName: '抖音来客',
     moduleCode: 'CLUE',
     executionMode: 'MOCK',
-    authType: 'CLIENT_TOKEN',
+    authType: 'AUTH_CODE',
     appId: '',
-    baseUrl: 'https://api.oceanengine.com',
-    tokenUrl: 'https://api.oceanengine.com/open_api/oauth2/access_token/',
-    endpointPath: '/open_api/2/tools/clue/life/get/',
+    baseUrl: 'https://open.douyin.com',
+    tokenUrl: 'https://open.douyin.com/oauth/access_token/',
+    endpointPath: '/goodlife/v1/clue/douyin/list/',
+    voucherPreparePath: '/goodlife/v1/fulfilment/certificate/prepare/',
+    voucherVerifyPath: '/goodlife/v1/fulfilment/certificate/verify/',
+    voucherCancelPath: '/goodlife/v1/fulfilment/certificate/cancel/',
     clientKey: '',
     clientSecret: '',
     clientSecretMasked: '',
+    clientSecretConfigured: false,
     redirectUri: '',
     scope: '',
     authCode: '',
@@ -353,6 +417,9 @@ function createProvider() {
     accountId: '',
     lifeAccountIds: '',
     localAccountIds: '',
+    openId: '',
+    poiId: '',
+    verifyCodeField: 'encrypted_codes',
     pageSize: 20,
     pullWindowMinutes: 60,
     overlapMinutes: 10,
@@ -394,7 +461,10 @@ function applyProvider(payload) {
     executionMode: provider.executionMode,
     appId: provider.appId,
     callbackUrl: provider.callbackUrl,
-    localAccountIds: provider.localAccountIds
+    localAccountIds: provider.localAccountIds,
+    voucherVerifyPath: provider.voucherVerifyPath,
+    poiId: provider.poiId,
+    verifyCodeField: provider.verifyCodeField
   }))
 }
 
@@ -424,9 +494,14 @@ function buildProviderDangerList() {
   return [
     ['executionMode', '运行模式'],
     ['appId', 'AppId'],
-    ['callbackUrl', '回调地址'],
-    ['localAccountIds', 'Local Account Ids']
-  ].filter(([key]) => providerSnapshot.value[key] !== provider[key]).map(([, label]) => label)
+    ['callbackUrl', '回调登记地址'],
+    ['localAccountIds', '本地账号映射'],
+    ['voucherVerifyPath', '核销提交路径'],
+    ['poiId', '默认 POI ID'],
+    ['verifyCodeField', '券码字段名']
+  ]
+    .filter(([key]) => providerSnapshot.value[key] !== provider[key])
+    .map(([, label]) => label)
 }
 
 function formatAuthType(value) {
@@ -439,11 +514,19 @@ function formatAuthType(value) {
   return value || '--'
 }
 
+function formatExecutionMode(value) {
+  return value === 'LIVE' ? '真实' : '模拟'
+}
+
+function formatJobStatus(value) {
+  return value === 'DISABLED' ? '停用' : '启用'
+}
+
 async function handleSaveProvider() {
   const changedDangerFields = buildProviderDangerList()
   if (changedDangerFields.length) {
     await ElMessageBox.confirm(
-      `本次会修改 ${changedDangerFields.join('、')}，可能影响真实授权和同步，确认继续保存吗？`,
+      `本次会修改 ${changedDangerFields.join('、')}，可能影响真实授权、回调或核销链路，确认继续保存吗？`,
       '确认保存',
       {
         type: 'warning',
@@ -452,6 +535,7 @@ async function handleSaveProvider() {
       }
     )
   }
+
   savingProvider.value = true
   try {
     const payload = await saveIntegrationProvider({ ...provider })
@@ -483,7 +567,7 @@ async function handleSaveJob() {
       providerId: provider.id || jobForm.providerId
     })
     await loadView()
-    ElMessage.success('同步任务已保存')
+    ElMessage.success('调度配置已保存')
   } finally {
     savingJob.value = false
   }
@@ -497,7 +581,7 @@ async function handleTrigger() {
       payload: JSON.stringify({ source: 'platform-douyin' })
     })
     await loadView()
-    ElMessage.success('同步任务已触发')
+    ElMessage.success('调度任务已触发')
   } finally {
     triggering.value = false
   }

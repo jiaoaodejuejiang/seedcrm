@@ -13,6 +13,16 @@ import org.springframework.stereotype.Component;
 @Component
 public class SchedulerIntegrationSchemaInitializer {
 
+    private static final String DOUYIN_PROVIDER_CODE = "DOUYIN_LAIKE";
+    private static final String DOUYIN_PROVIDER_NAME = "抖音来客";
+    private static final String DOUYIN_BASE_URL = "https://open.douyin.com";
+    private static final String DOUYIN_TOKEN_URL = "https://open.douyin.com/oauth/access_token/";
+    private static final String DOUYIN_CLUE_ENDPOINT = "/goodlife/v1/clue/douyin/list/";
+    private static final String DOUYIN_VOUCHER_PREPARE_PATH = "/goodlife/v1/fulfilment/certificate/prepare/";
+    private static final String DOUYIN_VOUCHER_VERIFY_PATH = "/goodlife/v1/fulfilment/certificate/verify/";
+    private static final String DOUYIN_VOUCHER_CANCEL_PATH = "/goodlife/v1/fulfilment/certificate/cancel/";
+    private static final String DOUYIN_VERIFY_CODE_FIELD = "encrypted_codes";
+
     private final JdbcTemplate jdbcTemplate;
 
     public SchedulerIntegrationSchemaInitializer(DataSource dataSource) {
@@ -77,6 +87,9 @@ public class SchedulerIntegrationSchemaInitializer {
                     base_url VARCHAR(255),
                     token_url VARCHAR(255),
                     endpoint_path VARCHAR(255),
+                    voucher_prepare_path VARCHAR(255),
+                    voucher_verify_path VARCHAR(255),
+                    voucher_cancel_path VARCHAR(255),
                     client_key VARCHAR(128),
                     client_secret VARCHAR(255),
                     redirect_uri VARCHAR(255),
@@ -92,6 +105,8 @@ public class SchedulerIntegrationSchemaInitializer {
                     life_account_ids VARCHAR(255),
                     local_account_ids VARCHAR(255),
                     open_id VARCHAR(128),
+                    poi_id VARCHAR(128),
+                    verify_code_field VARCHAR(64),
                     page_size INT DEFAULT 20,
                     pull_window_minutes INT DEFAULT 60,
                     overlap_minutes INT DEFAULT 10,
@@ -180,6 +195,9 @@ public class SchedulerIntegrationSchemaInitializer {
         columns.put("base_url", "base_url VARCHAR(255)");
         columns.put("token_url", "token_url VARCHAR(255)");
         columns.put("endpoint_path", "endpoint_path VARCHAR(255)");
+        columns.put("voucher_prepare_path", "voucher_prepare_path VARCHAR(255)");
+        columns.put("voucher_verify_path", "voucher_verify_path VARCHAR(255)");
+        columns.put("voucher_cancel_path", "voucher_cancel_path VARCHAR(255)");
         columns.put("client_key", "client_key VARCHAR(128)");
         columns.put("client_secret", "client_secret VARCHAR(255)");
         columns.put("redirect_uri", "redirect_uri VARCHAR(255)");
@@ -195,6 +213,8 @@ public class SchedulerIntegrationSchemaInitializer {
         columns.put("life_account_ids", "life_account_ids VARCHAR(255)");
         columns.put("local_account_ids", "local_account_ids VARCHAR(255)");
         columns.put("open_id", "open_id VARCHAR(128)");
+        columns.put("poi_id", "poi_id VARCHAR(128)");
+        columns.put("verify_code_field", "verify_code_field VARCHAR(64)");
         columns.put("page_size", "page_size INT DEFAULT 20");
         columns.put("pull_window_minutes", "pull_window_minutes INT DEFAULT 60");
         columns.put("overlap_minutes", "overlap_minutes INT DEFAULT 10");
@@ -266,26 +286,55 @@ public class SchedulerIntegrationSchemaInitializer {
         Integer count = jdbcTemplate.queryForObject("""
                 SELECT COUNT(1)
                 FROM integration_provider_config
-                WHERE provider_code = 'DOUYIN_LAIKE'
-                """, Integer.class);
+                WHERE provider_code = ?
+                """, Integer.class, DOUYIN_PROVIDER_CODE);
+        LocalDateTime now = LocalDateTime.now();
         if (count != null && count > 0) {
+            jdbcTemplate.update("""
+                    UPDATE integration_provider_config
+                    SET provider_name = ?,
+                        module_code = COALESCE(module_code, 'CLUE'),
+                        execution_mode = COALESCE(execution_mode, 'MOCK'),
+                        auth_type = 'AUTH_CODE',
+                        base_url = COALESCE(base_url, ?),
+                        token_url = COALESCE(token_url, ?),
+                        endpoint_path = COALESCE(endpoint_path, ?),
+                        voucher_prepare_path = COALESCE(voucher_prepare_path, ?),
+                        voucher_verify_path = COALESCE(voucher_verify_path, ?),
+                        voucher_cancel_path = COALESCE(voucher_cancel_path, ?),
+                        verify_code_field = COALESCE(verify_code_field, ?),
+                        updated_at = ?
+                    WHERE provider_code = ?
+                    """,
+                    DOUYIN_PROVIDER_NAME,
+                    DOUYIN_BASE_URL,
+                    DOUYIN_TOKEN_URL,
+                    DOUYIN_CLUE_ENDPOINT,
+                    DOUYIN_VOUCHER_PREPARE_PATH,
+                    DOUYIN_VOUCHER_VERIFY_PATH,
+                    DOUYIN_VOUCHER_CANCEL_PATH,
+                    DOUYIN_VERIFY_CODE_FIELD,
+                    now,
+                    DOUYIN_PROVIDER_CODE);
             return;
         }
-        LocalDateTime now = LocalDateTime.now();
         jdbcTemplate.update("""
                 INSERT INTO integration_provider_config(
                     provider_code, provider_name, module_code, execution_mode, auth_type,
-                    app_id, base_url, token_url, endpoint_path, page_size, pull_window_minutes,
+                    app_id, base_url, token_url, endpoint_path,
+                    voucher_prepare_path, voucher_verify_path, voucher_cancel_path, verify_code_field,
+                    page_size, pull_window_minutes,
                     overlap_minutes, request_timeout_ms,
                     enabled, remark, auth_status, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                "DOUYIN_LAIKE", "抖音来客线索", "CLUE", "MOCK", "AUTH_CODE",
+                DOUYIN_PROVIDER_CODE, DOUYIN_PROVIDER_NAME, "CLUE", "MOCK", "AUTH_CODE",
                 null,
-                "https://api.oceanengine.com", "https://api.oceanengine.com/open_api/oauth2/access_token/",
-                "/open_api/2/tools/clue/life/get/", 20, 60, 10, 10000,
-                1, "默认保留 MOCK 模式，便于本地联调", "MOCK", now, now);
+                DOUYIN_BASE_URL, DOUYIN_TOKEN_URL, DOUYIN_CLUE_ENDPOINT,
+                DOUYIN_VOUCHER_PREPARE_PATH, DOUYIN_VOUCHER_VERIFY_PATH, DOUYIN_VOUCHER_CANCEL_PATH, DOUYIN_VERIFY_CODE_FIELD,
+                20, 60, 10, 10000,
+                1, "默认使用 MOCK 模式，可切换为真实授权与核销配置", "MOCK", now, now);
     }
 
     private void ensureSchedulerJobProviderColumn() {
@@ -302,17 +351,17 @@ public class SchedulerIntegrationSchemaInitializer {
         Long providerId = jdbcTemplate.queryForObject("""
                 SELECT id
                 FROM integration_provider_config
-                WHERE provider_code = 'DOUYIN_LAIKE'
+                WHERE provider_code = ?
                 LIMIT 1
-                """, Long.class);
+                """, Long.class, DOUYIN_PROVIDER_CODE);
         if (providerId == null) {
             return;
         }
         jdbcTemplate.update("""
                 UPDATE scheduler_job
                 SET provider_id = ?
-                WHERE job_code = 'DOUYIN_CLUE_INCREMENTAL'
+                WHERE job_code = ?
                   AND (provider_id IS NULL OR provider_id = 0)
-                """, providerId);
+                """, providerId, "DOUYIN_CLUE_INCREMENTAL");
     }
 }

@@ -14,7 +14,7 @@ public interface WorkbenchService {
 
     List<ClueItemResponse> listClues(String sourceChannel, String productSourceType, String status);
 
-    List<OrderItemResponse> listOrders(String status);
+    List<OrderItemResponse> listOrders(String status, String customerName, String customerPhone);
 
     List<PlanOrderItemResponse> listPlanOrders(String status);
 

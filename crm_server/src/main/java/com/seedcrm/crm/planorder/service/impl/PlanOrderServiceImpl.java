@@ -21,6 +21,7 @@ import com.seedcrm.crm.planorder.service.PlanOrderService;
 import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder> implements PlanOrderService {
@@ -64,6 +65,8 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     public PlanOrder arrive(PlanOrderActionDTO planOrderActionDTO) {
         PlanOrder planOrder = getPlanOrderForAction(planOrderActionDTO);
         ensureStatus(planOrder, PlanOrderStatus.ARRIVED);
+        Order order = getOrderOrThrow(planOrder.getOrderId());
+        ensureOrderVerifiedForService(order, "arrive");
         if (planOrder.getArriveTime() != null) {
             throw new BusinessException("plan order already arrived");
         }
@@ -72,7 +75,6 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         planOrder.setArriveTime(now);
         updatePlanOrder(planOrder, "failed to update arrive time");
 
-        Order order = getOrderOrThrow(planOrder.getOrderId());
         OrderStatus orderStatus = parseOrderStatus(order.getStatus());
         if (orderStatus == OrderStatus.CANCELLED || orderStatus == OrderStatus.REFUNDED) {
             throw new BusinessException("order cannot arrive from status " + orderStatus.name());
@@ -92,6 +94,8 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     public PlanOrder start(PlanOrderActionDTO planOrderActionDTO) {
         PlanOrder planOrder = getPlanOrderForAction(planOrderActionDTO);
         ensureStatus(planOrder, PlanOrderStatus.SERVICING);
+        Order order = getOrderOrThrow(planOrder.getOrderId());
+        ensureOrderVerifiedForService(order, "start");
         if (planOrder.getArriveTime() == null) {
             throw new BusinessException("plan order must arrive before start");
         }
@@ -102,7 +106,6 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         planOrder.setStartTime(LocalDateTime.now());
         updatePlanOrder(planOrder, "failed to start plan order");
 
-        Order order = getOrderOrThrow(planOrder.getOrderId());
         OrderStatus orderStatus = parseOrderStatus(order.getStatus());
         if (orderStatus == OrderStatus.CANCELLED || orderStatus == OrderStatus.REFUNDED) {
             throw new BusinessException("order cannot start service from status " + orderStatus.name());
@@ -119,6 +122,9 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     public PlanOrder finish(PlanOrderActionDTO planOrderActionDTO) {
         PlanOrder planOrder = getPlanOrderForAction(planOrderActionDTO);
         ensureStatus(planOrder, PlanOrderStatus.FINISHED);
+        Order order = getOrderOrThrow(planOrder.getOrderId());
+        ensureOrderVerifiedForService(order, "finish");
+        ensureServiceDetailSaved(order);
         if (planOrder.getStartTime() == null) {
             throw new BusinessException("plan order must start before finish");
         }
@@ -130,7 +136,6 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         planOrder.setFinishTime(now);
         updatePlanOrder(planOrder, "failed to finish plan order");
 
-        Order order = getOrderOrThrow(planOrder.getOrderId());
         OrderStatus orderStatus = parseOrderStatus(order.getStatus());
         if (orderStatus == OrderStatus.CANCELLED || orderStatus == OrderStatus.REFUNDED) {
             throw new BusinessException("order cannot be completed from status " + orderStatus.name());
@@ -178,12 +183,27 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         }
     }
 
+    private void ensureOrderVerifiedForService(Order order, String action) {
+        if (order == null) {
+            throw new BusinessException("order not found");
+        }
+        if (!"VERIFIED".equalsIgnoreCase(order.getVerificationStatus())) {
+            throw new BusinessException("order must be verified before " + action);
+        }
+    }
+
     private Order getOrderOrThrow(Long orderId) {
         Order order = orderMapper.selectById(orderId);
         if (order == null) {
             throw new BusinessException("order not found");
         }
         return order;
+    }
+
+    private void ensureServiceDetailSaved(Order order) {
+        if (!StringUtils.hasText(order.getServiceDetailJson())) {
+            throw new BusinessException("service form must be saved before finish");
+        }
     }
 
     private void ensureOrderCanCreatePlan(Order order) {

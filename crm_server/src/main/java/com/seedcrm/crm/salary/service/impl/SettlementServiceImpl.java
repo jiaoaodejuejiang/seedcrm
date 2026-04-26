@@ -82,6 +82,17 @@ public class SettlementServiceImpl implements SettlementService {
         return settlement;
     }
 
+    @Override
+    public List<SalarySettlement> listSettlements(Long userId) {
+        LambdaQueryWrapper<SalarySettlement> wrapper = new LambdaQueryWrapper<SalarySettlement>()
+                .orderByDesc(SalarySettlement::getCreateTime)
+                .orderByDesc(SalarySettlement::getId);
+        if (userId != null && userId > 0) {
+            wrapper.eq(SalarySettlement::getUserId, userId);
+        }
+        return salarySettlementMapper.selectList(wrapper);
+    }
+
     private void validateCreateRequest(SalarySettlementCreateRequest request) {
         if (request == null) {
             throw new BusinessException("request body is required");

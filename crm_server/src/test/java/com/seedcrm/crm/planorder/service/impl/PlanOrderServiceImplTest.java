@@ -87,6 +87,10 @@ class PlanOrderServiceImplTest {
         planOrder.setOrderId(10L);
         planOrder.setStatus(PlanOrderStatus.ARRIVED.name());
         when(planOrderMapper.selectById(1L)).thenReturn(planOrder);
+        Order order = new Order();
+        order.setId(10L);
+        order.setVerificationStatus("VERIFIED");
+        when(orderMapper.selectById(10L)).thenReturn(order);
 
         PlanOrderActionDTO dto = new PlanOrderActionDTO();
         dto.setPlanOrderId(1L);
@@ -94,6 +98,52 @@ class PlanOrderServiceImplTest {
         assertThatThrownBy(() -> planOrderService.start(dto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("must arrive before start");
+    }
+
+    @Test
+    void arriveShouldRejectWhenOrderNotVerified() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(41L);
+        planOrder.setOrderId(410L);
+        planOrder.setStatus(PlanOrderStatus.ARRIVED.name());
+        when(planOrderMapper.selectById(41L)).thenReturn(planOrder);
+
+        Order order = new Order();
+        order.setId(410L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setVerificationStatus(null);
+        when(orderMapper.selectById(410L)).thenReturn(order);
+
+        PlanOrderActionDTO dto = new PlanOrderActionDTO();
+        dto.setPlanOrderId(41L);
+
+        assertThatThrownBy(() -> planOrderService.arrive(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("verified before arrive");
+    }
+
+    @Test
+    void finishShouldRejectWhenOrderNotVerified() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(42L);
+        planOrder.setOrderId(420L);
+        planOrder.setStatus(PlanOrderStatus.SERVICING.name());
+        planOrder.setArriveTime(java.time.LocalDateTime.now().minusHours(1));
+        planOrder.setStartTime(java.time.LocalDateTime.now().minusMinutes(30));
+        when(planOrderMapper.selectById(42L)).thenReturn(planOrder);
+
+        Order order = new Order();
+        order.setId(420L);
+        order.setStatus(OrderStatus.SERVING.name());
+        order.setVerificationStatus("");
+        when(orderMapper.selectById(420L)).thenReturn(order);
+
+        PlanOrderActionDTO dto = new PlanOrderActionDTO();
+        dto.setPlanOrderId(42L);
+
+        assertThatThrownBy(() -> planOrderService.finish(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("verified before finish");
     }
 
     @Test
@@ -127,6 +177,8 @@ class PlanOrderServiceImplTest {
         Order order = new Order();
         order.setId(30L);
         order.setStatus(OrderStatus.CREATED.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson("{\"serviceRequirement\":\"已确认到店需求\"}");
         when(orderMapper.selectById(30L)).thenReturn(order);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
 
@@ -143,6 +195,31 @@ class PlanOrderServiceImplTest {
     }
 
     @Test
+    void finishShouldRejectWhenServiceDetailNotSaved() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(31L);
+        planOrder.setOrderId(310L);
+        planOrder.setStatus(PlanOrderStatus.SERVICING.name());
+        planOrder.setArriveTime(java.time.LocalDateTime.now().minusHours(1));
+        planOrder.setStartTime(java.time.LocalDateTime.now().minusMinutes(30));
+        when(planOrderMapper.selectById(31L)).thenReturn(planOrder);
+
+        Order order = new Order();
+        order.setId(310L);
+        order.setStatus(OrderStatus.SERVING.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson("");
+        when(orderMapper.selectById(310L)).thenReturn(order);
+
+        PlanOrderActionDTO dto = new PlanOrderActionDTO();
+        dto.setPlanOrderId(31L);
+
+        assertThatThrownBy(() -> planOrderService.finish(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("service form must be saved");
+    }
+
+    @Test
     void arriveShouldWriteOrderTraceTime() {
         PlanOrder planOrder = new PlanOrder();
         planOrder.setId(4L);
@@ -154,6 +231,7 @@ class PlanOrderServiceImplTest {
         Order order = new Order();
         order.setId(40L);
         order.setStatus(OrderStatus.CREATED.name());
+        order.setVerificationStatus("VERIFIED");
         when(orderMapper.selectById(40L)).thenReturn(order);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
 

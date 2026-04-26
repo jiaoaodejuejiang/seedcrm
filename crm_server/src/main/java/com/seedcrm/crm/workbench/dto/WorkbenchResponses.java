@@ -82,6 +82,13 @@ public final class WorkbenchResponses {
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime completeTime;
         private String remark;
+        private String serviceDetailJson;
+        private String verificationStatus;
+        private String verificationMethod;
+        private String verificationCode;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime verificationTime;
+        private Long verificationOperatorId;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime createTime;
     }

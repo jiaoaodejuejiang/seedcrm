@@ -1,20 +1,17 @@
 <template>
   <div class="stack-page">
-    <section class="metrics-row">
-      <article class="metric-card">
+    <section class="summary-strip">
+      <article class="summary-pill">
         <span>企微回调</span>
         <strong>{{ wecomLogs.length }}</strong>
-        <small>{{ wecomLogs[0]?.processStatus || '暂无记录' }}</small>
       </article>
-      <article class="metric-card">
+      <article class="summary-pill">
         <span>抖音回调</span>
         <strong>{{ douyinLogs.length }}</strong>
-        <small>{{ douyinLogs[0]?.processStatus || '暂无记录' }}</small>
       </article>
-      <article class="metric-card">
+      <article class="summary-pill">
         <span>调度任务</span>
         <strong>{{ jobs.length }}</strong>
-        <small>{{ selectedJobCode || '可查看全部' }}</small>
       </article>
     </section>
 
@@ -33,8 +30,16 @@
                 {{ formatDateTime(row.receivedAt) || '--' }}
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="120" prop="processStatus" />
-            <el-table-column label="验签" width="120" prop="signatureStatus" />
+            <el-table-column label="状态" width="120">
+              <template #default="{ row }">
+                {{ formatCallbackProcessStatus(row.processStatus) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="验签" width="120">
+              <template #default="{ row }">
+                {{ formatCallbackSignatureStatus(row.signatureStatus) }}
+              </template>
+            </el-table-column>
             <el-table-column label="事件" min-width="160" prop="eventType" />
             <el-table-column label="结果" min-width="220" prop="processMessage" />
           </el-table>
@@ -59,8 +64,16 @@
                 {{ formatDateTime(row.receivedAt) || '--' }}
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="120" prop="processStatus" />
-            <el-table-column label="可信度" width="140" prop="signatureStatus" />
+            <el-table-column label="状态" width="120">
+              <template #default="{ row }">
+                {{ formatCallbackProcessStatus(row.processStatus) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="验签" width="140">
+              <template #default="{ row }">
+                {{ formatCallbackSignatureStatus(row.signatureStatus) }}
+              </template>
+            </el-table-column>
             <el-table-column label="事件" min-width="160" prop="eventType" />
             <el-table-column label="结果" min-width="220" prop="processMessage" />
           </el-table>
@@ -90,8 +103,16 @@
 
           <el-table :data="jobs" stripe>
             <el-table-column label="任务编码" min-width="180" prop="jobCode" />
-            <el-table-column label="模块" width="120" prop="moduleCode" />
-            <el-table-column label="状态" width="120" prop="status" />
+            <el-table-column label="模块" width="120">
+              <template #default="{ row }">
+                {{ formatModuleCode(row.moduleCode) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="120">
+              <template #default="{ row }">
+                <el-tag :type="statusTagType(row.status)">{{ formatSchedulerStatus(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column label="最近执行" min-width="170">
               <template #default="{ row }">
                 {{ formatDateTime(row.lastRunTime) || '--' }}
@@ -121,7 +142,11 @@
               </template>
             </el-table-column>
             <el-table-column label="任务编码" min-width="180" prop="jobCode" />
-            <el-table-column label="状态" width="120" prop="status" />
+            <el-table-column label="状态" width="120">
+              <template #default="{ row }">
+                <el-tag :type="statusTagType(row.status)">{{ formatSchedulerStatus(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column label="结果" min-width="260">
               <template #default="{ row }">
                 {{ row.errorMessage || row.payload || '--' }}
@@ -159,7 +184,14 @@ import {
 } from '../api/scheduler'
 import { fetchWecomCallbackLogs } from '../api/wecom'
 import { useTablePagination } from '../composables/useTablePagination'
-import { formatDateTime } from '../utils/format'
+import {
+  formatCallbackProcessStatus,
+  formatCallbackSignatureStatus,
+  formatDateTime,
+  formatModuleCode,
+  formatSchedulerStatus,
+  statusTagType
+} from '../utils/format'
 
 const route = useRoute()
 const activeTab = ref(resolveRuntimeTab())

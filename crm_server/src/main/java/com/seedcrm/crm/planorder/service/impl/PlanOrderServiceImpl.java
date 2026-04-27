@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.order.entity.Order;
+import com.seedcrm.crm.order.entity.OrderActionRecord;
 import com.seedcrm.crm.order.enums.OrderStatus;
+import com.seedcrm.crm.order.mapper.OrderActionRecordMapper;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.order.service.OrderSettlementService;
 import com.seedcrm.crm.planorder.dto.PlanOrderActionDTO;
@@ -18,7 +20,14 @@ import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.planorder.service.OrderRoleRecordService;
 import com.seedcrm.crm.planorder.service.PlanOrderService;
+import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.wecom.entity.WecomTouchLog;
+import com.seedcrm.crm.wecom.service.WecomTouchService;
 import java.time.LocalDateTime;
+import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -26,24 +35,49 @@ import org.springframework.util.StringUtils;
 @Service
 public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder> implements PlanOrderService {
 
+    private static final Pattern CUSTOMER_SIGNATURE_PATTERN =
+            Pattern.compile("\\\"customerSignature\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
+
+    private static final Set<String> AUTO_ASSIGN_ROLE_CODES = Set.of(
+            "STORE_SERVICE",
+            "STORE_MANAGER",
+            "PHOTOGRAPHER",
+            "MAKEUP_ARTIST",
+            "PHOTO_SELECTOR");
+
     private final PlanOrderMapper planOrderMapper;
     private final OrderMapper orderMapper;
     private final OrderRoleRecordService orderRoleRecordService;
     private final OrderSettlementService orderSettlementService;
+    private final WecomTouchService wecomTouchService;
+    private final OrderActionRecordMapper orderActionRecordMapper;
+    private final DbLockService dbLockService;
 
     public PlanOrderServiceImpl(PlanOrderMapper planOrderMapper,
                                 OrderMapper orderMapper,
                                 OrderRoleRecordService orderRoleRecordService,
-                                OrderSettlementService orderSettlementService) {
+                                OrderSettlementService orderSettlementService,
+                                WecomTouchService wecomTouchService,
+                                OrderActionRecordMapper orderActionRecordMapper,
+                                DbLockService dbLockService) {
         this.planOrderMapper = planOrderMapper;
         this.orderMapper = orderMapper;
         this.orderRoleRecordService = orderRoleRecordService;
         this.orderSettlementService = orderSettlementService;
+        this.wecomTouchService = wecomTouchService;
+        this.orderActionRecordMapper = orderActionRecordMapper;
+        this.dbLockService = dbLockService;
     }
 
     @Override
     @Transactional
     public PlanOrder createPlanOrder(PlanOrderCreateDTO planOrderCreateDTO) {
+        return createPlanOrder(planOrderCreateDTO, null, null);
+    }
+
+    @Override
+    @Transactional
+    public PlanOrder createPlanOrder(PlanOrderCreateDTO planOrderCreateDTO, Long operatorUserId, String operatorRoleCode) {
         Long orderId = planOrderCreateDTO == null ? null : planOrderCreateDTO.getOrderId();
         validateOrderId(orderId);
         Order order = getOrderOrThrow(orderId);
@@ -57,6 +91,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         if (planOrderMapper.insert(planOrder) <= 0) {
             throw new BusinessException("failed to create plan order");
         }
+        bindInitialRole(planOrder, operatorUserId, operatorRoleCode);
         return planOrder;
     }
 
@@ -120,9 +155,15 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     @Override
     @Transactional
     public PlanOrder finish(PlanOrderActionDTO planOrderActionDTO) {
+        return finish(planOrderActionDTO, null);
+    }
+
+    @Override
+    @Transactional
+    public PlanOrder finish(PlanOrderActionDTO planOrderActionDTO, Long operatorUserId) {
         PlanOrder planOrder = getPlanOrderForAction(planOrderActionDTO);
         ensureStatus(planOrder, PlanOrderStatus.FINISHED);
-        Order order = getOrderOrThrow(planOrder.getOrderId());
+        Order order = dbLockService.lockOrder(planOrder.getOrderId());
         ensureOrderVerifiedForService(order, "finish");
         ensureServiceDetailSaved(order);
         if (planOrder.getStartTime() == null) {
@@ -140,12 +181,15 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         if (orderStatus == OrderStatus.CANCELLED || orderStatus == OrderStatus.REFUNDED) {
             throw new BusinessException("order cannot be completed from status " + orderStatus.name());
         }
+        String fromStatus = order.getStatus();
         order.setStatus(OrderStatus.COMPLETED.name());
         order.setCompleteTime(now);
         if (planOrder.getArriveTime() != null && order.getArriveTime() == null) {
             order.setArriveTime(planOrder.getArriveTime());
         }
         touchOrder(order, true);
+        recordOrderAction(order.getId(), "SERVICE_FINISH", fromStatus, OrderStatus.COMPLETED.name(),
+                operatorUserId, "服务完成");
         orderSettlementService.settleCompletedOrder(order.getId());
         return planOrder;
     }
@@ -175,12 +219,41 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
                 orderRoleRecordService.listByPlanOrderId(planOrderId));
     }
 
+    @Override
+    @Transactional
+    public WecomTouchLog sendServiceForm(Long planOrderId, String message) {
+        validatePlanOrderId(planOrderId);
+        PlanOrder planOrder = getPlanOrderOrThrow(planOrderId);
+        Order order = getOrderOrThrow(planOrder.getOrderId());
+        ensureOrderVerifiedForService(order, "send service form");
+        ensureServiceDetailSaved(order);
+        if (order.getCustomerId() == null || order.getCustomerId() <= 0) {
+            throw new BusinessException("order customer is required");
+        }
+        String finalMessage = StringUtils.hasText(message) ? message.trim() : buildDefaultServiceFormMessage(order);
+        return wecomTouchService.manualSend(order.getCustomerId(), finalMessage);
+    }
+
     private void ensurePlanOrderNotExists(Long orderId) {
         Long count = planOrderMapper.selectCount(new LambdaQueryWrapper<PlanOrder>()
                 .eq(PlanOrder::getOrderId, orderId));
         if (count != null && count > 0) {
             throw new BusinessException("plan order already exists for order");
         }
+    }
+
+    private void bindInitialRole(PlanOrder planOrder, Long operatorUserId, String operatorRoleCode) {
+        if (planOrder == null || planOrder.getId() == null || operatorUserId == null || operatorUserId <= 0) {
+            return;
+        }
+        if (!StringUtils.hasText(operatorRoleCode)) {
+            return;
+        }
+        String normalizedRoleCode = operatorRoleCode.trim().toUpperCase(Locale.ROOT);
+        if (!AUTO_ASSIGN_ROLE_CODES.contains(normalizedRoleCode)) {
+            return;
+        }
+        orderRoleRecordService.assignRole(planOrder.getId(), normalizedRoleCode, operatorUserId);
     }
 
     private void ensureOrderVerifiedForService(Order order, String action) {
@@ -201,9 +274,22 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     }
 
     private void ensureServiceDetailSaved(Order order) {
-        if (!StringUtils.hasText(order.getServiceDetailJson())) {
+        String serviceDetailJson = order.getServiceDetailJson();
+        if (!StringUtils.hasText(serviceDetailJson)) {
             throw new BusinessException("service form must be saved before finish");
         }
+        Matcher matcher = CUSTOMER_SIGNATURE_PATTERN.matcher(serviceDetailJson);
+        if (!matcher.find() || !StringUtils.hasText(matcher.group(1))) {
+            throw new BusinessException("customer signature is required before finish");
+        }
+    }
+
+    private String buildDefaultServiceFormMessage(Order order) {
+        String orderNo = StringUtils.hasText(order.getOrderNo()) ? order.getOrderNo().trim() : "--";
+        String appointment = order.getAppointmentTime() == null ? "待确认" : order.getAppointmentTime().toString().replace('T', ' ');
+        return "您好，您的服务确认单已更新。订单号：" + orderNo
+                + "，预约时间：" + appointment
+                + "。如需调整，请直接联系门店客服。";
     }
 
     private void ensureOrderCanCreatePlan(Order order) {
@@ -288,5 +374,25 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
                     ? "failed to complete order when finishing plan order"
                     : "failed to update order trace fields");
         }
+    }
+
+    private void recordOrderAction(Long orderId,
+                                   String actionType,
+                                   String fromStatus,
+                                   String toStatus,
+                                   Long operatorUserId,
+                                   String remark) {
+        if (orderId == null || orderId <= 0) {
+            return;
+        }
+        OrderActionRecord record = new OrderActionRecord();
+        record.setOrderId(orderId);
+        record.setActionType(actionType);
+        record.setFromStatus(fromStatus);
+        record.setToStatus(toStatus);
+        record.setOperatorUserId(operatorUserId);
+        record.setRemark(StringUtils.hasText(remark) ? remark.trim() : null);
+        record.setCreateTime(LocalDateTime.now());
+        orderActionRecordMapper.insert(record);
     }
 }

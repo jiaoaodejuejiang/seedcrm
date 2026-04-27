@@ -1,46 +1,36 @@
 package com.seedcrm.crm.permission.support;
 
 import com.seedcrm.crm.auth.service.AuthService;
-import com.seedcrm.crm.clue.entity.Clue;
-import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
-import com.seedcrm.crm.order.entity.Order;
-import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.permission.dto.PermissionCheckRequest;
 import com.seedcrm.crm.permission.dto.PermissionCheckResponse;
 import com.seedcrm.crm.permission.service.PermissionService;
-import com.seedcrm.crm.planorder.entity.PlanOrder;
-import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import org.springframework.stereotype.Component;
 
 @Component
 public class PlanOrderPermissionGuard {
 
     private final PermissionService permissionService;
-    private final PlanOrderMapper planOrderMapper;
-    private final OrderMapper orderMapper;
-    private final ClueMapper clueMapper;
     private final AuthService authService;
+    private final OrderPermissionResourceResolver resourceResolver;
 
     public PlanOrderPermissionGuard(PermissionService permissionService,
-                                    PlanOrderMapper planOrderMapper,
-                                    OrderMapper orderMapper,
-                                    ClueMapper clueMapper,
-                                    AuthService authService) {
+                                    AuthService authService,
+                                    OrderPermissionResourceResolver resourceResolver) {
         this.permissionService = permissionService;
-        this.planOrderMapper = planOrderMapper;
-        this.orderMapper = orderMapper;
-        this.clueMapper = clueMapper;
         this.authService = authService;
+        this.resourceResolver = resourceResolver;
     }
 
     public void checkCreate(PermissionRequestContext context, Long orderId) {
-        PermissionCheckRequest request = buildCheckRequest(context, "PLANORDER", "CREATE", resolveOrderOwnerId(orderId));
+        PermissionCheckRequest request = buildCheckRequest(context, "PLANORDER", "CREATE",
+                resolveOrderResourceOwnerId(context, orderId));
         assertAllowed(permissionService.check(request), "plan order create denied");
     }
 
     public void checkUpdate(PermissionRequestContext context, Long planOrderId) {
-        PermissionCheckRequest request = buildCheckRequest(context, "PLANORDER", "UPDATE", resolvePlanOrderOwnerId(planOrderId));
+        PermissionCheckRequest request = buildCheckRequest(context, "PLANORDER", "UPDATE",
+                resolvePlanOrderResourceOwnerId(context, planOrderId));
         assertAllowed(permissionService.check(request), "plan order update denied");
     }
 
@@ -49,7 +39,8 @@ public class PlanOrderPermissionGuard {
     }
 
     public void checkAssignRole(PermissionRequestContext context, Long planOrderId) {
-        PermissionCheckRequest request = buildCheckRequest(context, "PLANORDER", "ASSIGN_ROLE", resolvePlanOrderOwnerId(planOrderId));
+        PermissionCheckRequest request = buildCheckRequest(context, "PLANORDER", "ASSIGN_ROLE",
+                resolvePlanOrderResourceOwnerId(context, planOrderId));
         assertAllowed(permissionService.check(request), "plan order assign role denied");
     }
 
@@ -82,33 +73,22 @@ public class PlanOrderPermissionGuard {
     }
 
     private PermissionCheckResponse checkViewPermission(PermissionRequestContext context, Long planOrderId) {
-        PermissionCheckRequest request = buildCheckRequest(context, "PLANORDER", "VIEW", resolvePlanOrderOwnerId(planOrderId));
+        PermissionCheckRequest request = buildCheckRequest(context, "PLANORDER", "VIEW",
+                resolvePlanOrderResourceOwnerId(context, planOrderId));
         return permissionService.check(request);
     }
 
-    private Long resolvePlanOrderOwnerId(Long planOrderId) {
-        if (planOrderId == null || planOrderId <= 0) {
-            throw new BusinessException("planOrderId is required");
+    private Long resolveOrderResourceOwnerId(PermissionRequestContext context, Long orderId) {
+        if (context != null && "STORE".equalsIgnoreCase(context.getDataScope())) {
+            return resourceResolver.resolveOrderStoreScopeOwnerId(orderId);
         }
-        PlanOrder planOrder = planOrderMapper.selectById(planOrderId);
-        if (planOrder == null) {
-            throw new BusinessException("plan order not found");
-        }
-        return resolveOrderOwnerId(planOrder.getOrderId());
+        return resourceResolver.resolveOrderOwnerId(orderId);
     }
 
-    private Long resolveOrderOwnerId(Long orderId) {
-        if (orderId == null || orderId <= 0) {
-            throw new BusinessException("orderId is required");
+    private Long resolvePlanOrderResourceOwnerId(PermissionRequestContext context, Long planOrderId) {
+        if (context != null && "STORE".equalsIgnoreCase(context.getDataScope())) {
+            return resourceResolver.resolvePlanOrderStoreScopeOwnerId(planOrderId);
         }
-        Order order = orderMapper.selectById(orderId);
-        if (order == null) {
-            throw new BusinessException("order not found");
-        }
-        if (order.getClueId() == null) {
-            return null;
-        }
-        Clue clue = clueMapper.selectById(order.getClueId());
-        return clue == null ? null : clue.getCurrentOwnerId();
+        return resourceResolver.resolvePlanOrderOwnerId(planOrderId);
     }
 }

@@ -1,52 +1,5 @@
 <template>
   <div class="stack-page">
-    <section class="metrics-row">
-      <article class="metric-card">
-        <span>{{ metrics.primaryLabel }}</span>
-        <strong>{{ metrics.primaryValue }}</strong>
-        <small>{{ metrics.primaryHint }}</small>
-      </article>
-      <article class="metric-card">
-        <span>{{ metrics.secondaryLabel }}</span>
-        <strong>{{ metrics.secondaryValue }}</strong>
-        <small>{{ metrics.secondaryHint }}</small>
-      </article>
-      <article class="metric-card">
-        <span>{{ metrics.tertiaryLabel }}</span>
-        <strong>{{ metrics.tertiaryValue }}</strong>
-        <small>{{ metrics.tertiaryHint }}</small>
-      </article>
-    </section>
-
-    <section class="panel compact-panel">
-      <div class="panel-heading compact">
-        <div>
-          <h3>系统设置工作台</h3>
-        </div>
-      </div>
-
-      <div class="workspace-board">
-        <section v-for="group in settingWorkbenchGroups" :key="group.key" class="workspace-board__group">
-          <div class="workspace-board__header">
-            <strong>{{ group.label }}</strong>
-          </div>
-          <div class="workspace-grid">
-            <button
-              v-for="item in group.items"
-              :key="item.key"
-              type="button"
-              class="workspace-card"
-              :class="{ 'is-active': item.active }"
-              @click="router.push(item.to)"
-            >
-              <strong>{{ item.label }}</strong>
-              <span>{{ item.meta }}</span>
-            </button>
-          </div>
-        </section>
-      </div>
-    </section>
-
     <section v-if="currentMode === 'jobs'" class="panel compact-panel">
       <div class="toolbar toolbar--compact">
         <div class="toolbar-tabs">
@@ -62,7 +15,6 @@
       <div class="panel-heading">
         <div>
           <h3>菜单管理</h3>
-          <p>按角色编排页面权限，保持菜单入口和实际业务职责一致。</p>
         </div>
         <div class="action-group">
           <el-button type="primary" @click="openSettingEditor('menu')">新增菜单</el-button>
@@ -183,7 +135,7 @@
           <div class="status-strip">
             <div class="status-pill">
               <span>授权状态</span>
-              <strong>{{ thirdPartyForm.authStatus || '未配置' }}</strong>
+              <strong>{{ formatAuthStatus(thirdPartyForm.authStatus || 'UNAUTHORIZED') }}</strong>
             </div>
             <div class="status-pill">
               <span>最近回调</span>
@@ -214,24 +166,24 @@
             <label>
               <span>执行模式</span>
               <el-select v-model="thirdPartyForm.executionMode">
-                <el-option label="MOCK" value="MOCK" />
-                <el-option label="LIVE" value="LIVE" />
+                <el-option label="模拟" value="MOCK" />
+                <el-option label="真实" value="LIVE" />
               </el-select>
             </label>
             <label>
               <span>认证方式</span>
-              <el-input v-model="thirdPartyForm.authType" placeholder="如 CLIENT_TOKEN" />
+              <el-input v-model="thirdPartyForm.authType" placeholder="如 AUTH_CODE / CLIENT_TOKEN" />
             </label>
             <label>
               <span>应用 AppId</span>
               <el-input v-model="thirdPartyForm.appId" placeholder="可填抖音开放平台 AppId" />
             </label>
             <label>
-              <span>Base URL</span>
+              <span>基础域名</span>
               <el-input v-model="thirdPartyForm.baseUrl" placeholder="请输入 https 地址" />
             </label>
             <label>
-              <span>Token URL</span>
+              <span>令牌地址</span>
               <el-input v-model="thirdPartyForm.tokenUrl" placeholder="如 https://open.douyin.com/oauth/client_token/" />
             </label>
             <label>
@@ -239,11 +191,11 @@
               <el-input v-model="thirdPartyForm.endpointPath" placeholder="如 /goodlife/v1/open_api/crm/clue/query/" />
             </label>
             <label>
-              <span>Client Key</span>
+              <span>客户端 Key</span>
               <el-input v-model="thirdPartyForm.clientKey" placeholder="请输入 client_key" />
             </label>
             <label>
-              <span>Client Secret</span>
+              <span>客户端 Secret</span>
               <el-input
                 v-model="thirdPartyForm.clientSecret"
                 type="password"
@@ -260,7 +212,7 @@
             </label>
             <label>
               <span>回调状态</span>
-              <el-input :model-value="thirdPartyForm.lastCallbackStatus || '--'" readonly />
+              <el-input :model-value="formatCallbackProcessStatus(thirdPartyForm.lastCallbackStatus || '--')" readonly />
             </label>
             <label>
               <span>回调时间</span>
@@ -298,7 +250,7 @@
               <el-input v-model="thirdPartyForm.lifeAccountIds" placeholder="多个逗号分隔" />
             </label>
             <label>
-              <span>Open ID</span>
+              <span>开放平台 OpenId</span>
               <el-input v-model="thirdPartyForm.openId" placeholder="可选" />
             </label>
             <label>
@@ -318,7 +270,7 @@
               <el-input v-model="thirdPartyForm.redirectUri" placeholder="如第三方授权回跳地址" />
             </label>
             <label>
-              <span>Scope</span>
+              <span>授权范围</span>
               <el-input v-model="thirdPartyForm.scope" placeholder="可选，多个空格或逗号分隔" />
             </label>
             <label class="full-span">
@@ -354,17 +306,29 @@
             {{ formatModuleCode(row.moduleCode) }}
           </template>
         </el-table-column>
-        <el-table-column label="模式" width="100" prop="executionMode" />
-        <el-table-column label="认证" width="140" prop="authType" />
-        <el-table-column label="授权状态" width="140" prop="authStatus" />
+        <el-table-column label="模式" width="100">
+          <template #default="{ row }">
+            {{ formatExecutionMode(row.executionMode) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="认证" width="140">
+          <template #default="{ row }">
+            {{ formatAuthType(row.authType) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="授权状态" width="140">
+          <template #default="{ row }">
+            {{ formatAuthStatus(row.authStatus || 'UNAUTHORIZED') }}
+          </template>
+        </el-table-column>
         <el-table-column label="最近回调" min-width="190">
           <template #default="{ row }">
-            {{ row.lastCallbackStatus || '--' }} / {{ formatDateTime(row.lastCallbackAt) || '--' }}
+            {{ formatCallbackProcessStatus(row.lastCallbackStatus || '--') }} / {{ formatDateTime(row.lastCallbackAt) || '--' }}
           </template>
         </el-table-column>
         <el-table-column label="检测结果" min-width="200">
           <template #default="{ row }">
-            {{ row.lastTestStatus || '--' }}{{ row.lastTestMessage ? ` / ${row.lastTestMessage}` : '' }}
+            {{ formatResultStatus(row.lastTestStatus || '--') }}{{ row.lastTestMessage ? ` / ${row.lastTestMessage}` : '' }}
           </template>
         </el-table-column>
         <el-table-column label="状态" width="100">
@@ -419,7 +383,7 @@
           <div class="status-strip">
             <div class="status-pill">
               <span>最近状态</span>
-              <strong>{{ callbackForm.lastCallbackStatus || '--' }}</strong>
+              <strong>{{ formatCallbackProcessStatus(callbackForm.lastCallbackStatus || '--') }}</strong>
             </div>
             <div class="status-pill">
               <span>最近时间</span>
@@ -495,7 +459,7 @@
         <el-table-column label="签名方式" width="160" prop="signatureMode" />
         <el-table-column label="最近状态" width="140">
           <template #default="{ row }">
-            {{ row.lastCallbackStatus || '--' }}
+            {{ formatCallbackProcessStatus(row.lastCallbackStatus || '--') }}
           </template>
         </el-table-column>
         <el-table-column label="最近时间" min-width="170">
@@ -556,11 +520,15 @@
           <el-table-column label="状态" width="120">
             <template #default="{ row }">
               <el-tag :type="row.processStatus === 'SUCCESS' ? 'success' : row.processStatus === 'FAILED' ? 'danger' : 'info'">
-                {{ row.processStatus || '--' }}
+                {{ formatCallbackProcessStatus(row.processStatus || '--') }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="验签" width="120" prop="signatureStatus" />
+          <el-table-column label="验签" width="120">
+            <template #default="{ row }">
+              {{ formatCallbackSignatureStatus(row.signatureStatus || '--') }}
+            </template>
+          </el-table-column>
           <el-table-column label="授权码" min-width="150">
             <template #default="{ row }">
               {{ row.authCode ? `${row.authCode.slice(0, 2)}****${row.authCode.slice(-2)}` : '--' }}
@@ -590,7 +558,6 @@
         <div class="panel-heading">
           <div>
             <h3>任务调度</h3>
-            <p>参考任务调度中心方式，管理三方接口调用、定时同步和失败重试。</p>
           </div>
           <div class="action-group">
             <el-button type="primary" @click="openSettingEditor('jobs')">新增任务</el-button>
@@ -639,7 +606,7 @@
                   <el-option
                     v-for="item in providerConfigs"
                     :key="item.id"
-                    :label="`${item.providerName}（${item.executionMode}）`"
+                    :label="`${item.providerName}（${formatExecutionMode(item.executionMode)}）`"
                     :value="item.id"
                   />
                 </el-select>
@@ -729,7 +696,6 @@
         <div class="panel-heading">
           <div>
             <h3>执行日志</h3>
-            <p>查看任务执行载荷、错误信息和下次重试时间。</p>
           </div>
           <el-select v-model="selectedJobCode" clearable placeholder="按任务筛选" style="width: 220px" @change="loadLogs">
             <el-option v-for="item in jobs" :key="item.jobCode" :label="item.jobCode" :value="item.jobCode" />
@@ -772,7 +738,6 @@
       <div class="panel-heading">
         <div>
           <h3>对外接口</h3>
-          <p>选择数据源表或联合查询结果，统一做字段映射、限流、缓存和认证控制。</p>
         </div>
         <div class="action-group">
           <el-button type="primary" @click="openSettingEditor('public-api')">新增接口</el-button>
@@ -866,7 +831,6 @@
       <div class="panel-heading">
         <div>
           <h3>字典管理</h3>
-          <p>维护编码和值的对应关系，让页面显示中文、数据存储编码。</p>
         </div>
         <div class="action-group">
           <el-button type="primary" @click="openSettingEditor('dictionary')">新增字典</el-button>
@@ -948,7 +912,6 @@
       <div class="panel-heading">
         <div>
           <h3>参数管理</h3>
-          <p>维护系统参数键值，方便各模块统一调用。</p>
         </div>
         <div class="action-group">
           <el-button type="primary" @click="openSettingEditor('parameter')">新增参数</el-button>
@@ -1023,7 +986,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import {
   fetchIntegrationCallbacks,
   fetchIntegrationCallbackLogs,
@@ -1039,8 +1002,14 @@ import {
 } from '../api/scheduler'
 import { useTablePagination } from '../composables/useTablePagination'
 import {
+  formatAuthStatus,
+  formatAuthType,
+  formatCallbackProcessStatus,
+  formatCallbackSignatureStatus,
   formatDateTime,
+  formatExecutionMode,
   formatModuleCode,
+  formatResultStatus,
   formatRoleCode,
   formatSchedulerStatus,
   formatSyncMode,
@@ -1049,7 +1018,6 @@ import {
 import { loadSystemConsoleState, nextSystemId, saveSystemConsoleState } from '../utils/systemConsoleStore'
 
 const route = useRoute()
-const router = useRouter()
 const state = reactive(loadSystemConsoleState())
 const providerConfigs = ref([])
 const callbackConfigs = ref([])
@@ -1098,178 +1066,6 @@ const jobForm = reactive({
   endpoint: '/clue/add',
   status: 'ENABLED'
 })
-const settingWorkbenchGroups = computed(() => [
-  {
-    key: 'base',
-    label: '基础配置',
-    items: [
-      {
-        key: 'menu',
-        label: '菜单管理',
-        meta: `${state.menuConfigs.length} 项`,
-        to: '/settings/menu',
-        active: currentMode.value === 'menu'
-      },
-      {
-        key: 'dictionary',
-        label: '字典管理',
-        meta: `${state.dictionaries.length} 项`,
-        to: '/settings/dictionaries',
-        active: currentMode.value === 'dictionary'
-      },
-      {
-        key: 'parameter',
-        label: '参数管理',
-        meta: `${state.parameters.length} 项`,
-        to: '/settings/parameters',
-        active: currentMode.value === 'parameter'
-      }
-    ]
-  },
-  {
-    key: 'integration',
-    label: '集成接入',
-    items: [
-      {
-        key: 'third-party',
-        label: '三方接口',
-        meta: `${providerConfigs.value.length} 项`,
-        to: '/settings/integration/third-party',
-        active: currentMode.value === 'third-party'
-      },
-      {
-        key: 'callback',
-        label: '回调接口',
-        meta: `${callbackConfigs.value.length} 项`,
-        to: '/settings/integration/callback',
-        active: currentMode.value === 'callback'
-      }
-    ]
-  },
-  {
-    key: 'runtime',
-    label: '任务运行',
-    items: [
-      {
-        key: 'jobs',
-        label: '任务调度',
-        meta: `${jobs.value.length} 个任务`,
-        to: '/settings/integration/jobs',
-        active: currentMode.value === 'jobs'
-      }
-    ]
-  },
-  {
-    key: 'api',
-    label: '开放能力',
-    items: [
-      {
-        key: 'public-api',
-        label: '对外接口',
-        meta: `${state.publicApis.length} 项`,
-        to: '/settings/integration/public-api',
-        active: currentMode.value === 'public-api'
-      }
-    ]
-  }
-])
-
-function currentDateKey() {
-  return new Intl.DateTimeFormat('sv-SE').format(new Date())
-}
-
-const metrics = computed(() => {
-  if (currentMode.value === 'menu') {
-    return {
-      primaryLabel: '菜单数量',
-      primaryValue: state.menuConfigs.length,
-      primaryHint: '当前已编排的后台菜单数',
-      secondaryLabel: '启用菜单',
-      secondaryValue: state.menuConfigs.filter((item) => item.isEnabled === 1).length,
-      secondaryHint: '当前仍对角色开放的菜单',
-      tertiaryLabel: '角色覆盖',
-      tertiaryValue: new Set(state.menuConfigs.flatMap((item) => item.roleCodes || [])).size,
-      tertiaryHint: '菜单已覆盖的角色数量'
-    }
-  }
-  if (currentMode.value === 'third-party') {
-    return {
-      primaryLabel: '三方接口',
-      primaryValue: providerConfigs.value.length,
-      primaryHint: '当前接入的三方接口配置数',
-      secondaryLabel: '启用接口',
-      secondaryValue: providerConfigs.value.filter((item) => item.enabled === 1).length,
-      secondaryHint: '当前处于启用状态的接口',
-      tertiaryLabel: '客资拉取任务',
-      tertiaryValue: providerConfigs.value.filter((item) => item.moduleCode === 'CLUE').length,
-      tertiaryHint: '客资中心自动拉取依赖这些接口'
-    }
-  }
-  if (currentMode.value === 'callback') {
-    return {
-      primaryLabel: '启用回调',
-      primaryValue: callbackConfigs.value.filter((item) => item.enabled === 1).length,
-      primaryHint: '当前仍在接收通知的回调',
-      secondaryLabel: '今日回调',
-      secondaryValue: callbackLogs.value.filter((item) => (item.receivedAt || '').startsWith(currentDateKey())).length,
-      secondaryHint: '今天已进入系统的回调数量',
-      tertiaryLabel: '异常回调',
-      tertiaryValue: callbackLogs.value.filter((item) => ['FAILED', 'INVALID'].includes(item.processStatus) || ['FAILED', 'INVALID'].includes(item.signatureStatus)).length,
-      tertiaryHint: '最近需要处理的失败或验签异常'
-    }
-  }
-  if (currentMode.value === 'jobs') {
-    return {
-      primaryLabel: '任务总数',
-      primaryValue: jobs.value.length,
-      primaryHint: '当前调度任务数量',
-      secondaryLabel: '启用任务',
-      secondaryValue: jobs.value.filter((item) => ['ACTIVE', 'ENABLED'].includes(item.status)).length,
-      secondaryHint: '已启用的自动同步任务',
-      tertiaryLabel: '失败日志',
-      tertiaryValue: logs.value.filter((item) => ['FAIL', 'FAILED'].includes(item.status)).length,
-      tertiaryHint: '失败任务可在下方继续重试'
-    }
-  }
-  if (currentMode.value === 'public-api') {
-    return {
-      primaryLabel: '对外接口',
-      primaryValue: state.publicApis.length,
-      primaryHint: '当前开放的外部查询接口数',
-      secondaryLabel: '启用接口',
-      secondaryValue: state.publicApis.filter((item) => item.enabled === 1).length,
-      secondaryHint: '启用后可对外提供访问',
-      tertiaryLabel: '缓存策略',
-      tertiaryValue: state.publicApis.filter((item) => item.cachePolicy).length,
-      tertiaryHint: '已配置缓存的接口数量'
-    }
-  }
-  if (currentMode.value === 'dictionary') {
-    return {
-      primaryLabel: '字典项',
-      primaryValue: state.dictionaries.length,
-      primaryHint: '系统内全部字典项数量',
-      secondaryLabel: '启用字典',
-      secondaryValue: state.dictionaries.filter((item) => item.isEnabled === 1).length,
-      secondaryHint: '当前生效中的字典项',
-      tertiaryLabel: '字典类型',
-      tertiaryValue: new Set(state.dictionaries.map((item) => item.dictType)).size,
-      tertiaryHint: '不同业务共用的字典类型数量'
-    }
-  }
-  return {
-    primaryLabel: '系统参数',
-    primaryValue: state.parameters.length,
-    primaryHint: '系统级参数总数',
-    secondaryLabel: '业务分类',
-    secondaryValue: new Set(state.parameters.map((item) => item.category)).size,
-    secondaryHint: '参数覆盖的业务分类数',
-    tertiaryLabel: '关键参数',
-    tertiaryValue: state.parameters.filter((item) => item.paramKey.includes('enabled')).length,
-    tertiaryHint: '直接影响功能开关的参数数'
-  }
-})
-
 function createMenuForm() {
   return {
     id: null,

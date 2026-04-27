@@ -32,21 +32,26 @@ import com.seedcrm.crm.salary.entity.WithdrawRecord;
 import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
 import com.seedcrm.crm.salary.mapper.WithdrawRecordMapper;
 import com.seedcrm.crm.wecom.entity.CustomerWecomRelation;
+import com.seedcrm.crm.wecom.entity.WecomLiveCodeConfig;
 import com.seedcrm.crm.wecom.entity.WecomTouchLog;
 import com.seedcrm.crm.wecom.mapper.CustomerWecomRelationMapper;
 import com.seedcrm.crm.wecom.mapper.WecomTouchLogMapper;
+import com.seedcrm.crm.wecom.service.WecomConsoleService;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CurrentRoleResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CustomerProfileResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CustomerSnapshotResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.DistributorBoardItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.EcomBindingResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FinanceMonthlyStatResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FinanceOverviewResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FinanceTeamStatResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.OrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderWorkbenchResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.RoleRecordResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StaffRoleOptionResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StoreLiveCodePreviewResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.WecomLogResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.WithdrawRecordResponse;
 import com.seedcrm.crm.workbench.service.StaffDirectoryService;
@@ -55,6 +60,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -88,6 +94,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
     private final WithdrawRecordMapper withdrawRecordMapper;
     private final DistributorService distributorService;
     private final StaffDirectoryService staffDirectoryService;
+    private final WecomConsoleService wecomConsoleService;
 
     public WorkbenchServiceImpl(ClueMapper clueMapper,
                                 OrderMapper orderMapper,
@@ -101,10 +108,11 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                                 DistributorMapper distributorMapper,
                                 DistributorIncomeDetailMapper distributorIncomeDetailMapper,
                                 DistributorWithdrawMapper distributorWithdrawMapper,
-                                SalaryDetailMapper salaryDetailMapper,
-                                WithdrawRecordMapper withdrawRecordMapper,
-                                DistributorService distributorService,
-                                StaffDirectoryService staffDirectoryService) {
+                                 SalaryDetailMapper salaryDetailMapper,
+                                 WithdrawRecordMapper withdrawRecordMapper,
+                                 DistributorService distributorService,
+                                 StaffDirectoryService staffDirectoryService,
+                                 WecomConsoleService wecomConsoleService) {
         this.clueMapper = clueMapper;
         this.orderMapper = orderMapper;
         this.planOrderMapper = planOrderMapper;
@@ -121,6 +129,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         this.withdrawRecordMapper = withdrawRecordMapper;
         this.distributorService = distributorService;
         this.staffDirectoryService = staffDirectoryService;
+        this.wecomConsoleService = wecomConsoleService;
     }
 
     @Override
@@ -173,7 +182,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                     clue.getCurrentOwnerId(),
                     staffDirectoryService.getUserName(clue.getCurrentOwnerId()),
                     clue.getIsPublic(),
-                    resolveStoreName(clue.getId()),
+                    resolveVisibleStoreName(clue.getId()),
                     customer == null ? null : customer.getId(),
                     latestOrder == null ? null : latestOrder.getId(),
                     latestOrder == null ? null : toWorkbenchOrderStatus(latestOrder.getStatus()),
@@ -203,6 +212,42 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 .limit(20)
                 .toList();
         return buildOrderResponses(filteredOrders);
+    }
+
+    @Override
+    public StoreLiveCodePreviewResponse getOrderLiveCodePreview(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            throw new BusinessException("orderId is required");
+        }
+        Order order = orderMapper.selectById(orderId);
+        if (order == null) {
+            throw new BusinessException("order not found");
+        }
+        String storeName = resolveVisibleStoreName(order.getClueId() == null ? order.getId() : order.getClueId());
+        return wecomConsoleService.listLiveCodeConfigs().stream()
+                .filter(config -> config != null && config.getIsEnabled() != null && config.getIsEnabled() == 1)
+                .filter(config -> config.getPublishedAt() != null)
+                .filter(config -> StringUtils.hasText(config.getQrCodeUrl()))
+                .filter(config -> config.getStoreNames() != null && config.getStoreNames().stream()
+                        .filter(StringUtils::hasText)
+                        .map(String::trim)
+                        .anyMatch(storeName::equals))
+                .sorted(Comparator
+                        .comparing(WecomLiveCodeConfig::getPublishedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(WecomLiveCodeConfig::getGeneratedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(WecomLiveCodeConfig::getId, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(config -> new StoreLiveCodePreviewResponse(
+                        config.getId(),
+                        config.getCodeName(),
+                        storeName,
+                        config.getContactWayId(),
+                        config.getQrCodeUrl(),
+                        config.getShortLink(),
+                        config.getStoreNames(),
+                        config.getGeneratedAt(),
+                        config.getPublishedAt()))
+                .findFirst()
+                .orElse(null);
     }
 
     @Override
@@ -335,37 +380,40 @@ public class WorkbenchServiceImpl implements WorkbenchService {
     @Override
     public FinanceOverviewResponse getFinanceOverview() {
         LocalDate today = LocalDate.now();
-        BigDecimal todayIncome = orderMapper.selectList(Wrappers.<Order>lambdaQuery()
+        List<Order> completedOrders = orderMapper.selectList(Wrappers.<Order>lambdaQuery()
                         .isNotNull(Order::getCompleteTime)
-                        .orderByDesc(Order::getCompleteTime))
-                .stream()
+                        .orderByDesc(Order::getCompleteTime));
+        BigDecimal todayIncome = completedOrders.stream()
                 .filter(order -> order.getCompleteTime() != null && today.equals(order.getCompleteTime().toLocalDate()))
                 .map(Order::getAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal employeeIncome = salaryDetailMapper.selectList(Wrappers.<SalaryDetail>lambdaQuery()
-                        .orderByDesc(SalaryDetail::getCreateTime))
-                .stream()
+        List<SalaryDetail> salaryDetails = salaryDetailMapper.selectList(Wrappers.<SalaryDetail>lambdaQuery()
+                .orderByDesc(SalaryDetail::getCreateTime));
+        BigDecimal employeeIncome = salaryDetails.stream()
                 .map(SalaryDetail::getAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal distributorIncome = distributorIncomeDetailMapper.selectList(Wrappers.<DistributorIncomeDetail>lambdaQuery()
-                        .orderByDesc(DistributorIncomeDetail::getCreateTime))
-                .stream()
+        List<DistributorIncomeDetail> distributorIncomeDetails = distributorIncomeDetailMapper.selectList(
+                Wrappers.<DistributorIncomeDetail>lambdaQuery().orderByDesc(DistributorIncomeDetail::getCreateTime));
+        BigDecimal distributorIncome = distributorIncomeDetails.stream()
                 .map(DistributorIncomeDetail::getIncomeAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        List<WithdrawRecord> employeeWithdraws = withdrawRecordMapper.selectList(Wrappers.<WithdrawRecord>lambdaQuery()
+                .orderByDesc(WithdrawRecord::getCreateTime));
+        List<DistributorWithdraw> distributorWithdraws = distributorWithdrawMapper.selectList(Wrappers.<DistributorWithdraw>lambdaQuery()
+                .orderByDesc(DistributorWithdraw::getCreateTime));
 
         Map<Long, Distributor> distributorMap = distributorMapper.selectList(Wrappers.<Distributor>lambdaQuery())
                 .stream()
                 .collect(Collectors.toMap(Distributor::getId, Function.identity(), (left, right) -> left));
 
         List<WithdrawRecordResponse> withdrawRecords = new ArrayList<>();
-        withdrawRecordMapper.selectList(Wrappers.<WithdrawRecord>lambdaQuery()
-                        .orderByDesc(WithdrawRecord::getCreateTime)
-                        .last("LIMIT 10"))
+        employeeWithdraws.stream()
+                .limit(10)
                 .forEach(record -> withdrawRecords.add(new WithdrawRecordResponse(
                         "EMPLOYEE",
                         record.getUserId(),
@@ -374,9 +422,8 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                         record.getStatus(),
                         record.getCreateTime())));
 
-        distributorWithdrawMapper.selectList(Wrappers.<DistributorWithdraw>lambdaQuery()
-                        .orderByDesc(DistributorWithdraw::getCreateTime)
-                        .last("LIMIT 10"))
+        distributorWithdraws.stream()
+                .limit(10)
                 .forEach(record -> withdrawRecords.add(new WithdrawRecordResponse(
                         "DISTRIBUTOR",
                         record.getDistributorId(),
@@ -392,12 +439,22 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                         .reversed())
                 .limit(10)
                 .toList();
+        List<FinanceMonthlyStatResponse> monthlyStats = buildMonthlyFinanceStats(
+                completedOrders,
+                salaryDetails,
+                distributorIncomeDetails,
+                employeeWithdraws,
+                distributorWithdraws
+        );
+        List<FinanceTeamStatResponse> teamStats = buildTeamFinanceStats(salaryDetails, distributorIncomeDetails);
 
         return new FinanceOverviewResponse(
                 scale(todayIncome),
                 scale(employeeIncome),
                 scale(distributorIncome),
-                recentWithdraws);
+                recentWithdraws,
+                monthlyStats,
+                teamStats);
     }
 
     @Override
@@ -438,7 +495,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 customer == null ? null : customer.getPhone(),
                 order.getSourceChannel(),
                 resolveProductSourceType(order.getSourceChannel(), null, null, order.getSourceId(), order.getClueId()),
-                resolveStoreName(order.getClueId() == null ? order.getId() : order.getClueId()),
+                resolveVisibleStoreName(order.getClueId() == null ? order.getId() : order.getClueId()),
                 scale(order.getAmount()),
                 scale(order.getDeposit()),
                 OrderType.toApiValue(order.getType()),
@@ -709,6 +766,15 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         };
     }
 
+    private String resolveVisibleStoreName(Long compatibleId) {
+        long marker = compatibleId == null ? 0L : Math.abs(compatibleId);
+        return switch ((int) (marker % 3)) {
+            case 0 -> "静安门店";
+            case 1 -> "浦东门店";
+            default -> "徐汇门店";
+        };
+    }
+
     private boolean matchesWorkbenchOrderStatus(Order order, String normalizedStatus) {
         if (!StringUtils.hasText(normalizedStatus)) {
             return true;
@@ -740,5 +806,141 @@ public class WorkbenchServiceImpl implements WorkbenchService {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
         return value.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private List<FinanceMonthlyStatResponse> buildMonthlyFinanceStats(List<Order> completedOrders,
+                                                                      List<SalaryDetail> salaryDetails,
+                                                                      List<DistributorIncomeDetail> distributorIncomeDetails,
+                                                                      List<WithdrawRecord> employeeWithdraws,
+                                                                      List<DistributorWithdraw> distributorWithdraws) {
+        YearMonth currentMonth = YearMonth.now();
+        Map<YearMonth, MonthlyFinanceBucket> buckets = new LinkedHashMap<>();
+        for (int offset = 5; offset >= 0; offset--) {
+            buckets.put(currentMonth.minusMonths(offset), new MonthlyFinanceBucket());
+        }
+
+        completedOrders.forEach(order -> addMonthlyAmount(
+                buckets,
+                order == null ? null : order.getCompleteTime(),
+                order == null ? null : order.getAmount(),
+                MonthlyMetric.ORDER
+        ));
+        salaryDetails.forEach(detail -> addMonthlyAmount(
+                buckets,
+                detail == null ? null : detail.getCreateTime(),
+                detail == null ? null : detail.getAmount(),
+                MonthlyMetric.EMPLOYEE
+        ));
+        distributorIncomeDetails.forEach(detail -> addMonthlyAmount(
+                buckets,
+                detail == null ? null : detail.getCreateTime(),
+                detail == null ? null : detail.getIncomeAmount(),
+                MonthlyMetric.DISTRIBUTOR
+        ));
+        employeeWithdraws.forEach(record -> addMonthlyAmount(
+                buckets,
+                record == null ? null : record.getCreateTime(),
+                record == null ? null : record.getAmount(),
+                MonthlyMetric.WITHDRAW
+        ));
+        distributorWithdraws.forEach(record -> addMonthlyAmount(
+                buckets,
+                record == null ? null : record.getCreateTime(),
+                record == null ? null : record.getAmount(),
+                MonthlyMetric.WITHDRAW
+        ));
+
+        return buckets.entrySet().stream()
+                .map(entry -> new FinanceMonthlyStatResponse(
+                        entry.getKey().toString(),
+                        scale(entry.getValue().orderIncome),
+                        scale(entry.getValue().employeeIncome),
+                        scale(entry.getValue().distributorIncome),
+                        scale(entry.getValue().withdrawAmount)))
+                .toList();
+    }
+
+    private void addMonthlyAmount(Map<YearMonth, MonthlyFinanceBucket> buckets,
+                                  LocalDateTime dateTime,
+                                  BigDecimal amount,
+                                  MonthlyMetric metric) {
+        if (dateTime == null || amount == null) {
+            return;
+        }
+        MonthlyFinanceBucket bucket = buckets.get(YearMonth.from(dateTime));
+        if (bucket == null) {
+            return;
+        }
+        switch (metric) {
+            case ORDER -> bucket.orderIncome = bucket.orderIncome.add(amount);
+            case EMPLOYEE -> bucket.employeeIncome = bucket.employeeIncome.add(amount);
+            case DISTRIBUTOR -> bucket.distributorIncome = bucket.distributorIncome.add(amount);
+            case WITHDRAW -> bucket.withdrawAmount = bucket.withdrawAmount.add(amount);
+        }
+    }
+
+    private List<FinanceTeamStatResponse> buildTeamFinanceStats(List<SalaryDetail> salaryDetails,
+                                                                List<DistributorIncomeDetail> distributorIncomeDetails) {
+        Map<String, TeamFinanceBucket> buckets = new LinkedHashMap<>();
+        for (SalaryDetail detail : salaryDetails) {
+            String roleCode = normalize(detail == null ? null : detail.getRoleCode());
+            if (!StringUtils.hasText(roleCode)) {
+                continue;
+            }
+            TeamFinanceBucket bucket = buckets.computeIfAbsent(roleCode, key -> new TeamFinanceBucket(staffDirectoryService.getRoleName(key)));
+            if (detail.getUserId() != null) {
+                bucket.memberIds.put(detail.getUserId(), Boolean.TRUE);
+            }
+            bucket.serviceCount++;
+            bucket.orderIncome = bucket.orderIncome.add(detail.getOrderAmount() == null ? BigDecimal.ZERO : detail.getOrderAmount());
+            bucket.incomeAmount = bucket.incomeAmount.add(detail.getAmount() == null ? BigDecimal.ZERO : detail.getAmount());
+        }
+        if (!distributorIncomeDetails.isEmpty()) {
+            TeamFinanceBucket distributorBucket = buckets.computeIfAbsent("DISTRIBUTOR_TEAM", key -> new TeamFinanceBucket("DISTRIBUTOR_TEAM"));
+            for (DistributorIncomeDetail detail : distributorIncomeDetails) {
+                if (detail.getDistributorId() != null) {
+                    distributorBucket.memberIds.put(detail.getDistributorId(), Boolean.TRUE);
+                }
+                distributorBucket.serviceCount++;
+                distributorBucket.orderIncome = distributorBucket.orderIncome.add(detail.getOrderAmount() == null ? BigDecimal.ZERO : detail.getOrderAmount());
+                distributorBucket.incomeAmount = distributorBucket.incomeAmount.add(detail.getIncomeAmount() == null ? BigDecimal.ZERO : detail.getIncomeAmount());
+            }
+        }
+        return buckets.values().stream()
+                .sorted(Comparator.comparing((TeamFinanceBucket bucket) -> bucket.incomeAmount).reversed())
+                .limit(6)
+                .map(bucket -> new FinanceTeamStatResponse(
+                        bucket.teamLabel,
+                        (long) bucket.memberIds.size(),
+                        bucket.serviceCount,
+                        scale(bucket.orderIncome),
+                        scale(bucket.incomeAmount)))
+                .toList();
+    }
+
+    private enum MonthlyMetric {
+        ORDER,
+        EMPLOYEE,
+        DISTRIBUTOR,
+        WITHDRAW
+    }
+
+    private static class MonthlyFinanceBucket {
+        private BigDecimal orderIncome = BigDecimal.ZERO;
+        private BigDecimal employeeIncome = BigDecimal.ZERO;
+        private BigDecimal distributorIncome = BigDecimal.ZERO;
+        private BigDecimal withdrawAmount = BigDecimal.ZERO;
+    }
+
+    private static class TeamFinanceBucket {
+        private final String teamLabel;
+        private final Map<Long, Boolean> memberIds = new LinkedHashMap<>();
+        private long serviceCount;
+        private BigDecimal orderIncome = BigDecimal.ZERO;
+        private BigDecimal incomeAmount = BigDecimal.ZERO;
+
+        private TeamFinanceBucket(String teamLabel) {
+            this.teamLabel = teamLabel;
+        }
     }
 }

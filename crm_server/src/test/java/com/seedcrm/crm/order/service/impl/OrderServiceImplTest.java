@@ -23,7 +23,9 @@ import com.seedcrm.crm.order.dto.OrderPayDTO;
 import com.seedcrm.crm.order.dto.OrderServiceDetailDTO;
 import com.seedcrm.crm.order.dto.OrderVoucherVerifyDTO;
 import com.seedcrm.crm.order.entity.Order;
+import com.seedcrm.crm.order.entity.OrderActionRecord;
 import com.seedcrm.crm.order.enums.OrderStatus;
+import com.seedcrm.crm.order.mapper.OrderActionRecordMapper;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.order.service.OrderSettlementService;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
@@ -65,12 +67,16 @@ class OrderServiceImplTest {
     @Mock
     private OrderSettlementService orderSettlementService;
 
+    @Mock
+    private OrderActionRecordMapper orderActionRecordMapper;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
     void setUp() {
         orderService = new OrderServiceImpl(orderMapper, clueMapper, customerService, customerTagService,
-                planOrderMapper, distributorIncomeService, dbLockService, orderSettlementService);
+                planOrderMapper, distributorIncomeService, dbLockService, orderSettlementService,
+                orderActionRecordMapper);
     }
 
     @Test
@@ -269,6 +275,7 @@ class OrderServiceImplTest {
         verify(customerService, times(1)).getByIdOrThrow(202L);
         verify(customerService).refreshCustomerLifecycle(202L);
         verify(orderSettlementService).settleCompletedOrder(2L);
+        verify(orderActionRecordMapper).insert(any(OrderActionRecord.class));
     }
 
     @Test
@@ -292,6 +299,50 @@ class OrderServiceImplTest {
         assertThatThrownBy(() -> orderService.complete(dto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("plan order must be finished");
+    }
+
+    @Test
+    void refundShouldOnlyRegisterActionRecordForCompletedOrder() {
+        Order order = new Order();
+        order.setId(12L);
+        order.setOrderNo("ORD202604211234567912");
+        order.setCustomerId(212L);
+        order.setStatus(OrderStatus.COMPLETED.name());
+        when(dbLockService.lockOrder(12L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(212L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderActionDTO dto = new OrderActionDTO();
+        dto.setOrderId(12L);
+        dto.setRemark("store refund register");
+
+        Order refunded = orderService.refund(dto, 9002L);
+
+        assertThat(refunded.getStatus()).isEqualTo(OrderStatus.COMPLETED.name());
+        verify(orderActionRecordMapper).insert(any(OrderActionRecord.class));
+        verify(orderSettlementService, never()).settleCompletedOrder(12L);
+    }
+
+    @Test
+    void refundShouldChangeUnfinishedOrderStatus() {
+        Order order = new Order();
+        order.setId(13L);
+        order.setOrderNo("ORD202604211234567913");
+        order.setCustomerId(213L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        when(dbLockService.lockOrder(13L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(213L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderActionDTO dto = new OrderActionDTO();
+        dto.setOrderId(13L);
+        dto.setRemark("before service refund register");
+
+        Order refunded = orderService.refund(dto, 9002L);
+
+        assertThat(refunded.getStatus()).isEqualTo(OrderStatus.REFUNDED.name());
+        verify(orderActionRecordMapper).insert(any(OrderActionRecord.class));
+        verify(orderSettlementService, never()).settleCompletedOrder(13L);
     }
 
     @Test
@@ -323,7 +374,7 @@ class OrderServiceImplTest {
         order.setId(8L);
         order.setCustomerId(208L);
         order.setStatus(OrderStatus.COMPLETED.name());
-        when(orderMapper.selectById(8L)).thenReturn(order);
+        when(dbLockService.lockOrder(8L)).thenReturn(order);
         when(customerService.getByIdOrThrow(208L)).thenReturn(new Customer());
 
         OrderVoucherVerifyDTO dto = new OrderVoucherVerifyDTO();

@@ -8,6 +8,10 @@ export function fetchOrders(params) {
   return http.get('/workbench/orders', { params })
 }
 
+export function fetchOrderWecomLiveCode(orderId) {
+  return http.get(`/workbench/orders/${orderId}/wecom-live-code`)
+}
+
 export function fetchPlanOrders(params) {
   return http.get('/workbench/plan-orders', { params })
 }

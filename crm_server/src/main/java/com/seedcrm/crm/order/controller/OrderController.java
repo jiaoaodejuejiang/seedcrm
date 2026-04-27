@@ -81,7 +81,7 @@ public class OrderController {
     public ApiResponse<OrderResponse> complete(@RequestBody OrderActionDTO orderActionDTO, HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         orderPermissionGuard.checkFinish(context, orderActionDTO == null ? null : orderActionDTO.getOrderId());
-        return ApiResponse.success(OrderResponse.from(orderService.complete(orderActionDTO)));
+        return ApiResponse.success(OrderResponse.from(orderService.complete(orderActionDTO, context.getCurrentUserId())));
     }
 
     @PostMapping("/cancel")
@@ -95,7 +95,7 @@ public class OrderController {
     public ApiResponse<OrderResponse> refund(@RequestBody OrderActionDTO orderActionDTO, HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         orderPermissionGuard.checkUpdate(context, orderActionDTO == null ? null : orderActionDTO.getOrderId());
-        return ApiResponse.success(OrderResponse.from(orderService.refund(orderActionDTO)));
+        return ApiResponse.success(OrderResponse.from(orderService.refund(orderActionDTO, context.getCurrentUserId())));
     }
 
     @PostMapping("/verify")

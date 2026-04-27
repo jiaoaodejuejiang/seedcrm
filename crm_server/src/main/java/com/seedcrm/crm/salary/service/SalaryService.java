@@ -11,6 +11,8 @@ public interface SalaryService {
 
     SalaryBalanceResponse balance(Long userId);
 
+    List<SalaryDetail> listDetails(Long userId);
+
     List<SalaryDetail> calculateForPlanOrder(Long planOrderId);
 
     List<SalaryDetail> recalculateForPlanOrder(Long planOrderId);

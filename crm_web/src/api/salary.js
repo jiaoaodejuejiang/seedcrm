@@ -24,6 +24,14 @@ export function fetchSalaryWithdrawable(userId) {
   })
 }
 
+export function fetchSalaryDetails(userId) {
+  return http.get('/salary/details', {
+    params: {
+      userId
+    }
+  })
+}
+
 export function fetchSalarySettlements(userId) {
   return http.get('/salary/settlements', {
     params: {

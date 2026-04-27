@@ -17,8 +17,10 @@ import com.seedcrm.crm.order.dto.OrderPayDTO;
 import com.seedcrm.crm.order.dto.OrderServiceDetailDTO;
 import com.seedcrm.crm.order.dto.OrderVoucherVerifyDTO;
 import com.seedcrm.crm.order.entity.Order;
+import com.seedcrm.crm.order.entity.OrderActionRecord;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.enums.OrderType;
+import com.seedcrm.crm.order.mapper.OrderActionRecordMapper;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.order.service.OrderSettlementService;
 import com.seedcrm.crm.order.service.OrderService;
@@ -46,6 +48,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final DistributorIncomeService distributorIncomeService;
     private final DbLockService dbLockService;
     private final OrderSettlementService orderSettlementService;
+    private final OrderActionRecordMapper orderActionRecordMapper;
 
     public OrderServiceImpl(OrderMapper orderMapper,
                             ClueMapper clueMapper,
@@ -54,7 +57,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                             PlanOrderMapper planOrderMapper,
                             DistributorIncomeService distributorIncomeService,
                             DbLockService dbLockService,
-                            OrderSettlementService orderSettlementService) {
+                            OrderSettlementService orderSettlementService,
+                            OrderActionRecordMapper orderActionRecordMapper) {
         this.orderMapper = orderMapper;
         this.clueMapper = clueMapper;
         this.customerService = customerService;
@@ -63,6 +67,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         this.distributorIncomeService = distributorIncomeService;
         this.dbLockService = dbLockService;
         this.orderSettlementService = orderSettlementService;
+        this.orderActionRecordMapper = orderActionRecordMapper;
     }
 
     @Override
@@ -174,6 +179,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     @Transactional
     public Order complete(OrderActionDTO orderActionDTO) {
+        return complete(orderActionDTO, null);
+    }
+
+    @Override
+    @Transactional
+    public Order complete(OrderActionDTO orderActionDTO, Long operatorUserId) {
         validateOrderId(orderActionDTO == null ? null : orderActionDTO.getOrderId());
         Order order = dbLockService.lockOrder(orderActionDTO.getOrderId());
         ensureOrderCustomerBound(order);
@@ -184,7 +195,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         ensurePlanOrderFinished(order.getId());
         order.setCompleteTime(LocalDateTime.now());
         updateRemark(order, orderActionDTO.getRemark());
+        String fromStatus = order.getStatus();
         updateOrderStatus(order, OrderStatus.COMPLETED);
+        recordOrderAction(order.getId(), "ORDER_COMPLETE", fromStatus, OrderStatus.COMPLETED.name(),
+                operatorUserId, orderActionDTO.getRemark());
         return orderSettlementService.settleCompletedOrder(order.getId());
     }
 
@@ -205,22 +219,44 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     @Transactional
     public Order refund(OrderActionDTO orderActionDTO) {
+        return refund(orderActionDTO, null);
+    }
+
+    @Override
+    @Transactional
+    public Order refund(OrderActionDTO orderActionDTO, Long operatorUserId) {
         validateOrderId(orderActionDTO == null ? null : orderActionDTO.getOrderId());
-        Order order = getOrderById(orderActionDTO.getOrderId());
+        Order order = dbLockService.lockOrder(orderActionDTO.getOrderId());
         ensureOrderCustomerBound(order);
         OrderStatus currentStatus = getCurrentStatus(order);
         if (!currentStatus.canRefund()) {
             throw new BusinessException("order cannot be refunded from status " + currentStatus.name());
         }
+        if (orderActionDTO.getServiceRefundAmount() != null
+                && orderActionDTO.getServiceRefundAmount().compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException("service refund amount cannot be negative");
+        }
         updateRemark(order, orderActionDTO.getRemark());
-        return updateOrderStatus(order, OrderStatus.REFUNDED);
+        if (currentStatus == OrderStatus.COMPLETED) {
+            order.setUpdateTime(LocalDateTime.now());
+            if (orderMapper.updateById(order) <= 0) {
+                throw new BusinessException("failed to register order refund");
+            }
+            recordOrderAction(order.getId(), "REFUND_REGISTER", currentStatus.name(), currentStatus.name(),
+                    operatorUserId, orderActionDTO.getRemark(), buildRefundActionExtra(orderActionDTO));
+            return order;
+        }
+        Order updated = updateOrderStatus(order, OrderStatus.REFUNDED);
+        recordOrderAction(order.getId(), "REFUND_REGISTER", currentStatus.name(), OrderStatus.REFUNDED.name(),
+                operatorUserId, orderActionDTO.getRemark(), buildRefundActionExtra(orderActionDTO));
+        return updated;
     }
 
     @Override
     @Transactional
     public Order verifyVoucher(OrderVoucherVerifyDTO orderVoucherVerifyDTO, Long operatorUserId) {
         validateOrderId(orderVoucherVerifyDTO == null ? null : orderVoucherVerifyDTO.getOrderId());
-        Order order = getOrderById(orderVoucherVerifyDTO.getOrderId());
+        Order order = dbLockService.lockOrder(orderVoucherVerifyDTO.getOrderId());
         ensureOrderCustomerBound(order);
         OrderStatus currentStatus = getCurrentStatus(order);
         if (!currentStatus.isPaidStage()) {
@@ -243,6 +279,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (orderMapper.updateById(order) <= 0) {
             throw new BusinessException("failed to verify order");
         }
+        recordOrderAction(order.getId(), "VOUCHER_VERIFY", currentStatus.name(), currentStatus.name(),
+                operatorUserId, verificationCode);
         refreshCustomerLifecycle(order.getCustomerId());
         return order;
     }
@@ -476,5 +514,53 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             order.setSourceChannel(customer.getSourceChannel());
             order.setSourceId(customer.getSourceId());
         }
+    }
+
+    private void recordOrderAction(Long orderId,
+                                   String actionType,
+                                   String fromStatus,
+                                   String toStatus,
+                                   Long operatorUserId,
+                                   String remark) {
+        recordOrderAction(orderId, actionType, fromStatus, toStatus, operatorUserId, remark, null);
+    }
+
+    private void recordOrderAction(Long orderId,
+                                   String actionType,
+                                   String fromStatus,
+                                   String toStatus,
+                                   Long operatorUserId,
+                                   String remark,
+                                   String extraJson) {
+        if (orderId == null || orderId <= 0) {
+            return;
+        }
+        OrderActionRecord record = new OrderActionRecord();
+        record.setOrderId(orderId);
+        record.setActionType(actionType);
+        record.setFromStatus(fromStatus);
+        record.setToStatus(toStatus);
+        record.setOperatorUserId(operatorUserId);
+        record.setRemark(StringUtils.hasText(remark) ? remark.trim() : null);
+        record.setExtraJson(StringUtils.hasText(extraJson) ? extraJson : null);
+        record.setCreateTime(LocalDateTime.now());
+        orderActionRecordMapper.insert(record);
+    }
+
+    private String buildRefundActionExtra(OrderActionDTO orderActionDTO) {
+        if (orderActionDTO == null) {
+            return null;
+        }
+        return "{"
+                + "\"serviceRefundAmount\":" + jsonNumber(orderActionDTO.getServiceRefundAmount())
+                + ",\"reverseSalary\":" + Boolean.TRUE.equals(orderActionDTO.getReverseSalary())
+                + ",\"reverseDistributor\":" + Boolean.TRUE.equals(orderActionDTO.getReverseDistributor())
+                + ",\"fundsTransferred\":false"
+                + ",\"scope\":\"STORE_SERVICE_CONTENT\""
+                + "}";
+    }
+
+    private String jsonNumber(BigDecimal value) {
+        return value == null ? "null" : value.stripTrailingZeros().toPlainString();
     }
 }

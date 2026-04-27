@@ -1,15 +1,15 @@
 <template>
   <div class="stack-page">
-    <section class="metrics-row">
-      <article class="metric-card">
+    <section class="summary-strip">
+      <article class="summary-pill">
         <span>{{ metrics.primaryLabel }}</span>
         <strong>{{ metrics.primaryValue }}</strong>
       </article>
-      <article class="metric-card">
+      <article class="summary-pill">
         <span>{{ metrics.secondaryLabel }}</span>
         <strong>{{ metrics.secondaryValue }}</strong>
       </article>
-      <article class="metric-card">
+      <article class="summary-pill">
         <span>{{ metrics.tertiaryLabel }}</span>
         <strong>{{ metrics.tertiaryValue }}</strong>
       </article>

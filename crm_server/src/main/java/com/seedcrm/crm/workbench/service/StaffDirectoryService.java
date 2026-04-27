@@ -18,7 +18,7 @@ import org.springframework.util.StringUtils;
 public class StaffDirectoryService {
 
     private static final List<StaffMemberOption> DEFAULT_STAFF = List.of(
-            new StaffMemberOption(1001L, "门店服务A", "STORE_SERVICE"),
+            new StaffMemberOption(5101L, "门店服务A", "STORE_SERVICE"),
             new StaffMemberOption(5002L, "静安店长", "STORE_MANAGER"),
             new StaffMemberOption(2001L, "摄影A", "PHOTOGRAPHER"),
             new StaffMemberOption(2002L, "摄影B", "PHOTOGRAPHER"),

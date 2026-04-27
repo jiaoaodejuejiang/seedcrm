@@ -8,6 +8,7 @@ import com.seedcrm.crm.workbench.dto.WorkbenchResponses.OrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderWorkbenchResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StaffRoleOptionResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StoreLiveCodePreviewResponse;
 import java.util.List;
 
 public interface WorkbenchService {
@@ -15,6 +16,8 @@ public interface WorkbenchService {
     List<ClueItemResponse> listClues(String sourceChannel, String productSourceType, String status);
 
     List<OrderItemResponse> listOrders(String status, String customerName, String customerPhone);
+
+    StoreLiveCodePreviewResponse getOrderLiveCodePreview(Long orderId);
 
     List<PlanOrderItemResponse> listPlanOrders(String status);
 

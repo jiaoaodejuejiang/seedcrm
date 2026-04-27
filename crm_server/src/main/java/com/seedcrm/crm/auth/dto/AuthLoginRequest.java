@@ -7,4 +7,7 @@ public class AuthLoginRequest {
 
     private String username;
     private String password;
+    private String loginMode;
+    private Long storeId;
+    private String storeName;
 }

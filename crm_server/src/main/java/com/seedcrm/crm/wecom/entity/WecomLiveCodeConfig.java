@@ -35,6 +35,10 @@ public class WecomLiveCodeConfig {
     @TableField("employee_accounts_json")
     private String employeeAccountsJson;
 
+    @JsonIgnore
+    @TableField("store_names_json")
+    private String storeNamesJson;
+
     @TableField("remark")
     private String remark;
 
@@ -49,6 +53,10 @@ public class WecomLiveCodeConfig {
 
     @TableField("short_link")
     private String shortLink;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("published_at")
+    private LocalDateTime publishedAt;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("generated_at")
@@ -67,4 +75,7 @@ public class WecomLiveCodeConfig {
 
     @TableField(exist = false)
     private List<String> employeeAccounts = new ArrayList<>();
+
+    @TableField(exist = false)
+    private List<String> storeNames = new ArrayList<>();
 }

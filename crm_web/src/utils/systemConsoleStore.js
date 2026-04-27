@@ -1,6 +1,93 @@
 const STORAGE_KEY = 'seedcrm.system-console'
 
+const DEFAULT_DOMAIN_SETTINGS = {
+  systemBaseUrl: 'http://127.0.0.1:4173',
+  apiBaseUrl: 'http://127.0.0.1:8080'
+}
+
+const DEFAULT_DICTIONARIES = [
+  { id: 1, dictType: 'order_status', itemCode: 'APPOINTMENT', itemLabel: '已预约', sortOrder: 10, isEnabled: 1 },
+  { id: 2, dictType: 'order_status', itemCode: 'COMPLETED', itemLabel: '已完成', sortOrder: 20, isEnabled: 1 },
+  { id: 3, dictType: 'clue_channel', itemCode: 'DOUYIN', itemLabel: '抖音', sortOrder: 10, isEnabled: 1 },
+  { id: 4, dictType: 'clue_channel', itemCode: 'DISTRIBUTOR', itemLabel: '分销', sortOrder: 20, isEnabled: 1 },
+  { id: 5, dictType: 'product_source_type', itemCode: 'GROUP_BUY', itemLabel: '团购', sortOrder: 10, isEnabled: 1 },
+  { id: 6, dictType: 'product_source_type', itemCode: 'FORM', itemLabel: '表单', sortOrder: 20, isEnabled: 1 },
+  { id: 7, dictType: 'order_status', itemCode: 'CREATED', itemLabel: '待付款', sortOrder: 30, isEnabled: 1 },
+  { id: 8, dictType: 'order_status', itemCode: 'PAID', itemLabel: '已付款', sortOrder: 40, isEnabled: 1 },
+  { id: 9, dictType: 'order_status', itemCode: 'PAID_DEPOSIT', itemLabel: '已付定金', sortOrder: 50, isEnabled: 1 },
+  { id: 10, dictType: 'order_status', itemCode: 'ARRIVED', itemLabel: '已到店', sortOrder: 60, isEnabled: 1 },
+  { id: 11, dictType: 'order_status', itemCode: 'SERVING', itemLabel: '服务中', sortOrder: 70, isEnabled: 1 },
+  { id: 12, dictType: 'order_status', itemCode: 'SERVICING', itemLabel: '服务中', sortOrder: 80, isEnabled: 1 },
+  { id: 13, dictType: 'order_status', itemCode: 'USED', itemLabel: '已完成', sortOrder: 90, isEnabled: 1 },
+  { id: 14, dictType: 'order_status', itemCode: 'FINISHED', itemLabel: '已完成', sortOrder: 100, isEnabled: 1 },
+  { id: 15, dictType: 'order_status', itemCode: 'CANCELLED', itemLabel: '已取消', sortOrder: 110, isEnabled: 1 },
+  { id: 16, dictType: 'order_status', itemCode: 'REFUNDED', itemLabel: '已退款', sortOrder: 120, isEnabled: 1 },
+  { id: 17, dictType: 'order_status', itemCode: 'APPROVED', itemLabel: '已通过', sortOrder: 130, isEnabled: 1 },
+  { id: 18, dictType: 'order_status', itemCode: 'PENDING', itemLabel: '待处理', sortOrder: 140, isEnabled: 1 },
+  { id: 19, dictType: 'order_status', itemCode: 'INIT', itemLabel: '待确认', sortOrder: 150, isEnabled: 1 },
+  { id: 20, dictType: 'order_status', itemCode: 'CONFIRMED', itemLabel: '已确认', sortOrder: 160, isEnabled: 1 },
+  { id: 21, dictType: 'order_status', itemCode: 'PAID_OUT', itemLabel: '已打款', sortOrder: 170, isEnabled: 1 },
+  { id: 22, dictType: 'order_status', itemCode: 'DRAFT', itemLabel: '草稿', sortOrder: 180, isEnabled: 1 },
+  { id: 23, dictType: 'order_status', itemCode: 'ENABLED', itemLabel: '启用', sortOrder: 190, isEnabled: 1 },
+  { id: 24, dictType: 'order_status', itemCode: 'DISABLED', itemLabel: '停用', sortOrder: 200, isEnabled: 1 },
+  { id: 25, dictType: 'order_status', itemCode: 'SUCCESS', itemLabel: '成功', sortOrder: 210, isEnabled: 1 },
+  { id: 26, dictType: 'order_status', itemCode: 'FAIL', itemLabel: '失败', sortOrder: 220, isEnabled: 1 },
+  { id: 27, dictType: 'order_status', itemCode: 'FAILED', itemLabel: '失败', sortOrder: 230, isEnabled: 1 },
+  { id: 28, dictType: 'clue_status', itemCode: 'NEW', itemLabel: '新客资', sortOrder: 10, isEnabled: 1 },
+  { id: 29, dictType: 'clue_status', itemCode: 'ASSIGNED', itemLabel: '已分配', sortOrder: 20, isEnabled: 1 },
+  { id: 30, dictType: 'clue_status', itemCode: 'FOLLOWING', itemLabel: '跟进中', sortOrder: 30, isEnabled: 1 },
+  { id: 31, dictType: 'clue_status', itemCode: 'CONVERTED', itemLabel: '已转化', sortOrder: 40, isEnabled: 1 },
+  { id: 32, dictType: 'call_status', itemCode: 'NOT_CALLED', itemLabel: '未通话', sortOrder: 10, isEnabled: 1 },
+  { id: 33, dictType: 'call_status', itemCode: 'CONNECTED', itemLabel: '已接通', sortOrder: 20, isEnabled: 1 },
+  { id: 34, dictType: 'call_status', itemCode: 'MISSED', itemLabel: '未接通', sortOrder: 30, isEnabled: 1 },
+  { id: 35, dictType: 'call_status', itemCode: 'CALLBACK', itemLabel: '待回拨', sortOrder: 40, isEnabled: 1 },
+  { id: 36, dictType: 'call_status', itemCode: 'INVALID', itemLabel: '无效号码', sortOrder: 50, isEnabled: 1 },
+  { id: 37, dictType: 'lead_stage', itemCode: 'NEW', itemLabel: '新线索', sortOrder: 10, isEnabled: 1 },
+  { id: 38, dictType: 'lead_stage', itemCode: 'INTENT', itemLabel: '有意向', sortOrder: 20, isEnabled: 1 },
+  { id: 39, dictType: 'lead_stage', itemCode: 'ARRIVED', itemLabel: '到店', sortOrder: 30, isEnabled: 1 },
+  { id: 40, dictType: 'lead_stage', itemCode: 'DEAL', itemLabel: '成交', sortOrder: 40, isEnabled: 1 },
+  { id: 41, dictType: 'lead_stage', itemCode: 'CALLBACK_PENDING', itemLabel: '待再次沟通', sortOrder: 50, isEnabled: 1 },
+  { id: 42, dictType: 'lead_stage', itemCode: 'WECHAT_ADDED', itemLabel: '已加微信', sortOrder: 60, isEnabled: 1 },
+  { id: 43, dictType: 'lead_stage', itemCode: 'DEPOSIT_PAID', itemLabel: '预付定金', sortOrder: 70, isEnabled: 1 },
+  { id: 44, dictType: 'lead_stage', itemCode: 'INVALID', itemLabel: '无效', sortOrder: 80, isEnabled: 1 },
+  { id: 45, dictType: 'lead_stage', itemCode: 'CONTACTED', itemLabel: '已联系', sortOrder: 90, isEnabled: 1 },
+  { id: 46, dictType: 'lead_stage', itemCode: 'APPOINTMENT_PENDING', itemLabel: '待预约', sortOrder: 100, isEnabled: 1 },
+  { id: 47, dictType: 'lead_stage', itemCode: 'APPOINTED', itemLabel: '已预约', sortOrder: 110, isEnabled: 1 },
+  { id: 48, dictType: 'lead_stage', itemCode: 'CLOSED', itemLabel: '已成交', sortOrder: 120, isEnabled: 1 },
+  { id: 49, dictType: 'plan_order_status', itemCode: 'ARRIVED', itemLabel: '已到店', sortOrder: 10, isEnabled: 1 },
+  { id: 50, dictType: 'plan_order_status', itemCode: 'SERVICING', itemLabel: '服务中', sortOrder: 20, isEnabled: 1 },
+  { id: 51, dictType: 'plan_order_status', itemCode: 'FINISHED', itemLabel: '已完成', sortOrder: 30, isEnabled: 1 },
+  { id: 52, dictType: 'scheduler_status', itemCode: 'ACTIVE', itemLabel: '启用', sortOrder: 10, isEnabled: 1 },
+  { id: 53, dictType: 'scheduler_status', itemCode: 'ENABLED', itemLabel: '启用', sortOrder: 20, isEnabled: 1 },
+  { id: 54, dictType: 'scheduler_status', itemCode: 'INACTIVE', itemLabel: '停用', sortOrder: 30, isEnabled: 1 },
+  { id: 55, dictType: 'scheduler_status', itemCode: 'DISABLED', itemLabel: '停用', sortOrder: 40, isEnabled: 1 },
+  { id: 56, dictType: 'scheduler_status', itemCode: 'QUEUED', itemLabel: '排队中', sortOrder: 50, isEnabled: 1 },
+  { id: 57, dictType: 'scheduler_status', itemCode: 'RUNNING', itemLabel: '执行中', sortOrder: 60, isEnabled: 1 },
+  { id: 58, dictType: 'scheduler_status', itemCode: 'SUCCESS', itemLabel: '成功', sortOrder: 70, isEnabled: 1 },
+  { id: 59, dictType: 'scheduler_status', itemCode: 'FAIL', itemLabel: '失败', sortOrder: 80, isEnabled: 1 },
+  { id: 60, dictType: 'scheduler_status', itemCode: 'FAILED', itemLabel: '失败', sortOrder: 90, isEnabled: 1 },
+  { id: 61, dictType: 'verification_status', itemCode: 'VERIFIED', itemLabel: '已核销', sortOrder: 10, isEnabled: 1 },
+  { id: 62, dictType: 'verification_status', itemCode: 'UNVERIFIED', itemLabel: '待核销', sortOrder: 20, isEnabled: 1 },
+  { id: 63, dictType: 'settlement_mode', itemCode: 'WITHDRAW_AUDIT', itemLabel: '提现审核', sortOrder: 10, isEnabled: 1 },
+  { id: 64, dictType: 'settlement_mode', itemCode: 'WITHDRAW_DIRECT', itemLabel: '提现不审核', sortOrder: 20, isEnabled: 1 },
+  { id: 65, dictType: 'settlement_mode', itemCode: 'LEDGER_ONLY', itemLabel: '只记账', sortOrder: 30, isEnabled: 1 },
+  { id: 66, dictType: 'role_code', itemCode: 'ADMIN', itemLabel: '管理员', sortOrder: 10, isEnabled: 1 },
+  { id: 67, dictType: 'role_code', itemCode: 'ONLINE_CUSTOMER_SERVICE', itemLabel: '在线客服', sortOrder: 20, isEnabled: 1 },
+  { id: 68, dictType: 'role_code', itemCode: 'CLUE_MANAGER', itemLabel: '客资主管', sortOrder: 30, isEnabled: 1 },
+  { id: 69, dictType: 'role_code', itemCode: 'STORE_SERVICE', itemLabel: '门店服务', sortOrder: 40, isEnabled: 1 },
+  { id: 70, dictType: 'role_code', itemCode: 'STORE_MANAGER', itemLabel: '店长', sortOrder: 50, isEnabled: 1 },
+  { id: 71, dictType: 'role_code', itemCode: 'PHOTOGRAPHER', itemLabel: '摄影', sortOrder: 60, isEnabled: 1 },
+  { id: 72, dictType: 'role_code', itemCode: 'MAKEUP_ARTIST', itemLabel: '化妆师', sortOrder: 70, isEnabled: 1 },
+  { id: 73, dictType: 'role_code', itemCode: 'PHOTO_SELECTOR', itemLabel: '选片负责人', sortOrder: 80, isEnabled: 1 },
+  { id: 74, dictType: 'role_code', itemCode: 'FINANCE', itemLabel: '财务', sortOrder: 90, isEnabled: 1 },
+  { id: 75, dictType: 'role_code', itemCode: 'PRIVATE_DOMAIN_SERVICE', itemLabel: '私域客服', sortOrder: 100, isEnabled: 1 },
+  { id: 76, dictType: 'role_code', itemCode: 'NORMAL_CS', itemLabel: '普通客服', sortOrder: 110, isEnabled: 1 },
+  { id: 77, dictType: 'role_code', itemCode: 'SENIOR_CS', itemLabel: '资深客服', sortOrder: 120, isEnabled: 1 },
+  { id: 78, dictType: 'role_code', itemCode: 'LEADER', itemLabel: '组长', sortOrder: 130, isEnabled: 1 }
+]
+
 const DEFAULT_STATE = {
+  domainSettings: DEFAULT_DOMAIN_SETTINGS,
   departments: [
     { id: 1, departmentCode: 'HQ', departmentName: '总部管理', parentCode: '', managerRoleCode: 'ADMIN', dataScopeRule: '可查看全部有效数据并进行系统配置', isEnabled: 1, remark: '系统管理员负责整体系统治理' },
     { id: 2, departmentCode: 'CLUE', departmentName: '客资中心', parentCode: 'HQ', managerRoleCode: 'CLUE_MANAGER', dataScopeRule: '仅查看并分配客资中心有效数据', isEnabled: 1, remark: '负责客资接入、分配、预约与转化' },
@@ -68,22 +155,24 @@ const DEFAULT_STATE = {
     { id: 13, menuGroup: '私域客服', menuName: '朋友圈定时群发', routePath: '/private-domain/moments', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'], moduleCode: 'WECOM', isEnabled: 1 },
     { id: 14, menuGroup: '私域客服', menuName: '标签管理', routePath: '/private-domain/tags', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'], moduleCode: 'WECOM', isEnabled: 1 },
     { id: 15, menuGroup: '财务管理', menuName: '财务看板', routePath: '/finance', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'FINANCE', isEnabled: 1 },
-    { id: 16, menuGroup: '财务管理', menuName: '薪酬中心', routePath: '/finance/salary-center', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
-    { id: 17, menuGroup: '财务管理 / 薪酬配置', menuName: '薪酬角色', routePath: '/finance/salary-config/roles', roleCodes: ['ADMIN'], moduleCode: 'SALARY', isEnabled: 1 },
-    { id: 18, menuGroup: '财务管理 / 薪酬配置', menuName: '薪酬档位', routePath: '/finance/salary-config/grades', roleCodes: ['ADMIN'], moduleCode: 'SALARY', isEnabled: 1 },
-    { id: 19, menuGroup: '财务管理 / 薪酬配置', menuName: '分销配置', routePath: '/finance/salary-config/distributor', roleCodes: ['ADMIN'], moduleCode: 'SALARY', isEnabled: 1 },
-    { id: 20, menuGroup: '系统管理', menuName: '部门管理', routePath: '/system/departments', roleCodes: ['ADMIN'], moduleCode: 'SYSTEM', isEnabled: 1 },
-    { id: 21, menuGroup: '系统管理', menuName: '员工管理', routePath: '/system/employees', roleCodes: ['ADMIN', 'CLUE_MANAGER'], moduleCode: 'SYSTEM', isEnabled: 1 },
-    { id: 22, menuGroup: '系统管理', menuName: '岗位管理', routePath: '/system/positions', roleCodes: ['ADMIN'], moduleCode: 'SYSTEM', isEnabled: 1 },
-    { id: 23, menuGroup: '系统管理', menuName: '角色管理', routePath: '/system/roles', roleCodes: ['ADMIN'], moduleCode: 'SYSTEM', isEnabled: 1 },
-    { id: 24, menuGroup: '系统设置', menuName: '菜单管理', routePath: '/settings/menu', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 25, menuGroup: '系统设置 / 调度中心', menuName: '三方接口', routePath: '/settings/integration/third-party', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 26, menuGroup: '系统设置 / 调度中心', menuName: '回调接口', routePath: '/settings/integration/callback', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 27, menuGroup: '系统设置 / 调度中心', menuName: '任务调度', routePath: '/settings/integration/jobs', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 28, menuGroup: '系统设置 / 调度中心', menuName: '对外接口', routePath: '/settings/integration/public-api', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 29, menuGroup: '系统设置', menuName: '字典管理', routePath: '/settings/dictionaries', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 30, menuGroup: '系统设置', menuName: '参数管理', routePath: '/settings/parameters', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 31, menuGroup: '系统设置', menuName: '支付设置', routePath: '/settings/payment', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 }
+    { id: 16, menuGroup: '财务管理 / 薪酬中心', menuName: '我的薪酬', routePath: '/finance/salary/my', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 17, menuGroup: '财务管理 / 薪酬中心', menuName: '结算中心', routePath: '/finance/salary/settlements', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 18, menuGroup: '财务管理 / 薪酬中心', menuName: '结算配置', routePath: '/finance/salary/settlement-config', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 19, menuGroup: '财务管理 / 薪酬配置', menuName: '薪酬角色', routePath: '/finance/salary-config/roles', roleCodes: ['ADMIN'], moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 20, menuGroup: '财务管理 / 薪酬配置', menuName: '薪酬档位', routePath: '/finance/salary-config/grades', roleCodes: ['ADMIN'], moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 21, menuGroup: '财务管理 / 薪酬配置', menuName: '分销配置', routePath: '/finance/salary-config/distributor', roleCodes: ['ADMIN'], moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 22, menuGroup: '系统管理', menuName: '部门管理', routePath: '/system/departments', roleCodes: ['ADMIN'], moduleCode: 'SYSTEM', isEnabled: 1 },
+    { id: 23, menuGroup: '系统管理', menuName: '员工管理', routePath: '/system/employees', roleCodes: ['ADMIN', 'CLUE_MANAGER'], moduleCode: 'SYSTEM', isEnabled: 1 },
+    { id: 24, menuGroup: '系统管理', menuName: '岗位管理', routePath: '/system/positions', roleCodes: ['ADMIN'], moduleCode: 'SYSTEM', isEnabled: 1 },
+    { id: 25, menuGroup: '系统管理', menuName: '角色管理', routePath: '/system/roles', roleCodes: ['ADMIN'], moduleCode: 'SYSTEM', isEnabled: 1 },
+    { id: 26, menuGroup: '系统设置 / 基础配置', menuName: '域名配置', routePath: '/settings/base/domain', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 27, menuGroup: '系统设置 / 基础配置', menuName: '菜单管理', routePath: '/settings/menu', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 28, menuGroup: '系统设置 / 调度中心', menuName: '三方接口', routePath: '/settings/integration/third-party', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 29, menuGroup: '系统设置 / 调度中心', menuName: '回调接口', routePath: '/settings/integration/callback', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 31, menuGroup: '系统设置 / 调度中心', menuName: '对外接口', routePath: '/settings/integration/public-api', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 32, menuGroup: '系统设置 / 基础配置', menuName: '字典管理', routePath: '/settings/dictionaries', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 33, menuGroup: '系统设置 / 基础配置', menuName: '参数管理', routePath: '/settings/parameters', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 34, menuGroup: '系统设置 / 基础配置', menuName: '支付设置', routePath: '/settings/payment', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 }
   ],
   salaryRoles: [
     { id: 1, roleName: '普通客服', roleCode: 'NORMAL_CS', employeeIds: [3, 4], isEnabled: 1, remark: '参与个人档位计算' },
@@ -117,7 +206,9 @@ const DEFAULT_STATE = {
       serialNo: '',
       privateKeyPem: '',
       notifyUrl: 'https://crm.example.com/pay/wechat/notify',
+      notifyPath: '/pay/wechat/notify',
       refundNotifyUrl: 'https://crm.example.com/pay/wechat/refund-notify',
+      refundNotifyPath: '/pay/wechat/refund-notify',
       tradeType: 'JSAPI',
       testStatus: '未测试',
       lastTestTime: ''
@@ -133,6 +224,7 @@ const DEFAULT_STATE = {
       transferScene: '营销返佣',
       verifyUserName: 'NO_CHECK',
       notifyUrl: 'https://crm.example.com/pay/wechat/transfer-notify',
+      notifyPath: '/pay/wechat/transfer-notify',
       singleLimit: '20000',
       dailyLimitTip: '以商户侧风控和微信支付配置为准',
       testStatus: '未测试',
@@ -154,19 +246,20 @@ const DEFAULT_STATE = {
     { id: 2, apiName: '客资中心表单拉取', moduleCode: 'CLUE', baseUrl: 'https://marketing.example.com/open/forms/leads', method: 'GET', authType: 'App Secret', enabled: 1, syncMode: '增量同步', scheduleJobCode: 'FORM_CLUE_INCREMENTAL' }
   ],
   callbackApis: [
-    { id: 1, callbackName: '客资回流状态回调', callbackUrl: 'https://seedcrm.example.com/api/callback/clue-status', signatureMode: 'HMAC-SHA256', enabled: 1, remark: '同步三方客资处理状态' }
+    {
+      id: 1,
+      callbackName: '客资回流状态回调',
+      callbackUrl: 'https://seedcrm.example.com/api/callback/clue-status',
+      callbackPath: '/api/callback/clue-status',
+      signatureMode: 'HMAC-SHA256',
+      enabled: 1,
+      remark: '同步三方客资处理状态'
+    }
   ],
   publicApis: [
     { id: 1, apiName: '门店订单联合查询', sourceTable: 'order + customer + plan_order', outputFields: 'orderNo, customerName, amount, statusLabel', authMode: '签名 + 令牌', rateLimit: '60 次/分钟', cachePolicy: '30 秒缓存', enabled: 1 }
   ],
-  dictionaries: [
-    { id: 1, dictType: 'order_status', itemCode: 'APPOINTMENT', itemLabel: '已预约', sortOrder: 10, isEnabled: 1 },
-    { id: 2, dictType: 'order_status', itemCode: 'COMPLETED', itemLabel: '已完成', sortOrder: 20, isEnabled: 1 },
-    { id: 3, dictType: 'clue_channel', itemCode: 'DOUYIN', itemLabel: '抖音', sortOrder: 10, isEnabled: 1 },
-    { id: 4, dictType: 'clue_channel', itemCode: 'DISTRIBUTOR', itemLabel: '分销', sortOrder: 20, isEnabled: 1 },
-    { id: 5, dictType: 'product_source_type', itemCode: 'GROUP_BUY', itemLabel: '团购', sortOrder: 10, isEnabled: 1 },
-    { id: 6, dictType: 'product_source_type', itemCode: 'FORM', itemLabel: '表单', sortOrder: 20, isEnabled: 1 }
-  ],
+  dictionaries: DEFAULT_DICTIONARIES,
   parameters: [
     { id: 1, paramKey: 'clue.autoPull.enabled', paramValue: 'true', category: '客资', remark: '控制客资中心是否启用自动拉取' },
     { id: 2, paramKey: 'order.confirmation.readonlyWhenCompleted', paramValue: 'true', category: '订单', remark: '已完成订单确认单进入只读查看' },
@@ -203,6 +296,48 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value))
 }
 
+function normalizeKey(value) {
+  return value ? String(value).trim().toUpperCase() : ''
+}
+
+function normalizeBaseUrl(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\/+$/, '')
+}
+
+function joinUrl(baseUrl, path) {
+  const normalizedBase = normalizeBaseUrl(baseUrl)
+  const normalizedPath = String(path || '').trim()
+  if (!normalizedBase) {
+    return normalizedPath
+  }
+  if (!normalizedPath) {
+    return normalizedBase
+  }
+  if (/^https?:\/\//i.test(normalizedPath)) {
+    return normalizedPath
+  }
+  const ensuredPath = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`
+  return `${normalizedBase}${ensuredPath}`
+}
+
+function extractRelativePath(value, fallback = '') {
+  const normalized = String(value || '').trim()
+  if (!normalized) {
+    return fallback
+  }
+  if (/^https?:\/\//i.test(normalized)) {
+    try {
+      const parsed = new URL(normalized)
+      return `${parsed.pathname || ''}${parsed.search || ''}${parsed.hash || ''}` || fallback
+    } catch {
+      return fallback
+    }
+  }
+  return normalized.startsWith('/') ? normalized : fallback || normalized
+}
+
 function mergeCollectionByKey(items, defaults, resolveKey) {
   const currentItems = Array.isArray(items) ? items : []
   const defaultItems = Array.isArray(defaults) ? defaults : []
@@ -221,7 +356,9 @@ function migrateSystemConsoleState(state) {
     ...state
   }
 
-  const normalizedMenuConfigs = (state?.menuConfigs || []).map((item) => {
+  const normalizedMenuConfigs = (state?.menuConfigs || [])
+    .filter((item) => item?.routePath !== '/settings/integration/jobs')
+    .map((item) => {
     if (item?.routePath === '/clues/payments') {
       return {
         ...item,
@@ -229,10 +366,30 @@ function migrateSystemConsoleState(state) {
         routePath: '/clues/scheduling'
       }
     }
+    if (item?.routePath === '/finance/salary-center') {
+      return {
+        ...item,
+        menuGroup: '财务管理 / 薪酬中心',
+        menuName: '我的薪酬',
+        routePath: '/finance/salary/my'
+      }
+    }
     return item
   })
 
+  nextState.domainSettings = {
+    ...(defaults.domainSettings || {}),
+    ...(state?.domainSettings || {})
+  }
+  nextState.domainSettings.systemBaseUrl =
+    nextState.domainSettings.systemBaseUrl || nextState.domainSettings.adminBaseUrl || defaults.domainSettings.systemBaseUrl
+  nextState.domainSettings.apiBaseUrl =
+    nextState.domainSettings.apiBaseUrl ||
+    nextState.domainSettings.callbackBaseUrl ||
+    nextState.domainSettings.publicApiBaseUrl ||
+    defaults.domainSettings.apiBaseUrl
   nextState.menuConfigs = mergeCollectionByKey(normalizedMenuConfigs, defaults.menuConfigs, (item) => item?.routePath || item?.id)
+  nextState.dictionaries = mergeCollectionByKey(state?.dictionaries, defaults.dictionaries, (item) => `${item?.dictType || ''}:${item?.itemCode || ''}`)
   nextState.parameters = mergeCollectionByKey(state?.parameters, defaults.parameters, (item) => item?.paramKey || item?.id)
   nextState.wecomLiveCodeConfigs = mergeCollectionByKey(state?.wecomLiveCodeConfigs, defaults.wecomLiveCodeConfigs, (item) => item?.id)
   nextState.wecomCustomerPortraits = mergeCollectionByKey(state?.wecomCustomerPortraits, defaults.wecomCustomerPortraits, (item) => item?.id)
@@ -258,6 +415,29 @@ function migrateSystemConsoleState(state) {
       ...(state?.paymentSettings?.wechatPayout || {})
     }
   }
+  nextState.paymentSettings.wechatPay.notifyPath = extractRelativePath(
+    nextState.paymentSettings.wechatPay.notifyPath || nextState.paymentSettings.wechatPay.notifyUrl,
+    defaults.paymentSettings.wechatPay.notifyPath
+  )
+  nextState.paymentSettings.wechatPay.refundNotifyPath = extractRelativePath(
+    nextState.paymentSettings.wechatPay.refundNotifyPath || nextState.paymentSettings.wechatPay.refundNotifyUrl,
+    defaults.paymentSettings.wechatPay.refundNotifyPath
+  )
+  nextState.paymentSettings.wechatPayout.notifyPath = extractRelativePath(
+    nextState.paymentSettings.wechatPayout.notifyPath || nextState.paymentSettings.wechatPayout.notifyUrl,
+    defaults.paymentSettings.wechatPayout.notifyPath
+  )
+  nextState.paymentSettings.wechatPay.notifyUrl = buildSystemUrl(nextState, 'callback', nextState.paymentSettings.wechatPay.notifyPath)
+  nextState.paymentSettings.wechatPay.refundNotifyUrl = buildSystemUrl(nextState, 'callback', nextState.paymentSettings.wechatPay.refundNotifyPath)
+  nextState.paymentSettings.wechatPayout.notifyUrl = buildSystemUrl(nextState, 'callback', nextState.paymentSettings.wechatPayout.notifyPath)
+  nextState.callbackApis = mergeCollectionByKey(state?.callbackApis, defaults.callbackApis, (item) => item?.callbackName || item?.id).map((item) => {
+    const callbackPath = extractRelativePath(item.callbackPath || item.callbackUrl, '/api/callback/default')
+    return {
+      ...item,
+      callbackPath,
+      callbackUrl: buildSystemUrl(nextState, 'callback', callbackPath)
+    }
+  })
 
   return nextState
 }
@@ -296,6 +476,43 @@ export function saveSystemConsoleState(state) {
 
 export function nextSystemId(items = []) {
   return items.reduce((max, item) => Math.max(max, Number(item?.id || 0)), 0) + 1
+}
+
+export function getDomainSettings(state) {
+  return {
+    ...DEFAULT_DOMAIN_SETTINGS,
+    ...(state?.domainSettings || {})
+  }
+}
+
+export function resolveSystemBaseUrl(state, scene = 'system') {
+  const config = getDomainSettings(state)
+  if (scene === 'api' || scene === 'callback' || scene === 'public-api') {
+    return normalizeBaseUrl(config.apiBaseUrl || config.systemBaseUrl)
+  }
+  return normalizeBaseUrl(config.systemBaseUrl)
+}
+
+export function buildSystemUrl(state, scene = 'system', path = '') {
+  return joinUrl(resolveSystemBaseUrl(state, scene), path)
+}
+
+export function getDictionaryLabel(state, dictType, code, fallback = '') {
+  const normalizedDictType = String(dictType || '').trim()
+  const normalizedCode = normalizeKey(code)
+  if (!normalizedDictType || !normalizedCode) {
+    return fallback || code || '--'
+  }
+  const matched = (state?.dictionaries || []).find(
+    (item) => item?.dictType === normalizedDictType && normalizeKey(item?.itemCode) === normalizedCode && item?.isEnabled === 1
+  )
+  return matched?.itemLabel || fallback || code || '--'
+}
+
+export function getDictionaryOptions(state, dictType) {
+  return (state?.dictionaries || [])
+    .filter((item) => item?.dictType === dictType && item?.isEnabled === 1)
+    .sort((left, right) => Number(left?.sortOrder || 0) - Number(right?.sortOrder || 0))
 }
 
 export function getDepartmentName(departments, departmentCode) {

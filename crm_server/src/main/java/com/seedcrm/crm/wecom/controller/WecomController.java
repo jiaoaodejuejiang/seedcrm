@@ -7,6 +7,7 @@ import com.seedcrm.crm.permission.support.WecomModuleGuard;
 import com.seedcrm.crm.scheduler.entity.IntegrationCallbackEventLog;
 import com.seedcrm.crm.wecom.dto.WecomLiveCodeGenerateRequest;
 import com.seedcrm.crm.wecom.dto.WecomLiveCodeGenerateResponse;
+import com.seedcrm.crm.wecom.dto.WecomLiveCodePublishRequest;
 import com.seedcrm.crm.wecom.dto.WecomSendRequest;
 import com.seedcrm.crm.wecom.entity.WecomAppConfig;
 import com.seedcrm.crm.wecom.entity.WecomLiveCodeConfig;
@@ -142,6 +143,16 @@ public class WecomController {
                 request == null ? null : request.getStrategy(),
                 request == null ? null : request.getEmployeeNames(),
                 request == null ? null : request.getEmployeeAccounts()));
+    }
+
+    @PostMapping("/live-code/publish")
+    public ApiResponse<WecomLiveCodeConfig> publishLiveCode(@RequestBody WecomLiveCodePublishRequest request,
+                                                            HttpServletRequest httpServletRequest) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
+        wecomModuleGuard.checkUpdate(context);
+        return ApiResponse.success(wecomConsoleService.publishLiveCodeConfig(
+                request == null ? null : request.getConfigId(),
+                request == null ? null : request.getStoreNames()));
     }
 
     @GetMapping(value = "/callback/{appCode}", produces = MediaType.TEXT_PLAIN_VALUE)

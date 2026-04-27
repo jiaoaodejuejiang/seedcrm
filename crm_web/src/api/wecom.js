@@ -55,3 +55,7 @@ export function saveWecomLiveCodeConfig(payload) {
 export function generateWecomLiveCode(payload) {
   return http.post('/wecom/live-code/generate', payload)
 }
+
+export function publishWecomLiveCode(payload) {
+  return http.post('/wecom/live-code/publish', payload)
+}

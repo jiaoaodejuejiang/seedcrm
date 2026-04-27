@@ -1,120 +1,105 @@
 <template>
   <div class="plan-order-page" :class="{ 'plan-order-page--scan': scanMode, 'plan-order-page--view': readOnlyMode }">
     <section v-if="detail" v-loading="detailLoading" class="service-shell">
-      <header class="service-hero">
-        <div class="service-hero__main">
-          <p class="service-hero__eyebrow">{{ heroEyebrow }}</p>
-          <div class="service-hero__headline">
+      <header class="service-header">
+        <div class="service-header__main">
+          <div class="service-header__headline">
             <h2>{{ pageTitle }}</h2>
-          </div>
-          <div class="service-hero__customer">
-            <strong>{{ customerDisplayName }}</strong>
-            <span>{{ customerDisplayPhone }}</span>
-            <span>{{ storeDisplayName }}</span>
-          </div>
-          <div class="service-hero__meta">
-            <span>预约 {{ appointmentLabel }}</span>
-            <span v-if="detail.order?.sourceChannel">来源 {{ formatChannel(detail.order?.sourceChannel) }}</span>
-            <span v-if="detail.order?.type">类型 {{ formatOrderType(detail.order?.type) }}</span>
+            <div class="service-header__meta">
+              <span>{{ customerDisplayName }}</span>
+              <span>{{ customerDisplayPhone }}</span>
+              <span>{{ storeDisplayName }}</span>
+              <span>预约：{{ appointmentLabel }}</span>
+              <span>核销金额：{{ formatMoney(verificationAmount) }}</span>
+              <span>确认单金额：{{ serviceConfirmAmountLabel }}</span>
+              <span>表单状态：{{ serviceFormStatusLabel }}</span>
+              <span>核销：{{ formatVerificationStatus(detail.order?.verificationStatus || 'UNVERIFIED') }}</span>
+              <span>履约：{{ serviceStage.label }}</span>
+              <span v-if="detail.order?.orderNo" class="service-header__weak">订单号 {{ detail.order.orderNo }}</span>
+            </div>
           </div>
         </div>
-
-        <div class="service-hero__side">
-          <div class="service-hero__status">
-            <el-tag :type="serviceStage.tagType">
-              {{ serviceStage.label }}
-            </el-tag>
-            <el-tag :type="statusTagType(detail.order?.verificationStatus || 'UNVERIFIED')">
-              {{ formatVerificationStatus(detail.order?.verificationStatus || 'UNVERIFIED') }}
-            </el-tag>
-          </div>
-
-          <div v-if="!scanMode" class="service-hero__actions">
-            <el-button plain @click="goBackToOrders">返回订单列表</el-button>
-            <el-button v-if="readOnlyMode" type="primary" plain @click="switchToEditMode">继续填写</el-button>
-          </div>
+        <div v-if="!scanMode" class="service-header__actions">
+          <el-button plain @click="goBackToOrders">返回订单列表</el-button>
+          <el-button v-if="canSwitchToEditMode" type="primary" plain @click="switchToEditMode">继续填写</el-button>
         </div>
       </header>
 
-      <section class="service-overview" :class="{ 'service-overview--scan': scanMode }">
-        <article
-          v-for="item in overviewCards"
-          :key="item.label"
-          class="service-overview__card"
-          :class="`service-overview__card--${item.tone || 'default'}`"
-        >
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-        </article>
-      </section>
-
-      <div class="service-workspace" :class="{ 'service-workspace--scan': scanMode, 'service-workspace--view': readOnlyMode }">
+      <div class="service-workspace" :class="{ 'service-workspace--single': scanMode }">
         <main class="service-main">
-          <section class="service-card service-card--verify">
-            <div class="service-card__header service-card__header--stack">
-              <h3>{{ isVerified ? '核验状态' : '核验后填写服务单' }}</h3>
+          <section class="service-card">
+            <div class="service-card__header">
+              <div>
+                <h3>{{ isVerified ? '核销完成' : '先完成核销，再填写服务确认单' }}</h3>
+              </div>
+              <el-tag :type="isVerified ? 'success' : 'warning'">
+                {{ isVerified ? '已核销' : '待核销' }}
+              </el-tag>
             </div>
 
-            <div class="verify-panel" :class="{ 'verify-panel--readonly': readOnlyMode }">
+            <div class="verify-panel" :class="{ 'verify-panel--scan': scanMode }">
               <template v-if="isVerified">
-                <div class="verify-panel__state">
-                  <el-tag type="success">已完成核验</el-tag>
-                  <span>{{ formatDateTime(detail.order?.verificationTime) || '核验时间待记录' }}</span>
-                  <span v-if="!scanMode && detail.order?.verificationCode">核验码 {{ detail.order?.verificationCode }}</span>
+                <div class="verify-panel__result">
+                  <div class="verify-panel__result-icon">已</div>
+                  <div class="verify-panel__result-body">
+                    <strong>{{ readOnlyMode || isFinishedOrder ? '核销已完成，服务单只读查看' : '核销已完成，可以继续填写服务单' }}</strong>
+                    <span>核销时间：{{ formatDateTime(detail.order?.verificationTime) || '--' }}</span>
+                    <span v-if="detail.order?.verificationCode">核销码：{{ detail.order.verificationCode }}</span>
+                  </div>
                 </div>
               </template>
 
               <template v-else-if="!readOnlyMode">
-                <div class="verify-panel__actions" :class="{ 'verify-panel__actions--scan': scanMode }">
-                  <el-button type="primary" size="large" @click="openCameraScanner">摄像头扫码核验</el-button>
-                  <div class="verify-panel__manual">
-                    <el-input ref="verificationInputRef" v-model="verificationCode" placeholder="请输入核验码" class="verify-panel__input" />
-                    <el-button @click="handleCodeVerify">输码核验</el-button>
+                <div class="verify-panel__actions">
+                  <button type="button" class="verify-hero verify-hero--primary" @click="openCameraScanner">
+                    <strong>扫码核销</strong>
+                    <span>优先使用摄像头快速核销</span>
+                  </button>
+                  <div class="verify-hero verify-hero--manual">
+                    <strong>输码核销</strong>
+                    <div class="verify-panel__manual">
+                      <el-input ref="verificationInputRef" v-model="verificationCode" placeholder="请输入核销码" />
+                      <el-button @click="handleCodeVerify">确认核销</el-button>
+                    </div>
                   </div>
                 </div>
               </template>
 
               <template v-else>
-                <div class="verify-panel__state verify-panel__state--pending">
-                  <el-tag type="warning">未核验</el-tag>
-                  <span>该服务单当前未完成核验。</span>
+                <div class="verify-panel__pending">
+                  <span>当前服务单尚未核销，暂不可编辑。</span>
                 </div>
               </template>
             </div>
           </section>
 
-          <div v-if="!readOnlyMode && !isVerified" class="service-lock-banner">
-            完成核验后可继续填写服务单。
-          </div>
-
-          <section class="service-card service-card--form-start" :class="{ 'service-card--locked': !readOnlyMode && !isVerified }">
+          <section class="service-card" :class="{ 'service-card--locked': !canEditForm }">
             <div class="service-card__header">
-              <h3>基础信息</h3>
+              <div>
+                <h3>基础信息</h3>
+              </div>
             </div>
 
             <div class="service-form-grid">
-              <div v-if="!scanMode" class="service-field">
+              <div class="service-field">
                 <label>当前角色</label>
                 <div class="service-field__display">{{ formatRoleCode(serviceForm.currentRoleCode) }}</div>
               </div>
-              <div class="service-field" :class="{ 'service-field--full': scanMode }">
+              <div class="service-field">
                 <label>职业</label>
                 <template v-if="readOnlyMode">
                   <div class="service-field__display">{{ fieldText(serviceForm.profession) }}</div>
                 </template>
-                <el-input
-                  v-else
-                  v-model="serviceForm.profession"
-                  :disabled="!isVerified"
-                  placeholder="请输入客户职业"
-                />
+                <el-input v-else v-model="serviceForm.profession" :disabled="!canEditForm" placeholder="请输入客户职业" />
               </div>
             </div>
           </section>
 
-          <section class="service-card" :class="{ 'service-card--locked': !readOnlyMode && !isVerified }">
+          <section class="service-card" :class="{ 'service-card--locked': !canEditForm }">
             <div class="service-card__header">
-              <h3>服务确认</h3>
+              <div>
+                <h3>服务确认</h3>
+              </div>
             </div>
 
             <div class="service-form-grid">
@@ -128,8 +113,8 @@
                   v-model="serviceForm.serviceRequirement"
                   type="textarea"
                   :rows="4"
-                  :disabled="!isVerified"
-                  placeholder="请输入到店需求"
+                  :disabled="!canEditForm"
+                  placeholder="请输入客户本次到店需求"
                 />
               </div>
 
@@ -143,8 +128,8 @@
                   v-model="serviceForm.styleConfirmation"
                   type="textarea"
                   :rows="3"
-                  :disabled="!isVerified"
-                  placeholder="请输入造型确认"
+                  :disabled="!canEditForm"
+                  placeholder="请输入造型、风格或执行要点"
                 />
               </div>
 
@@ -153,9 +138,24 @@
                 <template v-if="readOnlyMode">
                   <div class="service-field__display">{{ joinDisplay(serviceForm.serviceItems) }}</div>
                 </template>
-                <el-checkbox-group v-else v-model="serviceForm.serviceItems" :disabled="!isVerified">
+                <el-checkbox-group v-else v-model="serviceForm.serviceItems" :disabled="!canEditForm">
                   <el-checkbox v-for="item in serviceItemOptions" :key="item" :value="item">{{ item }}</el-checkbox>
                 </el-checkbox-group>
+              </div>
+
+              <div class="service-field">
+                <label>服务确认单金额</label>
+                <template v-if="readOnlyMode">
+                  <div class="service-field__display">{{ serviceConfirmAmountLabel }}</div>
+                </template>
+                <el-input-number
+                  v-else
+                  v-model="serviceForm.serviceConfirmAmount"
+                  :disabled="!canEditForm"
+                  :min="0"
+                  :precision="2"
+                  controls-position="right"
+                />
               </div>
 
               <div class="service-field">
@@ -163,32 +163,24 @@
                 <template v-if="readOnlyMode">
                   <div class="service-field__display">{{ fieldText(serviceForm.serviceDuration) }}</div>
                 </template>
-                <el-input
-                  v-else
-                  v-model="serviceForm.serviceDuration"
-                  :disabled="!isVerified"
-                  placeholder="如 3-4 小时"
-                />
+                <el-input v-else v-model="serviceForm.serviceDuration" :disabled="!canEditForm" placeholder="例如：3-4 小时" />
               </div>
 
               <div class="service-field">
-                <label>签名确认</label>
+                <label>确认人</label>
                 <template v-if="readOnlyMode">
                   <div class="service-field__display">{{ fieldText(serviceForm.signature) }}</div>
                 </template>
-                <el-input
-                  v-else
-                  v-model="serviceForm.signature"
-                  :disabled="!isVerified"
-                  placeholder="请输入确认人"
-                />
+                <el-input v-else v-model="serviceForm.signature" :disabled="!canEditForm" placeholder="请输入确认人姓名" />
               </div>
             </div>
           </section>
 
-          <section class="service-card" :class="{ 'service-card--locked': !readOnlyMode && !isVerified }">
+          <section class="service-card" :class="{ 'service-card--locked': !canEditForm }">
             <div class="service-card__header">
-              <h3>偏好与补充</h3>
+              <div>
+                <h3>偏好与补充</h3>
+              </div>
             </div>
 
             <div class="service-form-grid">
@@ -197,7 +189,7 @@
                 <template v-if="readOnlyMode">
                   <div class="service-field__display">{{ joinDisplay(serviceForm.preferredStyles) }}</div>
                 </template>
-                <el-checkbox-group v-else v-model="serviceForm.preferredStyles" :disabled="!isVerified">
+                <el-checkbox-group v-else v-model="serviceForm.preferredStyles" :disabled="!canEditForm">
                   <el-checkbox v-for="item in styleOptions" :key="item" :value="item">{{ item }}</el-checkbox>
                 </el-checkbox-group>
               </div>
@@ -207,7 +199,7 @@
                 <template v-if="readOnlyMode">
                   <div class="service-field__display">{{ joinDisplay(serviceForm.preferredScenes) }}</div>
                 </template>
-                <el-checkbox-group v-else v-model="serviceForm.preferredScenes" :disabled="!isVerified">
+                <el-checkbox-group v-else v-model="serviceForm.preferredScenes" :disabled="!canEditForm">
                   <el-checkbox v-for="item in sceneOptions" :key="item" :value="item">{{ item }}</el-checkbox>
                 </el-checkbox-group>
               </div>
@@ -217,13 +209,7 @@
                 <template v-if="readOnlyMode">
                   <div class="service-field__display">{{ String(serviceForm.addOnCount ?? 0) }}</div>
                 </template>
-                <el-input-number
-                  v-else
-                  v-model="serviceForm.addOnCount"
-                  :disabled="!isVerified"
-                  :min="0"
-                  controls-position="right"
-                />
+                <el-input-number v-else v-model="serviceForm.addOnCount" :disabled="!canEditForm" :min="0" controls-position="right" />
               </div>
 
               <div class="service-field service-field--full">
@@ -236,9 +222,36 @@
                   v-model="serviceForm.addOnContent"
                   type="textarea"
                   :rows="3"
-                  :disabled="!isVerified"
+                  :disabled="!canEditForm"
                   placeholder="请输入加选内容"
                 />
+              </div>
+
+              <div class="service-field service-field--full signature-field">
+                <label>客户手写签名</label>
+                <template v-if="readOnlyMode">
+                  <div class="signature-preview">
+                    <img v-if="serviceForm.customerSignature" :src="serviceForm.customerSignature" alt="客户手写签名" />
+                    <span v-else>未签名</span>
+                  </div>
+                </template>
+                <div v-else class="signature-pad" :class="{ 'is-disabled': !canEditForm }">
+                  <canvas
+                    ref="signatureCanvasRef"
+                    class="signature-pad__canvas"
+                    @pointerdown="startSignatureDrawing"
+                    @pointermove="drawSignature"
+                    @pointerup="finishSignatureDrawing"
+                    @pointercancel="finishSignatureDrawing"
+                    @pointerleave="finishSignatureDrawing"
+                  ></canvas>
+                  <div class="signature-pad__tools">
+                    <span>{{ serviceForm.customerSignature ? '客户已签名，可清除后重签' : '请客户在此处手写确认' }}</span>
+                    <el-button size="small" plain :disabled="!canEditForm || !serviceForm.customerSignature" @click="clearSignature">
+                      清除重签
+                    </el-button>
+                  </div>
+                </div>
               </div>
 
               <div v-if="!scanMode" class="service-field service-field--full">
@@ -251,18 +264,35 @@
                   v-model="serviceForm.internalRemark"
                   type="textarea"
                   :rows="3"
-                  :disabled="!isVerified"
+                  :disabled="!canEditForm"
                   placeholder="请输入内部备注"
                 />
               </div>
             </div>
           </section>
+        </main>
 
-          <section v-if="showRoleAssignment" class="service-card" :class="{ 'service-card--locked': !isVerified }">
+        <aside v-if="!scanMode" class="service-side">
+          <section class="service-card">
             <div class="service-card__header">
-              <h3>角色分配</h3>
+              <div>
+                <h3>订单摘要</h3>
+              </div>
             </div>
+            <div class="side-list">
+              <div v-for="item in orderSummaryItems" :key="item.label" class="side-list__item">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+              </div>
+            </div>
+          </section>
 
+          <section v-if="showRoleAssignment" class="service-card">
+            <div class="service-card__header">
+              <div>
+                <h3>角色分配</h3>
+              </div>
+            </div>
             <div class="role-grid">
               <article v-for="role in roleCards" :key="role.roleCode" class="role-card">
                 <div class="role-card__header">
@@ -275,7 +305,7 @@
                     :key="staff.userId"
                     size="small"
                     :type="role.current?.userId === staff.userId ? 'primary' : 'default'"
-                    :disabled="!isVerified || !canManageRoles"
+                    :disabled="!canEditForm"
                     @click="handleAssignRole(role.roleCode, staff.userId)"
                   >
                     {{ staff.userName }}
@@ -285,66 +315,50 @@
             </div>
           </section>
 
-          <div v-if="!readOnlyMode" class="service-footer-actions">
-            <el-button type="primary" :disabled="!isVerified" :loading="savingServiceForm" @click="handleSaveServiceForm">
-              保存服务单
-            </el-button>
-          </div>
-        </main>
-
-        <aside v-if="!scanMode" class="service-side">
-          <section class="service-side-card">
-            <div class="service-side-card__heading">
-              <h3>{{ readOnlyMode ? '服务档案' : '订单摘要' }}</h3>
-              <small>订单号 {{ detail.order?.orderNo || '--' }}</small>
-            </div>
-            <div class="service-side-list">
-              <div v-for="item in orderSummaryItems" :key="item.label" class="service-side-list__item">
-                <span>{{ item.label }}</span>
-                <strong>{{ item.value }}</strong>
+          <section class="service-card">
+            <div class="service-card__header">
+              <div>
+                <h3>履约轨迹</h3>
               </div>
             </div>
-          </section>
-
-          <section v-if="showTimelineCard" class="service-side-card">
-            <h3>{{ readOnlyMode ? '服务轨迹' : '履约动作' }}</h3>
-            <div v-if="showFlowActions" class="service-side-actions">
-              <el-button type="primary" :disabled="!canArrive || !isVerified" @click="handlePlanAction('arrive')">到店</el-button>
-              <el-button type="warning" :disabled="!canStart || !isVerified" @click="handlePlanAction('start')">开始服务</el-button>
-              <el-button type="success" :disabled="!canFinish || !isVerified" @click="handlePlanAction('finish')">完成服务</el-button>
-            </div>
-            <div class="service-side-list service-side-list--timeline">
-              <div v-for="item in timelineItems" :key="item.label" class="service-side-list__item">
+            <div class="side-list">
+              <div v-for="item in timelineItems" :key="item.label" class="side-list__item">
                 <span>{{ item.label }}</span>
                 <strong>{{ item.value }}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section v-if="currentRoles.length" class="service-side-card">
-            <h3>当前分工</h3>
-            <div class="service-role-tags">
-              <div v-for="role in currentRoles" :key="`${role.roleCode}-${role.userId}`" class="service-role-tag">
-                <span>{{ formatRoleCode(role.roleCode) }}</span>
-                <strong>{{ role.userName || '--' }}</strong>
               </div>
             </div>
           </section>
         </aside>
       </div>
+
+      <div v-if="!readOnlyMode" class="service-action-bar">
+        <div class="service-action-bar__status">
+          <span v-if="autosaveMessage">{{ autosaveMessage }}</span>
+          <span v-else>{{ serviceActionHint }}</span>
+        </div>
+        <div class="action-group action-group--wrap">
+          <el-button :loading="savingServiceForm" :disabled="!canEditForm" @click="handleSaveServiceForm()">保存草稿</el-button>
+          <el-button type="primary" :loading="confirmingAction" :disabled="!canEditForm || !canConfirmAction" @click="handleConfirmAndAdvance">
+            {{ confirmActionLabel }}
+          </el-button>
+          <el-button
+            type="success"
+            :loading="sendingToCustomer"
+            :disabled="!canSendToCustomer"
+            :title="sendToCustomerDisabledReason"
+            @click="handleSaveAndSend"
+          >
+            保存并发送给客户
+          </el-button>
+        </div>
+      </div>
     </section>
 
     <section v-else class="panel empty-panel">
-      <el-empty :description="scanMode ? '服务单不存在、已失效或无权限访问' : '请选择一个服务单'" />
+      <el-empty :description="scanMode ? '服务单不存在或链接已失效，请联系门店重发。' : '请选择一个服务单'" />
     </section>
 
-    <el-dialog
-      v-model="scannerDialogVisible"
-      title="摄像头扫码核验"
-      width="720px"
-      destroy-on-close
-      @closed="stopCameraScanner"
-    >
+    <el-dialog v-model="scannerDialogVisible" title="扫码核销" width="720px" destroy-on-close @closed="stopCameraScanner">
       <div class="scanner-dialog">
         <div class="scanner-dialog__viewport">
           <video ref="scannerVideoRef" autoplay muted playsinline class="scanner-dialog__video"></video>
@@ -356,7 +370,7 @@
           <div class="action-group">
             <el-button @click="scannerDialogVisible = false">关闭</el-button>
             <el-button v-if="scannerError" text type="primary" @click="restartCameraScanner">重新扫码</el-button>
-            <el-button text type="primary" @click="useManualVerify">改为输码核验</el-button>
+            <el-button text type="primary" @click="useManualVerify">改为输码核销</el-button>
           </div>
         </div>
       </div>
@@ -365,49 +379,54 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { arrivePlanOrder, assignPlanOrderRole, finishPlanOrder, startPlanOrder } from '../api/actions'
+import {
+  assignPlanOrderRole,
+  sendPlanOrderServiceForm,
+  startPlanOrder,
+  arrivePlanOrder,
+  finishPlanOrder
+} from '../api/actions'
 import { saveOrderServiceDetail, verifyOrderVoucher } from '../api/order'
 import { fetchPlanOrderDetail, fetchStaffOptions } from '../api/workbench'
 import { currentUser } from '../utils/auth'
-import { loadSystemConsoleState } from '../utils/systemConsoleStore'
+import { buildSystemUrl, loadSystemConsoleState } from '../utils/systemConsoleStore'
 import {
   formatChannel,
   formatDateTime,
   formatMoney,
   formatOrderStatus,
-  formatOrderType,
   formatRoleCode,
   formatVerificationStatus,
-  normalize,
-  statusTagType
+  normalize
 } from '../utils/format'
 
 const route = useRoute()
 const router = useRouter()
+
 const detailLoading = ref(false)
 const savingServiceForm = ref(false)
+const confirmingAction = ref(false)
+const sendingToCustomer = ref(false)
 const detail = ref(null)
 const staffOptions = ref([])
 const verificationCode = ref('')
 const verificationInputRef = ref(null)
+const signatureCanvasRef = ref(null)
 const scannerDialogVisible = ref(false)
 const scannerAutoOpened = ref(false)
 const scannerVideoRef = ref(null)
-const scannerHint = ref('请将核验二维码置于取景框内')
+const scannerHint = ref('请将核销二维码置于取景框内')
 const scannerError = ref('')
+const autosaveMessage = ref('')
+const dirty = ref(false)
 const state = reactive(loadSystemConsoleState())
 const serviceForm = reactive(createServiceForm())
+
 const STORE_ROLE_CODES = ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR']
 const ROLE_ASSIGNMENT_MANAGER_CODES = ['ADMIN', 'STORE_MANAGER']
-const isStoreRoleCode = (roleCode) => STORE_ROLE_CODES.includes(normalize(roleCode || ''))
-const serviceRoleOrder = (roleCode) => {
-  const index = STORE_ROLE_CODES.indexOf(normalize(roleCode || ''))
-  return index === -1 ? STORE_ROLE_CODES.length : index
-}
-
 const styleOptions = ['自然', '高级感', '轻奢', '活力', '知性']
 const sceneOptions = ['特写', '三分', '五分', '七分', '全身']
 const serviceItemOptions = ['服装造型', '精修底片', '拍摄服务', '加选服务']
@@ -415,111 +434,143 @@ const serviceItemOptions = ['服装造型', '精修底片', '拍摄服务', '加
 const scanMode = computed(() => route.meta?.scanMode === true || String(route.query.scan || '') === '1')
 const readOnlyMode = computed(() => String(route.query.mode || '') === 'view')
 const isVerified = computed(() => normalize(detail.value?.order?.verificationStatus || 'UNVERIFIED') === 'VERIFIED')
+const isFinishedOrder = computed(
+  () =>
+    Boolean(detail.value?.summary?.finishTime) ||
+    ['COMPLETED', 'FINISHED', 'USED'].includes(normalize(detail.value?.order?.status || ''))
+)
 const hasSavedServiceDetail = computed(() => Boolean(String(detail.value?.order?.serviceDetailJson || '').trim()))
+const hasCustomerSignature = computed(() => Boolean(String(serviceForm.customerSignature || '').trim()))
 const canManageRoles = computed(() => ROLE_ASSIGNMENT_MANAGER_CODES.includes(normalize(currentUser.value?.roleCode || '')))
+const canEditForm = computed(() => !readOnlyMode.value && !isFinishedOrder.value && isVerified.value)
+const canSwitchToEditMode = computed(() => readOnlyMode.value && !isFinishedOrder.value)
+const canSendToCustomer = computed(
+  () => Boolean(detail.value?.order?.customerId) && detail.value?.customer?.wecomBound === true && canEditForm.value && hasCustomerSignature.value
+)
+const sendToCustomerDisabledReason = computed(() => {
+  if (canSendToCustomer.value) {
+    return ''
+  }
+  if (!hasCustomerSignature.value) {
+    return '客户尚未完成手写签名，暂不能发送'
+  }
+  return '客户尚未绑定企业微信，暂不能发送'
+})
 const showRoleAssignment = computed(() => !scanMode.value && !readOnlyMode.value && canManageRoles.value)
-const showFlowActions = computed(() => !scanMode.value && !readOnlyMode.value && isVerified.value)
 const currentRoles = computed(() =>
   (detail.value?.currentRoles || [])
-    .filter((item) => isStoreRoleCode(item?.roleCode))
-    .sort((left, right) => serviceRoleOrder(left?.roleCode) - serviceRoleOrder(right?.roleCode))
+    .filter((item) => STORE_ROLE_CODES.includes(normalize(item?.roleCode)))
+    .sort((left, right) => STORE_ROLE_CODES.indexOf(normalize(left?.roleCode)) - STORE_ROLE_CODES.indexOf(normalize(right?.roleCode)))
 )
-const heroEyebrow = computed(() => {
-  if (scanMode.value) {
-    return detail.value?.order?.storeName || '服务单核验'
-  }
-  if (readOnlyMode.value) {
-    return '服务单详情'
-  }
-  return activeTemplate.value?.templateName || '服务单'
-})
-const pageTitle = computed(() => {
-  if (readOnlyMode.value) {
-    return activeTemplate.value?.title || '服务单详情'
-  }
-  return activeTemplate.value?.title || '服务单'
-})
 const customerDisplayName = computed(() => detail.value?.customer?.name || detail.value?.order?.customerName || '未绑定客户')
 const customerDisplayPhone = computed(() => detail.value?.customer?.phone || detail.value?.order?.customerPhone || '--')
-const storeDisplayName = computed(() => detail.value?.order?.storeName || '未分配门店')
-const appointmentLabel = computed(() => formatDateTime(detail.value?.order?.appointmentTime) || '未预约')
+const storeDisplayName = computed(() => detail.value?.order?.storeName || currentUser.value?.storeName || '未分配门店')
+const appointmentLabel = computed(() => formatDateTime(detail.value?.order?.appointmentTime) || '待确认')
+const pageTitle = computed(() => (readOnlyMode.value ? '查看服务单' : '服务确认单'))
+const verificationAmount = computed(() => {
+  const deposit = toAmount(detail.value?.order?.deposit)
+  if (deposit && deposit > 0) {
+    return deposit
+  }
+  return toAmount(detail.value?.order?.amount) || 0
+})
+const serviceConfirmAmountLabel = computed(() =>
+  Number(serviceForm.serviceConfirmAmount || 0) > 0 ? formatMoney(serviceForm.serviceConfirmAmount) : '待填写'
+)
+const serviceFormStatusLabel = computed(() => {
+  if (!isVerified.value) {
+    return '待核销'
+  }
+  if (readOnlyMode.value || serviceStage.value.key === 'finish') {
+    return '已完成'
+  }
+  if (hasCustomerSignature.value) {
+    return '已签字'
+  }
+  return hasSavedServiceDetail.value ? '已保存' : '待填写'
+})
 const serviceStage = computed(() => {
   if (detail.value?.summary?.finishTime) {
-    return { label: '已完成', tagType: 'success' }
+    return { label: '已完成', key: 'finish' }
   }
   if (detail.value?.summary?.startTime) {
-    return { label: '服务中', tagType: 'primary' }
+    return { label: '服务中', key: 'serving' }
   }
-  if (detail.value?.summary?.arriveTime) {
-    return { label: '已到店', tagType: 'warning' }
+  if (!isVerified.value) {
+    return { label: '待核销', key: 'verify' }
   }
-  if (detail.value?.summary?.planOrderStatus) {
-    return { label: '待到店', tagType: 'info' }
+  if (!hasCustomerSignature.value) {
+    return { label: '待客户签单', key: 'sign' }
   }
-  return { label: hasSavedServiceDetail.value ? '已填写' : '待填写', tagType: 'info' }
+  return { label: '待开始服务', key: 'start' }
 })
-const canArrive = computed(() => detail.value?.summary?.planOrderStatus === 'arrived' && !detail.value?.summary?.arriveTime)
-const canStart = computed(
-  () => detail.value?.summary?.planOrderStatus === 'arrived' && !!detail.value?.summary?.arriveTime && !detail.value?.summary?.startTime
-)
-const canFinish = computed(
-  () =>
-    detail.value?.summary?.planOrderStatus === 'servicing' &&
-    !!detail.value?.summary?.startTime &&
-    !detail.value?.summary?.finishTime &&
-    !!detail.value?.currentRoles?.length &&
-    hasSavedServiceDetail.value
-)
+const confirmActionLabel = computed(() => {
+  if (!isVerified.value) {
+    return '请先完成核销'
+  }
+  if (detail.value?.summary?.finishTime) {
+    return '已完成'
+  }
+  if (detail.value?.summary?.startTime) {
+    return '完成服务'
+  }
+  return '签字并开始服务'
+})
+const canConfirmAction = computed(() => {
+  if (!detail.value || !isVerified.value) {
+    return false
+  }
+  if (detail.value.summary?.finishTime) {
+    return false
+  }
+  if (!detail.value.summary?.startTime) {
+    return hasCustomerSignature.value
+  }
+  return true
+})
+const serviceActionHint = computed(() => {
+  if (!isVerified.value) {
+    return '请先完成核销后继续'
+  }
+  if (detail.value?.summary?.finishTime) {
+    return '订单已完成，可返回列表查看或登记退款'
+  }
+  if (detail.value?.summary?.startTime) {
+    return '服务进行中，完成后点击完成服务'
+  }
+  if (!hasCustomerSignature.value) {
+    return '请先让客户完成手写签名'
+  }
+  return '签名已保存，可开始服务'
+})
 const roleCards = computed(() => {
-  const currentRoleMap = new Map(currentRoles.value.map((item) => [item.roleCode, item]))
+  const currentRoleMap = new Map(currentRoles.value.map((item) => [normalize(item.roleCode), item]))
   return (staffOptions.value || []).map((role) => ({
     ...role,
-    current: currentRoleMap.get(role.roleCode)
+    current: currentRoleMap.get(normalize(role.roleCode))
   }))
 })
-const activeTemplate = computed(() => {
-  const storeName = detail.value?.order?.storeName
-  const binding = (state.serviceFormBindings || []).find((item) => item.storeName === storeName && item.enabled === 1)
-  return (
-    (state.serviceFormTemplates || []).find((item) => item.id === binding?.templateId) ||
-    state.serviceFormTemplates?.find((item) => item.enabled === 1) ||
-    null
-  )
-})
-const overviewCards = computed(() => {
-  const cards = [
-    { label: '订单金额', value: formatMoney(detail.value?.order?.amount), tone: 'accent' },
-    { label: '预约时间', value: appointmentLabel.value, tone: 'default' },
-    {
-      label: '核验状态',
-      value: formatVerificationStatus(detail.value?.order?.verificationStatus || 'UNVERIFIED'),
-      tone: isVerified.value ? 'success' : 'warning'
-    },
-    { label: '履约进度', value: serviceStage.value.label, tone: serviceStage.value.tagType === 'success' ? 'success' : 'default' },
-    { label: '最近更新时间', value: formatDateTime(detail.value?.order?.updateTime) || '--', tone: 'default' }
-  ]
-  return scanMode.value ? cards.slice(0, 4) : cards
-})
 const orderSummaryItems = computed(() => [
-  { label: '客户姓名', value: customerDisplayName.value },
-  { label: '手机号码', value: customerDisplayPhone.value },
+  { label: '订单号', value: detail.value?.order?.orderNo || '--' },
   { label: '订单状态', value: formatOrderStatus(detail.value?.order?.status) },
-  { label: '订单类型', value: formatOrderType(detail.value?.order?.type) },
+  { label: '核销金额', value: formatMoney(verificationAmount.value) },
+  { label: '确认单金额', value: serviceConfirmAmountLabel.value },
   { label: '来源渠道', value: formatChannel(detail.value?.order?.sourceChannel) },
-  { label: '服务单状态', value: hasSavedServiceDetail.value ? '已填写' : '待填写' }
+  { label: '最近更新', value: formatDateTime(detail.value?.order?.updateTime || detail.value?.order?.createTime) || '--' }
 ])
 const timelineItems = computed(() => [
-  { label: '到店时间', value: formatDateTime(detail.value?.summary?.arriveTime) || '--' },
-  { label: '开始时间', value: formatDateTime(detail.value?.summary?.startTime) || '--' },
-  { label: '完成时间', value: formatDateTime(detail.value?.summary?.finishTime) || '--' }
+  { label: '核销时间', value: formatDateTime(detail.value?.order?.verificationTime) || '--' },
+  { label: '签单时间', value: formatDateTime(serviceForm.customerSignatureSignedAt) || '--' },
+  { label: '开始服务', value: formatDateTime(detail.value?.summary?.startTime) || '--' },
+  { label: '完成服务', value: formatDateTime(detail.value?.summary?.finishTime) || '--' }
 ])
-const showTimelineCard = computed(
-  () => !scanMode.value && (readOnlyMode.value || showFlowActions.value || timelineItems.value.some((item) => item.value !== '--'))
-)
 
+let autosaveTimer = null
 let scannerStream = null
 let scannerFrameId = 0
 let barcodeDetector = null
+let suppressDirtyWatch = false
+let signatureDrawing = false
 
 function createServiceForm(payload = {}) {
   return {
@@ -530,16 +581,122 @@ function createServiceForm(payload = {}) {
     serviceRequirement: String(payload.serviceRequirement || ''),
     styleConfirmation: String(payload.styleConfirmation || ''),
     serviceItems: normalizeArray(payload.serviceItems),
+    serviceConfirmAmount: toAmount(payload.serviceConfirmAmount),
     serviceDuration: String(payload.serviceDuration || ''),
     addOnCount: Number.isFinite(Number(payload.addOnCount)) ? Number(payload.addOnCount) : 0,
     addOnContent: String(payload.addOnContent || ''),
     signature: String(payload.signature || ''),
+    customerSignature: String(payload.customerSignature || ''),
+    customerSignatureSignedAt: String(payload.customerSignatureSignedAt || ''),
     internalRemark: String(payload.internalRemark || '')
   }
 }
 
 function applyServiceForm(payload) {
+  suppressDirtyWatch = true
   Object.assign(serviceForm, createServiceForm(payload || {}))
+  dirty.value = false
+  queueMicrotask(() => {
+    suppressDirtyWatch = false
+  })
+  void nextTick(redrawSignatureCanvas)
+}
+
+function prepareSignatureCanvas() {
+  const canvas = signatureCanvasRef.value
+  if (!canvas) {
+    return null
+  }
+  const rect = canvas.getBoundingClientRect()
+  const width = Math.max(1, rect.width)
+  const height = Math.max(1, rect.height)
+  const ratio = window.devicePixelRatio || 1
+  const nextWidth = Math.floor(width * ratio)
+  const nextHeight = Math.floor(height * ratio)
+  if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+    canvas.width = nextWidth
+    canvas.height = nextHeight
+  }
+  const context = canvas.getContext('2d')
+  context.setTransform(ratio, 0, 0, ratio, 0, 0)
+  context.lineCap = 'round'
+  context.lineJoin = 'round'
+  context.lineWidth = 3
+  context.strokeStyle = '#0f172a'
+  return { canvas, context, width, height }
+}
+
+function redrawSignatureCanvas() {
+  const prepared = prepareSignatureCanvas()
+  if (!prepared) {
+    return
+  }
+  const { context, width, height } = prepared
+  context.clearRect(0, 0, width, height)
+  if (!serviceForm.customerSignature) {
+    return
+  }
+  const image = new Image()
+  image.onload = () => {
+    context.clearRect(0, 0, width, height)
+    context.drawImage(image, 0, 0, width, height)
+  }
+  image.src = serviceForm.customerSignature
+}
+
+function signaturePoint(event) {
+  const canvas = signatureCanvasRef.value
+  const rect = canvas.getBoundingClientRect()
+  return {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top
+  }
+}
+
+function startSignatureDrawing(event) {
+  if (!canEditForm.value) {
+    return
+  }
+  const prepared = prepareSignatureCanvas()
+  if (!prepared) {
+    return
+  }
+  event.preventDefault()
+  signatureDrawing = true
+  const point = signaturePoint(event)
+  prepared.canvas.setPointerCapture?.(event.pointerId)
+  prepared.context.beginPath()
+  prepared.context.moveTo(point.x, point.y)
+}
+
+function drawSignature(event) {
+  if (!signatureDrawing || !canEditForm.value) {
+    return
+  }
+  const prepared = prepareSignatureCanvas()
+  if (!prepared) {
+    return
+  }
+  event.preventDefault()
+  const point = signaturePoint(event)
+  prepared.context.lineTo(point.x, point.y)
+  prepared.context.stroke()
+}
+
+function finishSignatureDrawing(event) {
+  if (!signatureDrawing) {
+    return
+  }
+  signatureDrawing = false
+  signatureCanvasRef.value?.releasePointerCapture?.(event.pointerId)
+  serviceForm.customerSignature = signatureCanvasRef.value?.toDataURL('image/png') || ''
+  serviceForm.customerSignatureSignedAt = new Date().toISOString()
+}
+
+function clearSignature() {
+  serviceForm.customerSignature = ''
+  serviceForm.customerSignatureSignedAt = ''
+  redrawSignatureCanvas()
 }
 
 function normalizeArray(value) {
@@ -563,11 +720,19 @@ function fieldText(value) {
   return String(value || '').trim() || '未填写'
 }
 
+function toAmount(value) {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+  const amount = Number(value)
+  return Number.isFinite(amount) ? amount : null
+}
+
 async function loadStaffOptions() {
   try {
     staffOptions.value = (await fetchStaffOptions())
-      .filter((role) => isStoreRoleCode(role?.roleCode))
-      .sort((left, right) => serviceRoleOrder(left?.roleCode) - serviceRoleOrder(right?.roleCode))
+      .filter((role) => STORE_ROLE_CODES.includes(normalize(role?.roleCode)))
+      .sort((left, right) => STORE_ROLE_CODES.indexOf(normalize(left?.roleCode)) - STORE_ROLE_CODES.indexOf(normalize(right?.roleCode)))
   } catch {
     staffOptions.value = []
   }
@@ -578,7 +743,7 @@ async function ensureCurrentRoleBound(planOrderId) {
     return
   }
   const normalizedRole = normalize(currentUser.value.roleCode)
-  if (!isStoreRoleCode(normalizedRole)) {
+  if (!STORE_ROLE_CODES.includes(normalizedRole)) {
     return
   }
   const existing = currentRoles.value.some((item) => normalize(item.roleCode) === normalizedRole)
@@ -627,7 +792,7 @@ async function loadPageContext() {
   await loadDetail(planOrderId)
 }
 
-async function handlePlanAction(action) {
+async function handlePlanAction(action, options = {}) {
   const payload = {
     planOrderId: Number(route.params.id)
   }
@@ -638,8 +803,60 @@ async function handlePlanAction(action) {
   } else if (action === 'finish') {
     await finishPlanOrder(payload)
   }
-  ElMessage.success('履约状态已更新')
-  await loadPageContext()
+  if (!options.silent) {
+    ElMessage.success('履约状态已更新')
+  }
+  if (!options.skipReload) {
+    await loadPageContext()
+  }
+}
+
+async function handleConfirmAndAdvance() {
+  if (!canEditForm.value || !canConfirmAction.value) {
+    if (isVerified.value && !detail.value?.summary?.startTime && !hasCustomerSignature.value) {
+      ElMessage.warning('请先让客户完成手写签名')
+      await scrollToSignaturePad()
+    }
+    return
+  }
+  try {
+    await ElMessageBox.confirm(confirmAdvanceMessage(), '确认状态流转', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  confirmingAction.value = true
+  try {
+    const saved = await handleSaveServiceForm({ silent: true })
+    if (!saved) {
+      ElMessage.error('服务单未保存成功，暂不能推进状态')
+      return
+    }
+    if (detail.value?.summary?.finishTime) {
+      ElMessage.info('当前服务单已完成')
+      return
+    }
+    if (detail.value?.summary?.startTime) {
+      await handlePlanAction('finish')
+      return
+    }
+    if (!detail.value?.summary?.arriveTime) {
+      await handlePlanAction('arrive', { silent: true, skipReload: true })
+    }
+    await handlePlanAction('start')
+  } finally {
+    confirmingAction.value = false
+  }
+}
+
+function confirmAdvanceMessage() {
+  if (detail.value?.summary?.startTime) {
+    return '确认完成本次门店服务吗？完成后订单会进入已完成状态，并用于后续服务分成统计；此操作不会发起退款或打款。'
+  }
+  return `点击后将推进到下一状态：${confirmActionLabel.value}。是否继续？`
 }
 
 async function handleAssignRole(roleCode, userId) {
@@ -655,8 +872,124 @@ async function handleAssignRole(roleCode, userId) {
   await loadPageContext()
 }
 
+function markDirty() {
+  if (readOnlyMode.value || !detail.value?.order?.id) {
+    return
+  }
+  dirty.value = true
+  queueAutosave()
+}
+
+function queueAutosave() {
+  if (!canEditForm.value) {
+    return
+  }
+  if (autosaveTimer) {
+    window.clearTimeout(autosaveTimer)
+  }
+  autosaveMessage.value = '内容已变更，稍后自动保存'
+  autosaveTimer = window.setTimeout(() => {
+    void handleSaveServiceForm({ silent: true, autosave: true })
+  }, 1500)
+}
+
+function clearAutosaveTimer() {
+  if (autosaveTimer) {
+    window.clearTimeout(autosaveTimer)
+    autosaveTimer = null
+  }
+}
+
+async function handleSaveServiceForm(options = {}) {
+  if (!detail.value?.order?.id || (!canEditForm.value && !options.force)) {
+    return false
+  }
+  if (savingServiceForm.value) {
+    return false
+  }
+  clearAutosaveTimer()
+  savingServiceForm.value = true
+  if (options.autosave) {
+    autosaveMessage.value = '正在自动保存...'
+  }
+  try {
+    const response = await saveOrderServiceDetail({
+      orderId: detail.value.order.id,
+      serviceRequirement: serviceForm.serviceRequirement,
+      serviceDetailJson: JSON.stringify(createServiceForm(serviceForm))
+    })
+    detail.value.order = {
+      ...detail.value.order,
+      ...response
+    }
+    dirty.value = false
+    const timeText = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    autosaveMessage.value = options.autosave ? `已自动保存 ${timeText}` : `已保存 ${timeText}`
+    if (!options.silent) {
+      ElMessage.success(options.autosave ? '已自动保存' : '服务单已保存')
+    }
+    return true
+  } catch {
+    autosaveMessage.value = options.autosave ? '自动保存失败，请手动保存' : autosaveMessage.value
+    if (!options.silent) {
+      ElMessage.error('服务单保存失败')
+    }
+    return false
+  } finally {
+    savingServiceForm.value = false
+  }
+}
+
+function buildServiceFormMessage() {
+  const url = buildSystemUrl(state, 'scan', `/service-scan/${route.params.id}?mode=view`)
+  return [
+    `您好，${customerDisplayName.value} 的服务确认单已更新。`,
+    `门店：${storeDisplayName.value}`,
+    `预约时间：${appointmentLabel.value}`,
+    `服务确认单金额：${serviceConfirmAmountLabel.value}`,
+    `服务需求：${fieldText(serviceForm.serviceRequirement)}`,
+    `查看链接：${url}`
+  ].join('\n')
+}
+
+async function handleSaveAndSend() {
+  if (!canSendToCustomer.value) {
+    ElMessage.warning(sendToCustomerDisabledReason.value || '暂不能发送')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`将通过企业微信把当前服务确认单发送给 ${customerDisplayName.value}，是否继续？`, '发送确认单', {
+      confirmButtonText: '确认发送',
+      cancelButtonText: '取消',
+      type: 'info'
+    })
+  } catch {
+    return
+  }
+  if (!canEditForm.value) {
+    return
+  }
+  sendingToCustomer.value = true
+  try {
+    const saved = await handleSaveServiceForm({ silent: true })
+    if (!saved) {
+      ElMessage.error('服务单未保存成功，暂未发送')
+      return
+    }
+    await sendPlanOrderServiceForm({
+      planOrderId: Number(route.params.id),
+      message: buildServiceFormMessage()
+    })
+    ElMessage.success('服务单已保存并发送给客户')
+  } catch {
+    ElMessage.warning('服务单已保存，但发送失败，请稍后重试')
+  } finally {
+    sendingToCustomer.value = false
+  }
+}
+
 function openCameraScanner() {
-  scannerHint.value = '请将核验二维码置于取景框内'
+  scannerHint.value = '请将核销二维码置于取景框内'
   scannerError.value = ''
   scannerDialogVisible.value = true
 }
@@ -668,7 +1001,7 @@ function useManualVerify() {
 
 function restartCameraScanner() {
   scannerError.value = ''
-  scannerHint.value = '正在重新打开摄像头'
+  scannerHint.value = '正在重新打开摄像头...'
   stopCameraScanner()
   void startCameraScanner()
 }
@@ -678,17 +1011,17 @@ async function startCameraScanner() {
     return
   }
   if (!navigator.mediaDevices?.getUserMedia) {
-    scannerError.value = '当前浏览器不支持摄像头，请改用输码核验。'
+    scannerError.value = '当前浏览器不支持摄像头，请改用输码核销。'
     return
   }
   if (!('BarcodeDetector' in window)) {
-    scannerError.value = '当前浏览器不支持二维码识别，请改用输码核验。'
+    scannerError.value = '当前浏览器不支持二维码识别，请改用输码核销。'
     return
   }
 
   try {
     scannerError.value = ''
-    scannerHint.value = '正在打开摄像头，请将核验二维码置于取景框内'
+    scannerHint.value = '正在打开摄像头，请将核销二维码完整置于取景框内。'
     await nextTick()
     const video = scannerVideoRef.value
     if (!video) {
@@ -703,7 +1036,7 @@ async function startCameraScanner() {
     video.srcObject = scannerStream
     await video.play()
     barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code'] })
-    scannerHint.value = '请将核验二维码完整置于取景框中'
+    scannerHint.value = '请对准核销二维码'
     scanCameraFrame()
   } catch (error) {
     stopCameraScanner()
@@ -726,7 +1059,7 @@ async function scanCameraFrame() {
       }
     }
   } catch {
-    scannerError.value = '摄像头已打开，但二维码暂未识别成功，可继续尝试或改用输码核验。'
+    scannerError.value = '摄像头已打开，但暂未识别成功，可继续尝试或改用输码核销。'
   }
   scannerFrameId = window.requestAnimationFrame(() => {
     void scanCameraFrame()
@@ -740,7 +1073,7 @@ async function handleCameraDetected(code) {
     await verifyCurrentOrder(code, 'SCAN_CAMERA')
     scannerDialogVisible.value = false
   } catch {
-    scannerError.value = '核验失败，请核对二维码后重试，或改用输码核验。'
+    scannerError.value = '核销失败，请核对二维码后重试，或改用输码核销。'
     scannerDialogVisible.value = true
   }
 }
@@ -764,14 +1097,14 @@ function stopCameraScanner() {
 function resolveCameraError(error) {
   const message = String(error?.message || '')
   if (message.includes('Permission') || message.includes('denied')) {
-    return '未获得摄像头权限，请允许访问后重试，或改用输码核验。'
+    return '未获得摄像头权限，请允许访问后重试，或改用输码核销。'
   }
-  return '摄像头暂时无法使用，请改用输码核验。'
+  return '摄像头暂时无法使用，请改用输码核销。'
 }
 
 async function handleCodeVerify() {
   if (!String(verificationCode.value || '').trim()) {
-    ElMessage.warning('请输入核验码')
+    ElMessage.warning('请输入核销码')
     await focusVerificationInput()
     return
   }
@@ -792,29 +1125,8 @@ async function verifyCurrentOrder(code, method) {
     ...response
   }
   verificationCode.value = response.verificationCode || code
-  ElMessage.success('核验成功，可继续填写服务单')
+  ElMessage.success('核销成功，可以继续填写服务单')
   await scrollToFormStart()
-}
-
-async function handleSaveServiceForm() {
-  if (!detail.value?.order?.id) {
-    return
-  }
-  savingServiceForm.value = true
-  try {
-    const response = await saveOrderServiceDetail({
-      orderId: detail.value.order.id,
-      serviceRequirement: serviceForm.serviceRequirement,
-      serviceDetailJson: JSON.stringify(createServiceForm(serviceForm))
-    })
-    detail.value.order = {
-      ...detail.value.order,
-      ...response
-    }
-    ElMessage.success('服务单已保存')
-  } finally {
-    savingServiceForm.value = false
-  }
 }
 
 async function scrollToFormStart() {
@@ -822,10 +1134,18 @@ async function scrollToFormStart() {
   if (typeof window === 'undefined') {
     return
   }
-  const target = document.querySelector('.service-card--form-start')
+  const target = document.querySelector('.service-card--locked')?.nextElementSibling || document.querySelector('.service-form-grid')
   target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  const firstEditable = target?.querySelector('input, textarea')
+  const firstEditable = document.querySelector('.service-main input, .service-main textarea')
   firstEditable?.focus?.()
+}
+
+async function scrollToSignaturePad() {
+  await nextTick()
+  if (typeof window === 'undefined') {
+    return
+  }
+  document.querySelector('.signature-field')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 async function focusVerificationInput() {
@@ -852,10 +1172,26 @@ function switchToEditMode() {
   router.push(`/plan-orders/${route.params.id}`)
 }
 
+function handleBeforeUnload(event) {
+  if (!dirty.value) {
+    return
+  }
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+function handlePageHide() {
+  if (dirty.value) {
+    void handleSaveServiceForm({ silent: true, autosave: true, force: true })
+  }
+}
+
 watch(
   () => `${route.params.id || ''}|${route.query.mode || ''}|${route.query.scan || ''}`,
   () => {
     scannerAutoOpened.value = false
+    clearAutosaveTimer()
+    autosaveMessage.value = ''
     void loadPageContext()
   },
   { immediate: true }
@@ -876,8 +1212,8 @@ watch(
     verified: isVerified.value,
     orderId: detail.value?.order?.id || null
   }),
-  (state) => {
-    if (!state.scanMode || state.readOnlyMode || state.verified || !state.orderId || scannerAutoOpened.value) {
+  (current) => {
+    if (!current.scanMode || current.readOnlyMode || current.verified || !current.orderId || scannerAutoOpened.value) {
       return
     }
     scannerAutoOpened.value = true
@@ -885,8 +1221,35 @@ watch(
   }
 )
 
+watch(
+  () => canEditForm.value,
+  () => {
+    void nextTick(redrawSignatureCanvas)
+  }
+)
+
+watch(
+  () => JSON.stringify(createServiceForm(serviceForm)),
+  (next, prev) => {
+    if (!detail.value || next === prev || suppressDirtyWatch) {
+      return
+    }
+    markDirty()
+  }
+)
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  window.addEventListener('pagehide', handlePageHide)
+  window.addEventListener('resize', redrawSignatureCanvas)
+})
+
 onBeforeUnmount(() => {
   stopCameraScanner()
+  clearAutosaveTimer()
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('pagehide', handlePageHide)
+  window.removeEventListener('resize', redrawSignatureCanvas)
 })
 </script>
 
@@ -898,585 +1261,446 @@ onBeforeUnmount(() => {
 
 .plan-order-page--scan {
   min-height: 100vh;
-  padding: 24px 20px 56px;
-  background: linear-gradient(180deg, #f4f7fb 0%, #eef3f8 100%);
+  padding: 20px 16px 96px;
+  background: #f4f7fb;
 }
 
 .service-shell {
   display: grid;
-  gap: 18px;
+  gap: 16px;
   width: 100%;
 }
 
 .plan-order-page--scan .service-shell {
-  max-width: 940px;
+  max-width: 980px;
   margin: 0 auto;
 }
 
-.service-hero {
+.service-header {
   display: flex;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
   align-items: flex-start;
-  padding: 24px 26px;
-  border-radius: 26px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 249, 252, 0.98) 100%);
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.06);
+  padding: 14px 18px;
+  border-radius: 22px;
+  background: #ffffff;
+  border: 1px solid #e5edf4;
 }
 
-.service-hero__main {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-
-.service-hero__headline {
+.service-header__main {
   display: grid;
   gap: 8px;
 }
 
-.service-hero__eyebrow {
+.service-header__headline h2 {
   margin: 0;
-  color: #2563eb;
+  font-size: 24px;
+  color: #0f172a;
+}
+
+.service-header__meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  color: #475569;
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
 }
 
-.service-hero h2 {
-  margin: 0;
-  color: #0f172a;
-  font-size: 36px;
-  letter-spacing: -0.04em;
-}
-
-.service-hero__customer {
-  display: flex;
-  flex-wrap: wrap;
+.service-header__meta span {
+  display: inline-flex;
   align-items: center;
-  gap: 8px 14px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px solid #e5edf4;
 }
 
-.service-hero__customer strong {
-  color: #0f172a;
-  font-size: 18px;
-}
-
-.service-hero__customer span {
-  color: #64748b;
-  font-size: 14px;
-}
-
-.service-hero__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  color: #64748b;
-  font-size: 14px;
-}
-
-.service-hero__meta-muted {
+.service-header__weak {
   color: #94a3b8;
+  background: transparent !important;
+  border-color: transparent !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 
-.service-hero__side {
-  display: grid;
-  gap: 14px;
-  justify-items: end;
-}
-
-.service-hero__status {
+.service-header__actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-
-.service-hero__actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.service-overview {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.service-overview--scan {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.service-overview__card {
-  display: grid;
-  gap: 10px;
-  padding: 18px 20px;
-  border-radius: 22px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.04);
-}
-
-.service-overview__card span {
-  color: #64748b;
-  font-size: 13px;
-}
-
-.service-overview__card strong {
-  color: #0f172a;
-  font-size: 18px;
-  line-height: 1.4;
-}
-
-.service-overview__card--accent {
-  background: linear-gradient(180deg, #173042 0%, #204357 100%);
-  border-color: rgba(23, 48, 66, 0.8);
-}
-
-.service-overview__card--accent span,
-.service-overview__card--accent strong {
-  color: #ffffff;
-}
-
-.service-overview__card--success {
-  background: linear-gradient(180deg, #f4fbf6 0%, #eef9f1 100%);
-}
-
-.service-overview__card--warning {
-  background: linear-gradient(180deg, #fff9ec 0%, #fff5dd 100%);
 }
 
 .service-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
   align-items: start;
-  width: 100%;
 }
 
-.service-workspace--scan {
+.service-workspace--single {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.service-workspace--view {
-  grid-template-columns: minmax(0, 1.08fr) 320px;
+.service-main {
+  display: grid;
+  gap: 16px;
 }
 
-.service-main,
 .service-side {
   display: grid;
-  gap: 18px;
-  width: 100%;
-}
-
-.service-side {
-  position: sticky;
-  top: 0;
-}
-
-.service-card,
-.service-side-card {
-  border-radius: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.05);
+  gap: 16px;
 }
 
 .service-card {
-  padding: 24px;
+  display: grid;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  background: #ffffff;
+  border: 1px solid #e5edf4;
 }
 
-.service-side-card {
-  padding: 20px;
-}
-
-.service-card__header,
-.service-side-card h3 {
-  margin: 0 0 18px;
+.service-card--locked {
+  opacity: 0.76;
 }
 
 .service-card__header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
-
-.service-card__header--stack {
   align-items: flex-start;
-  justify-content: flex-start;
 }
 
-.service-card__header h3,
-.service-side-card h3 {
+.service-card__header h3 {
   margin: 0;
   color: #0f172a;
-  font-size: 26px;
-  letter-spacing: -0.03em;
+  font-size: 18px;
 }
 
-.service-side-card h3 {
-  font-size: 20px;
-}
-
-.service-side-card__heading {
-  display: grid;
-  gap: 4px;
-  margin-bottom: 18px;
-}
-
-.service-side-card__heading small {
-  color: #94a3b8;
-  font-size: 12px;
-}
-
-.service-fact-grid,
-.service-form-grid {
-  display: grid;
-  gap: 14px;
-}
-
-.service-fact-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-bottom: 18px;
-}
-
-.service-fact {
-  display: grid;
-  gap: 8px;
-  padding: 16px 18px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #f8fbff 0%, #f4f7fb 100%);
-  border: 1px solid rgba(59, 130, 246, 0.08);
-}
-
-.service-fact span,
-.service-side-list__item span,
-.service-field label {
+.service-card__header p {
+  margin: 6px 0 0;
   color: #64748b;
   font-size: 13px;
-}
-
-.service-fact strong,
-.service-side-list__item strong {
-  color: #0f172a;
-  font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .verify-panel {
   display: grid;
-  gap: 12px;
-  padding: 18px;
-  border-radius: 20px;
-  background: #f8fafc;
-  border: 1px solid rgba(15, 23, 42, 0.07);
+  gap: 14px;
 }
 
 .verify-panel__actions {
   display: grid;
-  gap: 14px;
-}
-
-.verify-panel__actions > :deep(.el-button) {
-  width: fit-content;
-  min-width: 168px;
-}
-
-.verify-panel__actions--scan > :deep(.el-button) {
-  width: 100%;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 12px;
 }
 
 .verify-panel__manual {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-}
-
-.verify-panel__state {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 14px;
-  align-items: center;
-  color: #64748b;
-}
-
-.verify-panel__state--pending {
-  color: #92400e;
-}
-
-.verify-panel__input {
+  gap: 10px;
   width: 100%;
 }
 
-.service-lock-banner {
-  padding: 14px 16px;
+.verify-panel__result,
+.verify-panel__pending {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 16px 18px;
   border-radius: 18px;
-  border: 1px dashed rgba(245, 158, 11, 0.48);
-  background: linear-gradient(180deg, rgba(255, 251, 235, 0.98) 0%, rgba(255, 247, 214, 0.92) 100%);
-  color: #92400e;
-  font-size: 14px;
-  font-weight: 600;
+  background: #effbf4;
+  border: 1px solid rgba(22, 163, 74, 0.16);
+  color: #64748b;
 }
 
-.service-card--locked {
-  border-color: rgba(245, 158, 11, 0.2);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 251, 235, 0.92) 100%);
+.verify-panel__pending {
+  background: #fff7ed;
+  border-color: rgba(249, 115, 22, 0.16);
+  color: #9a3412;
+}
+
+.verify-panel__result strong {
+  color: #0f172a;
+}
+
+.verify-panel__result-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #16a34a;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.verify-panel__result-body {
+  display: grid;
+  gap: 4px;
+}
+
+.verify-hero {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid #dbe4ee;
+  background: #ffffff;
+  text-align: left;
+  min-height: 132px;
+}
+
+.verify-hero strong {
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.verify-hero span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.verify-hero--primary {
+  border: 1px solid #173042;
+  cursor: pointer;
+  background: linear-gradient(135deg, #173042 0%, #28495f 100%);
+  box-shadow: 0 10px 24px rgba(23, 48, 66, 0.16);
+}
+
+.verify-hero--primary strong,
+.verify-hero--primary span {
+  color: #ffffff;
 }
 
 .service-form-grid {
+  display: grid;
+  gap: 14px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.service-card--form-start {
-  scroll-margin-top: 18px;
 }
 
 .service-field {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .service-field--full {
   grid-column: 1 / -1;
 }
 
+.service-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
 .service-field__display {
   min-height: 44px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: #f8fafc;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid #e5edf4;
+  background: #f8fbff;
   color: #0f172a;
-  line-height: 1.7;
+  display: flex;
+  align-items: center;
 }
 
 .service-field__display--multiline {
+  align-items: flex-start;
   white-space: pre-wrap;
 }
 
-.plan-order-page--view .service-card,
-.plan-order-page--view .service-side-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 255, 0.96) 100%);
-}
-
-.plan-order-page--view .service-field__display {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-}
-
-.service-footer-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.service-side-list {
+.signature-pad,
+.signature-preview {
   display: grid;
-  gap: 12px;
-}
-
-.service-side-list__item {
-  display: grid;
-  gap: 6px;
-  padding: 14px 16px;
-  border-radius: 16px;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 18px;
   background: #f8fafc;
-  border: 1px solid rgba(15, 23, 42, 0.06);
 }
 
-.service-side-list--timeline .service-side-list__item {
-  border-left: 3px solid rgba(37, 99, 235, 0.2);
+.signature-pad.is-disabled {
+  opacity: 0.68;
 }
 
-.service-side-actions {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.service-side-actions :deep(.el-button) {
+.signature-pad__canvas {
   width: 100%;
+  height: 180px;
+  border-radius: 14px;
+  background:
+    linear-gradient(transparent 31px, rgba(148, 163, 184, 0.12) 32px),
+    #ffffff;
+  border: 1px solid #e2e8f0;
+  touch-action: none;
 }
 
-.service-role-tags {
-  display: grid;
-  gap: 10px;
-}
-
-.service-role-tag {
+.signature-pad__tools {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: #f8fafc;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-}
-
-.service-role-tag span {
   color: #64748b;
   font-size: 13px;
 }
 
-.service-role-tag strong {
+.signature-preview {
+  min-height: 160px;
+  place-items: center;
+  color: #94a3b8;
+}
+
+.signature-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+}
+
+.side-list {
+  display: grid;
+  gap: 12px;
+}
+
+.side-list__item {
+  display: grid;
+  gap: 4px;
+}
+
+.side-list__item span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.side-list__item strong {
   color: #0f172a;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .role-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .role-card {
-  padding: 18px;
-  border-radius: 18px;
-  background: #f8fafc;
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  background: #f8fbff;
 }
 
 .role-card__header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 12px;
+  align-items: center;
+}
+
+.role-card__header span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.quick-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.service-action-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 18px;
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #e2e8f0;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
+}
+
+.service-action-bar__status {
+  font-size: 13px;
+}
+
+.action-group--wrap {
+  flex-wrap: wrap;
 }
 
 .scanner-dialog {
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .scanner-dialog__viewport {
   position: relative;
+  border-radius: 20px;
   overflow: hidden;
-  border-radius: 24px;
-  background: #08111f;
-  min-height: 420px;
+  background: #0f172a;
+  min-height: 360px;
 }
 
 .scanner-dialog__video {
-  display: block;
   width: 100%;
-  height: 420px;
+  height: 100%;
   object-fit: cover;
 }
 
 .scanner-dialog__frame {
   position: absolute;
-  inset: 50%;
-  width: min(72vw, 280px);
-  height: min(72vw, 280px);
-  transform: translate(-50%, -50%);
+  inset: 18% 18%;
   border: 2px solid rgba(255, 255, 255, 0.92);
-  border-radius: 28px;
-  box-shadow: 0 0 0 999px rgba(8, 17, 31, 0.28);
+  border-radius: 18px;
+  box-shadow: 0 0 0 999px rgba(15, 23, 42, 0.22);
 }
 
 .scanner-dialog__footer {
   display: grid;
   gap: 10px;
-}
-
-.scanner-dialog__footer p {
-  margin: 0;
-  color: #64748b;
+  color: #475569;
 }
 
 .scanner-dialog__error {
-  color: #dc2626 !important;
+  color: #dc2626;
 }
 
-@media (max-width: 1360px) {
-  .service-overview {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .service-fact-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 1180px) {
-  .service-overview {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
+@media (max-width: 1080px) {
   .service-workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .service-side {
-    order: -1;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (max-width: 900px) {
-  .service-hero {
-    padding: 20px;
-  }
-
-  .service-hero,
-  .service-card__header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .service-hero__side,
-  .service-hero__status,
-  .service-hero__actions {
-    justify-items: flex-start;
-    justify-content: flex-start;
-  }
-
-  .service-form-grid,
-  .role-grid,
-  .verify-panel__manual,
-  .service-fact-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .service-card,
-  .service-side-card {
-    padding: 20px;
-  }
-
-  .scanner-dialog__video,
-  .scanner-dialog__viewport {
-    min-height: 320px;
-    height: 320px;
-  }
-}
-
-@media (max-width: 640px) {
-  .service-hero h2 {
-    font-size: 30px;
-  }
-
-  .service-overview,
-  .service-overview--scan {
-    grid-template-columns: 1fr;
-  }
-
-  .service-hero__meta {
+@media (max-width: 768px) {
+  .service-header,
+  .service-action-bar {
+    grid-template-columns: minmax(0, 1fr);
     display: grid;
-    gap: 6px;
   }
 
-  .service-footer-actions {
+  .service-header__meta span {
+    min-height: auto;
+  }
+
+  .service-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .verify-panel__actions,
+  .verify-panel__manual {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .signature-pad__tools {
+    align-items: flex-start;
     flex-direction: column;
-    align-items: stretch;
-  }
-
-  .service-footer-actions :deep(.el-button) {
-    width: 100%;
   }
 }
 </style>

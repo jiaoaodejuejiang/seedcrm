@@ -19,6 +19,10 @@ export function fetchCurrentUser(token) {
     .then((response) => response.data?.data)
 }
 
+export function fetchStoreLoginOptions() {
+  return authHttp.get('/auth/store-options').then((response) => response.data?.data || [])
+}
+
 export function logout(token) {
   return authHttp.post(
     '/auth/logout',

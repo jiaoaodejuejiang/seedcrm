@@ -1,68 +1,132 @@
 <template>
   <div class="login-shell admin-login-shell">
     <section class="login-showcase">
-      <p class="brand-mark">CRM</p>
-      <h1>CRM 控制台</h1>
-      <p class="login-showcase__summary">按角色登录后自动进入对应工作台与权限范围。</p>
+      <div class="login-showcase__brand">
+        <p class="brand-mark">CRM</p>
+        <span>SeedCRM</span>
+      </div>
 
-      <div class="login-showcase__roles">
-        <span v-for="account in visibleDemoAccounts" :key="account.username" class="login-role-pill">
-          {{ account.title }}
-        </span>
+      <div class="login-showcase__content">
+        <p class="login-showcase__eyebrow">客户增长与门店履约工作台</p>
+        <h1>把客资、订单、服务和结算放进一条清晰链路。</h1>
+        <p class="login-showcase__summary">
+          登录后按角色进入对应工作台，门店、岗位、权限和数据范围会自动生效。
+        </p>
+      </div>
+
+      <div class="login-showcase__flow">
+        <article>
+          <span>01</span>
+          <strong>客资跟进</strong>
+          <small>自动接入、分配、预约</small>
+        </article>
+        <article>
+          <span>02</span>
+          <strong>门店服务</strong>
+          <small>核销、签单、履约</small>
+        </article>
+        <article>
+          <span>03</span>
+          <strong>财务结算</strong>
+          <small>薪酬、分销、审计</small>
+        </article>
       </div>
     </section>
 
     <section class="login-panel">
-      <div class="login-panel__card">
+      <div class="login-panel__card login-panel__card--main">
         <div class="login-panel__header">
-          <h2>{{ loginMode === 'store' ? '门店登录' : '总部登录' }}</h2>
-          <p>{{ loginMode === 'store' ? '登录后直接进入门店服务工作台。' : '登录后进入总部业务与管理后台。' }}</p>
-        </div>
-
-        <div class="toolbar toolbar--compact">
-          <div class="toolbar-tabs">
-            <el-radio-group v-model="loginMode">
-              <el-radio-button value="hq">总部登录</el-radio-button>
-              <el-radio-button value="store">门店登录</el-radio-button>
-            </el-radio-group>
+          <div>
+            <span class="login-panel__tag">{{ loginMode === 'store' ? '门店入口' : '总部入口' }}</span>
+            <h2>{{ loginMode === 'store' ? '门店登录' : '总部登录' }}</h2>
           </div>
+          <p>{{ loginHeaderDescription }}</p>
         </div>
 
-        <el-form :model="form" label-position="top" @submit.prevent="handleLogin">
-          <el-form-item label="账号">
-            <el-input v-model="form.username" placeholder="请输入账号" size="large" />
+        <div class="login-mode-switch">
+          <button type="button" :class="{ 'is-active': loginMode === 'hq' }" @click="loginMode = 'hq'">
+            总部登录
+          </button>
+          <button type="button" :class="{ 'is-active': loginMode === 'store' }" @click="loginMode = 'store'">
+            门店登录
+          </button>
+        </div>
+
+        <el-form class="login-form" :model="form" label-position="top" @submit.prevent="handleLogin">
+          <el-form-item v-if="loginMode === 'store'" label="选择门店">
+            <el-select
+              v-model="selectedStoreName"
+              placeholder="请先选择门店"
+              clearable
+              filterable
+              :loading="storeLoading"
+              style="width: 100%"
+            >
+              <el-option v-for="store in storeOptions" :key="store.value" :label="store.label" :value="store.value" />
+            </el-select>
           </el-form-item>
-          <el-form-item label="密码">
+
+          <el-form-item label="登录账号">
+            <el-input
+              v-model="form.username"
+              :disabled="accountInputDisabled"
+              :placeholder="loginMode === 'store' && !selectedStoreName ? '请先选择门店' : '请输入账号'"
+              size="large"
+            />
+          </el-form-item>
+
+          <el-form-item label="登录密码">
             <el-input
               v-model="form.password"
               type="password"
               show-password
-              placeholder="请输入密码"
+              :disabled="accountInputDisabled"
+              :placeholder="loginMode === 'store' && !selectedStoreName ? '请先选择门店' : '请输入密码'"
               size="large"
             />
           </el-form-item>
-          <el-button type="primary" class="login-submit" :loading="loading" @click="handleLogin">
-            登录系统
+
+          <el-button type="primary" class="login-submit" :loading="loading" :disabled="!canLogin" @click="handleLogin">
+            {{ submitButtonText }}
           </el-button>
         </el-form>
+
+        <div class="login-safe-note">
+          <span>权限生效</span>
+          <span>数据隔离</span>
+          <span>演示密码 123456</span>
+        </div>
       </div>
 
       <div class="login-panel__card login-panel__card--soft">
         <div class="login-panel__header">
-          <h3>快捷账号</h3>
-          <p>点击即可填充，统一密码 `123456`</p>
+          <h3>{{ loginMode === 'store' ? '门店快捷账号' : '总部快捷账号' }}</h3>
+          <p v-if="loginMode === 'store' && !selectedStoreName">请先选择门店，再查看门店账号</p>
+          <p v-else>点击账号卡片即可填充登录信息。</p>
         </div>
 
-        <div class="login-demo-grid">
+        <el-empty
+          v-if="loginMode === 'store' && selectedStoreName && !visibleAccounts.length"
+          description="当前门店暂无可登录账号"
+        />
+
+        <div v-else-if="loginMode === 'store' && !selectedStoreName" class="login-empty-tip">请选择门店后登录</div>
+
+        <div v-else class="login-demo-grid">
           <button
-            v-for="account in visibleDemoAccounts"
+            v-for="account in visibleAccounts"
             :key="account.username"
             type="button"
             class="demo-account"
-            @click="pickDemo(account)"
+            :class="{ 'is-active': form.username === account.username }"
+            @click="pickAccount(account)"
           >
-            <strong>{{ account.title }}</strong>
-            <span>{{ account.username }}</span>
+            <span class="demo-account__avatar">{{ account.title?.slice(0, 1) || '账' }}</span>
+            <span class="demo-account__body">
+              <strong>{{ account.title }}</strong>
+              <small>{{ account.storeName || account.username }}</small>
+            </span>
+            <span class="demo-account__name">{{ account.username }}</span>
           </button>
         </div>
       </div>
@@ -71,36 +135,123 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
+import { fetchStoreLoginOptions } from '../api/auth'
 import { demoAccounts, getFirstAccessibleRoute, login } from '../utils/auth'
+
+const DEMO_DEFAULT_PASSWORD = '123456'
 
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
+const storeLoading = ref(false)
 const loginMode = ref('hq')
+const selectedStoreName = ref('')
+const remoteStoreOptions = ref([])
 
 const form = reactive({
   username: 'admin',
-  password: '123456'
+  password: DEMO_DEFAULT_PASSWORD
 })
 
-const visibleDemoAccounts = computed(() =>
-  demoAccounts.filter((account) => (loginMode.value === 'store' ? isStoreAccount(account.username) : !isStoreAccount(account.username)))
+const fallbackStoreOptions = computed(() =>
+  [...new Set(demoAccounts.filter((account) => account.loginMode === 'store').map((account) => account.storeName).filter(Boolean))].map((storeName) => ({
+    label: storeName,
+    value: storeName,
+    storeId: null,
+    accounts: demoAccounts
+      .filter((account) => account.loginMode === 'store' && account.storeName === storeName)
+      .map((account) => ({
+        username: account.username,
+        title: account.title,
+        storeName: account.storeName,
+        password: account.password || DEMO_DEFAULT_PASSWORD
+      }))
+  }))
 )
 
-function pickDemo(account) {
+const storeOptions = computed(() => (remoteStoreOptions.value.length ? remoteStoreOptions.value : fallbackStoreOptions.value))
+const selectedStoreOption = computed(() => storeOptions.value.find((item) => item.value === selectedStoreName.value) || null)
+
+const visibleAccounts = computed(() => {
+  if (loginMode.value === 'store') {
+    return selectedStoreOption.value?.accounts || []
+  }
+  return demoAccounts.filter((account) => account.loginMode !== 'store')
+})
+
+const accountInputDisabled = computed(() => loginMode.value === 'store' && !selectedStoreName.value)
+const canLogin = computed(() => {
+  if (loading.value) {
+    return false
+  }
+  if (loginMode.value === 'store' && !selectedStoreName.value) {
+    return false
+  }
+  return Boolean(String(form.username || '').trim() && String(form.password || '').trim())
+})
+
+const loginHeaderDescription = computed(() =>
+  loginMode.value === 'store' ? '请先选择门店，再使用对应账号进入门店工作台。' : '登录后进入总部业务与系统管理后台。'
+)
+
+const submitButtonText = computed(() => {
+  if (loginMode.value === 'store' && !selectedStoreName.value) {
+    return '请先选择门店'
+  }
+  return loginMode.value === 'store' ? '进入门店工作台' : '登录系统'
+})
+
+function resetForm(defaultAccount = null) {
+  form.username = defaultAccount?.username || ''
+  form.password = defaultAccount?.password || (defaultAccount ? DEMO_DEFAULT_PASSWORD : '')
+}
+
+function pickAccount(account) {
   form.username = account.username
-  form.password = account.password
+  form.password = account.password || DEMO_DEFAULT_PASSWORD
+}
+
+async function loadStoreOptions() {
+  storeLoading.value = true
+  try {
+    const options = await fetchStoreLoginOptions()
+    remoteStoreOptions.value = options.map((item) => ({
+      label: item.storeName,
+      value: item.storeName,
+      storeId: item.storeId,
+      accounts: (item.accounts || []).map((account) => ({
+        username: account.username,
+        title: account.title || account.roleName || account.username,
+        storeName: account.storeName || item.storeName,
+        password: DEMO_DEFAULT_PASSWORD
+      }))
+    }))
+  } catch {
+    remoteStoreOptions.value = []
+  } finally {
+    storeLoading.value = false
+  }
 }
 
 async function handleLogin() {
+  if (!canLogin.value) {
+    if (loginMode.value === 'store' && !selectedStoreName.value) {
+      ElMessage.warning('请先选择门店')
+    }
+    return
+  }
+
   loading.value = true
   try {
     await login({
       username: form.username,
-      password: form.password
+      password: form.password,
+      loginMode: loginMode.value,
+      storeId: loginMode.value === 'store' ? selectedStoreOption.value?.storeId : undefined,
+      storeName: loginMode.value === 'store' ? selectedStoreName.value : undefined
     })
     ElMessage.success('登录成功')
     await router.replace(route.query.redirect || getFirstAccessibleRoute())
@@ -111,16 +262,31 @@ async function handleLogin() {
 
 watch(
   loginMode,
-  () => {
-    const fallback = visibleDemoAccounts.value[0]
-    if (fallback) {
-      pickDemo(fallback)
+  (mode) => {
+    if (mode === 'store') {
+      selectedStoreName.value = ''
+      resetForm()
+      return
     }
+    selectedStoreName.value = ''
+    const fallback = demoAccounts.find((account) => account.loginMode !== 'store')
+    resetForm(fallback)
   },
   { immediate: true }
 )
 
-function isStoreAccount(username) {
-  return ['store_service', 'store_manager', 'photo_a', 'makeup_a', 'selector_a'].includes(username)
-}
+watch(selectedStoreName, () => {
+  if (loginMode.value !== 'store') {
+    return
+  }
+  resetForm()
+  const fallback = visibleAccounts.value[0]
+  if (fallback) {
+    pickAccount(fallback)
+  }
+})
+
+onMounted(() => {
+  void loadStoreOptions()
+})
 </script>

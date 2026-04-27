@@ -4,17 +4,14 @@
       <article class="metric-card">
         <span>活码配置</span>
         <strong>{{ configs.length }}</strong>
-        <small>已保存</small>
       </article>
       <article class="metric-card">
         <span>轮询员工</span>
         <strong>{{ availableEmployees.length }}</strong>
-        <small>当前可选</small>
       </article>
       <article class="metric-card">
-        <span>最近生成</span>
-        <strong>{{ generatedCount }}</strong>
-        <small>已生成二维码</small>
+        <span>覆盖门店</span>
+        <strong>{{ publishedStoreCount }}</strong>
       </article>
     </section>
 
@@ -24,24 +21,8 @@
           <h3>活码配置</h3>
         </div>
         <div class="action-group">
-          <el-button type="primary" @click="handleSaveConfig">保存配置</el-button>
-          <el-button type="success" :loading="generating" @click="handleGenerate">生成活码</el-button>
+          <el-button type="primary" :loading="savingConfig" @click="handleSaveConfig">保存配置</el-button>
           <el-button @click="resetLiveCodeForm">重置</el-button>
-        </div>
-      </div>
-
-      <div class="status-strip">
-        <div class="status-pill">
-          <span>企业微信模式</span>
-          <strong>{{ wecomConfig.executionMode || 'MOCK' }}</strong>
-        </div>
-        <div class="status-pill">
-          <span>回调状态</span>
-          <strong>{{ wecomConfig.lastCallbackStatus || '未收到' }}</strong>
-        </div>
-        <div class="status-pill">
-          <span>联系我参数</span>
-          <strong>{{ liveCodeSummary }}</strong>
         </div>
       </div>
 
@@ -52,17 +33,29 @@
         </label>
         <label>
           <span>应用场景</span>
-          <el-input v-model="liveCodeForm.scene" placeholder="例如：活动投放 / 门店承接" />
-        </label>
-        <label>
-          <span>分配策略</span>
-          <el-input :model-value="'轮询分配'" readonly />
+          <el-input v-model="liveCodeForm.scene" placeholder="例如：门店接待 / 活动投放" />
         </label>
         <label>
           <span>配置状态</span>
           <el-select v-model="liveCodeForm.isEnabled">
             <el-option :value="1" label="启用" />
             <el-option :value="0" label="停用" />
+          </el-select>
+        </label>
+        <label>
+          <span>分配策略</span>
+          <el-input :model-value="'自动轮询'" readonly />
+        </label>
+        <label class="full-span">
+          <span>覆盖门店</span>
+          <el-select
+            v-model="liveCodeForm.storeNames"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="请选择需要覆盖二维码的门店"
+          >
+            <el-option v-for="store in storeOptions" :key="store" :label="store" :value="store" />
           </el-select>
         </label>
         <label class="full-span">
@@ -89,14 +82,11 @@
       </div>
 
       <div class="chip-row">
-        <el-tag
-          v-for="employee in selectedEmployees"
-          :key="employee.id"
-          class="employee-chip"
-          effect="plain"
-          type="info"
-        >
-          {{ employee.userName }} / {{ employee.accountName }}
+        <el-tag v-for="employee in selectedEmployees" :key="employee.id" class="employee-chip" effect="plain" type="info">
+          {{ displayEmployeeName(employee) }} / {{ employee.accountName }}
+        </el-tag>
+        <el-tag v-for="storeName in liveCodeForm.storeNames" :key="storeName" class="employee-chip" effect="plain">
+          {{ storeName }}
         </el-tag>
       </div>
     </section>
@@ -104,8 +94,11 @@
     <section v-if="generatedResult" class="panel">
       <div class="panel-heading">
         <div>
-          <h3>生成结果</h3>
+          <h3>二维码状态</h3>
         </div>
+        <el-tag :type="generatedResult.qrCodeUrl ? 'success' : 'info'">
+          {{ generatedResult.qrCodeUrl ? '二维码可用' : '待生成' }}
+        </el-tag>
       </div>
 
       <div class="live-code-preview-grid">
@@ -115,13 +108,17 @@
 
         <div class="detail-card">
           <h3>{{ generatedResult.codeName }}</h3>
-          <p>应用场景：{{ generatedResult.scene }}</p>
+          <p>应用场景：{{ generatedResult.scene || '--' }}</p>
           <p>分配策略：{{ strategyLabel(generatedResult.strategy) }}</p>
-          <p>联系我 ID：{{ generatedResult.contactWayId }}</p>
+          <p>活码 ID：{{ generatedResult.contactWayId || '--' }}</p>
           <p>短链地址：{{ generatedResult.shortLink || '--' }}</p>
           <p>生成时间：{{ formatDateTime(generatedResult.generatedAt) }}</p>
-          <p>轮询员工：{{ generatedResult.employeeNames.join(' / ') }}</p>
-          <p>{{ generatedResult.summary }}</p>
+          <p>轮询员工：{{ (generatedResult.employeeNames || []).join(' / ') || '--' }}</p>
+          <p>覆盖门店：{{ (generatedResult.storeNames || []).join(' / ') || '暂未选择门店' }}</p>
+          <p>{{ generatedResult.summary || '保存配置后系统会同步活码链接与门店覆盖状态。' }}</p>
+          <el-button v-if="generatedResult.shortLink || generatedResult.qrCodeUrl" text type="primary" @click="copyLiveCodeLink(generatedResult)">
+            复制链接
+          </el-button>
         </div>
       </div>
     </section>
@@ -134,7 +131,7 @@
       </div>
 
       <el-table :data="pagination.rows" stripe>
-        <el-table-column label="活码名称" min-width="180">
+        <el-table-column label="活码名称" min-width="190">
           <template #default="{ row }">
             <div class="table-primary">
               <strong>{{ row.codeName }}</strong>
@@ -147,14 +144,17 @@
             {{ (row.employeeNames || []).join(' / ') || '--' }}
           </template>
         </el-table-column>
-        <el-table-column label="策略" width="120">
+        <el-table-column label="覆盖门店" min-width="220">
           <template #default="{ row }">
-            {{ strategyLabel(row.strategy) }}
+            {{ (row.storeNames || []).join(' / ') || '暂未选择' }}
           </template>
         </el-table-column>
-        <el-table-column label="最近生成" min-width="170">
+        <el-table-column label="二维码状态" min-width="170">
           <template #default="{ row }">
-            {{ formatDateTime(row.generatedAt) }}
+            <div class="table-primary">
+              <strong>{{ row.qrCodeUrl ? '二维码可用' : '待生成' }}</strong>
+              <span>{{ formatDateTime(row.generatedAt) || '保存配置后自动同步' }}</span>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="100">
@@ -164,13 +164,11 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" min-width="280" fixed="right">
+        <el-table-column label="操作" min-width="220" fixed="right">
           <template #default="{ row }">
-            <div class="action-group">
+            <div class="action-group action-group--wrap">
               <el-button size="small" @click="pickLiveCodeConfig(row)">编辑</el-button>
-              <el-button size="small" type="success" :loading="generatingRowId === row.id" @click="handleGenerate(row)">
-                生成活码
-              </el-button>
+              <el-button size="small" plain :disabled="!row.shortLink && !row.qrCodeUrl" @click="copyLiveCodeLink(row)">复制链接</el-button>
               <el-button size="small" plain @click="toggleLiveCodeConfig(row)">
                 {{ row.isEnabled === 1 ? '停用' : '启用' }}
               </el-button>
@@ -198,17 +196,32 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { fetchWecomConfig, fetchWecomLiveCodeConfigs, generateWecomLiveCode, saveWecomLiveCodeConfig } from '../api/wecom'
+import {
+  fetchWecomConfig,
+  fetchWecomLiveCodeConfigs,
+  generateWecomLiveCode,
+  publishWecomLiveCode,
+  saveWecomLiveCodeConfig
+} from '../api/wecom'
 import { useTablePagination } from '../composables/useTablePagination'
 import { formatDateTime } from '../utils/format'
 import { loadSystemConsoleState } from '../utils/systemConsoleStore'
 
 const STRATEGY_ROUND_ROBIN = 'ROUND_ROBIN'
+const EMPLOYEE_NAME_MAP = {
+  private_domain: '私域客服A',
+  private_domain_b: '私域客服B',
+  store_service: '门店服务A',
+  store_manager: '静安店长',
+  photo_a: '摄影A',
+  makeup_a: '化妆师A',
+  selector_a: '选片负责人A'
+}
+const storeOptions = ['静安门店', '浦东门店', '徐汇门店']
 
 const state = reactive(loadSystemConsoleState())
 const configs = ref([])
-const generating = ref(false)
-const generatingRowId = ref(null)
+const savingConfig = ref(false)
 const generatedResult = ref(null)
 const wecomConfig = ref({
   executionMode: 'MOCK',
@@ -230,14 +243,8 @@ const availableEmployees = computed(() => {
   return state.employees.filter((item) => item.status === 'ACTIVE' && item.canLogin === 1)
 })
 
-const selectedEmployees = computed(() =>
-  availableEmployees.value.filter((item) => liveCodeForm.employeeIds.includes(item.id))
-)
-
-const generatedCount = computed(() => configs.value.filter((item) => item.generatedAt && item.qrCodeUrl).length)
-const liveCodeSummary = computed(
-  () => `${wecomConfig.value.liveCodeType || 2} / ${wecomConfig.value.liveCodeScene || 2} / ${wecomConfig.value.liveCodeStyle || 1}`
-)
+const selectedEmployees = computed(() => availableEmployees.value.filter((item) => liveCodeForm.employeeIds.includes(item.id)))
+const publishedStoreCount = computed(() => new Set(configs.value.flatMap((item) => item.storeNames || [])).size)
 
 onMounted(async () => {
   await Promise.all([loadConfigs(), loadWecomConfig()])
@@ -260,6 +267,7 @@ function createLiveCodeForm() {
     scene: '门店引流',
     strategy: STRATEGY_ROUND_ROBIN,
     employeeIds: [],
+    storeNames: [],
     remark: '',
     isEnabled: 1
   }
@@ -279,12 +287,16 @@ function resetLiveCodeForm() {
   generatedResult.value = null
 }
 
+function displayEmployeeName(employee) {
+  return EMPLOYEE_NAME_MAP[employee.accountName] || employee.userName || employee.accountName || '--'
+}
+
 function employeeOptionLabel(employee) {
-  return `${employee.userName}（${employee.accountName}）`
+  return `${displayEmployeeName(employee)} / ${employee.accountName}`
 }
 
 function strategyLabel(strategy) {
-  return strategy === STRATEGY_ROUND_ROBIN ? '轮询分配' : strategy || '--'
+  return strategy === STRATEGY_ROUND_ROBIN ? '自动轮询' : strategy || '--'
 }
 
 function resolveEmployeeIds(payload) {
@@ -296,7 +308,7 @@ function resolveEmployeeIds(payload) {
     }
   }
   const nameSet = new Set(payload.employeeNames || [])
-  return availableEmployees.value.filter((item) => nameSet.has(item.userName)).map((item) => item.id)
+  return availableEmployees.value.filter((item) => nameSet.has(displayEmployeeName(item)) || nameSet.has(item.userName)).map((item) => item.id)
 }
 
 function buildPayload(formLike) {
@@ -306,8 +318,9 @@ function buildPayload(formLike) {
     codeName: formLike.codeName,
     scene: formLike.scene,
     strategy: formLike.strategy || STRATEGY_ROUND_ROBIN,
-    employeeNames: employees.map((item) => item.userName),
+    employeeNames: employees.map((item) => displayEmployeeName(item)),
     employeeAccounts: employees.map((item) => item.accountName),
+    storeNames: formLike.storeNames || [],
     remark: formLike.remark,
     isEnabled: formLike.isEnabled
   }
@@ -318,13 +331,42 @@ async function handleSaveConfig() {
     ElMessage.warning('请先填写活码名称并选择轮询员工')
     return
   }
-  const saved = await saveWecomLiveCodeConfig(buildPayload(liveCodeForm))
-  Object.assign(liveCodeForm, {
-    ...saved,
-    employeeIds: resolveEmployeeIds(saved)
-  })
-  await loadConfigs()
-  ElMessage.success('活码配置已保存')
+  savingConfig.value = true
+  try {
+    const saved = await saveWecomLiveCodeConfig(buildPayload(liveCodeForm))
+    let latest = saved
+    try {
+      const generated = await generateWecomLiveCode({
+        codeName: saved.codeName,
+        scene: saved.scene,
+        strategy: saved.strategy,
+        employeeNames: saved.employeeNames,
+        employeeAccounts: saved.employeeAccounts
+      })
+      latest = {
+        ...saved,
+        ...generated
+      }
+      if (saved.id && (saved.storeNames || []).length && generated.qrCodeUrl) {
+        latest = await publishWecomLiveCode({
+          configId: saved.id,
+          storeNames: saved.storeNames
+        })
+      }
+    } catch {
+      ElMessage.warning('配置已保存，二维码同步失败，请检查企业微信配置后重试')
+    }
+    Object.assign(liveCodeForm, {
+      ...latest,
+      employeeIds: resolveEmployeeIds(latest),
+      storeNames: latest.storeNames || saved.storeNames || []
+    })
+    generatedResult.value = latest
+    await loadConfigs()
+    ElMessage.success('活码配置已保存')
+  } finally {
+    savingConfig.value = false
+  }
 }
 
 function pickLiveCodeConfig(row) {
@@ -334,6 +376,7 @@ function pickLiveCodeConfig(row) {
     scene: row.scene || '门店引流',
     strategy: row.strategy || STRATEGY_ROUND_ROBIN,
     employeeIds: resolveEmployeeIds(row),
+    storeNames: row.storeNames || [],
     remark: row.remark || '',
     isEnabled: row.isEnabled ?? 1
   })
@@ -354,47 +397,23 @@ async function toggleLiveCodeConfig(row) {
   ElMessage.success('活码状态已更新')
 }
 
-async function handleGenerate(row = null) {
-  const formLike = row
-    ? {
-        id: row.id,
-        codeName: row.codeName,
-        scene: row.scene || '门店引流',
-        strategy: row.strategy || STRATEGY_ROUND_ROBIN,
-        employeeIds: resolveEmployeeIds(row),
-        remark: row.remark || '',
-        isEnabled: row.isEnabled ?? 1
-      }
-    : liveCodeForm
-  if (!formLike.codeName || !formLike.employeeIds.length) {
-    ElMessage.warning('请先填写活码名称并选择轮询员工')
+async function copyLiveCodeLink(row) {
+  const link = row?.shortLink || row?.qrCodeUrl
+  if (!link) {
+    ElMessage.warning('当前活码暂无可复制链接')
     return
   }
-
-  generating.value = !row
-  generatingRowId.value = row?.id || null
   try {
-    const saved = await saveWecomLiveCodeConfig(buildPayload(formLike))
-    const result = await generateWecomLiveCode({
-      codeName: saved.codeName,
-      scene: saved.scene,
-      strategy: saved.strategy,
-      employeeNames: saved.employeeNames,
-      employeeAccounts: saved.employeeAccounts
-    })
-    generatedResult.value = {
-      ...result,
-      strategyLabel: strategyLabel(result.strategy)
-    }
-    await loadConfigs()
-    const latest = configs.value.find((item) => item.codeName === saved.codeName)
-    if (latest) {
-      pickLiveCodeConfig(latest)
-    }
-    ElMessage.success('活码已生成')
-  } finally {
-    generating.value = false
-    generatingRowId.value = null
+    await navigator.clipboard.writeText(link)
+    ElMessage.success('活码链接已复制')
+  } catch {
+    ElMessage.warning('当前环境不支持自动复制')
   }
 }
 </script>
+
+<style scoped>
+.action-group--wrap {
+  flex-wrap: wrap;
+}
+</style>

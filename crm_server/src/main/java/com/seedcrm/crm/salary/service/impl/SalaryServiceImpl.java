@@ -107,6 +107,14 @@ public class SalaryServiceImpl implements SalaryService {
     }
 
     @Override
+    public List<SalaryDetail> listDetails(Long userId) {
+        validateUserId(userId);
+        return salaryDetailMapper.selectList(new LambdaQueryWrapper<SalaryDetail>()
+                .eq(SalaryDetail::getUserId, userId)
+                .orderByDesc(SalaryDetail::getCreateTime, SalaryDetail::getId));
+    }
+
+    @Override
     @Transactional
     public List<SalaryDetail> calculateForPlanOrder(Long planOrderId) {
         return calculateInternal(planOrderId, true);

@@ -463,6 +463,35 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
         return inflateLiveCodeConfig(existing);
     }
 
+    @Override
+    public WecomLiveCodeConfig publishLiveCodeConfig(Long configId, List<String> storeNames) {
+        if (configId == null || configId <= 0) {
+            throw new BusinessException("活码配置 ID 不能为空");
+        }
+        WecomLiveCodeConfig existing = wecomLiveCodeConfigMapper.selectById(configId);
+        if (existing == null) {
+            throw new BusinessException("未找到对应的活码配置");
+        }
+        if (!StringUtils.hasText(existing.getQrCodeUrl())) {
+            throw new BusinessException("请先生成二维码后再发布到门店");
+        }
+        List<String> normalizedStores = storeNames == null ? List.of() : storeNames.stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .distinct()
+                .toList();
+        if (normalizedStores.isEmpty()) {
+            throw new BusinessException("至少选择一个发布门店");
+        }
+        existing.setStoreNamesJson(writeStringList(normalizedStores));
+        existing.setPublishedAt(LocalDateTime.now());
+        existing.setUpdatedAt(LocalDateTime.now());
+        if (wecomLiveCodeConfigMapper.updateById(existing) <= 0) {
+            throw new BusinessException("发布活码到门店失败");
+        }
+        return inflateLiveCodeConfig(existing);
+    }
+
     private WecomAppConfig findConfig() {
         return wecomAppConfigMapper.selectOne(Wrappers.<WecomAppConfig>lambdaQuery()
                 .orderByAsc(WecomAppConfig::getId)
@@ -821,6 +850,7 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
         }
         config.setEmployeeNames(parseStringList(config.getEmployeeNamesJson()));
         config.setEmployeeAccounts(parseStringList(config.getEmployeeAccountsJson()));
+        config.setStoreNames(parseStringList(config.getStoreNamesJson()));
         return config;
     }
 
@@ -830,6 +860,7 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
         target.setStrategy(StringUtils.hasText(source.getStrategy()) ? source.getStrategy().trim() : DEFAULT_STRATEGY);
         target.setEmployeeNamesJson(writeStringList(source.getEmployeeNames()));
         target.setEmployeeAccountsJson(writeStringList(source.getEmployeeAccounts()));
+        target.setStoreNamesJson(writeStringList(source.getStoreNames()));
         target.setRemark(trimToNull(source.getRemark()));
         target.setIsEnabled(source.getIsEnabled() == null ? 1 : source.getIsEnabled());
     }

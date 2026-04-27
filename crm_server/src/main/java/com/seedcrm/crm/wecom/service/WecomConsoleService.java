@@ -37,4 +37,6 @@ public interface WecomConsoleService {
     List<WecomLiveCodeConfig> listLiveCodeConfigs();
 
     WecomLiveCodeConfig saveLiveCodeConfig(WecomLiveCodeConfig config);
+
+    WecomLiveCodeConfig publishLiveCodeConfig(Long configId, List<String> storeNames);
 }

@@ -1,13 +1,5 @@
 <template>
   <div class="stack-page">
-    <section class="metrics-row metrics-row--six">
-      <article v-for="card in overviewCards" :key="card.label" class="metric-card">
-        <span>{{ card.label }}</span>
-        <strong>{{ card.value }}</strong>
-        <small>{{ card.hint }}</small>
-      </article>
-    </section>
-
     <section v-if="verificationWarning" class="panel compact-panel">
       <el-alert :title="verificationWarning" type="warning" show-icon :closable="false" />
     </section>
@@ -25,29 +17,10 @@
 
       <el-tabs v-model="activeTab" class="platform-tabs">
         <el-tab-pane label="概览" name="overview">
-          <div class="status-strip">
-            <div class="status-pill">
-              <span>运行模式</span>
-              <strong>{{ formatExecutionMode(provider.executionMode) }}</strong>
-            </div>
-            <div class="status-pill">
-              <span>授权方式</span>
-              <strong>{{ formatAuthType(provider.authType) }}</strong>
-            </div>
-            <div class="status-pill">
-              <span>授权状态</span>
-              <strong>{{ provider.authStatus || '未授权' }}</strong>
-            </div>
-            <div class="status-pill">
-              <span>任务状态</span>
-              <strong>{{ formatJobStatus(jobForm.status) }}</strong>
-            </div>
-          </div>
-
           <div class="overview-grid">
             <article class="detail-card">
               <h3>授权信息</h3>
-              <p>AuthCode 状态：{{ provider.authCodeStatus || '--' }}</p>
+              <p>授权码状态：{{ formatResultStatus(provider.authCodeStatus || '--') }}</p>
               <p>Access Token：{{ provider.accessTokenMasked || '--' }}</p>
               <p>Refresh Token：{{ provider.refreshTokenMasked || '--' }}</p>
               <p>到期时间：{{ formatDateTime(provider.tokenExpiresAt) || '--' }}</p>
@@ -56,8 +29,8 @@
 
             <article class="detail-card">
               <h3>同步与回调</h3>
-              <p>最近测试：{{ provider.lastTestStatus || '--' }}</p>
-              <p>最近回调：{{ provider.lastCallbackStatus || '--' }}</p>
+              <p>最近测试：{{ formatResultStatus(provider.lastTestStatus || '--') }}</p>
+              <p>最近回调：{{ formatCallbackProcessStatus(provider.lastCallbackStatus || '--') }}</p>
               <p>最近同步：{{ formatDateTime(provider.lastSyncTime) || '--' }}</p>
               <p>下次执行：{{ formatDateTime(jobForm.nextRunTime) || '--' }}</p>
               <p>队列名称：{{ jobForm.queueName || '--' }}</p>
@@ -88,8 +61,16 @@
                 {{ formatDateTime(row.receivedAt) || '--' }}
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="120" prop="processStatus" />
-            <el-table-column label="验签" width="120" prop="signatureStatus" />
+            <el-table-column label="状态" width="120">
+              <template #default="{ row }">
+                {{ formatCallbackProcessStatus(row.processStatus) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="验签" width="120">
+              <template #default="{ row }">
+                {{ formatCallbackSignatureStatus(row.signatureStatus) }}
+              </template>
+            </el-table-column>
             <el-table-column label="事件" min-width="160" prop="eventType" />
             <el-table-column label="结果" min-width="220" prop="processMessage" />
           </el-table>
@@ -146,11 +127,11 @@
               <el-input v-model="provider.appId" placeholder="请输入抖音开放平台 AppId" />
             </label>
             <label>
-              <span>ClientKey</span>
+              <span>客户端 Key</span>
               <el-input v-model="provider.clientKey" placeholder="兼容旧配置时可补录" />
             </label>
             <label class="full-span">
-              <span>应用 Secret</span>
+              <span>客户端 Secret</span>
               <el-input
                 v-model="provider.clientSecret"
                 type="password"
@@ -161,16 +142,24 @@
 
             <div class="full-span form-group-title">请求地址</div>
             <label>
-              <span>基础域名</span>
+              <span>开放平台域名</span>
               <el-input v-model="provider.baseUrl" placeholder="例如 https://open.douyin.com" />
             </label>
             <label>
-              <span>授权换 Token 地址</span>
+              <span>换取 Token 地址</span>
               <el-input v-model="provider.tokenUrl" placeholder="请输入 access_token 接口地址" />
+            </label>
+            <label>
+              <span>系统基础域名</span>
+              <el-input :model-value="systemBaseUrl" readonly />
+            </label>
+            <label>
+              <span>API 域名</span>
+              <el-input :model-value="apiBaseUrl" readonly />
             </label>
             <label class="full-span">
               <span>回调登记地址</span>
-              <el-input v-model="provider.callbackUrl" placeholder="保存当前配置在平台登记的回调地址" />
+              <el-input :model-value="provider.callbackUrl || backendCallbackUrl" readonly />
             </label>
             <label class="full-span">
               <span>固定后端回调地址</span>
@@ -313,7 +302,13 @@ import {
   triggerSchedulerJob
 } from '../api/scheduler'
 import { useTablePagination } from '../composables/useTablePagination'
-import { formatDateTime } from '../utils/format'
+import {
+  formatCallbackProcessStatus,
+  formatCallbackSignatureStatus,
+  formatDateTime,
+  formatResultStatus
+} from '../utils/format'
+import { buildSystemUrl, loadSystemConsoleState } from '../utils/systemConsoleStore'
 
 const DOUYIN_CODE = 'DOUYIN_LAIKE'
 const DOUYIN_JOB_CODE = 'DOUYIN_CLUE_INCREMENTAL'
@@ -326,13 +321,15 @@ const triggering = ref(false)
 const callbackLogs = ref([])
 const callbackPagination = useTablePagination(callbackLogs)
 const providerSnapshot = ref(null)
+const systemState = loadSystemConsoleState()
 
 const provider = reactive(createProvider())
 const jobForm = reactive(createJobForm())
+const systemBaseUrl = computed(() => String(systemState.domainSettings?.systemBaseUrl || '').trim() || '--')
+const apiBaseUrl = computed(() => String(systemState.domainSettings?.apiBaseUrl || '').trim() || '--')
 
 const backendCallbackUrl = computed(() => {
-  const host = window.location.hostname || '127.0.0.1'
-  return `http://${host}:8080/scheduler/oauth/douyin/callback`
+  return buildSystemUrl(systemState, 'callback', '/scheduler/oauth/douyin/callback')
 })
 
 const verificationWarning = computed(() => {
@@ -348,39 +345,6 @@ const verificationWarning = computed(() => {
   }
   return ''
 })
-
-const overviewCards = computed(() => [
-  {
-    label: '运行模式',
-    value: formatExecutionMode(provider.executionMode),
-    hint: provider.enabled === 1 ? '当前已启用' : '当前已停用'
-  },
-  {
-    label: '授权状态',
-    value: provider.authStatus || '未授权',
-    hint: provider.authCodeStatus || '未收到授权码'
-  },
-  {
-    label: '最近测试',
-    value: provider.lastTestStatus || '--',
-    hint: formatDateTime(provider.lastTestAt) || '尚未测试'
-  },
-  {
-    label: '最近回调',
-    value: provider.lastCallbackStatus || '--',
-    hint: formatDateTime(provider.lastCallbackAt) || '尚未收到'
-  },
-  {
-    label: '最近同步',
-    value: formatDateTime(provider.lastSyncTime) || '--',
-    hint: formatDateTime(jobForm.nextRunTime) || '未排期'
-  },
-  {
-    label: '核销接口',
-    value: provider.voucherVerifyPath || '--',
-    hint: provider.verifyCodeField || '未配置字段'
-  }
-])
 
 onMounted(async () => {
   await loadView()
@@ -514,14 +478,6 @@ function formatAuthType(value) {
   return value || '--'
 }
 
-function formatExecutionMode(value) {
-  return value === 'LIVE' ? '真实' : '模拟'
-}
-
-function formatJobStatus(value) {
-  return value === 'DISABLED' ? '停用' : '启用'
-}
-
 async function handleSaveProvider() {
   const changedDangerFields = buildProviderDangerList()
   if (changedDangerFields.length) {
@@ -538,7 +494,10 @@ async function handleSaveProvider() {
 
   savingProvider.value = true
   try {
-    const payload = await saveIntegrationProvider({ ...provider })
+    const payload = await saveIntegrationProvider({
+      ...provider,
+      callbackUrl: backendCallbackUrl.value
+    })
     applyProvider(payload)
     if (!jobForm.providerId && provider.id) {
       jobForm.providerId = provider.id
@@ -552,7 +511,7 @@ async function handleSaveProvider() {
 async function handleTestProvider() {
   testingProvider.value = true
   try {
-    applyProvider(await testIntegrationProvider({ ...provider }))
+    applyProvider(await testIntegrationProvider({ ...provider, callbackUrl: backendCallbackUrl.value }))
     ElMessage.success(provider.lastTestMessage || '抖音来客连接测试完成')
   } finally {
     testingProvider.value = false
@@ -589,10 +548,6 @@ async function handleTrigger() {
 </script>
 
 <style scoped>
-.metrics-row--six {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
 .overview-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

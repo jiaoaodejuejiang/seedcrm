@@ -1,15 +1,15 @@
 <template>
   <div class="stack-page">
-    <section class="metrics-row">
-      <article class="metric-card">
+    <section class="summary-strip summary-strip--compact">
+      <article class="summary-pill">
         <span>微信支付</span>
         <strong>{{ paymentSettings.wechatPay.enabled === 1 ? '已启用' : '未启用' }}</strong>
       </article>
-      <article class="metric-card">
+      <article class="summary-pill">
         <span>微信代付</span>
         <strong>{{ paymentSettings.wechatPayout.enabled === 1 ? '已启用' : '未启用' }}</strong>
       </article>
-      <article class="metric-card">
+      <article class="summary-pill">
         <span>最近测试</span>
         <strong>{{ paymentSettings.wechatPay.lastTestTime || paymentSettings.wechatPayout.lastTestTime || '--' }}</strong>
       </article>
@@ -79,13 +79,21 @@
             </label>
 
             <div class="full-span form-group-title">回调配置</div>
+            <label>
+              <span>系统基础域名</span>
+              <el-input :model-value="systemBaseUrl" readonly />
+            </label>
+            <label>
+              <span>API 域名</span>
+              <el-input :model-value="apiBaseUrl" readonly />
+            </label>
             <label class="full-span">
               <span>支付回调地址</span>
-              <el-input v-model="paymentSettings.wechatPay.notifyUrl" placeholder="请输入支付结果通知地址" />
+              <el-input :model-value="wechatPayNotifyUrl" readonly />
             </label>
             <label class="full-span">
               <span>退款回调地址</span>
-              <el-input v-model="paymentSettings.wechatPay.refundNotifyUrl" placeholder="请输入退款结果通知地址" />
+              <el-input :model-value="wechatPayRefundNotifyUrl" readonly />
             </label>
             <label>
               <span>连接测试</span>
@@ -94,7 +102,7 @@
           </div>
 
           <div class="action-group action-group--section">
-            <el-button @click="testPayment('wechatPay')">测试微信支付</el-button>
+            <el-button :loading="testingKey === 'wechatPay'" @click="testPayment('wechatPay')">测试微信支付</el-button>
           </div>
         </el-tab-pane>
 
@@ -162,9 +170,17 @@
             </label>
 
             <div class="full-span form-group-title">回调配置</div>
+            <label>
+              <span>系统基础域名</span>
+              <el-input :model-value="systemBaseUrl" readonly />
+            </label>
+            <label>
+              <span>API 域名</span>
+              <el-input :model-value="apiBaseUrl" readonly />
+            </label>
             <label class="full-span">
               <span>代付回调地址</span>
-              <el-input v-model="paymentSettings.wechatPayout.notifyUrl" placeholder="请输入代付结果通知地址" />
+              <el-input :model-value="wechatPayoutNotifyUrl" readonly />
             </label>
             <label>
               <span>连接测试</span>
@@ -173,24 +189,7 @@
           </div>
 
           <div class="action-group action-group--section">
-            <el-button @click="testPayment('wechatPayout')">测试微信代付</el-button>
-          </div>
-        </el-tab-pane>
-
-        <el-tab-pane label="回调与安全" name="safety">
-          <div class="detail-grid">
-            <article class="detail-card">
-              <h3>微信支付回调</h3>
-              <p>{{ paymentSettings.wechatPay.notifyUrl || '--' }}</p>
-              <p>退款回调：{{ paymentSettings.wechatPay.refundNotifyUrl || '--' }}</p>
-              <p>最近测试：{{ paymentSettings.wechatPay.lastTestTime || '--' }}</p>
-            </article>
-            <article class="detail-card">
-              <h3>微信代付回调</h3>
-              <p>{{ paymentSettings.wechatPayout.notifyUrl || '--' }}</p>
-              <p>单笔上限：{{ paymentSettings.wechatPayout.singleLimit || '--' }}</p>
-              <p>最近测试：{{ paymentSettings.wechatPayout.lastTestTime || '--' }}</p>
-            </article>
+            <el-button :loading="testingKey === 'wechatPayout'" @click="testPayment('wechatPayout')">测试微信代付</el-button>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -199,23 +198,59 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { loadSystemConsoleState, saveSystemConsoleState } from '../utils/systemConsoleStore'
+import { testPaymentConfig } from '../api/payment'
+import { buildSystemUrl, loadSystemConsoleState, saveSystemConsoleState } from '../utils/systemConsoleStore'
 
 const activeTab = ref('pay')
+const testingKey = ref('')
 const state = reactive(loadSystemConsoleState())
 const paymentSettings = reactive(JSON.parse(JSON.stringify(state.paymentSettings || {})))
 
+const systemBaseUrl = computed(() => String(state.domainSettings?.systemBaseUrl || '').trim() || '--')
+const apiBaseUrl = computed(() => String(state.domainSettings?.apiBaseUrl || '').trim() || '--')
+const wechatPayNotifyUrl = computed(() => buildSystemUrl(state, 'callback', paymentSettings.wechatPay.notifyPath))
+const wechatPayRefundNotifyUrl = computed(() => buildSystemUrl(state, 'callback', paymentSettings.wechatPay.refundNotifyPath))
+const wechatPayoutNotifyUrl = computed(() => buildSystemUrl(state, 'callback', paymentSettings.wechatPayout.notifyPath))
+
 function savePaymentSettings() {
+  paymentSettings.wechatPay.notifyUrl = wechatPayNotifyUrl.value
+  paymentSettings.wechatPay.refundNotifyUrl = wechatPayRefundNotifyUrl.value
+  paymentSettings.wechatPayout.notifyUrl = wechatPayoutNotifyUrl.value
   state.paymentSettings = JSON.parse(JSON.stringify(paymentSettings))
   saveSystemConsoleState(state)
   ElMessage.success('支付设置已保存')
 }
 
-function testPayment(key) {
-  paymentSettings[key].testStatus = '连接成功'
-  paymentSettings[key].lastTestTime = new Date().toLocaleString('zh-CN', { hour12: false })
-  savePaymentSettings()
+async function testPayment(key) {
+  testingKey.value = key
+  try {
+    const channel = key === 'wechatPay' ? 'WECHAT_PAY' : 'WECHAT_PAYOUT'
+    const target = paymentSettings[key]
+    const result = await testPaymentConfig({
+      channel,
+      enabled: target.enabled,
+      merchantName: target.merchantName,
+      mchId: target.mchId,
+      appId: target.appId,
+      apiV3Key: target.apiV3Key,
+      serialNo: target.serialNo,
+      privateKeyPem: target.privateKeyPem,
+      notifyPath: target.notifyPath,
+      refundNotifyPath: key === 'wechatPay' ? target.refundNotifyPath : undefined,
+      apiBaseUrl: state.domainSettings?.apiBaseUrl
+    })
+    target.testStatus = result.success ? '连接成功' : result.status === 'SKIPPED' ? '已跳过' : '校验失败'
+    target.lastTestTime = result.checkedAt || new Date().toLocaleString('zh-CN', { hour12: false })
+    savePaymentSettings()
+    if (result.success) {
+      ElMessage.success(result.message || '支付配置测试完成')
+    } else {
+      ElMessage.warning(result.message || '支付配置校验未通过')
+    }
+  } finally {
+    testingKey.value = ''
+  }
 }
 </script>

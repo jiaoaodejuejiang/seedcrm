@@ -15,3 +15,7 @@ export function verifyOrderVoucher(payload) {
 export function saveOrderServiceDetail(payload) {
   return http.post('/order/service-detail', payload)
 }
+
+export function refundOrder(payload) {
+  return http.post('/order/refund', payload)
+}

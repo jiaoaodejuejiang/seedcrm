@@ -4,7 +4,7 @@
       <div class="shell-topbar__brand">
         <div class="brand-mark">CRM</div>
         <div class="brand-copy">
-          <h1>CRM控制台</h1>
+          <h1>CRM 控制台</h1>
           <p>{{ currentUser?.displayName || '未登录' }} · {{ currentRoleLabel }}</p>
         </div>
       </div>
@@ -113,8 +113,8 @@
       <main class="main-panel" :class="{ 'main-panel--standalone': standalonePage }">
         <section v-if="!standalonePage && !route.meta?.hidePageHeader" class="page-header">
           <div class="page-header__main">
-            <p class="page-header__eyebrow">{{ route.meta.sectionTitle || activeGroup?.label || '系统模块' }}</p>
-            <h2>{{ route.meta.title }}</h2>
+            <p class="page-header__eyebrow">{{ resolvedSectionTitle }}</p>
+            <h2>{{ resolvedPageTitle }}</h2>
           </div>
         </section>
 
@@ -177,13 +177,7 @@ const navGroups = [
         label: '业务工作台',
         icon: icon(Operation),
         items: [
-          {
-            key: 'clues',
-            to: '/clues',
-            label: '客资列表',
-            icon: icon(Files),
-            moduleCode: 'CLUE'
-          },
+          { key: 'clues', to: '/clues', label: '客资列表', icon: icon(Files), moduleCode: 'CLUE' },
           {
             key: 'paid-orders',
             to: '/clues/scheduling',
@@ -324,19 +318,29 @@ const navGroups = [
         label: '财务看板',
         icon: icon(DataAnalysis),
         items: [
+          { key: 'finance', to: '/finance', label: '财务看板', icon: icon(DataAnalysis), moduleCode: 'FINANCE' },
+          { key: 'salary-my', to: '/finance/salary/my', label: '我的薪酬', icon: icon(Money), moduleCode: 'SALARY' }
+        ]
+      },
+      {
+        key: 'finance-settlement',
+        label: '薪酬结算',
+        icon: icon(WalletFilled),
+        items: [
           {
-            key: 'finance',
-            to: '/finance',
-            label: '财务看板',
-            icon: icon(DataAnalysis),
-            moduleCode: 'FINANCE'
+            key: 'salary-settlements',
+            to: '/finance/salary/settlements',
+            label: '结算中心',
+            icon: icon(WalletFilled),
+            moduleCode: 'SALARY'
           },
           {
-            key: 'salary-center',
-            to: '/finance/salary-center',
-            label: '薪酬中心',
-            icon: icon(Money),
-            moduleCode: 'SALARY'
+            key: 'salary-settlement-config',
+            to: '/finance/salary/settlement-config',
+            label: '结算配置',
+            icon: icon(SetUp),
+            moduleCode: 'SALARY',
+            roleCodes: ['ADMIN', 'FINANCE']
           }
         ]
       },
@@ -422,14 +426,8 @@ const navGroups = [
         label: '基础配置',
         icon: icon(MenuIcon),
         items: [
-          {
-            key: 'settings-menu',
-            to: '/settings/menu',
-            label: '菜单管理',
-            icon: icon(MenuIcon),
-            moduleCode: 'SETTING',
-            roleCodes: ['ADMIN']
-          },
+          { key: 'settings-domain', to: '/settings/base/domain', label: '域名配置', icon: icon(Link), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+          { key: 'settings-menu', to: '/settings/menu', label: '菜单管理', icon: icon(MenuIcon), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
           {
             key: 'settings-dictionaries',
             to: '/settings/dictionaries',
@@ -438,22 +436,8 @@ const navGroups = [
             moduleCode: 'SETTING',
             roleCodes: ['ADMIN']
           },
-          {
-            key: 'settings-parameters',
-            to: '/settings/parameters',
-            label: '参数管理',
-            icon: icon(SetUp),
-            moduleCode: 'SETTING',
-            roleCodes: ['ADMIN']
-          },
-          {
-            key: 'settings-payment',
-            to: '/settings/payment',
-            label: '支付设置',
-            icon: icon(WalletFilled),
-            moduleCode: 'SETTING',
-            roleCodes: ['ADMIN']
-          }
+          { key: 'settings-parameters', to: '/settings/parameters', label: '参数管理', icon: icon(SetUp), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+          { key: 'settings-payment', to: '/settings/payment', label: '支付设置', icon: icon(WalletFilled), moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
         ]
       },
       {
@@ -461,43 +445,93 @@ const navGroups = [
         label: '调度中心',
         icon: icon(Timer),
         items: [
-          {
-            key: 'settings-third-party',
-            to: '/settings/integration/third-party',
-            label: '三方接口',
-            icon: icon(Link),
-            moduleCode: 'SETTING',
-            roleCodes: ['ADMIN']
-          },
-          {
-            key: 'settings-callback',
-            to: '/settings/integration/callback',
-            label: '回调接口',
-            icon: icon(Bell),
-            moduleCode: 'SETTING',
-            roleCodes: ['ADMIN']
-          },
-          {
-            key: 'settings-jobs',
-            to: '/settings/integration/jobs',
-            label: '任务调度',
-            icon: icon(Timer),
-            moduleCode: 'SETTING',
-            roleCodes: ['ADMIN']
-          },
-          {
-            key: 'settings-public-api',
-            to: '/settings/integration/public-api',
-            label: '对外接口',
-            icon: icon(Connection),
-            moduleCode: 'SETTING',
-            roleCodes: ['ADMIN']
-          }
+          { key: 'settings-third-party', to: '/settings/integration/third-party', label: '三方接口', icon: icon(Link), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+          { key: 'settings-callback', to: '/settings/integration/callback', label: '回调接口', icon: icon(Bell), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+          { key: 'settings-public-api', to: '/settings/integration/public-api', label: '对外接口', icon: icon(Connection), moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
         ]
       }
     ]
   }
 ]
+
+const routeTitleMap = {
+  login: '登录',
+  clues: '客资列表',
+  'clues-scheduling': '顾客排档',
+  'clue-auto-assign': '自动分配',
+  'duty-customer-service': '值班客服',
+  'store-schedules': '门店档期',
+  'store-service-orders': '订单列表',
+  'store-service-design': '服务单设计',
+  'store-service-personnel': '人员管理',
+  'store-service-roles': '门店角色',
+  'plan-orders': '服务单',
+  'plan-orders-scan': '扫码服务单',
+  customers: '客户详情',
+  'private-domain-wecom': '企业微信',
+  'private-domain-live-code': '活码配置',
+  'private-domain-customer-profile': '客户画像',
+  'private-domain-moments': '朋友圈定时群发',
+  'private-domain-tags': '标签管理',
+  finance: '财务看板',
+  'salary-my': '我的薪酬',
+  'salary-settlements': '结算中心',
+  'salary-settlement-config': '结算配置',
+  'salary-config-roles': '薪酬角色',
+  'salary-config-grades': '薪酬档位',
+  'salary-config-distributor': '分销配置',
+  'system-departments': '部门管理',
+  'system-employees': '员工管理',
+  'system-positions': '岗位管理',
+  'system-roles': '角色管理',
+  'settings-third-party': '三方接口',
+  'settings-callback': '回调接口',
+  'settings-domain': '域名配置',
+  'settings-menu': '菜单管理',
+  'settings-public-api': '对外接口',
+  'settings-dictionaries': '字典管理',
+  'settings-parameters': '参数管理',
+  'settings-payment': '支付设置'
+}
+
+const routeSectionMap = {
+  clues: '客资中心',
+  'clues-scheduling': '客资中心',
+  'clue-auto-assign': '客资中心 / 客资管理',
+  'duty-customer-service': '客资中心 / 客资管理',
+  'store-schedules': '客资中心 / 客资管理',
+  'store-service-orders': '门店服务',
+  'store-service-design': '门店服务',
+  'store-service-personnel': '门店服务',
+  'store-service-roles': '门店服务',
+  'plan-orders': '门店服务',
+  'plan-orders-scan': '门店服务',
+  customers: '门店服务',
+  'private-domain-wecom': '私域客服',
+  'private-domain-live-code': '私域客服',
+  'private-domain-customer-profile': '私域客服',
+  'private-domain-moments': '私域客服',
+  'private-domain-tags': '私域客服',
+  finance: '财务管理',
+  'salary-my': '财务管理 / 薪酬中心',
+  'salary-settlements': '财务管理 / 薪酬结算',
+  'salary-settlement-config': '财务管理 / 薪酬结算',
+  'salary-config-roles': '财务管理 / 薪酬配置',
+  'salary-config-grades': '财务管理 / 薪酬配置',
+  'salary-config-distributor': '财务管理 / 薪酬配置',
+  'system-departments': '系统管理',
+  'system-employees': '系统管理',
+  'system-positions': '系统管理',
+  'system-roles': '系统管理',
+  'settings-third-party': '系统设置 / 调度中心',
+  'settings-callback': '系统设置 / 调度中心',
+  'settings-domain': '系统设置 / 基础配置',
+  'settings-menu': '系统设置 / 基础配置',
+  'settings-public-api': '系统设置 / 调度中心',
+  'settings-dictionaries': '系统设置 / 基础配置',
+  'settings-parameters': '系统设置 / 基础配置',
+  'settings-payment': '系统设置 / 基础配置'
+}
 
 const visibleGroups = computed(() =>
   navGroups
@@ -529,12 +563,16 @@ const visibleGroups = computed(() =>
 const activeGroup = computed(() => visibleGroups.value.find((group) => groupHasActive(group)) || visibleGroups.value[0] || null)
 const currentRoleLabel = computed(() => formatRoleCode(currentUser.value?.roleCode))
 const standalonePage = computed(() => Boolean(route.meta?.standalone) || String(route.query.scan || '') === '1')
+const resolvedPageTitle = computed(() => routeTitleMap[route.name] || route.meta.title || activeGroup.value?.label || '系统模块')
+const resolvedSectionTitle = computed(
+  () => routeSectionMap[route.name] || route.meta.sectionTitle || activeGroup.value?.label || '系统模块'
+)
 const breadcrumbItems = computed(() => {
-  const parts = String(route.meta.sectionTitle || activeGroup.value?.label || '系统模块')
+  const parts = String(resolvedSectionTitle.value)
     .split(/\s*\/\s*/)
     .map((item) => item.trim())
     .filter(Boolean)
-  const title = String(route.meta.title || '').trim()
+  const title = String(resolvedPageTitle.value || '').trim()
 
   if (title && parts.at(-1) !== title) {
     parts.push(title)

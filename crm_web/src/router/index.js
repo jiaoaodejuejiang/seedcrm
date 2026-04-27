@@ -5,8 +5,10 @@ import ClueManagement from '../views/ClueManagement.vue'
 import ClueAutoAssignmentView from '../views/ClueAutoAssignmentView.vue'
 import CustomerDetail from '../views/CustomerDetail.vue'
 import DutyCustomerServiceView from '../views/DutyCustomerServiceView.vue'
+import DomainSettingView from '../views/DomainSettingView.vue'
 import FinanceOverview from '../views/FinanceOverview.vue'
 import LoginView from '../views/LoginView.vue'
+import MySalaryView from '../views/MySalaryView.vue'
 import OrderManagement from '../views/OrderManagement.vue'
 import PaidOrderManagement from '../views/PaidOrderManagement.vue'
 import PaymentSettingView from '../views/PaymentSettingView.vue'
@@ -18,8 +20,9 @@ import PrivateDomainCustomerProfileView from '../views/PrivateDomainCustomerProf
 import PrivateDomainLiveCodeView from '../views/PrivateDomainLiveCodeView.vue'
 import PrivateDomainMomentsView from '../views/PrivateDomainMomentsView.vue'
 import PrivateDomainTagManagementView from '../views/PrivateDomainTagManagementView.vue'
-import SalaryCenter from '../views/SalaryCenter.vue'
 import SalaryConfigView from '../views/SalaryConfigView.vue'
+import SettlementCenterView from '../views/SettlementCenterView.vue'
+import SettlementConfigView from '../views/SettlementConfigView.vue'
 import StorePersonnelManagementView from '../views/StorePersonnelManagementView.vue'
 import StoreRoleManagementView from '../views/StoreRoleManagementView.vue'
 import StoreScheduleManagementView from '../views/StoreScheduleManagementView.vue'
@@ -267,14 +270,37 @@ const routes = [
         }
       },
       {
-        path: 'finance/salary-center',
-        name: 'salary-center',
-        component: SalaryCenter,
+        path: 'finance/salary/my',
+        name: 'salary-my',
+        component: MySalaryView,
         meta: {
-          title: '薪酬中心',
+          title: '我的薪酬',
           sectionTitle: '财务管理',
           moduleCode: 'SALARY',
-          navKey: 'salary-center'
+          navKey: 'salary-my'
+        }
+      },
+      {
+        path: 'finance/salary/settlements',
+        name: 'salary-settlements',
+        component: SettlementCenterView,
+        meta: {
+          title: '结算中心',
+          sectionTitle: '财务管理 / 薪酬结算',
+          moduleCode: 'SALARY',
+          navKey: 'salary-settlements'
+        }
+      },
+      {
+        path: 'finance/salary/settlement-config',
+        name: 'salary-settlement-config',
+        component: SettlementConfigView,
+        meta: {
+          title: '结算配置',
+          sectionTitle: '财务管理 / 薪酬结算',
+          moduleCode: 'SALARY',
+          roleCodes: ['ADMIN', 'FINANCE'],
+          navKey: 'salary-settlement-config'
         }
       },
       {
@@ -407,15 +433,18 @@ const routes = [
       },
       {
         path: 'settings/integration/jobs',
-        name: 'settings-jobs',
-        component: PlatformRuntimeView,
+        redirect: '/settings/integration/callback'
+      },
+      {
+        path: 'settings/base/domain',
+        name: 'settings-domain',
+        component: DomainSettingView,
         meta: {
-          title: '任务调度',
-          sectionTitle: '系统设置 / 调度中心',
+          title: '域名配置',
+          sectionTitle: '系统设置 / 基础配置',
           moduleCode: 'SETTING',
           roleCodes: ['ADMIN'],
-          navKey: 'settings-jobs',
-          runtimeTab: 'jobs'
+          navKey: 'settings-domain'
         }
       },
       {
@@ -484,11 +513,15 @@ const routes = [
       },
       {
         path: 'salary',
-        redirect: '/finance/salary-center'
+        redirect: '/finance/salary/my'
+      },
+      {
+        path: 'finance/salary-center',
+        redirect: '/finance/salary/my'
       },
       {
         path: 'scheduler',
-        redirect: '/settings/integration/jobs'
+        redirect: '/settings/integration/third-party'
       },
       {
         path: 'permission',

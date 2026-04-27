@@ -1,10 +1,9 @@
 <template>
   <div class="stack-page">
-    <section class="metrics-row metrics-row--six">
-      <article v-for="card in overviewCards" :key="card.label" class="metric-card">
+    <section class="summary-strip">
+      <article v-for="card in overviewCards" :key="card.label" class="summary-pill">
         <span>{{ card.label }}</span>
         <strong>{{ card.value }}</strong>
-        <small>{{ card.hint }}</small>
       </article>
     </section>
 
@@ -37,11 +36,11 @@
           </div>
           <div class="status-pill">
             <span>运行模式</span>
-            <strong>{{ config.executionMode || 'MOCK' }}</strong>
+            <strong>{{ formatExecutionMode(config.executionMode || 'MOCK') }}</strong>
           </div>
           <div class="status-pill">
             <span>授权状态</span>
-            <strong>{{ config.authStatus || 'UNAUTHORIZED' }}</strong>
+            <strong>{{ formatAuthStatus(config.authStatus || 'UNAUTHORIZED') }}</strong>
           </div>
           <div class="status-pill">
             <span>最近回调</span>
@@ -76,8 +75,16 @@
             </template>
           </el-table-column>
           <el-table-column label="应用编码" min-width="140" prop="appCode" />
-          <el-table-column label="状态" width="120" prop="processStatus" />
-          <el-table-column label="验签" width="120" prop="signatureStatus" />
+          <el-table-column label="状态" width="120">
+            <template #default="{ row }">
+              {{ formatCallbackProcessStatus(row.processStatus) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="验签" width="120">
+            <template #default="{ row }">
+              {{ formatCallbackSignatureStatus(row.signatureStatus) }}
+            </template>
+          </el-table-column>
           <el-table-column label="事件" min-width="160" prop="eventType" />
           <el-table-column label="结果" min-width="220" prop="processMessage" />
         </el-table>
@@ -105,11 +112,11 @@
             </div>
             <div class="status-pill">
               <span>运行模式</span>
-              <strong>{{ config.executionMode || 'MOCK' }}</strong>
+              <strong>{{ formatExecutionMode(config.executionMode || 'MOCK') }}</strong>
             </div>
             <div class="status-pill">
               <span>授权状态</span>
-              <strong>{{ config.authStatus || 'UNAUTHORIZED' }}</strong>
+              <strong>{{ formatAuthStatus(config.authStatus || 'UNAUTHORIZED') }}</strong>
             </div>
             <div class="status-pill">
               <span>最近回调</span>
@@ -144,8 +151,16 @@
               </template>
             </el-table-column>
             <el-table-column label="应用编码" min-width="140" prop="appCode" />
-            <el-table-column label="状态" width="120" prop="processStatus" />
-            <el-table-column label="验签" width="120" prop="signatureStatus" />
+            <el-table-column label="状态" width="120">
+              <template #default="{ row }">
+                {{ formatCallbackProcessStatus(row.processStatus) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="验签" width="120">
+              <template #default="{ row }">
+                {{ formatCallbackSignatureStatus(row.signatureStatus) }}
+              </template>
+            </el-table-column>
             <el-table-column label="事件" min-width="160" prop="eventType" />
             <el-table-column label="结果" min-width="220" prop="processMessage" />
           </el-table>
@@ -177,8 +192,8 @@
             <label>
               <span>运行模式</span>
               <el-select v-model="config.executionMode">
-                <el-option label="MOCK" value="MOCK" />
-                <el-option label="LIVE" value="LIVE" />
+                <el-option label="模拟" value="MOCK" />
+                <el-option label="真实" value="LIVE" />
               </el-select>
             </label>
             <label>
@@ -196,12 +211,12 @@
             <template v-if="config.authMode === 'SELF_BUILT'">
               <div class="full-span form-group-title">自建企业微信</div>
               <label>
-                <span>CorpId</span>
-                <el-input v-model="config.corpId" placeholder="请输入 CorpId" />
+                <span>企业 CorpId</span>
+                <el-input v-model="config.corpId" placeholder="请输入企业 CorpId" />
               </label>
               <label>
-                <span>AgentId</span>
-                <el-input v-model="config.agentId" placeholder="请输入 AgentId" />
+                <span>应用 AgentId</span>
+                <el-input v-model="config.agentId" placeholder="请输入应用 AgentId" />
               </label>
               <label>
                 <span>AppId</span>
@@ -221,11 +236,11 @@
             <template v-else>
               <div class="full-span form-group-title">服务商授权</div>
               <label>
-                <span>SuiteId</span>
-                <el-input v-model="config.suiteId" placeholder="请输入 SuiteId" />
+                <span>服务商 SuiteId</span>
+                <el-input v-model="config.suiteId" placeholder="请输入服务商 SuiteId" />
               </label>
               <label>
-                <span>SuiteSecret</span>
+                <span>服务商 Secret</span>
                 <el-input
                   v-model="config.suiteSecret"
                   type="password"
@@ -238,15 +253,15 @@
                 <el-input v-model="config.authCorpId" placeholder="回调后自动回填，也可手动补录" />
               </label>
               <label>
-                <span>AgentId</span>
-                <el-input v-model="config.agentId" placeholder="请输入 AgentId" />
+                <span>应用 AgentId</span>
+                <el-input v-model="config.agentId" placeholder="请输入应用 AgentId" />
               </label>
               <label>
-                <span>AuthCode</span>
+                <span>授权码</span>
                 <el-input v-model="config.authCode" :placeholder="config.authCodeMasked || '回调后自动回填'" />
               </label>
               <label>
-                <span>PermanentCode</span>
+                <span>永久授权码</span>
                 <el-input v-model="config.permanentCode" :placeholder="config.permanentCodeMasked || '换取后自动回填'" />
               </label>
             </template>
@@ -273,12 +288,20 @@
 
         <el-tab-pane label="回调与安全" name="callback">
           <div class="form-grid">
-            <label class="full-span">
-              <span>回调地址</span>
-              <el-input v-model="config.callbackUrl" placeholder="请输入企业微信回调 URL" />
+            <label>
+              <span>系统基础域名</span>
+              <el-input :model-value="systemBaseUrl" readonly />
             </label>
             <label>
-              <span>Redirect URI</span>
+              <span>API 域名</span>
+              <el-input :model-value="apiBaseUrl" readonly />
+            </label>
+            <label class="full-span">
+              <span>回调地址</span>
+              <el-input :model-value="wecomCallbackUrl" readonly />
+            </label>
+            <label>
+              <span>授权回跳地址</span>
               <el-input v-model="config.redirectUri" placeholder="服务商授权回跳地址" />
             </label>
             <label>
@@ -355,7 +378,8 @@ import { RouterLink } from 'vue-router'
 import { fetchWecomCallbackLogs, fetchWecomConfig, saveWecomConfig, testWecomConfig } from '../api/wecom'
 import { useTablePagination } from '../composables/useTablePagination'
 import { currentUser } from '../utils/auth'
-import { formatDateTime } from '../utils/format'
+import { formatAuthStatus, formatCallbackProcessStatus, formatCallbackSignatureStatus, formatDateTime, formatExecutionMode } from '../utils/format'
+import { buildSystemUrl, loadSystemConsoleState } from '../utils/systemConsoleStore'
 
 const activeTab = ref('overview')
 const saving = ref(false)
@@ -363,17 +387,21 @@ const testing = ref(false)
 const callbackLogs = ref([])
 const callbackLogPagination = useTablePagination(callbackLogs)
 const loadedSnapshot = ref(null)
+const systemState = loadSystemConsoleState()
 
 const config = reactive(createConfig())
 
 const authModeLabel = computed(() => (config.authMode === 'SERVICE_PROVIDER' ? '服务商模式' : '自有企业微信'))
 const isPrivateDomainWorkspace = computed(() => currentUser.value?.roleCode === 'PRIVATE_DOMAIN_SERVICE')
+const systemBaseUrl = computed(() => String(systemState.domainSettings?.systemBaseUrl || '').trim() || '--')
+const apiBaseUrl = computed(() => String(systemState.domainSettings?.apiBaseUrl || '').trim() || '--')
 const workspaceLinks = computed(() => [
   { to: '/private-domain/live-code', label: '活码配置', meta: '去生成轮询活码' },
   { to: '/private-domain/customer-profile', label: '客户画像', meta: '查看画像能力开关' },
   { to: '/private-domain/moments', label: '朋友圈群发', meta: '进入企业微信群发任务' },
   { to: '/private-domain/tags', label: '标签管理', meta: '维护客户标签与统计' }
 ])
+const wecomCallbackUrl = computed(() => buildSystemUrl(systemState, 'callback', '/wecom/callback'))
 const callbackRisk = computed(() => {
   if (config.executionMode !== 'LIVE' || config.skipVerify !== 1) {
     return ''
@@ -392,12 +420,12 @@ const overviewCards = computed(() => [
   },
   {
     label: '后端模式',
-    value: config.executionMode || 'MOCK',
+    value: formatExecutionMode(config.executionMode || 'MOCK'),
     hint: config.lastTokenStatus || '未检测'
   },
   {
     label: '授权状态',
-    value: config.authStatus || 'UNAUTHORIZED',
+    value: formatAuthStatus(config.authStatus || 'UNAUTHORIZED'),
     hint: formatDateTime(config.lastAuthCodeAt) || '未收到授权码'
   },
   {
@@ -407,7 +435,7 @@ const overviewCards = computed(() => [
   },
   {
     label: '最近回调',
-    value: config.lastCallbackStatus || '--',
+    value: formatCallbackProcessStatus(config.lastCallbackStatus || '--'),
     hint: formatDateTime(config.lastCallbackAt) || '未收到'
   },
   {
@@ -533,7 +561,7 @@ async function handleSave() {
   }
   saving.value = true
   try {
-    applyConfig(await saveWecomConfig({ ...config }))
+    applyConfig(await saveWecomConfig({ ...config, callbackUrl: wecomCallbackUrl.value }))
     callbackLogs.value = await fetchWecomCallbackLogs(config.appCode || undefined)
     callbackLogPagination.reset()
     ElMessage.success('企业微信配置已保存')
@@ -545,7 +573,7 @@ async function handleSave() {
 async function handleTest() {
   testing.value = true
   try {
-    applyConfig(await testWecomConfig({ ...config }))
+    applyConfig(await testWecomConfig({ ...config, callbackUrl: wecomCallbackUrl.value }))
     ElMessage.success(config.lastTokenMessage || '企业微信连接测试完成')
   } finally {
     testing.value = false
@@ -554,10 +582,6 @@ async function handleTest() {
 </script>
 
 <style scoped>
-.metrics-row--six {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-}
-
 .overview-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

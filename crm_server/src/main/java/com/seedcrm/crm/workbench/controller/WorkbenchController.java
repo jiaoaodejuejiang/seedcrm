@@ -14,6 +14,7 @@ import com.seedcrm.crm.workbench.dto.WorkbenchResponses.OrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderWorkbenchResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StaffRoleOptionResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StoreLiveCodePreviewResponse;
 import com.seedcrm.crm.workbench.service.WorkbenchService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -68,6 +69,14 @@ public class WorkbenchController {
                 .filter(order -> orderPermissionGuard.canView(context, order.getId()))
                 .collect(Collectors.toList());
         return ApiResponse.success(orders);
+    }
+
+    @GetMapping("/orders/{orderId}/wecom-live-code")
+    public ApiResponse<StoreLiveCodePreviewResponse> orderWecomLiveCode(@PathVariable Long orderId,
+                                                                        HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        orderPermissionGuard.checkView(context, orderId);
+        return ApiResponse.success(workbenchService.getOrderLiveCodePreview(orderId));
     }
 
     @GetMapping("/plan-orders")

@@ -96,6 +96,23 @@ public final class WorkbenchResponses {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    public static class StoreLiveCodePreviewResponse {
+        private Long configId;
+        private String codeName;
+        private String storeName;
+        private String contactWayId;
+        private String qrCodeUrl;
+        private String shortLink;
+        private List<String> storeNames;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime generatedAt;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime publishedAt;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class CurrentRoleResponse {
         private String roleCode;
         private String roleName;
@@ -243,5 +260,29 @@ public final class WorkbenchResponses {
         private BigDecimal employeeIncome;
         private BigDecimal distributorIncome;
         private List<WithdrawRecordResponse> withdrawRecords;
+        private List<FinanceMonthlyStatResponse> monthlyStats;
+        private List<FinanceTeamStatResponse> teamStats;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class FinanceMonthlyStatResponse {
+        private String monthLabel;
+        private BigDecimal orderIncome;
+        private BigDecimal employeeIncome;
+        private BigDecimal distributorIncome;
+        private BigDecimal withdrawAmount;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class FinanceTeamStatResponse {
+        private String teamLabel;
+        private Long memberCount;
+        private Long serviceCount;
+        private BigDecimal orderIncome;
+        private BigDecimal incomeAmount;
     }
 }

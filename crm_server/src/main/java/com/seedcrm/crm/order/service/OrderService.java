@@ -25,9 +25,13 @@ public interface OrderService extends IService<Order> {
 
     Order complete(OrderActionDTO orderActionDTO);
 
+    Order complete(OrderActionDTO orderActionDTO, Long operatorUserId);
+
     Order cancel(OrderActionDTO orderActionDTO);
 
     Order refund(OrderActionDTO orderActionDTO);
+
+    Order refund(OrderActionDTO orderActionDTO, Long operatorUserId);
 
     Order verifyVoucher(OrderVoucherVerifyDTO orderVoucherVerifyDTO, Long operatorUserId);
 

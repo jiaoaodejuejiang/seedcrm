@@ -1,12 +1,8 @@
 package com.seedcrm.crm.permission.support;
 
 import com.seedcrm.crm.auth.service.AuthService;
-import com.seedcrm.crm.clue.entity.Clue;
-import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.order.dto.OrderCreateDTO;
-import com.seedcrm.crm.order.entity.Order;
-import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.permission.dto.PermissionCheckRequest;
 import com.seedcrm.crm.permission.dto.PermissionCheckResponse;
 import com.seedcrm.crm.permission.service.PermissionService;
@@ -16,29 +12,26 @@ import org.springframework.stereotype.Component;
 public class OrderPermissionGuard {
 
     private final PermissionService permissionService;
-    private final OrderMapper orderMapper;
-    private final ClueMapper clueMapper;
     private final AuthService authService;
+    private final OrderPermissionResourceResolver resourceResolver;
 
     public OrderPermissionGuard(PermissionService permissionService,
-                                OrderMapper orderMapper,
-                                ClueMapper clueMapper,
-                                AuthService authService) {
+                                AuthService authService,
+                                OrderPermissionResourceResolver resourceResolver) {
         this.permissionService = permissionService;
-        this.orderMapper = orderMapper;
-        this.clueMapper = clueMapper;
         this.authService = authService;
+        this.resourceResolver = resourceResolver;
     }
 
     public void checkCreate(PermissionRequestContext context, OrderCreateDTO request) {
-        Long clueOwnerId = resolveClueOwnerId(request == null ? null : request.getClueId());
+        Long clueOwnerId = resourceResolver.resolveClueOwnerId(request == null ? null : request.getClueId());
         PermissionCheckRequest checkRequest = buildCheckRequest(context, "ORDER", "UPDATE", clueOwnerId);
         assertAllowed(permissionService.check(checkRequest), "order create denied");
     }
 
     public void checkUpdate(PermissionRequestContext context, Long orderId) {
-        Order order = getOrderOrThrow(orderId);
-        PermissionCheckRequest checkRequest = buildCheckRequest(context, "ORDER", "UPDATE", resolveClueOwnerId(order.getClueId()));
+        PermissionCheckRequest checkRequest = buildCheckRequest(context, "ORDER", "UPDATE",
+                resolveResourceOwnerId(context, orderId));
         assertAllowed(permissionService.check(checkRequest), "order update denied");
     }
 
@@ -51,8 +44,8 @@ public class OrderPermissionGuard {
     }
 
     public void checkFinish(PermissionRequestContext context, Long orderId) {
-        Order order = getOrderOrThrow(orderId);
-        PermissionCheckRequest checkRequest = buildCheckRequest(context, "ORDER", "FINISH", resolveClueOwnerId(order.getClueId()));
+        PermissionCheckRequest checkRequest = buildCheckRequest(context, "ORDER", "FINISH",
+                resolveResourceOwnerId(context, orderId));
         assertAllowed(permissionService.check(checkRequest), "order finish denied");
     }
 
@@ -81,27 +74,15 @@ public class OrderPermissionGuard {
     }
 
     private PermissionCheckResponse checkViewPermission(PermissionRequestContext context, Long orderId) {
-        Order order = getOrderOrThrow(orderId);
-        PermissionCheckRequest checkRequest = buildCheckRequest(context, "ORDER", "VIEW", resolveClueOwnerId(order.getClueId()));
+        PermissionCheckRequest checkRequest = buildCheckRequest(context, "ORDER", "VIEW",
+                resolveResourceOwnerId(context, orderId));
         return permissionService.check(checkRequest);
     }
 
-    private Order getOrderOrThrow(Long orderId) {
-        if (orderId == null || orderId <= 0) {
-            throw new BusinessException("orderId is required");
+    private Long resolveResourceOwnerId(PermissionRequestContext context, Long orderId) {
+        if (context != null && "STORE".equalsIgnoreCase(context.getDataScope())) {
+            return resourceResolver.resolveOrderStoreScopeOwnerId(orderId);
         }
-        Order order = orderMapper.selectById(orderId);
-        if (order == null) {
-            throw new BusinessException("order not found");
-        }
-        return order;
-    }
-
-    private Long resolveClueOwnerId(Long clueId) {
-        if (clueId == null) {
-            return null;
-        }
-        Clue clue = clueMapper.selectById(clueId);
-        return clue == null ? null : clue.getCurrentOwnerId();
+        return resourceResolver.resolveOrderOwnerId(orderId);
     }
 }

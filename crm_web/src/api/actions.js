@@ -47,3 +47,7 @@ export function assignPlanOrderRole(payload) {
 export function sendWecomMessage(payload) {
   return http.post('/wecom/send', payload)
 }
+
+export function sendPlanOrderServiceForm(payload) {
+  return http.post('/planOrder/send-service-form', payload)
+}

@@ -8,21 +8,27 @@ const accessibleRoutes = [
   { path: '/clues/scheduling', moduleCode: 'ORDER', roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE'] },
   { path: '/clue-management/store-schedules', moduleCode: 'CLUE', roleCodes: ['ADMIN', 'CLUE_MANAGER'] },
   { path: '/clue-management/auto-assign', moduleCode: 'CLUE', roleCodes: ['CLUE_MANAGER', 'ADMIN'] },
-  { path: '/store-service/orders', moduleCode: 'ORDER', roleCodes: ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR', 'ADMIN'] },
+  {
+    path: '/store-service/orders',
+    moduleCode: 'ORDER',
+    roleCodes: ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR', 'ADMIN']
+  },
   { path: '/store-service/service-design', moduleCode: 'PLANORDER', roleCodes: ['STORE_MANAGER', 'ADMIN'] },
   { path: '/store-service/personnel', moduleCode: 'SYSTEM', roleCodes: ['STORE_MANAGER', 'ADMIN'] },
   { path: '/store-service/roles', moduleCode: 'SYSTEM', roleCodes: ['STORE_MANAGER', 'ADMIN'] },
   { path: '/private-domain/wecom', moduleCode: 'WECOM', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'] },
   { path: '/finance', moduleCode: 'FINANCE' },
-  { path: '/finance/salary-center', moduleCode: 'SALARY' },
+  { path: '/finance/salary/my', moduleCode: 'SALARY' },
+  { path: '/finance/salary/settlements', moduleCode: 'SALARY' },
+  { path: '/finance/salary/settlement-config', moduleCode: 'SALARY', roleCodes: ['ADMIN', 'FINANCE'] },
   { path: '/finance/salary-config/distributor', moduleCode: 'SALARY', roleCodes: ['ADMIN'] },
   { path: '/system/departments', moduleCode: 'SYSTEM', roleCodes: ['ADMIN'] },
   { path: '/system/employees', moduleCode: 'SYSTEM', roleCodes: ['ADMIN', 'CLUE_MANAGER'] },
+  { path: '/settings/base/domain', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
   { path: '/settings/menu', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
   { path: '/settings/payment', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
   { path: '/settings/integration/third-party', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-  { path: '/settings/integration/callback', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-  { path: '/settings/integration/jobs', moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
+  { path: '/settings/integration/callback', moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
 ]
 
 export const authState = reactive({
@@ -34,16 +40,81 @@ export const authState = reactive({
 export const currentUser = computed(() => authState.currentUser)
 
 export const demoAccounts = [
-  { username: 'admin', password: '123456', title: '管理员', description: '查看系统管理、系统设置、私域客服等全部后台模块' },
-  { username: 'clue_manager', password: '123456', title: '客资主管', description: '管理客资中心、顾客排档、门店档期与本部门员工' },
-  { username: 'online_cs', password: '123456', title: '在线客服', description: '查看已分配客资、顾客排档并继续跟进预约' },
-  { username: 'store_service', password: '123456', title: '门店服务', description: '在订单列表处理核销、服务单和履约记录' },
-  { username: 'store_manager', password: '123456', title: '店长', description: '管理门店服务、服务单模板、门店角色和人员' },
-  { username: 'photo_a', password: '123456', title: '摄影', description: '参与门店服务履约与角色分工记录' },
-  { username: 'makeup_a', password: '123456', title: '化妆师', description: '参与门店到店服务与服务单填写' },
-  { username: 'selector_a', password: '123456', title: '选片负责人', description: '查看已核销订单并完成选片相关履约' },
-  { username: 'finance', password: '123456', title: '财务', description: '查看财务与薪酬数据，处理结算与提现' },
-  { username: 'private_domain', password: '123456', title: '私域客服', description: '使用企业微信触达客户并维护私域运营能力' }
+  {
+    username: 'admin',
+    password: '123456',
+    title: '管理员',
+    description: '查看系统管理、系统设置、私域客服等全部后台模块',
+    loginMode: 'hq'
+  },
+  {
+    username: 'clue_manager',
+    password: '123456',
+    title: '客资主管',
+    description: '管理客资中心、顾客排档、门店档期与值班安排',
+    loginMode: 'hq'
+  },
+  {
+    username: 'online_cs',
+    password: '123456',
+    title: '在线客服',
+    description: '跟进已分配客资，处理预约与名单整理',
+    loginMode: 'hq'
+  },
+  {
+    username: 'store_service',
+    password: '123456',
+    title: '门店服务',
+    description: '处理订单核销、服务单填写与门店履约',
+    loginMode: 'store',
+    storeName: '静安门店'
+  },
+  {
+    username: 'store_manager',
+    password: '123456',
+    title: '店长',
+    description: '管理门店人员、角色与服务单模板',
+    loginMode: 'store',
+    storeName: '静安门店'
+  },
+  {
+    username: 'photo_a',
+    password: '123456',
+    title: '摄影',
+    description: '参与门店服务履约与服务单协作',
+    loginMode: 'store',
+    storeName: '静安门店'
+  },
+  {
+    username: 'makeup_a',
+    password: '123456',
+    title: '化妆师',
+    description: '参与到店服务与服务单填写',
+    loginMode: 'store',
+    storeName: '静安门店'
+  },
+  {
+    username: 'selector_a',
+    password: '123456',
+    title: '选片负责人',
+    description: '查看已核销订单并完成选片相关履约',
+    loginMode: 'store',
+    storeName: '静安门店'
+  },
+  {
+    username: 'finance',
+    password: '123456',
+    title: '财务',
+    description: '查看财务与薪酬数据，处理结算与提现',
+    loginMode: 'hq'
+  },
+  {
+    username: 'private_domain',
+    password: '123456',
+    title: '私域客服',
+    description: '使用企业微信触达客户并维护私域运营能力',
+    loginMode: 'hq'
+  }
 ]
 
 export async function initializeAuth() {

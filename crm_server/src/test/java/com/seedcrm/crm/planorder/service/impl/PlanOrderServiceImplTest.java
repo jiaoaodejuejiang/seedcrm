@@ -5,11 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.order.entity.Order;
+import com.seedcrm.crm.order.entity.OrderActionRecord;
 import com.seedcrm.crm.order.enums.OrderStatus;
+import com.seedcrm.crm.order.mapper.OrderActionRecordMapper;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.order.service.OrderSettlementService;
 import com.seedcrm.crm.planorder.dto.PlanOrderActionDTO;
@@ -19,6 +22,8 @@ import com.seedcrm.crm.planorder.entity.OrderRoleRecord;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
+import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.wecom.service.WecomTouchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,12 +45,21 @@ class PlanOrderServiceImplTest {
     @Mock
     private OrderSettlementService orderSettlementService;
 
+    @Mock
+    private WecomTouchService wecomTouchService;
+
+    @Mock
+    private OrderActionRecordMapper orderActionRecordMapper;
+
+    @Mock
+    private DbLockService dbLockService;
+
     private PlanOrderServiceImpl planOrderService;
 
     @BeforeEach
     void setUp() {
         planOrderService = new PlanOrderServiceImpl(planOrderMapper, orderMapper, orderRoleRecordService,
-                orderSettlementService);
+                orderSettlementService, wecomTouchService, orderActionRecordMapper, dbLockService);
     }
 
     @Test
@@ -78,6 +92,28 @@ class PlanOrderServiceImplTest {
         assertThatThrownBy(() -> planOrderService.createPlanOrder(dto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("order must be paid");
+    }
+
+    @Test
+    void createPlanOrderShouldBindCurrentStoreRoleWhenContextProvided() {
+        Order order = new Order();
+        order.setId(16L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        when(orderMapper.selectById(16L)).thenReturn(order);
+        when(planOrderMapper.selectCount(any())).thenReturn(0L);
+        when(planOrderMapper.insert(any(PlanOrder.class))).thenAnswer(invocation -> {
+            PlanOrder created = invocation.getArgument(0);
+            created.setId(88L);
+            return 1;
+        });
+
+        PlanOrderCreateDTO dto = new PlanOrderCreateDTO();
+        dto.setOrderId(16L);
+
+        PlanOrder created = planOrderService.createPlanOrder(dto, 1001L, "STORE_SERVICE");
+
+        assertThat(created.getId()).isEqualTo(88L);
+        verify(orderRoleRecordService, times(1)).assignRole(88L, "STORE_SERVICE", 1001L);
     }
 
     @Test
@@ -136,7 +172,7 @@ class PlanOrderServiceImplTest {
         order.setId(420L);
         order.setStatus(OrderStatus.SERVING.name());
         order.setVerificationStatus("");
-        when(orderMapper.selectById(420L)).thenReturn(order);
+        when(dbLockService.lockOrder(420L)).thenReturn(order);
 
         PlanOrderActionDTO dto = new PlanOrderActionDTO();
         dto.setPlanOrderId(42L);
@@ -178,8 +214,8 @@ class PlanOrderServiceImplTest {
         order.setId(30L);
         order.setStatus(OrderStatus.CREATED.name());
         order.setVerificationStatus("VERIFIED");
-        order.setServiceDetailJson("{\"serviceRequirement\":\"已确认到店需求\"}");
-        when(orderMapper.selectById(30L)).thenReturn(order);
+        order.setServiceDetailJson("{\"serviceRequirement\":\"已确认到店需求\",\"customerSignature\":\"data:image/png;base64,test\"}");
+        when(dbLockService.lockOrder(30L)).thenReturn(order);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
 
         PlanOrderActionDTO dto = new PlanOrderActionDTO();
@@ -191,6 +227,7 @@ class PlanOrderServiceImplTest {
         assertThat(finished.getFinishTime()).isNotNull();
         assertThat(order.getStatus()).isEqualTo(OrderStatus.COMPLETED.name());
         assertThat(order.getCompleteTime()).isNotNull();
+        verify(orderActionRecordMapper).insert(any(OrderActionRecord.class));
         verify(orderSettlementService).settleCompletedOrder(30L);
     }
 
@@ -209,7 +246,7 @@ class PlanOrderServiceImplTest {
         order.setStatus(OrderStatus.SERVING.name());
         order.setVerificationStatus("VERIFIED");
         order.setServiceDetailJson("");
-        when(orderMapper.selectById(310L)).thenReturn(order);
+        when(dbLockService.lockOrder(310L)).thenReturn(order);
 
         PlanOrderActionDTO dto = new PlanOrderActionDTO();
         dto.setPlanOrderId(31L);

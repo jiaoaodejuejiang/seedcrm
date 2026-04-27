@@ -121,11 +121,13 @@ public class WecomConsoleSchemaInitializer {
                     strategy VARCHAR(32) DEFAULT 'ROUND_ROBIN',
                     employee_names_json TEXT,
                     employee_accounts_json TEXT,
+                    store_names_json TEXT,
                     remark VARCHAR(255),
                     is_enabled TINYINT DEFAULT 1,
                     contact_way_id VARCHAR(128),
                     qr_code_url TEXT,
                     short_link VARCHAR(255),
+                    published_at DATETIME,
                     generated_at DATETIME,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -192,11 +194,13 @@ public class WecomConsoleSchemaInitializer {
         columns.put("strategy", "strategy VARCHAR(32) DEFAULT 'ROUND_ROBIN'");
         columns.put("employee_names_json", "employee_names_json TEXT");
         columns.put("employee_accounts_json", "employee_accounts_json TEXT");
+        columns.put("store_names_json", "store_names_json TEXT");
         columns.put("remark", "remark VARCHAR(255)");
         columns.put("is_enabled", "is_enabled TINYINT DEFAULT 1");
         columns.put("contact_way_id", "contact_way_id VARCHAR(128)");
         columns.put("qr_code_url", "qr_code_url TEXT");
         columns.put("short_link", "short_link VARCHAR(255)");
+        columns.put("published_at", "published_at DATETIME");
         columns.put("generated_at", "generated_at DATETIME");
         columns.put("created_at", "created_at DATETIME DEFAULT CURRENT_TIMESTAMP");
         columns.put("updated_at", "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");

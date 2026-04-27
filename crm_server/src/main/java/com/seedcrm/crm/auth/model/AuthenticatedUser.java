@@ -17,6 +17,7 @@ public class AuthenticatedUser {
     private String dataScope;
     private Long userId;
     private Long storeId;
+    private String storeName;
     private List<Long> teamMemberIds;
     private Long boundCustomerUserId;
     private List<String> allowedModules;

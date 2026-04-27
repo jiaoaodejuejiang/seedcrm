@@ -530,15 +530,15 @@ label > span {
 .metrics-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .metric-card {
   border-radius: 20px;
-  padding: 22px;
-  min-height: 104px;
+  padding: 12px 14px;
+  min-height: 72px;
   display: grid;
-  gap: 10px;
+  gap: 6px;
   align-content: center;
 }
 
@@ -551,13 +551,39 @@ label > span {
 
 .metric-card strong,
 .timeline-item strong {
-  font-size: 30px;
+  font-size: 22px;
   letter-spacing: -0.03em;
   color: #13212d;
 }
 
 .metrics-row .metric-card > small {
   display: none;
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.summary-pill {
+  display: grid;
+  gap: 4px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(19, 33, 45, 0.08);
+  background: #f8fafc;
+}
+
+.summary-pill span {
+  color: #718092;
+  font-size: 12px;
+}
+
+.summary-pill strong {
+  font-size: 17px;
+  color: #13212d;
+  line-height: 1.3;
 }
 
 .customer-detail-page .metric-card > small,

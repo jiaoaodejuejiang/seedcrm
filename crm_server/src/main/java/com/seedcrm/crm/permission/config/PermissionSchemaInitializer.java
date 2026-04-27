@@ -124,16 +124,21 @@ public class PermissionSchemaInitializer {
         seedPolicy("ORDER", "UPDATE", "CLUE_MANAGER", "ALL", "appointment scheduling");
         seedPolicy("ORDER", "VIEW", "STORE_SERVICE", "STORE", null);
         seedPolicy("ORDER", "UPDATE", "STORE_SERVICE", "STORE", null);
+        seedPolicy("ORDER", "REFUND_STORE", "STORE_SERVICE", "STORE", "offline service refund only");
         seedPolicy("ORDER", "FINISH", "STORE_SERVICE", "STORE", "order(status=finished)");
         seedPolicy("ORDER", "VIEW", "STORE_MANAGER", "STORE", null);
         seedPolicy("ORDER", "UPDATE", "STORE_MANAGER", "STORE", null);
+        seedPolicy("ORDER", "REFUND_STORE", "STORE_MANAGER", "STORE", "offline service refund only");
         seedPolicy("ORDER", "FINISH", "STORE_MANAGER", "STORE", "order(status=finished)");
         seedPolicy("ORDER", "VIEW", "PHOTOGRAPHER", "STORE", null);
         seedPolicy("ORDER", "UPDATE", "PHOTOGRAPHER", "STORE", null);
+        seedPolicy("ORDER", "REFUND_STORE", "PHOTOGRAPHER", "STORE", "offline service refund only");
         seedPolicy("ORDER", "VIEW", "MAKEUP_ARTIST", "STORE", null);
         seedPolicy("ORDER", "UPDATE", "MAKEUP_ARTIST", "STORE", null);
+        seedPolicy("ORDER", "REFUND_STORE", "MAKEUP_ARTIST", "STORE", "offline service refund only");
         seedPolicy("ORDER", "VIEW", "PHOTO_SELECTOR", "STORE", null);
         seedPolicy("ORDER", "UPDATE", "PHOTO_SELECTOR", "STORE", null);
+        seedPolicy("ORDER", "REFUND_STORE", "PHOTO_SELECTOR", "STORE", "offline service refund only");
 
         seedPolicy("PLANORDER", "CREATE", "STORE_SERVICE", "STORE", null);
         seedPolicy("PLANORDER", "VIEW", "STORE_SERVICE", "STORE", null);
@@ -152,6 +157,9 @@ public class PermissionSchemaInitializer {
 
         seedPolicy("PLANORDER", "VIEW", "PRIVATE_DOMAIN_SERVICE", "SELF", "bound customer");
         seedPolicy("ORDER", "VIEW", "PRIVATE_DOMAIN_SERVICE", "SELF", "bound customer");
+        seedPolicy("ORDER", "VIEW", "FINANCE", "ALL", "verified and finished order finance scope");
+        seedPolicy("ORDER", "UPDATE", "FINANCE", "ALL", "verified payment refund registration");
+        seedPolicy("ORDER", "REFUND_PAYMENT", "FINANCE", "ALL", "verified payment refund registration");
         seedPolicy("ORDER", "FINISH", "FINANCE", "ALL", "order(status=finished)");
 
         seedPolicy("SCHEDULER", "VIEW", "CLUE_MANAGER", "ALL", "scheduler monitor");

@@ -267,14 +267,6 @@ const navGroups = [
     icon: icon(ChatDotRound),
     items: [
       {
-        key: 'private-domain-wecom',
-        to: '/private-domain/wecom',
-        label: '企业微信',
-        icon: icon(ChatDotRound),
-        moduleCode: 'WECOM',
-        roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE']
-      },
-      {
         key: 'private-domain-live-code',
         to: '/private-domain/live-code',
         label: '活码配置',
@@ -332,7 +324,8 @@ const navGroups = [
             to: '/finance/salary/settlements',
             label: '结算中心',
             icon: icon(WalletFilled),
-            moduleCode: 'SALARY'
+            moduleCode: 'SALARY',
+            roleCodes: ['ADMIN', 'FINANCE']
           },
           {
             key: 'salary-settlement-config',
@@ -427,6 +420,14 @@ const navGroups = [
         icon: icon(MenuIcon),
         items: [
           { key: 'settings-domain', to: '/settings/base/domain', label: '域名配置', icon: icon(Link), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+          {
+            key: 'settings-wecom',
+            to: '/settings/base/wecom',
+            label: '企业微信',
+            icon: icon(ChatDotRound),
+            moduleCode: 'SETTING',
+            roleCodes: ['ADMIN']
+          },
           { key: 'settings-menu', to: '/settings/menu', label: '菜单管理', icon: icon(MenuIcon), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
           {
             key: 'settings-dictionaries',
@@ -468,7 +469,6 @@ const routeTitleMap = {
   'plan-orders': '服务单',
   'plan-orders-scan': '扫码服务单',
   customers: '客户详情',
-  'private-domain-wecom': '企业微信',
   'private-domain-live-code': '活码配置',
   'private-domain-customer-profile': '客户画像',
   'private-domain-moments': '朋友圈定时群发',
@@ -487,6 +487,7 @@ const routeTitleMap = {
   'settings-third-party': '三方接口',
   'settings-callback': '回调接口',
   'settings-domain': '域名配置',
+  'settings-wecom': '企业微信',
   'settings-menu': '菜单管理',
   'settings-public-api': '对外接口',
   'settings-dictionaries': '字典管理',
@@ -507,7 +508,6 @@ const routeSectionMap = {
   'plan-orders': '门店服务',
   'plan-orders-scan': '门店服务',
   customers: '门店服务',
-  'private-domain-wecom': '私域客服',
   'private-domain-live-code': '私域客服',
   'private-domain-customer-profile': '私域客服',
   'private-domain-moments': '私域客服',
@@ -526,6 +526,7 @@ const routeSectionMap = {
   'settings-third-party': '系统设置 / 调度中心',
   'settings-callback': '系统设置 / 调度中心',
   'settings-domain': '系统设置 / 基础配置',
+  'settings-wecom': '系统设置 / 基础配置',
   'settings-menu': '系统设置 / 基础配置',
   'settings-public-api': '系统设置 / 调度中心',
   'settings-dictionaries': '系统设置 / 基础配置',

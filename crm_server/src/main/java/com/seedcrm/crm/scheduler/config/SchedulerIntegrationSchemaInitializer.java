@@ -21,6 +21,12 @@ public class SchedulerIntegrationSchemaInitializer {
     private static final String DOUYIN_VOUCHER_PREPARE_PATH = "/goodlife/v1/fulfilment/certificate/prepare/";
     private static final String DOUYIN_VOUCHER_VERIFY_PATH = "/goodlife/v1/fulfilment/certificate/verify/";
     private static final String DOUYIN_VOUCHER_CANCEL_PATH = "/goodlife/v1/fulfilment/certificate/cancel/";
+    private static final String DOUYIN_REFUND_APPLY_PATH = "/api/apps/trade/v2/refund/create_refund";
+    private static final String DOUYIN_REFUND_QUERY_PATH = "/api/apps/trade/v2/refund/query_refund";
+    private static final String DOUYIN_REFUND_LIST_PATH = "/api/apps/trade/v2/refund/refund_list";
+    private static final String DOUYIN_REFUND_NOTIFY_PATH = "/scheduler/callback/douyin/refund";
+    private static final String DOUYIN_REFUND_AUDIT_CALLBACK_PATH = "/scheduler/callback/douyin/refund-audit";
+    private static final String DOUYIN_REFUND_AMOUNT_UNIT = "CENT";
     private static final String DOUYIN_VERIFY_CODE_FIELD = "encrypted_codes";
 
     private final JdbcTemplate jdbcTemplate;
@@ -90,6 +96,21 @@ public class SchedulerIntegrationSchemaInitializer {
                     voucher_prepare_path VARCHAR(255),
                     voucher_verify_path VARCHAR(255),
                     voucher_cancel_path VARCHAR(255),
+                    refund_apply_path VARCHAR(255),
+                    refund_query_path VARCHAR(255),
+                    refund_list_path VARCHAR(255),
+                    refund_notify_path VARCHAR(255),
+                    refund_audit_callback_path VARCHAR(255),
+                    refund_order_id_field VARCHAR(64),
+                    refund_amount_field VARCHAR(64),
+                    refund_reason_field VARCHAR(64),
+                    refund_out_order_no_field VARCHAR(64),
+                    refund_out_refund_no_field VARCHAR(64),
+                    refund_external_refund_id_field VARCHAR(64),
+                    refund_item_order_id_field VARCHAR(64),
+                    refund_notify_url_field VARCHAR(64),
+                    refund_amount_unit VARCHAR(16),
+                    refund_status_mapping VARCHAR(255),
                     client_key VARCHAR(128),
                     client_secret VARCHAR(255),
                     redirect_uri VARCHAR(255),
@@ -198,6 +219,21 @@ public class SchedulerIntegrationSchemaInitializer {
         columns.put("voucher_prepare_path", "voucher_prepare_path VARCHAR(255)");
         columns.put("voucher_verify_path", "voucher_verify_path VARCHAR(255)");
         columns.put("voucher_cancel_path", "voucher_cancel_path VARCHAR(255)");
+        columns.put("refund_apply_path", "refund_apply_path VARCHAR(255)");
+        columns.put("refund_query_path", "refund_query_path VARCHAR(255)");
+        columns.put("refund_list_path", "refund_list_path VARCHAR(255)");
+        columns.put("refund_notify_path", "refund_notify_path VARCHAR(255)");
+        columns.put("refund_audit_callback_path", "refund_audit_callback_path VARCHAR(255)");
+        columns.put("refund_order_id_field", "refund_order_id_field VARCHAR(64)");
+        columns.put("refund_amount_field", "refund_amount_field VARCHAR(64)");
+        columns.put("refund_reason_field", "refund_reason_field VARCHAR(64)");
+        columns.put("refund_out_order_no_field", "refund_out_order_no_field VARCHAR(64)");
+        columns.put("refund_out_refund_no_field", "refund_out_refund_no_field VARCHAR(64)");
+        columns.put("refund_external_refund_id_field", "refund_external_refund_id_field VARCHAR(64)");
+        columns.put("refund_item_order_id_field", "refund_item_order_id_field VARCHAR(64)");
+        columns.put("refund_notify_url_field", "refund_notify_url_field VARCHAR(64)");
+        columns.put("refund_amount_unit", "refund_amount_unit VARCHAR(16)");
+        columns.put("refund_status_mapping", "refund_status_mapping VARCHAR(255)");
         columns.put("client_key", "client_key VARCHAR(128)");
         columns.put("client_secret", "client_secret VARCHAR(255)");
         columns.put("redirect_uri", "redirect_uri VARCHAR(255)");
@@ -302,6 +338,21 @@ public class SchedulerIntegrationSchemaInitializer {
                         voucher_prepare_path = COALESCE(voucher_prepare_path, ?),
                         voucher_verify_path = COALESCE(voucher_verify_path, ?),
                         voucher_cancel_path = COALESCE(voucher_cancel_path, ?),
+                        refund_apply_path = COALESCE(refund_apply_path, ?),
+                        refund_query_path = COALESCE(refund_query_path, ?),
+                        refund_list_path = COALESCE(refund_list_path, ?),
+                        refund_notify_path = COALESCE(refund_notify_path, ?),
+                        refund_audit_callback_path = COALESCE(refund_audit_callback_path, ?),
+                        refund_order_id_field = COALESCE(refund_order_id_field, 'order_id'),
+                        refund_amount_field = COALESCE(refund_amount_field, 'refund_amount'),
+                        refund_reason_field = COALESCE(refund_reason_field, 'reason'),
+                        refund_out_order_no_field = COALESCE(refund_out_order_no_field, 'out_order_no'),
+                        refund_out_refund_no_field = COALESCE(refund_out_refund_no_field, 'out_refund_no'),
+                        refund_external_refund_id_field = COALESCE(refund_external_refund_id_field, 'refund_id'),
+                        refund_item_order_id_field = COALESCE(refund_item_order_id_field, 'item_order_id'),
+                        refund_notify_url_field = COALESCE(refund_notify_url_field, 'notify_url'),
+                        refund_amount_unit = COALESCE(refund_amount_unit, ?),
+                        refund_status_mapping = COALESCE(refund_status_mapping, 'INIT,AUDITING,AUDITED,REJECTED,ARBITRATE,CANCEL,SUCCESS,FAIL'),
                         verify_code_field = COALESCE(verify_code_field, ?),
                         updated_at = ?
                     WHERE provider_code = ?
@@ -313,6 +364,12 @@ public class SchedulerIntegrationSchemaInitializer {
                     DOUYIN_VOUCHER_PREPARE_PATH,
                     DOUYIN_VOUCHER_VERIFY_PATH,
                     DOUYIN_VOUCHER_CANCEL_PATH,
+                    DOUYIN_REFUND_APPLY_PATH,
+                    DOUYIN_REFUND_QUERY_PATH,
+                    DOUYIN_REFUND_LIST_PATH,
+                    DOUYIN_REFUND_NOTIFY_PATH,
+                    DOUYIN_REFUND_AUDIT_CALLBACK_PATH,
+                    DOUYIN_REFUND_AMOUNT_UNIT,
                     DOUYIN_VERIFY_CODE_FIELD,
                     now,
                     DOUYIN_PROVIDER_CODE);
@@ -322,17 +379,28 @@ public class SchedulerIntegrationSchemaInitializer {
                 INSERT INTO integration_provider_config(
                     provider_code, provider_name, module_code, execution_mode, auth_type,
                     app_id, base_url, token_url, endpoint_path,
-                    voucher_prepare_path, voucher_verify_path, voucher_cancel_path, verify_code_field,
+                    voucher_prepare_path, voucher_verify_path, voucher_cancel_path,
+                    refund_apply_path, refund_query_path, refund_list_path, refund_notify_path, refund_audit_callback_path,
+                    refund_order_id_field, refund_amount_field, refund_reason_field,
+                    refund_out_order_no_field, refund_out_refund_no_field, refund_external_refund_id_field,
+                    refund_item_order_id_field, refund_notify_url_field, refund_amount_unit, refund_status_mapping,
+                    verify_code_field,
                     page_size, pull_window_minutes,
                     overlap_minutes, request_timeout_ms,
                     enabled, remark, auth_status, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 DOUYIN_PROVIDER_CODE, DOUYIN_PROVIDER_NAME, "CLUE", "MOCK", "AUTH_CODE",
                 null,
                 DOUYIN_BASE_URL, DOUYIN_TOKEN_URL, DOUYIN_CLUE_ENDPOINT,
-                DOUYIN_VOUCHER_PREPARE_PATH, DOUYIN_VOUCHER_VERIFY_PATH, DOUYIN_VOUCHER_CANCEL_PATH, DOUYIN_VERIFY_CODE_FIELD,
+                DOUYIN_VOUCHER_PREPARE_PATH, DOUYIN_VOUCHER_VERIFY_PATH, DOUYIN_VOUCHER_CANCEL_PATH,
+                DOUYIN_REFUND_APPLY_PATH, DOUYIN_REFUND_QUERY_PATH, DOUYIN_REFUND_LIST_PATH,
+                DOUYIN_REFUND_NOTIFY_PATH, DOUYIN_REFUND_AUDIT_CALLBACK_PATH,
+                "order_id", "refund_amount", "reason",
+                "out_order_no", "out_refund_no", "refund_id", "item_order_id", "notify_url", DOUYIN_REFUND_AMOUNT_UNIT,
+                "INIT,AUDITING,AUDITED,REJECTED,ARBITRATE,CANCEL,SUCCESS,FAIL",
+                DOUYIN_VERIFY_CODE_FIELD,
                 20, 60, 10, 10000,
                 1, "默认使用 MOCK 模式，可切换为真实授权与核销配置", "MOCK", now, now);
     }

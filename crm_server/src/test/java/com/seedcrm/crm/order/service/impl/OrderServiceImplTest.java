@@ -24,16 +24,21 @@ import com.seedcrm.crm.order.dto.OrderServiceDetailDTO;
 import com.seedcrm.crm.order.dto.OrderVoucherVerifyDTO;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.entity.OrderActionRecord;
+import com.seedcrm.crm.order.entity.OrderRefundRecord;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderActionRecordMapper;
 import com.seedcrm.crm.order.mapper.OrderMapper;
+import com.seedcrm.crm.order.mapper.OrderRefundRecordMapper;
 import com.seedcrm.crm.order.service.OrderSettlementService;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -70,13 +75,19 @@ class OrderServiceImplTest {
     @Mock
     private OrderActionRecordMapper orderActionRecordMapper;
 
+    @Mock
+    private OrderRefundRecordMapper orderRefundRecordMapper;
+
+    @Mock
+    private SalaryDetailMapper salaryDetailMapper;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
     void setUp() {
         orderService = new OrderServiceImpl(orderMapper, clueMapper, customerService, customerTagService,
                 planOrderMapper, distributorIncomeService, dbLockService, orderSettlementService,
-                orderActionRecordMapper);
+                orderActionRecordMapper, orderRefundRecordMapper, salaryDetailMapper, new ObjectMapper());
     }
 
     @Test
@@ -308,12 +319,22 @@ class OrderServiceImplTest {
         order.setOrderNo("ORD202604211234567912");
         order.setCustomerId(212L);
         order.setStatus(OrderStatus.COMPLETED.name());
+        order.setAmount(new BigDecimal("1000.00"));
+        order.setServiceDetailJson("{\"serviceConfirmAmount\":300.00}");
         when(dbLockService.lockOrder(12L)).thenReturn(order);
         when(customerService.getByIdOrThrow(212L)).thenReturn(new Customer());
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(120L);
+        planOrder.setOrderId(12L);
+        planOrder.setStatus(PlanOrderStatus.FINISHED.name());
+        when(planOrderMapper.selectOne(any())).thenReturn(planOrder);
+        when(orderRefundRecordMapper.selectList(any())).thenReturn(List.of());
+        when(orderRefundRecordMapper.insert(any(OrderRefundRecord.class))).thenReturn(1);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
 
         OrderActionDTO dto = new OrderActionDTO();
         dto.setOrderId(12L);
+        dto.setServiceRefundAmount(new BigDecimal("100.00"));
         dto.setRemark("store refund register");
 
         Order refunded = orderService.refund(dto, 9002L);
@@ -330,12 +351,18 @@ class OrderServiceImplTest {
         order.setOrderNo("ORD202604211234567913");
         order.setCustomerId(213L);
         order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setDeposit(new BigDecimal("200.00"));
         when(dbLockService.lockOrder(13L)).thenReturn(order);
         when(customerService.getByIdOrThrow(213L)).thenReturn(new Customer());
+        when(orderRefundRecordMapper.selectList(any())).thenReturn(List.of());
+        when(orderRefundRecordMapper.insert(any(OrderRefundRecord.class))).thenReturn(1);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
 
         OrderActionDTO dto = new OrderActionDTO();
         dto.setOrderId(13L);
+        dto.setRefundScene("FINANCE_VERIFIED_PAYMENT");
+        dto.setRefundAmount(new BigDecimal("88.00"));
         dto.setRemark("before service refund register");
 
         Order refunded = orderService.refund(dto, 9002L);

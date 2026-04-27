@@ -35,6 +35,12 @@ public class OrderPermissionGuard {
         assertAllowed(permissionService.check(checkRequest), "order update denied");
     }
 
+    public void checkRefund(PermissionRequestContext context, Long orderId, String refundScene) {
+        PermissionCheckRequest checkRequest = buildCheckRequest(context, "ORDER", resolveRefundActionCode(refundScene),
+                resolveResourceOwnerId(context, orderId));
+        assertAllowed(permissionService.check(checkRequest), "order refund denied");
+    }
+
     public void checkView(PermissionRequestContext context, Long orderId) {
         assertAllowed(checkViewPermission(context, orderId), "order view denied");
     }
@@ -77,6 +83,11 @@ public class OrderPermissionGuard {
         PermissionCheckRequest checkRequest = buildCheckRequest(context, "ORDER", "VIEW",
                 resolveResourceOwnerId(context, orderId));
         return permissionService.check(checkRequest);
+    }
+
+    private String resolveRefundActionCode(String refundScene) {
+        String normalizedScene = refundScene == null ? "" : refundScene.trim().toUpperCase();
+        return "FINANCE_VERIFIED_PAYMENT".equals(normalizedScene) ? "REFUND_PAYMENT" : "REFUND_STORE";
     }
 
     private Long resolveResourceOwnerId(PermissionRequestContext context, Long orderId) {

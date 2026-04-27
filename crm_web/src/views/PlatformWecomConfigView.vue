@@ -1,12 +1,5 @@
 <template>
   <div class="stack-page">
-    <section class="summary-strip">
-      <article v-for="card in overviewCards" :key="card.label" class="summary-pill">
-        <span>{{ card.label }}</span>
-        <strong>{{ card.value }}</strong>
-      </article>
-    </section>
-
     <section v-if="callbackRisk" class="panel compact-panel">
       <el-alert :title="callbackRisk" type="error" show-icon :closable="false" />
     </section>
@@ -411,39 +404,6 @@ const callbackRisk = computed(() => {
   }
   return 'LIVE 模式下公网回调不能跳过验签，请改为开启验签后再保存。'
 })
-
-const overviewCards = computed(() => [
-  {
-    label: '接入模式',
-    value: authModeLabel.value,
-    hint: config.enabled === 1 ? '当前已启用' : '当前已停用'
-  },
-  {
-    label: '后端模式',
-    value: formatExecutionMode(config.executionMode || 'MOCK'),
-    hint: config.lastTokenStatus || '未检测'
-  },
-  {
-    label: '授权状态',
-    value: formatAuthStatus(config.authStatus || 'UNAUTHORIZED'),
-    hint: formatDateTime(config.lastAuthCodeAt) || '未收到授权码'
-  },
-  {
-    label: '最近测试',
-    value: config.lastTokenStatus || '--',
-    hint: formatDateTime(config.lastTokenCheckedAt) || '未测试'
-  },
-  {
-    label: '最近回调',
-    value: formatCallbackProcessStatus(config.lastCallbackStatus || '--'),
-    hint: formatDateTime(config.lastCallbackAt) || '未收到'
-  },
-  {
-    label: '最近日志',
-    value: callbackLogs.value.length,
-    hint: callbackLogs.value[0]?.eventType || '暂无事件'
-  }
-])
 
 onMounted(async () => {
   await loadConfig()

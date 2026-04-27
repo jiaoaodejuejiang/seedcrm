@@ -154,4 +154,32 @@ public class SchedulerController {
                 payload);
         return "success";
     }
+
+    @PostMapping(value = "/callback/douyin/refund", produces = MediaType.TEXT_PLAIN_VALUE)
+    public String receiveDouyinRefundCallback(@RequestParam Map<String, String> parameters,
+                                              @RequestBody(required = false) String payload,
+                                              HttpServletRequest request) {
+        schedulerIntegrationService.receiveProviderCallback(
+                "DOUYIN_LAIKE",
+                "抖音来客退款回调",
+                request.getRequestURI(),
+                request.getMethod(),
+                parameters,
+                payload);
+        return "success";
+    }
+
+    @PostMapping(value = "/callback/douyin/refund-audit", produces = MediaType.TEXT_PLAIN_VALUE)
+    public String receiveDouyinRefundAuditCallback(@RequestParam Map<String, String> parameters,
+                                                   @RequestBody(required = false) String payload,
+                                                   HttpServletRequest request) {
+        schedulerIntegrationService.receiveProviderCallback(
+                "DOUYIN_LAIKE",
+                "抖音来客退款审核回调",
+                request.getRequestURI(),
+                request.getMethod(),
+                parameters,
+                payload);
+        return "success";
+    }
 }

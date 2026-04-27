@@ -34,6 +34,15 @@ public class SalaryDetail {
     @TableField("settlement_id")
     private Long settlementId;
 
+    @TableField("adjustment_type")
+    private String adjustmentType;
+
+    @TableField("refund_record_id")
+    private Long refundRecordId;
+
+    @TableField("source_salary_detail_id")
+    private Long sourceSalaryDetailId;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("settlement_time")
     private LocalDateTime settlementTime;

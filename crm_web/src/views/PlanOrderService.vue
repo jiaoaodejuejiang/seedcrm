@@ -440,9 +440,12 @@ const isFinishedOrder = computed(
     ['COMPLETED', 'FINISHED', 'USED'].includes(normalize(detail.value?.order?.status || ''))
 )
 const hasSavedServiceDetail = computed(() => Boolean(String(detail.value?.order?.serviceDetailJson || '').trim()))
+const compatibilityBackfillMode = computed(
+  () => String(route.query.mode || '') === 'backfill' && isFinishedOrder.value && !hasSavedServiceDetail.value
+)
 const hasCustomerSignature = computed(() => Boolean(String(serviceForm.customerSignature || '').trim()))
 const canManageRoles = computed(() => ROLE_ASSIGNMENT_MANAGER_CODES.includes(normalize(currentUser.value?.roleCode || '')))
-const canEditForm = computed(() => !readOnlyMode.value && !isFinishedOrder.value && isVerified.value)
+const canEditForm = computed(() => !readOnlyMode.value && isVerified.value && (!isFinishedOrder.value || compatibilityBackfillMode.value))
 const canSwitchToEditMode = computed(() => readOnlyMode.value && !isFinishedOrder.value)
 const canSendToCustomer = computed(
   () => Boolean(detail.value?.order?.customerId) && detail.value?.customer?.wecomBound === true && canEditForm.value && hasCustomerSignature.value
@@ -505,6 +508,9 @@ const serviceStage = computed(() => {
   return { label: '待开始服务', key: 'start' }
 })
 const confirmActionLabel = computed(() => {
+  if (compatibilityBackfillMode.value) {
+    return '仅保存补录'
+  }
   if (!isVerified.value) {
     return '请先完成核销'
   }
@@ -520,6 +526,9 @@ const canConfirmAction = computed(() => {
   if (!detail.value || !isVerified.value) {
     return false
   }
+  if (compatibilityBackfillMode.value) {
+    return false
+  }
   if (detail.value.summary?.finishTime) {
     return false
   }
@@ -529,6 +538,9 @@ const canConfirmAction = computed(() => {
   return true
 })
 const serviceActionHint = computed(() => {
+  if (compatibilityBackfillMode.value) {
+    return '历史已完成订单补录确认单，仅保存内容，不改变订单状态'
+  }
   if (!isVerified.value) {
     return '请先完成核销后继续'
   }

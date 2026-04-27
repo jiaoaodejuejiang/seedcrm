@@ -18,35 +18,6 @@
       </article>
     </section>
 
-    <section class="panel compact-panel">
-      <div class="panel-heading compact">
-        <div>
-          <h3>系统管理工作台</h3>
-        </div>
-      </div>
-
-      <div class="workspace-board">
-        <section v-for="group in organizationWorkbenchGroups" :key="group.key" class="workspace-board__group">
-          <div class="workspace-board__header">
-            <strong>{{ group.label }}</strong>
-          </div>
-          <div class="workspace-grid">
-            <button
-              v-for="item in group.items"
-              :key="item.key"
-              type="button"
-              class="workspace-card"
-              :class="{ 'is-active': item.active }"
-              @click="router.push(item.to)"
-            >
-              <strong>{{ item.label }}</strong>
-              <span>{{ item.meta }}</span>
-            </button>
-          </div>
-        </section>
-      </div>
-    </section>
-
     <section v-if="currentMode === 'role'" class="panel compact-panel">
       <div class="toolbar toolbar--compact">
         <div class="toolbar-tabs">
@@ -603,7 +574,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { fetchPermissionPolicies, savePermissionPolicy } from '../api/permission'
 import { useTablePagination } from '../composables/useTablePagination'
 import { currentUser } from '../utils/auth'
@@ -625,7 +596,6 @@ import {
 } from '../utils/systemConsoleStore'
 
 const route = useRoute()
-const router = useRouter()
 const state = reactive(loadSystemConsoleState())
 const policies = ref([])
 
@@ -699,49 +669,6 @@ const filteredPositionsForEmployeeForm = computed(() => {
   const departmentCode = employeeForm.departmentCode
   return state.positions.filter((item) => item.departmentCode === departmentCode && item.isEnabled === 1)
 })
-const organizationWorkbenchGroups = computed(() => [
-  {
-    key: 'organization',
-    label: '组织工作台',
-    items: [
-      {
-        key: 'department',
-        label: '部门管理',
-        meta: `${state.departments.length} 个部门`,
-        to: '/system/departments',
-        active: currentMode.value === 'department'
-      },
-      {
-        key: 'position',
-        label: '岗位管理',
-        meta: `${state.positions.length} 个岗位`,
-        to: '/system/positions',
-        active: currentMode.value === 'position'
-      }
-    ]
-  },
-  {
-    key: 'staff',
-    label: '人员与权限',
-    items: [
-      {
-        key: 'employee',
-        label: '员工管理',
-        meta: `${filteredEmployees.value.length} 位员工`,
-        to: '/system/employees',
-        active: currentMode.value === 'employee'
-      },
-      {
-        key: 'role',
-        label: '角色管理',
-        meta: `${state.roles.length} 个角色`,
-        to: '/system/roles',
-        active: currentMode.value === 'role'
-      }
-    ]
-  }
-])
-
 const metrics = computed(() => {
   if (currentMode.value === 'department') {
     return {

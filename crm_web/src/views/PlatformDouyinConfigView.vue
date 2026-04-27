@@ -53,6 +53,14 @@
               <p>默认 POI：{{ provider.poiId || '--' }}</p>
               <p>券码字段：{{ provider.verifyCodeField || '--' }}</p>
             </article>
+
+            <article class="detail-card">
+              <h3>退款接口</h3>
+              <p>退款申请：{{ provider.refundApplyPath || '--' }}</p>
+              <p>退款查询：{{ provider.refundQueryPath || '--' }}</p>
+              <p>退款回调：{{ refundNotifyUrl }}</p>
+              <p>状态映射：{{ provider.refundStatusMapping || '--' }}</p>
+            </article>
           </div>
 
           <el-table :data="callbackPagination.rows" stripe>
@@ -248,6 +256,82 @@
           </div>
         </el-tab-pane>
 
+        <el-tab-pane label="退款配置" name="refund">
+          <div class="form-grid">
+            <div class="full-span form-group-title">退款接口路径</div>
+            <label class="full-span">
+              <span>退款申请路径</span>
+              <el-input v-model="provider.refundApplyPath" placeholder="/api/apps/trade/v2/refund/create_refund" />
+            </label>
+            <label class="full-span">
+              <span>退款查询路径</span>
+              <el-input v-model="provider.refundQueryPath" placeholder="/api/apps/trade/v2/refund/query_refund" />
+            </label>
+            <label class="full-span">
+              <span>退款列表路径</span>
+              <el-input v-model="provider.refundListPath" placeholder="/api/apps/trade/v2/refund/refund_list" />
+            </label>
+
+            <div class="full-span form-group-title">回调地址</div>
+            <label class="full-span">
+              <span>退款通知地址</span>
+              <el-input :model-value="refundNotifyUrl" readonly />
+            </label>
+            <label class="full-span">
+              <span>退款审核回调</span>
+              <el-input :model-value="refundAuditCallbackUrl" readonly />
+            </label>
+
+            <div class="full-span form-group-title">字段映射</div>
+            <label>
+              <span>平台订单字段</span>
+              <el-input v-model="provider.refundOrderIdField" placeholder="order_id" />
+            </label>
+            <label>
+              <span>退款金额字段</span>
+              <el-input v-model="provider.refundAmountField" placeholder="refund_amount" />
+            </label>
+            <label>
+              <span>退款原因字段</span>
+              <el-input v-model="provider.refundReasonField" placeholder="reason" />
+            </label>
+            <label>
+              <span>商户订单字段</span>
+              <el-input v-model="provider.refundOutOrderNoField" placeholder="out_order_no" />
+            </label>
+            <label>
+              <span>商户退款单字段</span>
+              <el-input v-model="provider.refundOutRefundNoField" placeholder="out_refund_no" />
+            </label>
+            <label>
+              <span>平台退款单字段</span>
+              <el-input v-model="provider.refundExternalRefundIdField" placeholder="refund_id" />
+            </label>
+            <label>
+              <span>券/子订单字段</span>
+              <el-input v-model="provider.refundItemOrderIdField" placeholder="item_order_id" />
+            </label>
+            <label>
+              <span>通知地址字段</span>
+              <el-input v-model="provider.refundNotifyUrlField" placeholder="notify_url" />
+            </label>
+            <label>
+              <span>金额单位</span>
+              <el-select v-model="provider.refundAmountUnit">
+                <el-option label="分（平台常用）" value="CENT" />
+                <el-option label="元" value="YUAN" />
+              </el-select>
+            </label>
+            <label class="full-span">
+              <span>状态映射</span>
+              <el-input
+                v-model="provider.refundStatusMapping"
+                placeholder="INIT,AUDITING,AUDITED,REJECTED,ARBITRATE,CANCEL,SUCCESS,FAIL"
+              />
+            </label>
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="任务调度" name="job">
           <div class="form-grid">
             <label>
@@ -331,6 +415,12 @@ const apiBaseUrl = computed(() => String(systemState.domainSettings?.apiBaseUrl 
 const backendCallbackUrl = computed(() => {
   return buildSystemUrl(systemState, 'callback', '/scheduler/oauth/douyin/callback')
 })
+const refundNotifyUrl = computed(() =>
+  buildSystemUrl(systemState, 'callback', provider.refundNotifyPath || '/scheduler/callback/douyin/refund')
+)
+const refundAuditCallbackUrl = computed(() =>
+  buildSystemUrl(systemState, 'callback', provider.refundAuditCallbackPath || '/scheduler/callback/douyin/refund-audit')
+)
 
 const verificationWarning = computed(() => {
   if (provider.executionMode !== 'LIVE') {
@@ -365,6 +455,21 @@ function createProvider() {
     voucherPreparePath: '/goodlife/v1/fulfilment/certificate/prepare/',
     voucherVerifyPath: '/goodlife/v1/fulfilment/certificate/verify/',
     voucherCancelPath: '/goodlife/v1/fulfilment/certificate/cancel/',
+    refundApplyPath: '/api/apps/trade/v2/refund/create_refund',
+    refundQueryPath: '/api/apps/trade/v2/refund/query_refund',
+    refundListPath: '/api/apps/trade/v2/refund/refund_list',
+    refundNotifyPath: '/scheduler/callback/douyin/refund',
+    refundAuditCallbackPath: '/scheduler/callback/douyin/refund-audit',
+    refundOrderIdField: 'order_id',
+    refundAmountField: 'refund_amount',
+    refundReasonField: 'reason',
+    refundOutOrderNoField: 'out_order_no',
+    refundOutRefundNoField: 'out_refund_no',
+    refundExternalRefundIdField: 'refund_id',
+    refundItemOrderIdField: 'item_order_id',
+    refundNotifyUrlField: 'notify_url',
+    refundAmountUnit: 'CENT',
+    refundStatusMapping: 'INIT,AUDITING,AUDITED,REJECTED,ARBITRATE,CANCEL,SUCCESS,FAIL',
     clientKey: '',
     clientSecret: '',
     clientSecretMasked: '',
@@ -419,7 +524,29 @@ function createJobForm() {
 }
 
 function applyProvider(payload) {
-  Object.assign(provider, createProvider(), payload || {})
+  const defaults = createProvider()
+  Object.assign(provider, defaults, payload || {})
+  for (const key of [
+    'refundApplyPath',
+    'refundQueryPath',
+    'refundListPath',
+    'refundNotifyPath',
+    'refundAuditCallbackPath',
+    'refundOrderIdField',
+    'refundAmountField',
+    'refundReasonField',
+    'refundOutOrderNoField',
+    'refundOutRefundNoField',
+    'refundExternalRefundIdField',
+    'refundItemOrderIdField',
+    'refundNotifyUrlField',
+    'refundAmountUnit',
+    'refundStatusMapping'
+  ]) {
+    if (!provider[key]) {
+      provider[key] = defaults[key]
+    }
+  }
   provider.clientSecret = ''
   providerSnapshot.value = JSON.parse(JSON.stringify({
     executionMode: provider.executionMode,
@@ -427,6 +554,10 @@ function applyProvider(payload) {
     callbackUrl: provider.callbackUrl,
     localAccountIds: provider.localAccountIds,
     voucherVerifyPath: provider.voucherVerifyPath,
+    refundApplyPath: provider.refundApplyPath,
+    refundQueryPath: provider.refundQueryPath,
+    refundNotifyPath: provider.refundNotifyPath,
+    refundAmountUnit: provider.refundAmountUnit,
     poiId: provider.poiId,
     verifyCodeField: provider.verifyCodeField
   }))
@@ -461,6 +592,10 @@ function buildProviderDangerList() {
     ['callbackUrl', '回调登记地址'],
     ['localAccountIds', '本地账号映射'],
     ['voucherVerifyPath', '核销提交路径'],
+    ['refundApplyPath', '退款申请路径'],
+    ['refundQueryPath', '退款查询路径'],
+    ['refundNotifyPath', '退款通知路径'],
+    ['refundAmountUnit', '退款金额单位'],
     ['poiId', '默认 POI ID'],
     ['verifyCodeField', '券码字段名']
   ]

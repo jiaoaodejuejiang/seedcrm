@@ -31,6 +31,7 @@
       <p v-if="canChooseUser" class="table-note">
         {{ selectedStaff ? `当前查看：${staffLabel(selectedStaff)}` : '请先选择员工，再查看薪酬明细。' }}
       </p>
+      <p v-else class="table-note">当前页面仅展示与你本人相关的薪酬数据。</p>
 
       <el-table v-if="!canChooseUser || selectedUserId" :data="dailyRows" stripe>
         <el-table-column label="日期" min-width="160" prop="date" />
@@ -59,11 +60,52 @@
       <el-empty v-else description="请先选择员工后查看薪酬明细" />
     </section>
 
+    <section v-if="deductionRows.length" class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h3>扣减记录</h3>
+        </div>
+      </div>
+      <el-table :data="deductionRows" stripe>
+        <el-table-column label="时间" min-width="170">
+          <template #default="{ row }">
+            {{ formatDateTime(row.createTime) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" width="120">
+          <template #default="{ row }">
+            <el-tag type="warning">{{ detailTypeLabel(row) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="角色" width="140">
+          <template #default="{ row }">
+            {{ formatRoleCode(row.roleCode) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="扣减金额" width="140">
+          <template #default="{ row }">
+            {{ formatMoney(row.amount) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="关联退款" width="140">
+          <template #default="{ row }">
+            {{ row.refundRecordId ? `#${row.refundRecordId}` : '--' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="服务单 ID" width="120" prop="planOrderId" />
+      </el-table>
+    </section>
+
     <el-dialog v-model="detailVisible" :title="detailTitle" width="880px">
       <el-table :data="detailRows" stripe>
         <el-table-column label="时间" min-width="170">
           <template #default="{ row }">
             {{ formatDateTime(row.createTime) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" width="120">
+          <template #default="{ row }">
+            <el-tag :type="row.adjustmentType ? 'warning' : 'success'">{{ detailTypeLabel(row) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="角色" width="140">
@@ -125,6 +167,11 @@ const todayIncome = computed(() => {
     .filter((item) => String(item.createTime || '').startsWith(today))
     .reduce((sum, item) => sum + Number(item.amount || 0), 0)
 })
+const deductionRows = computed(() =>
+  salaryDetails.value
+    .filter((item) => Number(item.amount || 0) < 0 || item.adjustmentType)
+    .sort((left, right) => String(right.createTime || '').localeCompare(String(left.createTime || '')))
+)
 const dailyRows = computed(() => {
   const grouped = new Map()
   for (const detail of salaryDetails.value) {
@@ -157,6 +204,10 @@ function openDetail(row) {
   detailTitle.value = `${row.date} 收入明细`
   detailRows.value = row.details || []
   detailVisible.value = true
+}
+
+function detailTypeLabel(row) {
+  return row?.adjustmentType === 'REFUND_REVERSAL' ? '退款冲正' : '佣金收入'
 }
 
 async function initSelection() {

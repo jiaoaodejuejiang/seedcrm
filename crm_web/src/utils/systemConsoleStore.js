@@ -149,15 +149,15 @@ const DEFAULT_STATE = {
     { id: 7, menuGroup: '门店服务', menuName: '服务单设计', routePath: '/store-service/service-design', roleCodes: ['ADMIN', 'STORE_MANAGER'], moduleCode: 'PLANORDER', isEnabled: 1 },
     { id: 8, menuGroup: '门店服务', menuName: '人员管理', routePath: '/store-service/personnel', roleCodes: ['ADMIN', 'STORE_MANAGER'], moduleCode: 'SYSTEM', isEnabled: 1 },
     { id: 9, menuGroup: '门店服务', menuName: '门店角色', routePath: '/store-service/roles', roleCodes: ['ADMIN', 'STORE_MANAGER'], moduleCode: 'SYSTEM', isEnabled: 1 },
-    { id: 10, menuGroup: '私域客服', menuName: '企业微信', routePath: '/private-domain/wecom', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'], moduleCode: 'WECOM', isEnabled: 1 },
+    { id: 10, menuGroup: '系统设置 / 基础配置', menuName: '企业微信', routePath: '/settings/base/wecom', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 11, menuGroup: '私域客服', menuName: '活码配置', routePath: '/private-domain/live-code', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'], moduleCode: 'WECOM', isEnabled: 1 },
     { id: 12, menuGroup: '私域客服', menuName: '客户画像', routePath: '/private-domain/customer-profile', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'], moduleCode: 'WECOM', isEnabled: 1 },
     { id: 13, menuGroup: '私域客服', menuName: '朋友圈定时群发', routePath: '/private-domain/moments', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'], moduleCode: 'WECOM', isEnabled: 1 },
     { id: 14, menuGroup: '私域客服', menuName: '标签管理', routePath: '/private-domain/tags', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'], moduleCode: 'WECOM', isEnabled: 1 },
     { id: 15, menuGroup: '财务管理', menuName: '财务看板', routePath: '/finance', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'FINANCE', isEnabled: 1 },
-    { id: 16, menuGroup: '财务管理 / 薪酬中心', menuName: '我的薪酬', routePath: '/finance/salary/my', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
-    { id: 17, menuGroup: '财务管理 / 薪酬中心', menuName: '结算中心', routePath: '/finance/salary/settlements', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
-    { id: 18, menuGroup: '财务管理 / 薪酬中心', menuName: '结算配置', routePath: '/finance/salary/settlement-config', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 16, menuGroup: '财务管理 / 薪酬中心', menuName: '我的薪酬', routePath: '/finance/salary/my', roleCodes: ['ADMIN', 'FINANCE', 'STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR'], moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 17, menuGroup: '财务管理 / 薪酬结算', menuName: '结算中心', routePath: '/finance/salary/settlements', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 18, menuGroup: '财务管理 / 薪酬结算', menuName: '结算配置', routePath: '/finance/salary/settlement-config', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
     { id: 19, menuGroup: '财务管理 / 薪酬配置', menuName: '薪酬角色', routePath: '/finance/salary-config/roles', roleCodes: ['ADMIN'], moduleCode: 'SALARY', isEnabled: 1 },
     { id: 20, menuGroup: '财务管理 / 薪酬配置', menuName: '薪酬档位', routePath: '/finance/salary-config/grades', roleCodes: ['ADMIN'], moduleCode: 'SALARY', isEnabled: 1 },
     { id: 21, menuGroup: '财务管理 / 薪酬配置', menuName: '分销配置', routePath: '/finance/salary-config/distributor', roleCodes: ['ADMIN'], moduleCode: 'SALARY', isEnabled: 1 },
@@ -372,6 +372,29 @@ function migrateSystemConsoleState(state) {
         menuGroup: '财务管理 / 薪酬中心',
         menuName: '我的薪酬',
         routePath: '/finance/salary/my'
+      }
+    }
+    if (item?.routePath === '/private-domain/wecom') {
+      return {
+        ...item,
+        menuGroup: '系统设置 / 基础配置',
+        menuName: '企业微信',
+        routePath: '/settings/base/wecom',
+        roleCodes: ['ADMIN'],
+        moduleCode: 'SETTING'
+      }
+    }
+    if (item?.routePath === '/finance/salary/my') {
+      return {
+        ...item,
+        roleCodes: ['ADMIN', 'FINANCE', 'STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR']
+      }
+    }
+    if (item?.routePath === '/finance/salary/settlements') {
+      return {
+        ...item,
+        menuGroup: '财务管理 / 薪酬结算',
+        roleCodes: ['ADMIN', 'FINANCE']
       }
     }
     return item

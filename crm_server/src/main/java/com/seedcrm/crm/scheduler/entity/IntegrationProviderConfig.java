@@ -52,6 +52,51 @@ public class IntegrationProviderConfig {
     @TableField("voucher_cancel_path")
     private String voucherCancelPath;
 
+    @TableField("refund_apply_path")
+    private String refundApplyPath;
+
+    @TableField("refund_query_path")
+    private String refundQueryPath;
+
+    @TableField("refund_list_path")
+    private String refundListPath;
+
+    @TableField("refund_notify_path")
+    private String refundNotifyPath;
+
+    @TableField("refund_audit_callback_path")
+    private String refundAuditCallbackPath;
+
+    @TableField("refund_order_id_field")
+    private String refundOrderIdField;
+
+    @TableField("refund_amount_field")
+    private String refundAmountField;
+
+    @TableField("refund_reason_field")
+    private String refundReasonField;
+
+    @TableField("refund_out_order_no_field")
+    private String refundOutOrderNoField;
+
+    @TableField("refund_out_refund_no_field")
+    private String refundOutRefundNoField;
+
+    @TableField("refund_external_refund_id_field")
+    private String refundExternalRefundIdField;
+
+    @TableField("refund_item_order_id_field")
+    private String refundItemOrderIdField;
+
+    @TableField("refund_notify_url_field")
+    private String refundNotifyUrlField;
+
+    @TableField("refund_amount_unit")
+    private String refundAmountUnit;
+
+    @TableField("refund_status_mapping")
+    private String refundStatusMapping;
+
     @TableField("client_key")
     private String clientKey;
 

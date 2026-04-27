@@ -94,7 +94,9 @@ public class OrderController {
     @PostMapping("/refund")
     public ApiResponse<OrderResponse> refund(@RequestBody OrderActionDTO orderActionDTO, HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
-        orderPermissionGuard.checkUpdate(context, orderActionDTO == null ? null : orderActionDTO.getOrderId());
+        orderPermissionGuard.checkRefund(context,
+                orderActionDTO == null ? null : orderActionDTO.getOrderId(),
+                orderActionDTO == null ? null : orderActionDTO.getRefundScene());
         return ApiResponse.success(OrderResponse.from(orderService.refund(orderActionDTO, context.getCurrentUserId())));
     }
 

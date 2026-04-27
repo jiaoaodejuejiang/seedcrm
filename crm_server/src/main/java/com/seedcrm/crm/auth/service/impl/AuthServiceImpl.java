@@ -38,19 +38,19 @@ public class AuthServiceImpl implements AuthService {
                     List.of(1001L, 1002L), null, List.of("CLUE", "ORDER"))),
             "store_service", new DemoAccount("store_service", "123456", new AuthenticatedUser(
                     "store_service", "门店服务A", "STORE_SERVICE", "门店服务", "STORE", 5101L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER"))),
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY"))),
             "store_manager", new DemoAccount("store_manager", "123456", new AuthenticatedUser(
                     "store_manager", "静安店长", "STORE_MANAGER", "店长", "STORE", 5002L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SYSTEM"))),
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SYSTEM", "SALARY"))),
             "photo_a", new DemoAccount("photo_a", "123456", new AuthenticatedUser(
                     "photo_a", "摄影A", "PHOTOGRAPHER", "摄影", "STORE", 2001L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER"))),
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY"))),
             "makeup_a", new DemoAccount("makeup_a", "123456", new AuthenticatedUser(
                     "makeup_a", "化妆师A", "MAKEUP_ARTIST", "化妆师", "STORE", 3001L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER"))),
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY"))),
             "selector_a", new DemoAccount("selector_a", "123456", new AuthenticatedUser(
                     "selector_a", "选片负责人A", "PHOTO_SELECTOR", "选片负责人", "STORE", 4001L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER"))),
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY"))),
             "finance", new DemoAccount("finance", "123456", new AuthenticatedUser(
                     "finance", "财务", "FINANCE", "财务", "ALL", 91001L, 10L, "总部",
                     List.of(91001L), null, List.of("ORDER", "SALARY", "FINANCE"))),
@@ -71,7 +71,7 @@ public class AuthServiceImpl implements AuthService {
         if (isStoreAccount(account.user())) {
             validateStoreSelection(account.user(), storeId, storeName);
             sessionUser.setStoreId(storeId != null ? storeId : account.user().getStoreId());
-            sessionUser.setStoreName(StringUtils.hasText(storeName) ? storeName.trim() : account.user().getStoreName());
+            sessionUser.setStoreName(account.user().getStoreName());
         }
 
         String token = UUID.randomUUID().toString().replace("-", "");

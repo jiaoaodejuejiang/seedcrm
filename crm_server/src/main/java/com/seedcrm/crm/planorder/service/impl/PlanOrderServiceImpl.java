@@ -85,9 +85,18 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         ensurePlanOrderNotExists(orderId);
 
         PlanOrder planOrder = new PlanOrder();
+        LocalDateTime now = LocalDateTime.now();
+        boolean completedCompatibilityOrder = parseOrderStatus(order.getStatus()) == OrderStatus.COMPLETED;
         planOrder.setOrderId(orderId);
-        planOrder.setStatus(PlanOrderStatus.ARRIVED.name());
-        planOrder.setCreateTime(LocalDateTime.now());
+        planOrder.setStatus(completedCompatibilityOrder ? PlanOrderStatus.FINISHED.name() : PlanOrderStatus.ARRIVED.name());
+        planOrder.setCreateTime(now);
+        if (completedCompatibilityOrder) {
+            LocalDateTime finishTime = order.getCompleteTime() == null ? now : order.getCompleteTime();
+            LocalDateTime arriveTime = order.getArriveTime() == null ? firstTime(order.getAppointmentTime(), finishTime) : order.getArriveTime();
+            planOrder.setArriveTime(arriveTime);
+            planOrder.setStartTime(firstTime(arriveTime, finishTime));
+            planOrder.setFinishTime(finishTime);
+        }
         if (planOrderMapper.insert(planOrder) <= 0) {
             throw new BusinessException("failed to create plan order");
         }
@@ -294,12 +303,19 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
 
     private void ensureOrderCanCreatePlan(Order order) {
         OrderStatus status = parseOrderStatus(order.getStatus());
-        if (status == OrderStatus.CANCELLED || status == OrderStatus.REFUNDED || status == OrderStatus.COMPLETED) {
+        if (status == OrderStatus.CANCELLED || status == OrderStatus.REFUNDED) {
             throw new BusinessException("order status does not support plan order creation");
+        }
+        if (status == OrderStatus.COMPLETED) {
+            return;
         }
         if (!status.isPaidStage()) {
             throw new BusinessException("order must be paid before plan order creation");
         }
+    }
+
+    private LocalDateTime firstTime(LocalDateTime preferred, LocalDateTime fallback) {
+        return preferred == null ? fallback : preferred;
     }
 
     private PlanOrder getPlanOrderForAction(PlanOrderActionDTO planOrderActionDTO) {

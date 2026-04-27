@@ -39,6 +39,12 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     private static final String DOUYIN_DEFAULT_VOUCHER_PREPARE_PATH = "/goodlife/v1/fulfilment/certificate/prepare/";
     private static final String DOUYIN_DEFAULT_VOUCHER_VERIFY_PATH = "/goodlife/v1/fulfilment/certificate/verify/";
     private static final String DOUYIN_DEFAULT_VOUCHER_CANCEL_PATH = "/goodlife/v1/fulfilment/certificate/cancel/";
+    private static final String DOUYIN_DEFAULT_REFUND_APPLY_PATH = "/api/apps/trade/v2/refund/create_refund";
+    private static final String DOUYIN_DEFAULT_REFUND_QUERY_PATH = "/api/apps/trade/v2/refund/query_refund";
+    private static final String DOUYIN_DEFAULT_REFUND_LIST_PATH = "/api/apps/trade/v2/refund/refund_list";
+    private static final String DOUYIN_DEFAULT_REFUND_NOTIFY_PATH = "/scheduler/callback/douyin/refund";
+    private static final String DOUYIN_DEFAULT_REFUND_AUDIT_CALLBACK_PATH = "/scheduler/callback/douyin/refund-audit";
+    private static final String DOUYIN_DEFAULT_REFUND_AMOUNT_UNIT = "CENT";
     private static final String DOUYIN_DEFAULT_VERIFY_CODE_FIELD = "encrypted_codes";
 
     private final IntegrationProviderConfigMapper providerConfigMapper;
@@ -212,6 +218,10 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
                 normalizedParameters.get("error"),
                 extractText(payloadNode, "error_description", "error_msg", "errmsg", "message", "error"));
         String traceId = UUID.randomUUID().toString();
+        boolean authorizationCallback = StringUtils.hasText(authCode)
+                || StringUtils.hasText(accessToken)
+                || StringUtils.hasText(refreshToken)
+                || (StringUtils.hasText(callbackName) && callbackName.contains("授权"));
 
         IntegrationProviderConfig provider = providerConfigMapper.selectOne(Wrappers.<IntegrationProviderConfig>lambdaQuery()
                 .eq(IntegrationProviderConfig::getProviderCode, normalizedProviderCode)
@@ -238,7 +248,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             provider.setLastCallbackMessage(trimMessage(callbackMessage));
             provider.setLastCallbackAt(now);
             provider.setLastCallbackPayload(trimPayload(callbackPayload));
-            if (trustedCallback) {
+            if (trustedCallback && authorizationCallback) {
                 provider.setAuthCode(resolveSensitiveValue(authCode, provider.getAuthCode()));
                 provider.setAuthCodeStatus(StringUtils.hasText(authCode) ? "RECEIVED" : provider.getAuthCodeStatus());
                 provider.setAccessToken(resolveSensitiveValue(accessToken, provider.getAccessToken()));
@@ -268,7 +278,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             callbackConfig.setLastCallbackMessage(trimMessage(callbackMessage));
             callbackConfig.setLastCallbackAt(now);
             callbackConfig.setLastTraceId(traceId);
-            if (trustedCallback) {
+            if (trustedCallback && authorizationCallback) {
                 callbackConfig.setLastAuthCode(resolveSensitiveValue(authCode, callbackConfig.getLastAuthCode()));
             }
             callbackConfig.setUpdatedAt(now);
@@ -358,6 +368,21 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             working.setVoucherPreparePath(existing.getVoucherPreparePath());
             working.setVoucherVerifyPath(existing.getVoucherVerifyPath());
             working.setVoucherCancelPath(existing.getVoucherCancelPath());
+            working.setRefundApplyPath(existing.getRefundApplyPath());
+            working.setRefundQueryPath(existing.getRefundQueryPath());
+            working.setRefundListPath(existing.getRefundListPath());
+            working.setRefundNotifyPath(existing.getRefundNotifyPath());
+            working.setRefundAuditCallbackPath(existing.getRefundAuditCallbackPath());
+            working.setRefundOrderIdField(existing.getRefundOrderIdField());
+            working.setRefundAmountField(existing.getRefundAmountField());
+            working.setRefundReasonField(existing.getRefundReasonField());
+            working.setRefundOutOrderNoField(existing.getRefundOutOrderNoField());
+            working.setRefundOutRefundNoField(existing.getRefundOutRefundNoField());
+            working.setRefundExternalRefundIdField(existing.getRefundExternalRefundIdField());
+            working.setRefundItemOrderIdField(existing.getRefundItemOrderIdField());
+            working.setRefundNotifyUrlField(existing.getRefundNotifyUrlField());
+            working.setRefundAmountUnit(existing.getRefundAmountUnit());
+            working.setRefundStatusMapping(existing.getRefundStatusMapping());
             working.setClientKey(existing.getClientKey());
             working.setClientSecret(existing.getClientSecret());
             working.setRedirectUri(existing.getRedirectUri());
@@ -450,6 +475,52 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
                 source.getVoucherCancelPath(),
                 existing == null ? null : existing.getVoucherCancelPath(),
                 DOUYIN_DEFAULT_VOUCHER_CANCEL_PATH));
+        target.setRefundApplyPath(resolveDouyinPathConfig(
+                source.getRefundApplyPath(),
+                existing == null ? null : existing.getRefundApplyPath(),
+                DOUYIN_DEFAULT_REFUND_APPLY_PATH));
+        target.setRefundQueryPath(resolveDouyinPathConfig(
+                source.getRefundQueryPath(),
+                existing == null ? null : existing.getRefundQueryPath(),
+                DOUYIN_DEFAULT_REFUND_QUERY_PATH));
+        target.setRefundListPath(resolveDouyinPathConfig(
+                source.getRefundListPath(),
+                existing == null ? null : existing.getRefundListPath(),
+                DOUYIN_DEFAULT_REFUND_LIST_PATH));
+        target.setRefundNotifyPath(resolveDouyinPathConfig(
+                source.getRefundNotifyPath(),
+                existing == null ? null : existing.getRefundNotifyPath(),
+                DOUYIN_DEFAULT_REFUND_NOTIFY_PATH));
+        target.setRefundAuditCallbackPath(resolveDouyinPathConfig(
+                source.getRefundAuditCallbackPath(),
+                existing == null ? null : existing.getRefundAuditCallbackPath(),
+                DOUYIN_DEFAULT_REFUND_AUDIT_CALLBACK_PATH));
+        target.setRefundOrderIdField(resolveOptionalConfigValue(source.getRefundOrderIdField(),
+                existing == null ? null : existing.getRefundOrderIdField()));
+        target.setRefundAmountField(resolveOptionalConfigValue(source.getRefundAmountField(),
+                existing == null ? null : existing.getRefundAmountField()));
+        target.setRefundReasonField(resolveOptionalConfigValue(source.getRefundReasonField(),
+                existing == null ? null : existing.getRefundReasonField()));
+        target.setRefundOutOrderNoField(resolveOptionalConfigValue(
+                firstNonBlank(source.getRefundOutOrderNoField(), "out_order_no"),
+                existing == null ? null : existing.getRefundOutOrderNoField()));
+        target.setRefundOutRefundNoField(resolveOptionalConfigValue(
+                firstNonBlank(source.getRefundOutRefundNoField(), "out_refund_no"),
+                existing == null ? null : existing.getRefundOutRefundNoField()));
+        target.setRefundExternalRefundIdField(resolveOptionalConfigValue(
+                firstNonBlank(source.getRefundExternalRefundIdField(), "refund_id"),
+                existing == null ? null : existing.getRefundExternalRefundIdField()));
+        target.setRefundItemOrderIdField(resolveOptionalConfigValue(
+                firstNonBlank(source.getRefundItemOrderIdField(), "item_order_id"),
+                existing == null ? null : existing.getRefundItemOrderIdField()));
+        target.setRefundNotifyUrlField(resolveOptionalConfigValue(
+                firstNonBlank(source.getRefundNotifyUrlField(), "notify_url"),
+                existing == null ? null : existing.getRefundNotifyUrlField()));
+        target.setRefundAmountUnit(resolveOptionalConfigValue(
+                firstNonBlank(source.getRefundAmountUnit(), DOUYIN_DEFAULT_REFUND_AMOUNT_UNIT),
+                existing == null ? null : existing.getRefundAmountUnit()));
+        target.setRefundStatusMapping(resolveOptionalConfigValue(source.getRefundStatusMapping(),
+                existing == null ? null : existing.getRefundStatusMapping()));
         target.setClientKey(trimToNull(source.getClientKey()));
         target.setClientSecret(resolveSensitiveValue(source.getClientSecret(), existing == null ? null : existing.getClientSecret()));
         target.setRedirectUri(trimToNull(source.getRedirectUri()));

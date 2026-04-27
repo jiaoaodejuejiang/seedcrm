@@ -67,6 +67,7 @@ public class WorkbenchController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         List<OrderItemResponse> orders = workbenchService.listOrders(status, customerName, customerPhone).stream()
                 .filter(order -> orderPermissionGuard.canView(context, order.getId()))
+                .filter(order -> matchesStoreScope(context, order.getStoreName()))
                 .collect(Collectors.toList());
         return ApiResponse.success(orders);
     }
@@ -87,6 +88,16 @@ public class WorkbenchController {
                 .filter(planOrder -> planOrderPermissionGuard.canView(context, planOrder.getPlanOrderId()))
                 .collect(Collectors.toList());
         return ApiResponse.success(planOrders);
+    }
+
+    private boolean matchesStoreScope(PermissionRequestContext context, String rowStoreName) {
+        if (context == null || !"STORE".equalsIgnoreCase(context.getDataScope())) {
+            return true;
+        }
+        if (context.getCurrentStoreName() == null || context.getCurrentStoreName().isBlank()) {
+            return true;
+        }
+        return rowStoreName != null && context.getCurrentStoreName().trim().equalsIgnoreCase(rowStoreName.trim());
     }
 
     @GetMapping("/plan-orders/{planOrderId}")

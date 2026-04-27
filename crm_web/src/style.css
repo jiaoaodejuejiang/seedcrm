@@ -596,65 +596,6 @@ label > span {
   padding-bottom: 18px;
 }
 
-.workspace-board {
-  display: grid;
-  gap: 16px;
-}
-
-.workspace-board__group {
-  display: grid;
-  gap: 10px;
-}
-
-.workspace-board__header strong {
-  font-size: 13px;
-  color: #64748b;
-}
-
-.workspace-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-}
-
-.workspace-card {
-  border: 1px solid rgba(19, 33, 45, 0.08);
-  border-radius: 18px;
-  padding: 14px 16px;
-  background: #f8fafc;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  cursor: pointer;
-  color: #13212d;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background 0.18s ease;
-}
-
-.workspace-card strong {
-  flex: 1;
-  min-width: 0;
-  font-size: 15px;
-}
-
-.workspace-card span {
-  flex-shrink: 0;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(59, 130, 246, 0.1);
-  color: #1d4ed8;
-  font-size: 12px;
-}
-
-.workspace-card:hover,
-.workspace-card.is-active {
-  transform: translateY(-1px);
-  border-color: rgba(15, 107, 125, 0.26);
-  background: rgba(15, 107, 125, 0.08);
-  box-shadow: 0 12px 24px rgba(24, 40, 60, 0.08);
-}
-
 .inline-editor-shell {
   margin-bottom: 18px;
   padding: 18px;

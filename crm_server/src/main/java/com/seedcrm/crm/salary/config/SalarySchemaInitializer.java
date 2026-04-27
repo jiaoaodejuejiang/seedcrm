@@ -24,8 +24,11 @@ public class SalarySchemaInitializer {
         ensureTable("salary_detail", salaryDetailCreateSql(), salaryDetailColumns());
         ensureTable("salary_settlement", salarySettlementCreateSql(), salarySettlementColumns());
         ensureTable("withdraw_record", withdrawRecordCreateSql(), withdrawRecordColumns());
-        ensureIndex("salary_detail", "uk_salary_detail_plan_user_role",
-                "CREATE UNIQUE INDEX uk_salary_detail_plan_user_role ON salary_detail(plan_order_id, user_id, role_code)");
+        replaceLegacySalaryDetailUniqueIndex();
+        ensureIndex("salary_detail", "idx_salary_detail_plan_user_role",
+                "CREATE INDEX idx_salary_detail_plan_user_role ON salary_detail(plan_order_id, user_id, role_code)");
+        ensureIndex("salary_detail", "idx_salary_detail_refund_record",
+                "CREATE INDEX idx_salary_detail_refund_record ON salary_detail(refund_record_id)");
         ensureDefaultRule("CONSULTANT", "PERCENT", "0.0800");
         ensureDefaultRule("DOCTOR", "PERCENT", "0.1200");
         ensureDefaultRule("ASSISTANT", "PERCENT", "0.0500");
@@ -89,6 +92,20 @@ public class SalarySchemaInitializer {
         }
     }
 
+    private void replaceLegacySalaryDetailUniqueIndex() {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'salary_detail'
+                  AND INDEX_NAME = 'uk_salary_detail_plan_user_role'
+                """, Integer.class);
+        if (count != null && count > 0) {
+            jdbcTemplate.execute("DROP INDEX uk_salary_detail_plan_user_role ON salary_detail");
+            log.info("dropped legacy unique index uk_salary_detail_plan_user_role on salary_detail");
+        }
+    }
+
     private void ensureDefaultRule(String roleCode, String ruleType, String ruleValue) {
         Integer activeCount = jdbcTemplate.queryForObject("""
                 SELECT COUNT(1)
@@ -141,11 +158,15 @@ public class SalarySchemaInitializer {
                     order_amount DECIMAL(12,2) NOT NULL,
                     amount DECIMAL(12,2) NOT NULL,
                     settlement_id BIGINT,
+                    adjustment_type VARCHAR(32),
+                    refund_record_id BIGINT,
+                    source_salary_detail_id BIGINT,
                     settlement_time DATETIME,
                     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                     KEY idx_salary_detail_plan_order_id (plan_order_id),
                     KEY idx_salary_detail_user_id (user_id),
-                    KEY idx_salary_detail_settlement_id (settlement_id)
+                    KEY idx_salary_detail_settlement_id (settlement_id),
+                    KEY idx_salary_detail_refund_record (refund_record_id)
                 )
                 """;
     }
@@ -159,6 +180,9 @@ public class SalarySchemaInitializer {
         columns.put("order_amount", "order_amount DECIMAL(12,2) NOT NULL");
         columns.put("amount", "amount DECIMAL(12,2) NOT NULL");
         columns.put("settlement_id", "settlement_id BIGINT");
+        columns.put("adjustment_type", "adjustment_type VARCHAR(32)");
+        columns.put("refund_record_id", "refund_record_id BIGINT");
+        columns.put("source_salary_detail_id", "source_salary_detail_id BIGINT");
         columns.put("settlement_time", "settlement_time DATETIME");
         columns.put("create_time", "create_time DATETIME DEFAULT CURRENT_TIMESTAMP");
         return columns;

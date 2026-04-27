@@ -200,15 +200,7 @@ const routes = [
       },
       {
         path: 'private-domain/wecom',
-        name: 'private-domain-wecom',
-        component: PlatformWecomConfigView,
-        meta: {
-          title: '企业微信',
-          sectionTitle: '私域客服',
-          moduleCode: 'WECOM',
-          roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
-          navKey: 'private-domain-wecom'
-        }
+        redirect: '/settings/base/wecom'
       },
       {
         path: 'private-domain/live-code',
@@ -288,6 +280,7 @@ const routes = [
           title: '结算中心',
           sectionTitle: '财务管理 / 薪酬结算',
           moduleCode: 'SALARY',
+          roleCodes: ['ADMIN', 'FINANCE'],
           navKey: 'salary-settlements'
         }
       },
@@ -396,7 +389,7 @@ const routes = [
       },
       {
         path: 'platform/wecom',
-        redirect: '/private-domain/wecom'
+        redirect: '/settings/base/wecom'
       },
       {
         path: 'platform/douyin',
@@ -445,6 +438,18 @@ const routes = [
           moduleCode: 'SETTING',
           roleCodes: ['ADMIN'],
           navKey: 'settings-domain'
+        }
+      },
+      {
+        path: 'settings/base/wecom',
+        name: 'settings-wecom',
+        component: PlatformWecomConfigView,
+        meta: {
+          title: '企业微信',
+          sectionTitle: '系统设置 / 基础配置',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-wecom'
         }
       },
       {

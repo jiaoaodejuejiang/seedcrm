@@ -27,6 +27,7 @@ public class PermissionRequestContextResolver {
             context.setDataScope(normalize(authenticatedUser.getDataScope()));
             context.setCurrentUserId(authenticatedUser.getUserId());
             context.setCurrentStoreId(authenticatedUser.getStoreId());
+            context.setCurrentStoreName(authenticatedUser.getStoreName());
             context.setResourceStoreId(authenticatedUser.getStoreId());
             context.setBoundCustomerUserId(authenticatedUser.getBoundCustomerUserId());
             context.setTeamMemberIds(authenticatedUser.getTeamMemberIds() == null ? List.of() : authenticatedUser.getTeamMemberIds());
@@ -37,6 +38,7 @@ public class PermissionRequestContextResolver {
         context.setDataScope(normalize(stringHeader(request, "X-Data-Scope", "dataScope", null)));
         context.setCurrentUserId(longHeader(request, "X-User-Id", "userId"));
         context.setCurrentStoreId(longHeader(request, "X-Store-Id", "storeId"));
+        context.setCurrentStoreName(stringHeader(request, "X-Store-Name", "storeName", null));
         context.setResourceStoreId(longHeader(request, "X-Resource-Store-Id", "resourceStoreId"));
         context.setBoundCustomerUserId(longHeader(request, "X-Bound-Customer-User-Id", "boundCustomerUserId"));
         context.setTeamMemberIds(parseLongList(stringHeader(request, "X-Team-Member-Ids", "teamMemberIds", null)));

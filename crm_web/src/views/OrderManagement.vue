@@ -19,7 +19,6 @@
               @click="handleFilterChange(option.value)"
             >
               <span>{{ option.label }}</span>
-              <strong>{{ option.count }}</strong>
             </button>
           </div>
 
@@ -67,6 +66,11 @@
             <el-tag :type="workflowTagType(row)">{{ workflowLabel(row) }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="确认单" width="130">
+          <template #default="{ row }">
+            <el-tag :type="serviceConfirmationTagType(row)">{{ serviceConfirmationLabel(row) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="付款时间" min-width="170">
           <template #default="{ row }">
             {{ formatDateTime(row.createTime) }}
@@ -77,13 +81,13 @@
             {{ formatDateTime(row.appointmentTime) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" min-width="430" fixed="right">
+        <el-table-column label="操作" min-width="470" fixed="right">
           <template #default="{ row }">
             <div class="action-group action-group--wrap">
               <el-button type="primary" size="small" :disabled="!canOpenServiceForm(row)" @click="openServiceForm(row)">
                 {{ serviceButtonLabel(row) }}
               </el-button>
-              <el-button v-if="canRefundOrder(row)" type="danger" size="small" plain @click="handleRefund(row)">退款</el-button>
+              <el-button v-if="canRefundOrder(row)" type="danger" size="small" plain @click="handleRefund(row)">登记门店退款</el-button>
               <el-button size="small" plain @click="openWecomDialog(row)">企微活码</el-button>
               <el-button v-if="row.planOrderId && workflowStatus(row) === 'pending-service'" size="small" plain @click="openQrDialog(row)">
                 客户扫码签单
@@ -149,7 +153,7 @@
       </div>
     </el-dialog>
 
-    <el-dialog v-model="legacyServiceDialogVisible" title="查看服务单" width="520px">
+    <el-dialog v-model="legacyServiceDialogVisible" title="补录服务确认单" width="560px">
       <div class="legacy-service-empty">
         <el-empty description="该订单暂无服务确认单记录" />
         <div v-if="legacyServiceOrder" class="legacy-service-empty__summary">
@@ -158,10 +162,20 @@
           <span>核销金额：{{ formatMoney(resolveVerificationAmount(legacyServiceOrder)) }}</span>
           <span>确认单金额：{{ formatServiceConfirmAmount(legacyServiceOrder) }}</span>
         </div>
+        <el-alert
+          title="该入口用于历史数据补录，只保存服务确认单内容，不改变订单已完成状态。"
+          type="warning"
+          show-icon
+          :closable="false"
+        />
+        <div class="action-group action-group--center">
+          <el-button @click="legacyServiceDialogVisible = false">稍后处理</el-button>
+          <el-button type="primary" @click="handleBackfillLegacyServiceOrder">补录确认单</el-button>
+        </div>
       </div>
     </el-dialog>
 
-    <el-dialog v-model="refundDialogVisible" title="退款" width="520px">
+    <el-dialog v-model="refundDialogVisible" title="门店服务退款" width="600px">
       <div class="refund-dialog">
         <el-alert
           title="本次仅登记门店服务内容退款，不会发起微信、银行或原路资金退款。"
@@ -169,24 +183,39 @@
           show-icon
           :closable="false"
         />
+        <div class="refund-summary">
+          <span>客户：{{ refundForm.order?.customerName || refundForm.order?.customerPhone || '--' }}</span>
+          <span>门店：{{ refundForm.order?.storeName || '--' }}</span>
+          <span>确认单金额：{{ formatServiceConfirmAmount(refundForm.order) }}</span>
+          <span>影响范围：门店人员整体绩效</span>
+        </div>
         <el-form label-width="110px">
           <el-form-item label="退款金额">
             <el-input-number
               v-model="refundForm.serviceRefundAmount"
               :min="0"
+              :max="resolveServiceConfirmAmount(refundForm.order) || 999999999"
               :precision="2"
               controls-position="right"
               placeholder="请输入门店服务内容退款金额"
             />
           </el-form-item>
+          <el-form-item label="原因类型">
+            <el-select v-model="refundForm.reasonType" placeholder="请选择退款原因">
+              <el-option label="客户主动取消" value="CUSTOMER_CANCEL" />
+              <el-option label="服务无法履约" value="SERVICE_UNAVAILABLE" />
+              <el-option label="门店协商退款" value="STORE_NEGOTIATED" />
+              <el-option label="订单信息错误" value="ORDER_INFO_ERROR" />
+              <el-option label="其他" value="OTHER" />
+            </el-select>
+          </el-form-item>
           <el-form-item label="退款原因">
-            <el-input v-model="refundForm.reason" type="textarea" :rows="3" placeholder="请输入门店服务内容退款原因" />
+            <el-input v-model="refundForm.reason" type="textarea" :rows="3" placeholder="请填写退款原因，选择“其他”时必须填写详细说明" />
           </el-form-item>
           <el-form-item label="冲正处理">
             <div class="refund-dialog__checks">
-              <el-checkbox v-model="refundForm.reverseSalary">冲正门店人员绩效薪资</el-checkbox>
-              <el-checkbox v-model="refundForm.reverseDistributor">记录分销冲正待复核</el-checkbox>
-              <small>分销暂不自动冲正，仅在退款审计记录中标记，后续由结算/分销模块人工处理。</small>
+              <el-checkbox v-model="refundForm.reverseStorePerformance" disabled>冲正门店人员整体绩效薪资</el-checkbox>
+              <small>门店端仅登记服务确认单线下金额退款，不处理团购券/定金原路退款，也不冲正客服或分销绩效。</small>
             </div>
           </el-form-item>
           <el-form-item label="备注">
@@ -196,7 +225,7 @@
       </div>
       <template #footer>
         <el-button @click="refundDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="refundSubmitting" @click="submitRefund">确认退款</el-button>
+        <el-button type="danger" :loading="refundSubmitting" @click="submitRefund">确认登记退款</el-button>
       </template>
     </el-dialog>
   </div>
@@ -204,7 +233,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import QRCode from 'qrcode'
 import { useRouter } from 'vue-router'
 import { createPlanOrder } from '../api/actions'
@@ -241,15 +270,15 @@ const qrPreview = ref({
 const refundForm = reactive({
   order: null,
   serviceRefundAmount: null,
+  reasonType: '',
   reason: '',
-  reverseSalary: true,
-  reverseDistributor: false,
+  reverseStorePerformance: true,
   remark: ''
 })
 
 const storeServiceOrders = computed(() => orders.value.filter(isStoreServiceOrder))
 const filteredOrders = computed(() =>
-  storeServiceOrders.value.filter((item) => statusFilter.value === 'all' || workflowStatus(item) === statusFilter.value)
+  storeServiceOrders.value.filter(matchesStatusFilter)
 )
 const pagination = useTablePagination(filteredOrders)
 
@@ -259,12 +288,14 @@ const pendingVerificationCount = computed(
 const pendingServiceCount = computed(() => storeServiceOrders.value.filter((item) => workflowStatus(item) === 'pending-service').length)
 const servingCount = computed(() => storeServiceOrders.value.filter((item) => workflowStatus(item) === 'serving').length)
 const completedCount = computed(() => storeServiceOrders.value.filter((item) => workflowStatus(item) === 'completed').length)
+const backfillCount = computed(() => storeServiceOrders.value.filter(needsServiceBackfill).length)
 
 const workflowOptions = computed(() => [
   { value: 'all', label: '全部', count: storeServiceOrders.value.length },
   { value: 'pending-verification', label: '待核销', count: pendingVerificationCount.value },
   { value: 'pending-service', label: '待确认服务', count: pendingServiceCount.value },
   { value: 'serving', label: '服务中', count: servingCount.value },
+  { value: 'backfill', label: '待补确认单', count: backfillCount.value },
   { value: 'completed', label: '已完成', count: completedCount.value }
 ])
 
@@ -322,6 +353,16 @@ function workflowTagType(row) {
   )
 }
 
+function matchesStatusFilter(row) {
+  if (statusFilter.value === 'all') {
+    return true
+  }
+  if (statusFilter.value === 'backfill') {
+    return needsServiceBackfill(row)
+  }
+  return workflowStatus(row) === statusFilter.value
+}
+
 async function loadOrders() {
   loading.value = true
   try {
@@ -349,6 +390,7 @@ function ensureAvailableStatusFilter() {
     'pending-verification': pendingVerificationCount.value,
     'pending-service': pendingServiceCount.value,
     serving: servingCount.value,
+    backfill: backfillCount.value,
     completed: completedCount.value,
     all: storeServiceOrders.value.length
   }
@@ -356,7 +398,7 @@ function ensureAvailableStatusFilter() {
     return
   }
   statusFilter.value =
-    ['pending-verification', 'pending-service', 'serving', 'completed', 'all'].find((key) => counts[key] > 0) || 'all'
+    ['pending-verification', 'pending-service', 'serving', 'backfill', 'completed', 'all'].find((key) => counts[key] > 0) || 'all'
 }
 
 async function ensurePlanOrder(row) {
@@ -377,7 +419,7 @@ async function openServiceForm(row) {
     ElMessage.warning(serviceButtonLabel(row))
     return
   }
-  if (workflowStatus(row) === 'completed' && !row.planOrderId) {
+  if (needsServiceBackfill(row)) {
     legacyServiceOrder.value = row
     legacyServiceDialogVisible.value = true
     return
@@ -393,6 +435,38 @@ async function openServiceForm(row) {
     return
   }
   await router.push(`/plan-orders/${planOrderId}`)
+}
+
+async function handleBackfillLegacyServiceOrder() {
+  const row = legacyServiceOrder.value
+  if (!row?.id) {
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      '将为该历史已完成订单补建服务确认单。此操作只用于补录确认单内容，不改变订单状态，是否继续？',
+      '补录确认单',
+      {
+        confirmButtonText: '继续补录',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+  legacyServiceDialogVisible.value = false
+  try {
+    const planOrderId = row.planOrderId || (await ensurePlanOrder(row))
+    await router.push({
+      path: `/plan-orders/${planOrderId}`,
+      query: {
+        mode: 'backfill'
+      }
+    })
+  } catch (error) {
+    ElMessage.error(error?.message || '补录确认单失败，请稍后重试')
+  }
 }
 
 async function openQrDialog(row) {
@@ -427,6 +501,9 @@ function serviceButtonLabel(row) {
   if (!canOpenServiceForm(row)) {
     return isAwaitingPayment(row) ? '待付款' : '暂不可用'
   }
+  if (needsServiceBackfill(row)) {
+    return '补录确认单'
+  }
   const currentWorkflow = workflowStatus(row)
   if (currentWorkflow === 'pending-verification') {
     return '核销订单'
@@ -440,8 +517,34 @@ function serviceButtonLabel(row) {
   return '查看服务单'
 }
 
+function serviceConfirmationLabel(row) {
+  if (needsServiceBackfill(row)) {
+    return '待补确认单'
+  }
+  if (row.serviceDetailJson) {
+    return '已生成'
+  }
+  if (row.planOrderId) {
+    return '待填写'
+  }
+  return '待生成'
+}
+
+function serviceConfirmationTagType(row) {
+  if (needsServiceBackfill(row)) {
+    return 'warning'
+  }
+  if (row.serviceDetailJson) {
+    return 'success'
+  }
+  if (row.planOrderId) {
+    return 'primary'
+  }
+  return 'info'
+}
+
 function canRefundOrder(row) {
-  return ['COMPLETED', 'FINISHED', 'USED'].includes(normalize(row?.status))
+  return ['COMPLETED', 'FINISHED', 'USED'].includes(normalize(row?.status)) && Number(resolveServiceConfirmAmount(row) || 0) > 0
 }
 
 function canOpenServiceForm(row) {
@@ -450,7 +553,13 @@ function canOpenServiceForm(row) {
 
 function canCreatePlanOrder(row) {
   const normalizedStatus = normalize(row?.status)
-  return ['PAID', 'PAID_DEPOSIT', 'APPOINTMENT', 'ARRIVED', 'SERVING', 'SERVICING'].includes(normalizedStatus)
+  return ['PAID', 'PAID_DEPOSIT', 'APPOINTMENT', 'ARRIVED', 'SERVING', 'SERVICING', 'COMPLETED', 'FINISHED', 'USED'].includes(
+    normalizedStatus
+  )
+}
+
+function needsServiceBackfill(row) {
+  return workflowStatus(row) === 'completed' && (!row.planOrderId || !row.serviceDetailJson)
 }
 
 function isAwaitingPayment(row) {
@@ -461,9 +570,9 @@ function handleRefund(row) {
   Object.assign(refundForm, {
     order: row,
     serviceRefundAmount: resolveServiceConfirmAmount(row),
+    reasonType: '',
     reason: '',
-    reverseSalary: true,
-    reverseDistributor: false,
+    reverseStorePerformance: true,
     remark: ''
   })
   refundDialogVisible.value = true
@@ -477,6 +586,10 @@ async function submitRefund() {
     ElMessage.warning('请填写本次门店服务内容退款金额')
     return
   }
+  if (!refundForm.reasonType) {
+    ElMessage.warning('请选择退款原因类型')
+    return
+  }
   if (!String(refundForm.reason || '').trim()) {
     ElMessage.warning('请填写退款原因')
     return
@@ -485,9 +598,17 @@ async function submitRefund() {
   try {
     await refundOrder({
       orderId: refundForm.order.id,
+      refundScene: 'STORE_SERVICE',
       serviceRefundAmount: refundForm.serviceRefundAmount,
-      reverseSalary: refundForm.reverseSalary,
-      reverseDistributor: refundForm.reverseDistributor,
+      idempotencyKey: buildStoreRefundIdempotencyKey(),
+      outOrderNo: refundForm.order.orderNo,
+      itemOrderId: refundForm.order.verificationCode,
+      refundReasonType: refundForm.reasonType,
+      refundReason: refundForm.reason,
+      reverseSalary: true,
+      reverseStorePerformance: refundForm.reverseStorePerformance,
+      reverseCustomerService: false,
+      reverseDistributor: false,
       remark: buildRefundRemark()
     })
     refundDialogVisible.value = false
@@ -499,15 +620,34 @@ async function submitRefund() {
 }
 
 function buildRefundRemark() {
-  const parts = [`门店服务内容退款：${refundForm.reason}`]
+  const parts = [`门店服务内容退款：${refundReasonTypeLabel(refundForm.reasonType)} / ${refundForm.reason}`]
   if (refundForm.remark) {
     parts.push(`备注：${refundForm.remark}`)
   }
-  parts.push(refundForm.reverseSalary ? '冲正门店人员绩效薪资' : '不冲正薪酬')
-  if (refundForm.reverseDistributor) {
-    parts.push('分销冲正待复核')
-  }
+  parts.push('仅冲正门店人员整体绩效薪资')
   return parts.join('；')
+}
+
+function buildStoreRefundIdempotencyKey() {
+  return [
+    'STORE_REFUND',
+    refundForm.order?.id || '',
+    Number(refundForm.serviceRefundAmount || 0).toFixed(2),
+    refundForm.reasonType || '',
+    String(refundForm.reason || '').trim()
+  ].join(':')
+}
+
+function refundReasonTypeLabel(value) {
+  return (
+    {
+      CUSTOMER_CANCEL: '客户主动取消',
+      SERVICE_UNAVAILABLE: '服务无法履约',
+      STORE_NEGOTIATED: '门店协商退款',
+      ORDER_INFO_ERROR: '订单信息错误',
+      OTHER: '其他'
+    }[value] || '未选择'
+  )
 }
 
 function parseServiceDetail(row) {
@@ -607,10 +747,6 @@ onMounted(loadOrders)
   transition: border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.status-chip strong {
-  color: #0f172a;
-}
-
 .status-chip.is-active {
   color: #14532d;
   border-color: rgba(22, 163, 74, 0.24);
@@ -652,6 +788,18 @@ onMounted(loadOrders)
   border-radius: 16px;
   background: #f8fafc;
   color: #475569;
+}
+
+.refund-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f8fbff;
+  border: 1px solid #e5edf4;
+  color: #334155;
+  font-size: 13px;
 }
 
 .refund-dialog__checks {
@@ -702,5 +850,8 @@ onMounted(loadOrders)
     flex-direction: column;
   }
 
+  .refund-summary {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

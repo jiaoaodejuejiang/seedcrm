@@ -15,6 +15,8 @@ public class PermissionRequestContext {
 
     private Long currentStoreId;
 
+    private String currentStoreName;
+
     private Long resourceStoreId;
 
     private Long boundCustomerUserId;

@@ -186,53 +186,123 @@
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane label="单据记录" name="records">
-          <el-tabs v-model="historyTab" class="platform-tabs inner-tabs">
-            <el-tab-pane label="结算单" name="settlements">
-              <el-table :data="settlementPagination.rows" stripe>
-                <el-table-column label="结算单号" width="120" prop="id" />
-                <el-table-column label="金额" min-width="140">
-                  <template #default="{ row }">
-                    {{ formatMoney(row.totalAmount) }}
-                  </template>
-                </el-table-column>
-                <el-table-column label="状态" width="120">
-                  <template #default="{ row }">
-                    <el-tag :type="statusTagType(row.status)">{{ formatOrderStatus(row.status) }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="创建时间" min-width="170">
-                  <template #default="{ row }">
-                    {{ formatDateTime(row.createTime) }}
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-tab-pane>
+        <el-tab-pane label="退款冲正" name="refunds">
+          <div class="settlement-refund-head">
+            <el-alert
+              title="这里处理已核销团购券/定金退款对薪酬的冲正；门店线下确认单金额退款仍在门店订单列表登记。"
+              type="warning"
+              show-icon
+              :closable="false"
+            />
+            <el-button :loading="refundOrdersLoading" @click="loadRefundableOrders">刷新订单</el-button>
+          </div>
 
-            <el-tab-pane :label="withdrawTabLabel" name="withdraws">
-              <el-table :data="withdrawPagination.rows" stripe>
-                <el-table-column label="单号" width="120" prop="id" />
-                <el-table-column label="金额" min-width="140">
-                  <template #default="{ row }">
-                    {{ formatMoney(row.amount) }}
-                  </template>
-                </el-table-column>
-                <el-table-column label="状态" width="120">
-                  <template #default="{ row }">
-                    <el-tag :type="statusTagType(row.status)">{{ formatOrderStatus(row.status) }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="创建时间" min-width="170">
-                  <template #default="{ row }">
-                    {{ formatDateTime(row.createTime) }}
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-tab-pane>
-          </el-tabs>
+          <el-table v-loading="refundOrdersLoading" :data="refundOrderPagination.rows" stripe>
+            <el-table-column label="手机号" min-width="140" prop="customerPhone" />
+            <el-table-column label="姓名" min-width="120">
+              <template #default="{ row }">
+                {{ row.customerName || '--' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="门店" min-width="130" prop="storeName" />
+            <el-table-column label="核销金额" width="120">
+              <template #default="{ row }">
+                {{ formatMoney(resolveVerificationAmount(row)) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="确认单金额" width="130">
+              <template #default="{ row }">
+                {{ formatServiceConfirmAmount(row) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="订单状态" width="120">
+              <template #default="{ row }">
+                <el-tag :type="statusTagType(row.status)">{{ formatOrderStatus(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="核销状态" width="110">
+              <template #default="{ row }">
+                {{ formatVerificationStatus(row.verificationStatus) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="核销时间" min-width="170">
+              <template #default="{ row }">
+                {{ formatDateTime(row.verificationTime) || '--' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="160" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" type="danger" plain @click="openFinanceRefund(row)">登记团购/定金退款冲正</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <div class="table-pagination">
+            <el-pagination
+              background
+              layout="total, sizes, prev, pager, next"
+              :total="refundOrderPagination.total"
+              :current-page="refundOrderPagination.currentPage"
+              :page-size="refundOrderPagination.pageSize"
+              :page-sizes="refundOrderPagination.pageSizes"
+              @size-change="refundOrderPagination.handleSizeChange"
+              @current-change="refundOrderPagination.handleCurrentChange"
+            />
+          </div>
         </el-tab-pane>
       </el-tabs>
     </section>
+
+    <el-dialog v-model="financeRefundDialogVisible" title="团购/定金退款冲正" width="620px">
+      <div class="refund-dialog">
+        <el-alert
+          title="本入口登记已核销金额退款，并同步冲正客服与分销绩效；真实抖音/支付退款由三方接口配置后对接。"
+          type="warning"
+          show-icon
+          :closable="false"
+        />
+        <div class="refund-summary">
+          <span>客户：{{ financeRefundForm.order?.customerName || financeRefundForm.order?.customerPhone || '--' }}</span>
+          <span>门店：{{ financeRefundForm.order?.storeName || '--' }}</span>
+          <span>可退核销金额：{{ formatMoney(resolveVerificationAmount(financeRefundForm.order)) }}</span>
+          <span>影响范围：客服绩效、分销绩效</span>
+        </div>
+        <el-form label-width="120px">
+          <el-form-item label="退款对象">
+            <span>
+              {{ financeRefundForm.order?.customerName || financeRefundForm.order?.customerPhone || '--' }}
+              / {{ financeRefundForm.order?.storeName || '--' }}
+            </span>
+          </el-form-item>
+          <el-form-item label="退款金额">
+            <el-input-number v-model="financeRefundForm.refundAmount" :min="0" :precision="2" controls-position="right" />
+          </el-form-item>
+          <el-form-item label="原因类型">
+            <el-select v-model="financeRefundForm.reasonType" placeholder="请选择退款原因">
+              <el-option label="订单退款关联扣减" value="ORDER_REFUND_REVERSE" />
+              <el-option label="团购券退款" value="COUPON_REFUND" />
+              <el-option label="定金退款" value="DEPOSIT_REFUND" />
+              <el-option label="结算金额异常" value="SETTLEMENT_ERROR" />
+              <el-option label="其他" value="OTHER" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="退款原因">
+            <el-input v-model="financeRefundForm.reason" type="textarea" :rows="3" placeholder="请填写退款原因" />
+          </el-form-item>
+          <el-form-item label="影响范围">
+            <div class="refund-dialog__checks">
+              <el-checkbox v-model="financeRefundForm.reverseCustomerService" disabled>冲正客服绩效薪资</el-checkbox>
+              <el-checkbox v-model="financeRefundForm.reverseDistributor" disabled>冲正分销绩效薪资</el-checkbox>
+              <small>门店线下确认单金额退款请回到【门店服务-订单列表】处理。</small>
+            </div>
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <el-button @click="financeRefundDialogVisible = false">取消</el-button>
+        <el-button type="danger" :loading="financeRefundSubmitting" @click="submitFinanceRefund">确认登记冲正</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -251,7 +321,8 @@ import {
   fetchSalaryWithdraws,
   paySalarySettlement
 } from '../api/salary'
-import { fetchStaffOptions } from '../api/workbench'
+import { refundOrder } from '../api/order'
+import { fetchOrders, fetchStaffOptions } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
 import { currentUser } from '../utils/auth'
 import { loadSystemConsoleState } from '../utils/systemConsoleStore'
@@ -261,6 +332,7 @@ import {
   formatOrderStatus,
   formatRoleCode,
   formatSettlementMode,
+  formatVerificationStatus,
   normalize,
   statusTagType,
   toDateTimeString
@@ -274,14 +346,26 @@ const balance = ref(null)
 const withdrawable = ref(0)
 const settlements = ref([])
 const withdraws = ref([])
+const refundableOrders = ref([])
 const activeTab = ref('settlement')
-const historyTab = ref('settlements')
+const refundOrdersLoading = ref(false)
+const financeRefundDialogVisible = ref(false)
+const financeRefundSubmitting = ref(false)
 
 const settlementPagination = useTablePagination(settlements)
 const withdrawPagination = useTablePagination(withdraws)
+const refundOrderPagination = useTablePagination(refundableOrders)
 
 const settlementForm = reactive({ range: [] })
 const withdrawForm = reactive({ amount: 0 })
+const financeRefundForm = reactive({
+  order: null,
+  refundAmount: null,
+  reasonType: '',
+  reason: '',
+  reverseCustomerService: true,
+  reverseDistributor: true
+})
 
 const canChooseUser = computed(() => ['ADMIN', 'FINANCE'].includes(String(currentUser.value?.roleCode || '').toUpperCase()))
 const staffMembers = computed(() =>
@@ -393,6 +477,19 @@ async function loadSalaryData() {
   }
 }
 
+async function loadRefundableOrders() {
+  refundOrdersLoading.value = true
+  try {
+    const rows = await fetchOrders()
+    refundableOrders.value = (rows || []).filter(isFinanceRefundableOrder)
+    refundOrderPagination.reset()
+  } catch {
+    refundableOrders.value = []
+  } finally {
+    refundOrdersLoading.value = false
+  }
+}
+
 async function handleCreateSettlement() {
   await createSalarySettlement({
     userId: selectedUserId.value,
@@ -450,9 +547,136 @@ async function handleAutoWithdraw() {
   await loadSalaryData()
 }
 
+function isFinanceRefundableOrder(row) {
+  return normalize(row?.verificationStatus || 'UNVERIFIED') === 'VERIFIED'
+    && ['PAID_DEPOSIT', 'APPOINTMENT', 'ARRIVED', 'SERVING', 'COMPLETED', 'FINISHED', 'USED'].includes(normalize(row?.status || ''))
+}
+
+function openFinanceRefund(row) {
+  Object.assign(financeRefundForm, {
+    order: row,
+    refundAmount: resolveVerificationAmount(row),
+    reasonType: '',
+    reason: '',
+    reverseCustomerService: true,
+    reverseDistributor: true
+  })
+  financeRefundDialogVisible.value = true
+}
+
+async function submitFinanceRefund() {
+  if (!financeRefundForm.order?.id) {
+    return
+  }
+  if (Number(financeRefundForm.refundAmount || 0) <= 0) {
+    ElMessage.warning('请填写团购券/定金退款金额')
+    return
+  }
+  if (!financeRefundForm.reasonType) {
+    ElMessage.warning('请选择退款原因类型')
+    return
+  }
+  if (!String(financeRefundForm.reason || '').trim()) {
+    ElMessage.warning('请填写退款原因')
+    return
+  }
+  financeRefundSubmitting.value = true
+  try {
+    await refundOrder({
+      orderId: financeRefundForm.order.id,
+      refundScene: 'FINANCE_VERIFIED_PAYMENT',
+      refundAmount: financeRefundForm.refundAmount,
+      idempotencyKey: buildFinanceRefundIdempotencyKey(),
+      outOrderNo: financeRefundForm.order.orderNo,
+      itemOrderId: financeRefundForm.order.verificationCode,
+      refundReasonType: financeRefundForm.reasonType,
+      refundReason: financeRefundForm.reason,
+      reverseCustomerService: financeRefundForm.reverseCustomerService,
+      reverseDistributor: financeRefundForm.reverseDistributor,
+      reverseSalary: false,
+      reverseStorePerformance: false,
+      remark: buildFinanceRefundRemark()
+    })
+    financeRefundDialogVisible.value = false
+    ElMessage.success('已登记团购/定金退款冲正')
+    await Promise.all([loadSalaryData(), loadRefundableOrders()])
+  } finally {
+    financeRefundSubmitting.value = false
+  }
+}
+
+function buildFinanceRefundRemark() {
+  return [
+    `财务已核销金额退款：${financeRefundReasonTypeLabel(financeRefundForm.reasonType)} / ${financeRefundForm.reason}`,
+    '冲正客服绩效薪资',
+    '冲正分销绩效薪资'
+  ].join('；')
+}
+
+function buildFinanceRefundIdempotencyKey() {
+  return [
+    'FINANCE_REFUND',
+    financeRefundForm.order?.id || '',
+    Number(financeRefundForm.refundAmount || 0).toFixed(2),
+    financeRefundForm.reasonType || '',
+    String(financeRefundForm.reason || '').trim()
+  ].join(':')
+}
+
+function financeRefundReasonTypeLabel(value) {
+  return (
+    {
+      ORDER_REFUND_REVERSE: '订单退款关联扣减',
+      COUPON_REFUND: '团购券退款',
+      DEPOSIT_REFUND: '定金退款',
+      SETTLEMENT_ERROR: '结算金额异常',
+      OTHER: '其他'
+    }[value] || '未选择'
+  )
+}
+
+function parseServiceDetail(row) {
+  if (!row?.serviceDetailJson) {
+    return null
+  }
+  try {
+    return JSON.parse(row.serviceDetailJson)
+  } catch {
+    return null
+  }
+}
+
+function toAmount(value) {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+  const amount = Number(value)
+  return Number.isFinite(amount) ? amount : null
+}
+
+function resolveVerificationAmount(row) {
+  const deposit = toAmount(row?.deposit)
+  if (deposit && deposit > 0) {
+    return deposit
+  }
+  return toAmount(row?.amount) || 0
+}
+
+function resolveServiceConfirmAmount(row) {
+  const parsed = parseServiceDetail(row)
+  const amount = toAmount(parsed?.serviceConfirmAmount)
+  return amount && amount > 0 ? amount : null
+}
+
+function formatServiceConfirmAmount(row) {
+  const amount = resolveServiceConfirmAmount(row)
+  return amount ? formatMoney(amount) : '待填写'
+}
+
 onMounted(async () => {
   await initSelection()
   await loadSalaryData()
+  await loadRefundableOrders()
 })
 </script>
 
@@ -492,12 +716,45 @@ onMounted(async () => {
   font-size: 12px;
 }
 
-.inner-tabs :deep(.el-tabs__header) {
+.settlement-refund-head,
+.refund-dialog {
+  display: grid;
+  gap: 14px;
   margin-bottom: 16px;
+}
+
+.refund-dialog {
+  margin-bottom: 0;
+}
+
+.refund-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f8fbff;
+  border: 1px solid #e5edf4;
+  color: #334155;
+  font-size: 13px;
+}
+
+.refund-dialog__checks {
+  display: grid;
+  gap: 6px;
+}
+
+.refund-dialog__checks small {
+  color: #94a3b8;
+  line-height: 1.6;
 }
 
 @media (max-width: 900px) {
   .rule-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .refund-summary {
     grid-template-columns: 1fr;
   }
 }

@@ -91,43 +91,44 @@
           </el-button>
         </el-form>
 
-        <div class="login-safe-note">
-          <span>权限生效</span>
-          <span>数据隔离</span>
-          <span>演示密码 123456</span>
-        </div>
-      </div>
+        <div class="login-support">
+          <div class="login-safe-note">
+            <span>权限生效</span>
+            <span>数据隔离</span>
+            <span>演示密码 123456</span>
+          </div>
 
-      <div class="login-panel__card login-panel__card--soft">
-        <div class="login-panel__header">
-          <h3>{{ loginMode === 'store' ? '门店快捷账号' : '总部快捷账号' }}</h3>
-          <p v-if="loginMode === 'store' && !selectedStoreName">请先选择门店，再查看门店账号</p>
-          <p v-else>点击账号卡片即可填充登录信息。</p>
-        </div>
+          <div class="login-quick-access">
+            <div class="login-quick-access__head">
+              <h3>{{ loginMode === 'store' ? '门店快捷账号' : '总部快捷账号' }}</h3>
+              <p v-if="loginMode === 'store' && !selectedStoreName">请先选择门店</p>
+              <p v-else>点击卡片快速填充</p>
+            </div>
 
-        <el-empty
-          v-if="loginMode === 'store' && selectedStoreName && !visibleAccounts.length"
-          description="当前门店暂无可登录账号"
-        />
+            <el-empty
+              v-if="loginMode === 'store' && selectedStoreName && !visibleAccounts.length"
+              description="当前门店暂无可登录账号"
+            />
 
-        <div v-else-if="loginMode === 'store' && !selectedStoreName" class="login-empty-tip">请选择门店后登录</div>
+            <div v-else-if="loginMode === 'store' && !selectedStoreName" class="login-empty-tip">请选择门店后登录</div>
 
-        <div v-else class="login-demo-grid">
-          <button
-            v-for="account in visibleAccounts"
-            :key="account.username"
-            type="button"
-            class="demo-account"
-            :class="{ 'is-active': form.username === account.username }"
-            @click="pickAccount(account)"
-          >
-            <span class="demo-account__avatar">{{ account.title?.slice(0, 1) || '账' }}</span>
-            <span class="demo-account__body">
-              <strong>{{ account.title }}</strong>
-              <small>{{ account.storeName || account.username }}</small>
-            </span>
-            <span class="demo-account__name">{{ account.username }}</span>
-          </button>
+            <div v-else class="login-demo-grid">
+              <button
+                v-for="account in visibleAccounts"
+                :key="account.username"
+                type="button"
+                class="demo-account"
+                :class="{ 'is-active': form.username === account.username }"
+                @click="pickAccount(account)"
+              >
+                <span class="demo-account__avatar">{{ account.title?.slice(0, 1) || '账' }}</span>
+                <span class="demo-account__body">
+                  <strong>{{ account.title }}</strong>
+                  <small>{{ account.username }}<template v-if="account.storeName"> · {{ account.storeName }}</template></small>
+                </span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </section>

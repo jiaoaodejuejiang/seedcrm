@@ -59,11 +59,36 @@ public final class AuthAccessCatalog {
     private AuthAccessCatalog() {
     }
 
+    public static List<MenuSeed> menuSeeds() {
+        return MENU_SEEDS;
+    }
+
+    public static List<RoleSeed> roleSeeds() {
+        return List.of(
+                new RoleSeed("ADMIN", "管理员", "ALL", "SYSTEM", 10),
+                new RoleSeed("CLUE_MANAGER", "客资主管", "ALL", "BUSINESS", 20),
+                new RoleSeed("ONLINE_CUSTOMER_SERVICE", "在线客服", "TEAM", "BUSINESS", 30),
+                new RoleSeed("STORE_SERVICE", "门店服务", "STORE", "STORE", 40),
+                new RoleSeed("STORE_MANAGER", "店长", "STORE", "STORE", 50),
+                new RoleSeed("PHOTOGRAPHER", "摄影", "STORE", "STORE", 60),
+                new RoleSeed("MAKEUP_ARTIST", "化妆师", "STORE", "STORE", 70),
+                new RoleSeed("PHOTO_SELECTOR", "选片负责人", "STORE", "STORE", 80),
+                new RoleSeed("FINANCE", "财务", "ALL", "FINANCE", 90),
+                new RoleSeed("PRIVATE_DOMAIN_SERVICE", "私域客服", "SELF", "BUSINESS", 100)
+        );
+    }
+
     public static AuthenticatedUser enrich(AuthenticatedUser user) {
         if (user == null) {
             return null;
         }
-        List<MenuSeed> visibleMenus = visibleMenus(user.getRoleCode());
+        return enrich(user, visibleMenus(user.getRoleCode()));
+    }
+
+    public static AuthenticatedUser enrich(AuthenticatedUser user, List<MenuSeed> visibleMenus) {
+        if (user == null) {
+            return null;
+        }
         Set<String> modules = new LinkedHashSet<>();
         if (user.getAllowedModules() != null) {
             modules.addAll(user.getAllowedModules());
@@ -163,12 +188,19 @@ public final class AuthAccessCatalog {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 
-    private record MenuSeed(int sortOrder,
-                            String menuGroup,
-                            String menuName,
-                            String routePath,
-                            String moduleCode,
-                            String permissionCode,
-                            Set<String> roleCodes) {
+    public record RoleSeed(String roleCode,
+                           String roleName,
+                           String dataScope,
+                           String roleType,
+                           int sortOrder) {
+    }
+
+    public record MenuSeed(int sortOrder,
+                           String menuGroup,
+                           String menuName,
+                           String routePath,
+                           String moduleCode,
+                           String permissionCode,
+                           Set<String> roleCodes) {
     }
 }

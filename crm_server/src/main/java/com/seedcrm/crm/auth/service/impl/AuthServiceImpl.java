@@ -4,6 +4,7 @@ import com.seedcrm.crm.auth.dto.AuthStoreOptionResponse;
 import com.seedcrm.crm.auth.model.AuthenticatedUser;
 import com.seedcrm.crm.auth.service.AuthService;
 import com.seedcrm.crm.auth.support.AuthAccessCatalog;
+import com.seedcrm.crm.auth.support.AuthAccessProvider;
 import com.seedcrm.crm.common.exception.BusinessException;
 import java.util.Comparator;
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -60,6 +62,16 @@ public class AuthServiceImpl implements AuthService {
                     List.of(1101L), 1101L, List.of("WECOM", "SALARY"))));
 
     private final Map<String, AuthenticatedUser> sessions = new ConcurrentHashMap<>();
+    private final AuthAccessProvider authAccessProvider;
+
+    public AuthServiceImpl() {
+        this(null);
+    }
+
+    @Autowired
+    public AuthServiceImpl(AuthAccessProvider authAccessProvider) {
+        this.authAccessProvider = authAccessProvider;
+    }
 
     @Override
     public String login(String username, String password, Long storeId, String storeName) {
@@ -76,7 +88,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         String token = UUID.randomUUID().toString().replace("-", "");
-        sessions.put(token, AuthAccessCatalog.enrich(sessionUser));
+        sessions.put(token, enrichAccess(sessionUser));
         return token;
     }
 
@@ -116,7 +128,7 @@ public class AuthServiceImpl implements AuthService {
             return Optional.empty();
         }
         AuthenticatedUser user = sessions.get(token.trim());
-        return user == null ? Optional.empty() : Optional.of(AuthAccessCatalog.enrich(copy(user)));
+        return user == null ? Optional.empty() : Optional.of(enrichAccess(copy(user)));
     }
 
     @Override
@@ -182,6 +194,10 @@ public class AuthServiceImpl implements AuthService {
         target.setPermissions(source.getPermissions() == null ? List.of() : List.copyOf(source.getPermissions()));
         target.setDefaultRoute(source.getDefaultRoute());
         return target;
+    }
+
+    private AuthenticatedUser enrichAccess(AuthenticatedUser user) {
+        return authAccessProvider == null ? AuthAccessCatalog.enrich(user) : authAccessProvider.enrich(user);
     }
 
     private record DemoAccount(String username, String password, AuthenticatedUser user) {

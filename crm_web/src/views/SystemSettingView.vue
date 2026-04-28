@@ -1019,6 +1019,7 @@ import {
   testIntegrationProvider,
   triggerSchedulerJob
 } from '../api/scheduler'
+import { fetchSystemAccessSnapshot, saveSystemAccessMenu } from '../api/systemAccess'
 import { useTablePagination } from '../composables/useTablePagination'
 import {
   formatAuthStatus,
@@ -1120,7 +1121,11 @@ function createMenuForm() {
     menuName: '',
     routePath: '',
     roleCodes: [],
-    moduleCode: 'SYSTEM'
+    moduleCode: 'SYSTEM',
+    permissionCode: '',
+    componentKey: '',
+    isEnabled: 1,
+    sortOrder: null
   }
 }
 
@@ -1224,6 +1229,56 @@ function replaceState(nextState) {
   Object.assign(state, loadSystemConsoleState())
 }
 
+function applyAccessSnapshot(snapshot) {
+  if (!snapshot) {
+    return
+  }
+  replaceState({
+    ...state,
+    menuConfigs: (snapshot.menus || []).map(normalizeAccessMenu),
+    roles: (snapshot.roles || []).map(normalizeAccessRole)
+  })
+  menuPagination.reset()
+}
+
+function normalizeAccessMenu(item) {
+  return {
+    id: item.id,
+    menuGroup: item.menuGroup || '',
+    menuName: item.menuName || '',
+    routePath: item.routePath || '',
+    roleCodes: item.roleCodes || [],
+    moduleCode: item.moduleCode || 'SYSTEM',
+    permissionCode: item.permissionCode || '',
+    componentKey: item.componentKey || '',
+    isEnabled: item.isEnabled ?? 1,
+    sortOrder: item.sortOrder ?? Number(item.id || 0)
+  }
+}
+
+function normalizeAccessRole(item) {
+  return {
+    id: item.id,
+    roleCode: item.roleCode || '',
+    roleName: item.roleName || '',
+    dataScope: item.dataScope || 'SELF',
+    roleType: item.roleType || 'BUSINESS',
+    moduleCodes: item.moduleCodes || [],
+    menuRoutes: item.menuRoutes || [],
+    permissionCodes: item.permissionCodes || [],
+    isEnabled: item.isEnabled ?? 1,
+    sort: item.sortOrder ?? Number(item.id || 0)
+  }
+}
+
+async function loadSystemAccessConfig() {
+  try {
+    applyAccessSnapshot(await fetchSystemAccessSnapshot())
+  } catch {
+    // 请求层已经提示错误；保留本地缓存，避免配置页空白。
+  }
+}
+
 function resetMenuForm() {
   Object.assign(menuForm, createMenuForm())
   menuGroupMode.value = 'existing'
@@ -1308,28 +1363,27 @@ function menuRowClassName({ row }) {
   return settingEditorMode.value === 'menu' && menuForm.id === row.id ? 'is-editing-row' : ''
 }
 
-function saveMenu() {
+async function saveMenu() {
   const resolvedMenuGroup = menuGroupMode.value === 'new' ? newMenuGroupName.value.trim() : String(menuForm.menuGroup || '').trim()
   if (!resolvedMenuGroup || !menuForm.menuName || !menuForm.routePath) {
     ElMessage.warning('请先完整填写菜单信息')
     return
   }
   menuForm.menuGroup = resolvedMenuGroup
-  const nextItems = [...state.menuConfigs]
-  if (menuForm.id) {
-    const index = nextItems.findIndex((item) => item.id === menuForm.id)
-    nextItems[index] = { ...nextItems[index], ...menuForm }
-  } else {
-    nextItems.push({
+  try {
+    await saveSystemAccessMenu({
       ...menuForm,
-      id: nextSystemId(nextItems),
-      isEnabled: 1
+      menuGroup: resolvedMenuGroup,
+      isEnabled: menuForm.isEnabled ?? 1,
+      sortOrder: menuForm.sortOrder
     })
+    await loadSystemAccessConfig()
+    ElMessage.success('菜单配置已保存，重新登录后按后端授权生效')
+    resetMenuForm()
+    closeSettingEditor('menu')
+  } catch {
+    // HTTP 层统一提示
   }
-  replaceState({ ...state, menuConfigs: nextItems })
-  ElMessage.success('菜单配置已保存')
-  resetMenuForm()
-  closeSettingEditor('menu')
 }
 
 function pickCollectionItem(form, row) {
@@ -1357,7 +1411,24 @@ function saveCollectionItem(collectionName, form, resetForm, successMessage) {
   closeSettingEditor(currentMode.value)
 }
 
-function toggleCollectionItem(collectionName, id, fieldName) {
+async function toggleCollectionItem(collectionName, id, fieldName) {
+  if (collectionName === 'menuConfigs') {
+    const current = state.menuConfigs.find((item) => item.id === id)
+    if (!current) {
+      return
+    }
+    try {
+      await saveSystemAccessMenu({
+        ...current,
+        [fieldName]: current[fieldName] === 1 ? 0 : 1
+      })
+      await loadSystemAccessConfig()
+      ElMessage.success('菜单状态已更新，重新登录后生效')
+    } catch {
+      // HTTP 层统一提示
+    }
+    return
+  }
   const nextItems = state[collectionName].map((item) =>
     item.id === id ? { ...item, [fieldName]: item[fieldName] === 1 ? 0 : 1 } : item
   )
@@ -1549,6 +1620,9 @@ watch(
   () => currentMode.value,
   async (mode) => {
     settingEditorMode.value = ''
+    if (mode === 'menu') {
+      await loadSystemAccessConfig()
+    }
     if (mode === 'third-party') {
       await loadProviders()
     }

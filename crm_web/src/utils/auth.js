@@ -214,10 +214,10 @@ export function hasRouteAccess(path, moduleCode, roleCodes = []) {
   const normalizedPath = normalizePath(path)
   const backendRoutes = getBackendMenuRoutes()
   const hasBackendRouteSource = backendRoutes.length > 0
-  if (hasBackendRouteSource && !backendRoutes.includes(normalizedPath)) {
-    return false
-  }
   const configuredMenu = getConfiguredMenuConfigs().find((item) => normalizePath(item.routePath) === normalizedPath)
+  if (hasBackendRouteSource && !backendRoutes.includes(normalizedPath)) {
+    return !configuredMenu
+  }
   if (configuredMenu) {
     return configuredMenu.isEnabled !== 0
       && hasModule(configuredMenu.moduleCode)

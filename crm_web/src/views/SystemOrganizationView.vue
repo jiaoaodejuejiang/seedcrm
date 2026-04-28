@@ -536,7 +536,7 @@
               <div class="action-group">
                 <el-button size="small" @click="pickRole(row)">编辑</el-button>
                 <el-button size="small" plain @click="toggleRole(row)">{{ row.isEnabled === 1 ? '停用' : '启用' }}</el-button>
-                <el-button size="small" type="danger" @click="removeRole(row)">删除</el-button>
+                <el-button size="small" type="danger" plain :disabled="row.isEnabled !== 1" @click="removeRole(row)">停用保留</el-button>
               </div>
             </template>
           </el-table-column>
@@ -668,6 +668,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { fetchPermissionPolicies, savePermissionPolicy } from '../api/permission'
+import { fetchSystemAccessSnapshot, saveSystemAccessRole } from '../api/systemAccess'
 import { useTablePagination } from '../composables/useTablePagination'
 import { currentUser } from '../utils/auth'
 import {
@@ -923,7 +924,12 @@ function createRoleForm() {
     roleCode: '',
     roleName: '',
     dataScope: 'TEAM',
+    roleType: 'BUSINESS',
     moduleCodes: [],
+    menuRoutes: [],
+    permissionCodes: [],
+    isEnabled: 1,
+    sortOrder: 0,
     remark: ''
   }
 }
@@ -941,6 +947,57 @@ function createPolicyForm() {
 function replaceState(nextState) {
   saveSystemConsoleState(nextState)
   Object.assign(state, loadSystemConsoleState())
+}
+
+function applyAccessSnapshot(snapshot) {
+  if (!snapshot) {
+    return
+  }
+  replaceState({
+    ...state,
+    menuConfigs: (snapshot.menus || []).map(normalizeAccessMenu),
+    roles: (snapshot.roles || []).map(normalizeAccessRole)
+  })
+  rolePagination.reset()
+}
+
+function normalizeAccessMenu(item) {
+  return {
+    id: item.id,
+    menuGroup: item.menuGroup || '',
+    menuName: item.menuName || '',
+    routePath: item.routePath || '',
+    roleCodes: item.roleCodes || [],
+    moduleCode: item.moduleCode || 'SYSTEM',
+    permissionCode: item.permissionCode || '',
+    componentKey: item.componentKey || '',
+    isEnabled: item.isEnabled ?? 1,
+    sortOrder: item.sortOrder ?? Number(item.id || 0)
+  }
+}
+
+function normalizeAccessRole(item) {
+  return {
+    id: item.id,
+    roleCode: item.roleCode || '',
+    roleName: item.roleName || '',
+    dataScope: item.dataScope || 'SELF',
+    roleType: item.roleType || 'BUSINESS',
+    moduleCodes: item.moduleCodes || [],
+    menuRoutes: item.menuRoutes || [],
+    permissionCodes: item.permissionCodes || [],
+    isEnabled: item.isEnabled ?? 1,
+    sortOrder: item.sortOrder ?? Number(item.id || 0),
+    sort: item.sortOrder ?? Number(item.id || 0)
+  }
+}
+
+async function loadSystemAccessConfig() {
+  try {
+    applyAccessSnapshot(await fetchSystemAccessSnapshot())
+  } catch {
+    // 请求层已经提示错误；保留本地缓存，避免系统管理页空白。
+  }
 }
 
 function resetDepartmentForm() {
@@ -1035,12 +1092,16 @@ function pickPosition(row) {
 function pickRole(row) {
   Object.assign(roleForm, {
     ...row,
-    moduleCodes: [...(row.moduleCodes || [])]
+    moduleCodes: [...(row.moduleCodes || [])],
+    menuRoutes: [...(row.menuRoutes || [])],
+    permissionCodes: [...(row.permissionCodes || [])]
   })
   editingRoleOriginalCode.value = row.roleCode
-  selectedRoleMenuPaths.value = state.menuConfigs
-    .filter((item) => (item.roleCodes || []).includes(row.roleCode))
-    .map((item) => item.routePath)
+  selectedRoleMenuPaths.value = row.menuRoutes?.length
+    ? [...row.menuRoutes]
+    : state.menuConfigs
+        .filter((item) => (item.roleCodes || []).includes(row.roleCode))
+        .map((item) => item.routePath)
   roleEditorTab.value = 'basic'
   roleWorkspace.value = 'role'
   managementEditorMode.value = 'role'
@@ -1227,7 +1288,7 @@ function removePosition(row) {
   ElMessage.success(attachedEmployees.length ? `岗位已删除，员工已迁移到 ${fallbackPosition.positionName}` : '岗位已删除')
 }
 
-function saveRole() {
+async function saveRole() {
   if (!roleForm.roleCode || !roleForm.roleName) {
     ElMessage.warning('请先填写角色编码和角色名称')
     return
@@ -1241,55 +1302,81 @@ function saveRole() {
     ...roleForm,
     moduleCodes: Array.from(new Set([...(roleForm.moduleCodes || []), ...selectedMenuModules]))
   }
-  const nextRoles = [...state.roles]
-  if (roleForm.id) {
-    const index = nextRoles.findIndex((item) => item.id === roleForm.id)
-    nextRoles[index] = { ...nextRoles[index], ...nextRoleForm }
-  } else {
-    nextRoles.push({
-      ...nextRoleForm,
-      id: nextSystemId(nextRoles),
-      isEnabled: 1
+  try {
+    await saveSystemAccessRole({
+      id: nextRoleForm.id,
+      roleCode: String(nextRoleForm.roleCode || '').trim(),
+      roleName: String(nextRoleForm.roleName || '').trim(),
+      dataScope: nextRoleForm.dataScope || 'TEAM',
+      roleType: nextRoleForm.roleType || 'BUSINESS',
+      isEnabled: nextRoleForm.isEnabled ?? 1,
+      sortOrder: nextRoleForm.sortOrder ?? nextRoleForm.sort,
+      menuRoutes: [...selectedMenuPathSet],
+      permissionCodes: nextRoleForm.permissionCodes || []
     })
+    await loadSystemAccessConfig()
+    ElMessage.success('角色权限已保存，重新登录后按后端授权生效')
+    resetRoleForm()
+    closeManagementEditor('role')
+  } catch {
+    // HTTP 层统一处理提示。
   }
-  const currentRoleCode = String(nextRoleForm.roleCode || '').trim()
-  const originalRoleCode = String(editingRoleOriginalCode.value || currentRoleCode).trim()
-  const nextMenuConfigs = state.menuConfigs.map((item) => {
-    const roleCodes = (item.roleCodes || []).filter((code) => code !== currentRoleCode && code !== originalRoleCode)
-    if (selectedMenuPathSet.has(item.routePath)) {
-      roleCodes.push(currentRoleCode)
-    }
-    return {
-      ...item,
-      roleCodes
-    }
-  })
-  replaceState({ ...state, roles: nextRoles, menuConfigs: nextMenuConfigs })
-  ElMessage.success('角色权限已保存，菜单入口将在刷新或重新登录后生效')
-  resetRoleForm()
-  closeManagementEditor('role')
 }
 
 function employeesInRole(roleCode) {
   return state.employees.filter((item) => item.roleCode === roleCode && item.status === 'ACTIVE')
 }
 
-function toggleRole(row) {
-  const nextRoles = state.roles.map((item) =>
-    item.id === row.id ? { ...item, isEnabled: item.isEnabled === 1 ? 0 : 1 } : item
-  )
-  replaceState({ ...state, roles: nextRoles })
-  ElMessage.success('角色状态已更新')
-}
-
-function removeRole(row) {
-  if (employeesInRole(row.roleCode).length) {
-    ElMessage.warning('当前角色仍绑定在职员工，需先调整人员角色后再删除')
+async function toggleRole(row) {
+  if (row.isEnabled === 1 && employeesInRole(row.roleCode).length) {
+    ElMessage.warning('停用角色前，需要先调整绑定该角色的在职员工')
     return
   }
-  const nextRoles = state.roles.filter((item) => item.id !== row.id)
-  replaceState({ ...state, roles: nextRoles })
-  ElMessage.success('角色已删除')
+  try {
+    await saveSystemAccessRole({
+      id: row.id,
+      roleCode: row.roleCode,
+      roleName: row.roleName,
+      dataScope: row.dataScope || 'TEAM',
+      roleType: row.roleType || 'BUSINESS',
+      isEnabled: row.isEnabled === 1 ? 0 : 1,
+      sortOrder: row.sortOrder ?? row.sort,
+      menuRoutes: row.menuRoutes || state.menuConfigs
+        .filter((item) => (item.roleCodes || []).includes(row.roleCode))
+        .map((item) => item.routePath),
+      permissionCodes: row.permissionCodes || []
+    })
+    await loadSystemAccessConfig()
+    ElMessage.success('角色状态已更新，重新登录后生效')
+  } catch {
+    // HTTP 层统一处理提示。
+  }
+}
+
+async function removeRole(row) {
+  if (employeesInRole(row.roleCode).length) {
+    ElMessage.warning('当前角色仍绑定在职员工，需先调整人员角色后再停用')
+    return
+  }
+  try {
+    await saveSystemAccessRole({
+      id: row.id,
+      roleCode: row.roleCode,
+      roleName: row.roleName,
+      dataScope: row.dataScope || 'TEAM',
+      roleType: row.roleType || 'BUSINESS',
+      isEnabled: 0,
+      sortOrder: row.sortOrder ?? row.sort,
+      menuRoutes: row.menuRoutes || state.menuConfigs
+        .filter((item) => (item.roleCodes || []).includes(row.roleCode))
+        .map((item) => item.routePath),
+      permissionCodes: row.permissionCodes || []
+    })
+    await loadSystemAccessConfig()
+    ElMessage.success('角色已停用并保留历史授权')
+  } catch {
+    // HTTP 层统一处理提示。
+  }
 }
 
 async function loadPolicies() {
@@ -1326,7 +1413,7 @@ watch(
     policyEditorVisible.value = false
     if (mode === 'role') {
       roleWorkspace.value = 'role'
-      await loadPolicies()
+      await Promise.all([loadSystemAccessConfig(), loadPolicies()])
     }
   },
   { immediate: true }

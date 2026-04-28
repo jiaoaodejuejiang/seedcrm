@@ -3,7 +3,9 @@ package com.seedcrm.crm.auth.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.seedcrm.crm.auth.model.AuthMenuNode;
 import com.seedcrm.crm.common.exception.BusinessException;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class AuthServiceImplTest {
@@ -74,5 +76,30 @@ class AuthServiceImplTest {
                 .contains("/store-service/orders", "/finance/salary/my")
                 .doesNotContain("/clues", "/settings/menu");
         assertThat(user.getAllowedModules()).contains("ORDER", "PLANORDER", "SALARY");
+    }
+
+    @Test
+    void loginShouldPreferInjectedAccessProvider() {
+        AuthServiceImpl service = new AuthServiceImpl(user -> {
+            user.setAllowedModules(List.of("CUSTOM"));
+            user.setMenuRoutes(List.of("/custom/workspace"));
+            user.setDefaultRoute("/custom/workspace");
+            user.setPermissions(List.of("custom:view"));
+            user.setMenuTree(List.of(new AuthMenuNode(
+                    "menu:/custom/workspace",
+                    "自定义工作台",
+                    "/custom/workspace",
+                    "CUSTOM",
+                    "custom:view")));
+            return user;
+        });
+
+        String token = service.login("private_domain", "123456", null, null);
+        var user = service.getUserOrThrow(token);
+
+        assertThat(user.getDefaultRoute()).isEqualTo("/custom/workspace");
+        assertThat(user.getMenuRoutes()).containsExactly("/custom/workspace");
+        assertThat(user.getAllowedModules()).containsExactly("CUSTOM");
+        assertThat(user.getPermissions()).containsExactly("custom:view");
     }
 }

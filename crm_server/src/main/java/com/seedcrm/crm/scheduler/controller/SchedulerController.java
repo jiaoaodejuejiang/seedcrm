@@ -5,6 +5,8 @@ import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
 import com.seedcrm.crm.permission.support.SchedulerModuleGuard;
 import com.seedcrm.crm.scheduler.dto.SchedulerJobUpsertRequest;
+import com.seedcrm.crm.scheduler.dto.SchedulerCallbackDebugRequest;
+import com.seedcrm.crm.scheduler.dto.SchedulerInterfaceDebugRequest;
 import com.seedcrm.crm.scheduler.dto.SchedulerTriggerRequest;
 import com.seedcrm.crm.scheduler.entity.IntegrationCallbackConfig;
 import com.seedcrm.crm.scheduler.entity.IntegrationCallbackEventLog;
@@ -15,6 +17,7 @@ import com.seedcrm.crm.scheduler.service.SchedulerIntegrationService;
 import com.seedcrm.crm.scheduler.service.SchedulerService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -77,7 +80,7 @@ public class SchedulerController {
     public ApiResponse<IntegrationProviderConfig> testProvider(@RequestBody IntegrationProviderConfig request,
                                                                HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
-        schedulerModuleGuard.checkTrigger(context);
+        schedulerModuleGuard.checkDebug(context);
         return ApiResponse.success(schedulerIntegrationService.testProvider(request));
     }
 
@@ -104,6 +107,43 @@ public class SchedulerController {
         return ApiResponse.success(schedulerIntegrationService.saveCallback(request));
     }
 
+    @PostMapping("/callback/debug")
+    public ApiResponse<Map<String, Object>> debugCallback(@RequestBody SchedulerCallbackDebugRequest request,
+                                                          HttpServletRequest httpServletRequest) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
+        schedulerModuleGuard.checkDebug(context);
+        String providerCode = request == null || request.getProviderCode() == null
+                ? "DOUYIN_LAIKE"
+                : request.getProviderCode();
+        String callbackName = request == null || request.getCallbackName() == null
+                ? "回调联调"
+                : request.getCallbackName();
+        String callbackPath = request == null || request.getCallbackPath() == null
+                ? "/scheduler/callback/debug"
+                : request.getCallbackPath();
+        String requestMethod = request == null || request.getRequestMethod() == null
+                ? "POST"
+                : request.getRequestMethod();
+        Map<String, String> parameters = request == null || request.getParameters() == null
+                ? Map.of("debug", "true")
+                : request.getParameters();
+        String payload = request == null ? null : request.getPayload();
+        IntegrationProviderConfig provider = schedulerIntegrationService.receiveProviderCallback(
+                providerCode,
+                callbackName,
+                callbackPath,
+                requestMethod,
+                parameters,
+                payload);
+        List<IntegrationCallbackEventLog> logs = schedulerIntegrationService.listCallbackLogs(providerCode);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("message", "回调联调已完成，已写入回调记录");
+        response.put("provider", provider);
+        response.put("latestLog", logs.isEmpty() ? null : logs.get(0));
+        return ApiResponse.success(response);
+    }
+
     @PostMapping("/job/save")
     public ApiResponse<SchedulerJob> saveJob(@RequestBody SchedulerJobUpsertRequest request,
                                              HttpServletRequest httpServletRequest) {
@@ -126,6 +166,47 @@ public class SchedulerController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkTrigger(context);
         return ApiResponse.success(schedulerService.retryFailed(jobCode));
+    }
+
+    @PostMapping("/interface/debug")
+    public ApiResponse<Map<String, Object>> debugInterface(@RequestBody SchedulerInterfaceDebugRequest request,
+                                                           HttpServletRequest httpServletRequest) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
+        schedulerModuleGuard.checkDebug(context);
+        String mode = request == null || request.getMode() == null ? "MOCK" : request.getMode().trim().toUpperCase();
+        String providerCode = request == null || request.getProviderCode() == null
+                ? "DOUYIN_LAIKE"
+                : request.getProviderCode().trim().toUpperCase();
+        String interfaceCode = request == null || request.getInterfaceCode() == null
+                ? "DOUYIN_CLUE_PULL"
+                : request.getInterfaceCode().trim().toUpperCase();
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("mode", mode);
+        response.put("providerCode", providerCode);
+        response.put("interfaceCode", interfaceCode);
+        response.put("requestMethod", request == null ? "POST" : request.getRequestMethod());
+        response.put("path", request == null ? null : request.getPath());
+        response.put("parameters", request == null ? Map.of() : request.getParameters());
+        response.put("payload", request == null ? null : request.getPayload());
+        if ("LIVE".equals(mode)) {
+            IntegrationProviderConfig provider = schedulerIntegrationService.listProviders().stream()
+                    .filter(item -> providerCode.equalsIgnoreCase(item.getProviderCode()))
+                    .findFirst()
+                    .orElse(null);
+            response.put("success", provider != null);
+            response.put("message", provider == null
+                    ? "未找到对应接口配置，请先在抖音接口或分销接口中保存配置"
+                    : "真实模式已完成配置校验；实际业务调用仍由调度任务或业务动作触发");
+            response.put("provider", provider);
+            return ApiResponse.success(response);
+        }
+        response.put("success", true);
+        response.put("message", "模拟接口调试成功，未调用外部平台");
+        response.put("mockData", Map.of(
+                "traceId", java.util.UUID.randomUUID().toString(),
+                "received", true,
+                "nextAction", "可在任务调度中触发同步，或切换真实模式校验配置"));
+        return ApiResponse.success(response);
     }
 
     @GetMapping(value = "/oauth/douyin/callback", produces = MediaType.TEXT_PLAIN_VALUE)

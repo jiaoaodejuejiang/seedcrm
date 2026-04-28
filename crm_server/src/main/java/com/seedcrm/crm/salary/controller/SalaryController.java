@@ -4,6 +4,7 @@ import com.seedcrm.crm.common.api.ApiResponse;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
+import com.seedcrm.crm.permission.support.SalaryModuleGuard;
 import com.seedcrm.crm.salary.dto.SalaryBalanceResponse;
 import com.seedcrm.crm.salary.dto.SalaryRecalculateRequest;
 import com.seedcrm.crm.salary.dto.SalarySettlementCreateRequest;
@@ -37,15 +38,18 @@ public class SalaryController {
     private final SettlementService settlementService;
     private final WithdrawService withdrawService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
+    private final SalaryModuleGuard salaryModuleGuard;
 
     public SalaryController(SalaryService salaryService,
                             SettlementService settlementService,
                             WithdrawService withdrawService,
-                            PermissionRequestContextResolver permissionRequestContextResolver) {
+                            PermissionRequestContextResolver permissionRequestContextResolver,
+                            SalaryModuleGuard salaryModuleGuard) {
         this.salaryService = salaryService;
         this.settlementService = settlementService;
         this.withdrawService = withdrawService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
+        this.salaryModuleGuard = salaryModuleGuard;
     }
 
     @GetMapping("/stat")
@@ -130,14 +134,8 @@ public class SalaryController {
 
     private Long resolveReadableSalaryUserId(Long requestedUserId, HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
-        if (isSettlementOperator(context)) {
-            return requestedUserId;
-        }
-        Long currentUserId = context.getCurrentUserId();
-        if (currentUserId == null || !currentUserId.equals(requestedUserId)) {
-            throw new BusinessException("只能查看本人薪酬数据");
-        }
-        return currentUserId;
+        salaryModuleGuard.checkView(context, requestedUserId);
+        return requestedUserId;
     }
 
     private Long resolveSettlementUserId(Long requestedUserId, PermissionRequestContext context) {
@@ -152,6 +150,7 @@ public class SalaryController {
         if (!isSettlementOperator(context)) {
             throw new BusinessException("薪酬结算操作仅限管理员或财务");
         }
+        salaryModuleGuard.checkUpdate(context);
     }
 
     private boolean isSettlementOperator(PermissionRequestContext context) {

@@ -55,3 +55,11 @@ export function retrySchedulerJob(jobCode) {
     }
   })
 }
+
+export function debugSchedulerCallback(payload) {
+  return http.post('/scheduler/callback/debug', payload)
+}
+
+export function debugSchedulerInterface(payload) {
+  return http.post('/scheduler/interface/debug', payload)
+}

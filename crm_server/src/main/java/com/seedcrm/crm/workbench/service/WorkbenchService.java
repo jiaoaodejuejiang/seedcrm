@@ -9,6 +9,7 @@ import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderWorkbenchResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StaffRoleOptionResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StoreLiveCodePreviewResponse;
+import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import java.util.List;
 
 public interface WorkbenchService {
@@ -17,7 +18,7 @@ public interface WorkbenchService {
 
     List<OrderItemResponse> listOrders(String status, String customerName, String customerPhone);
 
-    StoreLiveCodePreviewResponse getOrderLiveCodePreview(Long orderId);
+    StoreLiveCodePreviewResponse getOrderLiveCodePreview(Long orderId, PermissionRequestContext context);
 
     List<PlanOrderItemResponse> listPlanOrders(String status);
 

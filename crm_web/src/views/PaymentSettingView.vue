@@ -81,19 +81,19 @@
             <div class="full-span form-group-title">回调配置</div>
             <label>
               <span>系统基础域名</span>
-              <el-input :model-value="systemBaseUrl" readonly />
+              <span class="readonly-prefix">{{ systemBaseUrl }}</span>
             </label>
             <label>
               <span>API 域名</span>
-              <el-input :model-value="apiBaseUrl" readonly />
+              <span class="readonly-prefix">{{ apiBaseUrl }}</span>
             </label>
             <label class="full-span">
               <span>支付回调地址</span>
-              <el-input :model-value="wechatPayNotifyUrl" readonly />
+              <span class="readonly-prefix">{{ wechatPayNotifyUrl }}</span>
             </label>
             <label class="full-span">
               <span>退款回调地址</span>
-              <el-input :model-value="wechatPayRefundNotifyUrl" readonly />
+              <span class="readonly-prefix">{{ wechatPayRefundNotifyUrl }}</span>
             </label>
             <label>
               <span>连接测试</span>
@@ -172,15 +172,15 @@
             <div class="full-span form-group-title">回调配置</div>
             <label>
               <span>系统基础域名</span>
-              <el-input :model-value="systemBaseUrl" readonly />
+              <span class="readonly-prefix">{{ systemBaseUrl }}</span>
             </label>
             <label>
               <span>API 域名</span>
-              <el-input :model-value="apiBaseUrl" readonly />
+              <span class="readonly-prefix">{{ apiBaseUrl }}</span>
             </label>
             <label class="full-span">
               <span>代付回调地址</span>
-              <el-input :model-value="wechatPayoutNotifyUrl" readonly />
+              <span class="readonly-prefix">{{ wechatPayoutNotifyUrl }}</span>
             </label>
             <label>
               <span>连接测试</span>
@@ -254,3 +254,16 @@ async function testPayment(key) {
   }
 }
 </script>
+
+<style scoped>
+.readonly-prefix {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+  word-break: break-all;
+}
+</style>

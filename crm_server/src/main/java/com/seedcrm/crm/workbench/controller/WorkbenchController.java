@@ -77,7 +77,7 @@ public class WorkbenchController {
                                                                         HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         orderPermissionGuard.checkView(context, orderId);
-        return ApiResponse.success(workbenchService.getOrderLiveCodePreview(orderId));
+        return ApiResponse.success(workbenchService.getOrderLiveCodePreview(orderId, context));
     }
 
     @GetMapping("/plan-orders")

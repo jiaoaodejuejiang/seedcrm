@@ -1,4 +1,17 @@
 const STORAGE_KEY = 'seedcrm.system-console'
+const SYSTEM_CONSOLE_SCHEMA_VERSION = 2
+const SELF_SALARY_ROLE_CODES = [
+  'ADMIN',
+  'FINANCE',
+  'CLUE_MANAGER',
+  'ONLINE_CUSTOMER_SERVICE',
+  'STORE_SERVICE',
+  'STORE_MANAGER',
+  'PHOTOGRAPHER',
+  'MAKEUP_ARTIST',
+  'PHOTO_SELECTOR',
+  'PRIVATE_DOMAIN_SERVICE'
+]
 
 const DEFAULT_DOMAIN_SETTINGS = {
   systemBaseUrl: 'http://127.0.0.1:4173',
@@ -87,6 +100,7 @@ const DEFAULT_DICTIONARIES = [
 ]
 
 const DEFAULT_STATE = {
+  permissionBaselineVersion: SYSTEM_CONSOLE_SCHEMA_VERSION,
   domainSettings: DEFAULT_DOMAIN_SETTINGS,
   departments: [
     { id: 1, departmentCode: 'HQ', departmentName: '总部管理', parentCode: '', managerRoleCode: 'ADMIN', dataScopeRule: '可查看全部有效数据并进行系统配置', isEnabled: 1, remark: '系统管理员负责整体系统治理' },
@@ -109,15 +123,15 @@ const DEFAULT_STATE = {
   ],
   roles: [
     { id: 1, roleCode: 'ADMIN', roleName: '管理员', dataScope: 'ALL', moduleCodes: ['CLUE', 'ORDER', 'PLANORDER', 'SALARY', 'FINANCE', 'SYSTEM', 'SETTING', 'WECOM'], isEnabled: 1, remark: '拥有系统全量菜单和配置权限' },
-    { id: 2, roleCode: 'CLUE_MANAGER', roleName: '客资主管', dataScope: 'ALL', moduleCodes: ['CLUE', 'ORDER', 'SYSTEM'], isEnabled: 1, remark: '管理客资中心、顾客排档和客资配置' },
-    { id: 3, roleCode: 'ONLINE_CUSTOMER_SERVICE', roleName: '在线客服', dataScope: 'TEAM', moduleCodes: ['CLUE', 'ORDER'], isEnabled: 1, remark: '处理已分配客资与排档跟进' },
-    { id: 4, roleCode: 'STORE_SERVICE', roleName: '门店服务', dataScope: 'STORE', moduleCodes: ['ORDER', 'PLANORDER'], isEnabled: 1, remark: '查看订单、核销和服务单' },
-    { id: 5, roleCode: 'STORE_MANAGER', roleName: '店长', dataScope: 'STORE', moduleCodes: ['ORDER', 'PLANORDER', 'SYSTEM'], isEnabled: 1, remark: '管理门店服务、人员与角色' },
-    { id: 6, roleCode: 'PHOTOGRAPHER', roleName: '摄影', dataScope: 'STORE', moduleCodes: ['ORDER', 'PLANORDER'], isEnabled: 1, remark: '参与门店服务履约' },
-    { id: 7, roleCode: 'MAKEUP_ARTIST', roleName: '化妆师', dataScope: 'STORE', moduleCodes: ['ORDER', 'PLANORDER'], isEnabled: 1, remark: '参与门店服务履约' },
-    { id: 8, roleCode: 'PHOTO_SELECTOR', roleName: '选片负责人', dataScope: 'STORE', moduleCodes: ['ORDER', 'PLANORDER'], isEnabled: 1, remark: '参与门店服务履约' },
+    { id: 2, roleCode: 'CLUE_MANAGER', roleName: '客资主管', dataScope: 'ALL', moduleCodes: ['CLUE', 'ORDER', 'SYSTEM', 'SALARY'], isEnabled: 1, remark: '管理客资中心、顾客排档和客资配置' },
+    { id: 3, roleCode: 'ONLINE_CUSTOMER_SERVICE', roleName: '在线客服', dataScope: 'TEAM', moduleCodes: ['CLUE', 'ORDER', 'SALARY'], isEnabled: 1, remark: '处理已分配客资与排档跟进' },
+    { id: 4, roleCode: 'STORE_SERVICE', roleName: '门店服务', dataScope: 'STORE', moduleCodes: ['ORDER', 'PLANORDER', 'SALARY'], isEnabled: 1, remark: '查看订单、核销和服务单' },
+    { id: 5, roleCode: 'STORE_MANAGER', roleName: '店长', dataScope: 'STORE', moduleCodes: ['ORDER', 'PLANORDER', 'SYSTEM', 'SALARY'], isEnabled: 1, remark: '管理门店服务、人员与角色' },
+    { id: 6, roleCode: 'PHOTOGRAPHER', roleName: '摄影', dataScope: 'STORE', moduleCodes: ['ORDER', 'PLANORDER', 'SALARY'], isEnabled: 1, remark: '参与门店服务履约' },
+    { id: 7, roleCode: 'MAKEUP_ARTIST', roleName: '化妆师', dataScope: 'STORE', moduleCodes: ['ORDER', 'PLANORDER', 'SALARY'], isEnabled: 1, remark: '参与门店服务履约' },
+    { id: 8, roleCode: 'PHOTO_SELECTOR', roleName: '选片负责人', dataScope: 'STORE', moduleCodes: ['ORDER', 'PLANORDER', 'SALARY'], isEnabled: 1, remark: '参与门店服务履约' },
     { id: 9, roleCode: 'FINANCE', roleName: '财务', dataScope: 'ALL', moduleCodes: ['ORDER', 'SALARY', 'FINANCE'], isEnabled: 1, remark: '查看结算与财务数据' },
-    { id: 10, roleCode: 'PRIVATE_DOMAIN_SERVICE', roleName: '私域客服', dataScope: 'SELF', moduleCodes: ['WECOM'], isEnabled: 1, remark: '负责企业微信客户触达' }
+    { id: 10, roleCode: 'PRIVATE_DOMAIN_SERVICE', roleName: '私域客服', dataScope: 'SELF', moduleCodes: ['WECOM', 'SALARY'], isEnabled: 1, remark: '负责企业微信客户触达' }
   ],
   employees: [
     { id: 1, accountName: 'admin', userName: '系统管理员', departmentCode: 'HQ', positionCode: 'SYSTEM_ADMIN', roleCode: 'ADMIN', status: 'ACTIVE', ownedDataCount: 0, canLogin: 1 },
@@ -155,8 +169,8 @@ const DEFAULT_STATE = {
     { id: 13, menuGroup: '私域客服', menuName: '朋友圈定时群发', routePath: '/private-domain/moments', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'], moduleCode: 'WECOM', isEnabled: 1 },
     { id: 14, menuGroup: '私域客服', menuName: '标签管理', routePath: '/private-domain/tags', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'], moduleCode: 'WECOM', isEnabled: 1 },
     { id: 15, menuGroup: '财务管理', menuName: '财务看板', routePath: '/finance', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'FINANCE', isEnabled: 1 },
-    { id: 16, menuGroup: '财务管理 / 薪酬中心', menuName: '我的薪酬', routePath: '/finance/salary/my', roleCodes: ['ADMIN', 'FINANCE', 'STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR'], moduleCode: 'SALARY', isEnabled: 1 },
-    { id: 17, menuGroup: '财务管理 / 薪酬结算', menuName: '结算中心', routePath: '/finance/salary/settlements', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 16, menuGroup: '财务管理 / 薪酬中心', menuName: '我的薪酬', routePath: '/finance/salary/my', roleCodes: SELF_SALARY_ROLE_CODES, moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 17, menuGroup: '财务管理 / 薪酬结算', menuName: '结算单管理', routePath: '/finance/salary/settlements', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
     { id: 18, menuGroup: '财务管理 / 薪酬结算', menuName: '结算配置', routePath: '/finance/salary/settlement-config', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
     { id: 19, menuGroup: '财务管理 / 薪酬配置', menuName: '薪酬角色', routePath: '/finance/salary-config/roles', roleCodes: ['ADMIN'], moduleCode: 'SALARY', isEnabled: 1 },
     { id: 20, menuGroup: '财务管理 / 薪酬配置', menuName: '薪酬档位', routePath: '/finance/salary-config/grades', roleCodes: ['ADMIN'], moduleCode: 'SALARY', isEnabled: 1 },
@@ -167,12 +181,17 @@ const DEFAULT_STATE = {
     { id: 25, menuGroup: '系统管理', menuName: '角色管理', routePath: '/system/roles', roleCodes: ['ADMIN'], moduleCode: 'SYSTEM', isEnabled: 1 },
     { id: 26, menuGroup: '系统设置 / 基础配置', menuName: '域名配置', routePath: '/settings/base/domain', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 27, menuGroup: '系统设置 / 基础配置', menuName: '菜单管理', routePath: '/settings/menu', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 28, menuGroup: '系统设置 / 调度中心', menuName: '三方接口', routePath: '/settings/integration/third-party', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 28, menuGroup: '系统设置 / 调度中心', menuName: '抖音接口', routePath: '/settings/integration/third-party', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 29, menuGroup: '系统设置 / 调度中心', menuName: '回调接口', routePath: '/settings/integration/callback', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 31, menuGroup: '系统设置 / 调度中心', menuName: '对外接口', routePath: '/settings/integration/public-api', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 32, menuGroup: '系统设置 / 基础配置', menuName: '字典管理', routePath: '/settings/dictionaries', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 33, menuGroup: '系统设置 / 基础配置', menuName: '参数管理', routePath: '/settings/parameters', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 34, menuGroup: '系统设置 / 基础配置', menuName: '支付设置', routePath: '/settings/payment', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 }
+    { id: 30, menuGroup: '系统设置 / 调度中心', menuName: '任务调度', routePath: '/settings/integration/jobs', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 31, menuGroup: '系统设置 / 调度中心', menuName: '接口调试', routePath: '/settings/integration/debug', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 32, menuGroup: '系统设置 / 调度中心', menuName: '对外接口', routePath: '/settings/integration/public-api', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 33, menuGroup: '系统设置 / 调度中心', menuName: '分销接口', routePath: '/settings/integration/distribution-api', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 34, menuGroup: '系统设置 / 基础配置', menuName: '字典管理', routePath: '/settings/dictionaries', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 35, menuGroup: '系统设置 / 基础配置', menuName: '参数管理', routePath: '/settings/parameters', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 36, menuGroup: '系统设置 / 基础配置', menuName: '支付设置', routePath: '/settings/payment', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 37, menuGroup: '财务管理 / 薪酬结算', menuName: '提现处理', routePath: '/finance/salary/withdrawals', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 38, menuGroup: '财务管理 / 薪酬结算', menuName: '退款冲正', routePath: '/finance/salary/refund-adjustments', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 }
   ],
   salaryRoles: [
     { id: 1, roleName: '普通客服', roleCode: 'NORMAL_CS', employeeIds: [3, 4], isEnabled: 1, remark: '参与个人档位计算' },
@@ -349,15 +368,20 @@ function mergeCollectionByKey(items, defaults, resolveKey) {
   ]
 }
 
+function mergeUniqueList(currentItems = [], requiredItems = []) {
+  return Array.from(new Set([...(currentItems || []), ...(requiredItems || [])]))
+}
+
 function migrateSystemConsoleState(state) {
   const defaults = clone(DEFAULT_STATE)
   const nextState = {
     ...defaults,
     ...state
   }
+  const shouldApplyPermissionBaseline =
+    Number(state?.permissionBaselineVersion || 0) < SYSTEM_CONSOLE_SCHEMA_VERSION
 
   const normalizedMenuConfigs = (state?.menuConfigs || [])
-    .filter((item) => item?.routePath !== '/settings/integration/jobs')
     .map((item) => {
     if (item?.routePath === '/clues/payments') {
       return {
@@ -387,7 +411,7 @@ function migrateSystemConsoleState(state) {
     if (item?.routePath === '/finance/salary/my') {
       return {
         ...item,
-        roleCodes: ['ADMIN', 'FINANCE', 'STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR']
+        roleCodes: shouldApplyPermissionBaseline ? mergeUniqueList(item.roleCodes, SELF_SALARY_ROLE_CODES) : item.roleCodes
       }
     }
     if (item?.routePath === '/finance/salary/settlements') {
@@ -412,6 +436,19 @@ function migrateSystemConsoleState(state) {
     nextState.domainSettings.publicApiBaseUrl ||
     defaults.domainSettings.apiBaseUrl
   nextState.menuConfigs = mergeCollectionByKey(normalizedMenuConfigs, defaults.menuConfigs, (item) => item?.routePath || item?.id)
+  if (shouldApplyPermissionBaseline) {
+    nextState.roles = (nextState.roles || []).map((role) => {
+      const roleCode = normalizeKey(role?.roleCode)
+      if (!SELF_SALARY_ROLE_CODES.includes(roleCode)) {
+        return role
+      }
+      return {
+        ...role,
+        moduleCodes: mergeUniqueList(role.moduleCodes, ['SALARY'])
+      }
+    })
+  }
+  nextState.permissionBaselineVersion = SYSTEM_CONSOLE_SCHEMA_VERSION
   nextState.dictionaries = mergeCollectionByKey(state?.dictionaries, defaults.dictionaries, (item) => `${item?.dictType || ''}:${item?.itemCode || ''}`)
   nextState.parameters = mergeCollectionByKey(state?.parameters, defaults.parameters, (item) => item?.paramKey || item?.id)
   nextState.wecomLiveCodeConfigs = mergeCollectionByKey(state?.wecomLiveCodeConfigs, defaults.wecomLiveCodeConfigs, (item) => item?.id)
@@ -495,6 +532,7 @@ export function saveSystemConsoleState(state) {
     return
   }
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  window.dispatchEvent(new CustomEvent('seedcrm:system-console-updated'))
 }
 
 export function nextSystemId(items = []) {

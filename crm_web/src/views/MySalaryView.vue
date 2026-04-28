@@ -22,18 +22,29 @@
     <section class="panel">
       <div class="toolbar">
         <div class="toolbar__filters">
-          <el-select v-if="canChooseUser" v-model="selectedUserId" placeholder="请选择员工" style="width: 260px" @change="loadSalaryView">
-            <el-option v-for="staff in staffMembers" :key="staff.userId" :label="staffLabel(staff)" :value="staff.userId" />
+          <el-tabs
+            v-if="salaryScopeTabs.length > 1"
+            v-model="activeSalaryScope"
+            class="salary-scope-tabs"
+            @tab-change="handleScopeChange"
+          >
+            <el-tab-pane v-for="tab in salaryScopeTabs" :key="tab.name" :label="tab.label" :name="tab.name" />
+          </el-tabs>
+          <el-select
+            v-if="showStaffSelect"
+            v-model="selectedUserId"
+            :placeholder="staffSelectPlaceholder"
+            style="width: 260px"
+            @change="loadSalaryView"
+          >
+            <el-option v-for="staff in selectableStaffMembers" :key="staff.userId" :label="staffLabel(staff)" :value="staff.userId" />
           </el-select>
         </div>
       </div>
 
-      <p v-if="canChooseUser" class="table-note">
-        {{ selectedStaff ? `当前查看：${staffLabel(selectedStaff)}` : '请先选择员工，再查看薪酬明细。' }}
-      </p>
-      <p v-else class="table-note">当前页面仅展示与你本人相关的薪酬数据。</p>
+      <p class="table-note">{{ salaryScopeNote }}</p>
 
-      <el-table v-if="!canChooseUser || selectedUserId" :data="dailyRows" stripe>
+      <el-table v-if="canDisplayTable" :data="dailyRows" stripe>
         <el-table-column label="日期" min-width="160" prop="date" />
         <el-table-column label="收入笔数" width="120" prop="count" />
         <el-table-column label="订单金额" width="140">
@@ -57,7 +68,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-else description="请先选择员工后查看薪酬明细" />
+      <el-empty v-else :description="emptyDescription" />
     </section>
 
     <section v-if="deductionRows.length" class="panel compact-panel">
@@ -146,11 +157,29 @@ const salaryDetails = ref([])
 const balance = ref(null)
 const withdrawable = ref(0)
 const selectedUserId = ref(null)
+const activeSalaryScope = ref('self')
 const detailVisible = ref(false)
 const detailTitle = ref('收入明细')
 const detailRows = ref([])
 
-const canChooseUser = computed(() => ['ADMIN', 'FINANCE'].includes(String(currentUser.value?.roleCode || '').toUpperCase()))
+const roleCode = computed(() => String(currentUser.value?.roleCode || '').toUpperCase())
+const isFinanceOperator = computed(() => ['ADMIN', 'FINANCE'].includes(roleCode.value))
+const canViewTeamSalary = computed(() => ['CLUE_MANAGER', 'STORE_MANAGER'].includes(roleCode.value))
+const salaryScopeTabs = computed(() => {
+  if (isFinanceOperator.value) {
+    return [
+      { name: 'self', label: '我的薪酬' },
+      { name: 'all', label: '全部员工薪酬' }
+    ]
+  }
+  if (canViewTeamSalary.value) {
+    return [
+      { name: 'self', label: '我的薪酬' },
+      { name: 'team', label: '部门薪酬' }
+    ]
+  }
+  return []
+})
 const staffMembers = computed(() =>
   staffOptions.value.flatMap((role) =>
     (role.staffOptions || []).map((staff) => ({
@@ -160,7 +189,44 @@ const staffMembers = computed(() =>
     }))
   )
 )
+const teamMemberIdSet = computed(
+  () => new Set((currentUser.value?.teamMemberIds || []).map((item) => Number(item)).filter((item) => Number.isFinite(item)))
+)
+const selectableStaffMembers = computed(() => {
+  const currentUserId = Number(currentUser.value?.userId || 0)
+  if (activeSalaryScope.value === 'all' && isFinanceOperator.value) {
+    return staffMembers.value
+  }
+  if (activeSalaryScope.value === 'team' && canViewTeamSalary.value) {
+    return staffMembers.value.filter((staff) => {
+      const userId = Number(staff.userId || 0)
+      return userId !== currentUserId && teamMemberIdSet.value.has(userId)
+    })
+  }
+  return []
+})
 const selectedStaff = computed(() => staffMembers.value.find((item) => item.userId === selectedUserId.value) || null)
+const showStaffSelect = computed(() => ['all', 'team'].includes(activeSalaryScope.value))
+const canDisplayTable = computed(() => activeSalaryScope.value === 'self' || Boolean(selectedUserId.value))
+const staffSelectPlaceholder = computed(() => (activeSalaryScope.value === 'team' ? '请选择部门员工' : '请选择员工'))
+const salaryScopeNote = computed(() => {
+  if (activeSalaryScope.value === 'all') {
+    return selectedStaff.value ? `当前查看：${staffLabel(selectedStaff.value)}` : '请选择员工后查看薪酬明细。'
+  }
+  if (activeSalaryScope.value === 'team') {
+    return selectedStaff.value ? `当前查看部门成员：${staffLabel(selectedStaff.value)}` : '当前部门暂无可查看的薪酬人员。'
+  }
+  return '当前页面仅展示与你本人相关的薪酬数据。'
+})
+const emptyDescription = computed(() => {
+  if (activeSalaryScope.value === 'team') {
+    return '当前部门暂无可查看的薪酬记录'
+  }
+  if (activeSalaryScope.value === 'all') {
+    return '请先选择员工后查看薪酬明细'
+  }
+  return '当前暂无你的薪酬记录'
+})
 const todayIncome = computed(() => {
   const today = new Date().toLocaleDateString('sv-SE')
   return salaryDetails.value
@@ -210,18 +276,27 @@ function detailTypeLabel(row) {
   return row?.adjustmentType === 'REFUND_REVERSAL' ? '退款冲正' : '佣金收入'
 }
 
+function applyDefaultSelection() {
+  if (activeSalaryScope.value === 'self') {
+    selectedUserId.value = currentUser.value?.userId || null
+    return
+  }
+  const currentSelection = selectableStaffMembers.value.find((staff) => staff.userId === selectedUserId.value)
+  selectedUserId.value = currentSelection?.userId || selectableStaffMembers.value[0]?.userId || null
+}
+
+async function handleScopeChange() {
+  applyDefaultSelection()
+  await loadSalaryView()
+}
+
 async function initSelection() {
   try {
     staffOptions.value = await fetchStaffOptions()
   } catch {
     staffOptions.value = []
   }
-  if (canChooseUser.value) {
-    const currentUserId = currentUser.value?.userId || null
-    selectedUserId.value = staffMembers.value.some((item) => item.userId === currentUserId) ? currentUserId : null
-  } else {
-    selectedUserId.value = currentUser.value?.userId || null
-  }
+  applyDefaultSelection()
 }
 
 async function loadSalaryView() {

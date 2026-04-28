@@ -7,7 +7,7 @@
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h3>抖音来客接入</h3>
+          <h3>抖音接入</h3>
         </div>
         <div class="action-group">
           <el-button type="primary" :loading="savingProvider" @click="handleSaveProvider">保存配置</el-button>
@@ -159,19 +159,19 @@
             </label>
             <label>
               <span>系统基础域名</span>
-              <el-input :model-value="systemBaseUrl" readonly />
+              <span class="readonly-prefix">{{ systemBaseUrl }}</span>
             </label>
             <label>
               <span>API 域名</span>
-              <el-input :model-value="apiBaseUrl" readonly />
+              <span class="readonly-prefix">{{ apiBaseUrl }}</span>
             </label>
             <label class="full-span">
               <span>回调登记地址</span>
-              <el-input :model-value="provider.callbackUrl || backendCallbackUrl" readonly />
+              <span class="readonly-prefix">{{ provider.callbackUrl || backendCallbackUrl }}</span>
             </label>
             <label class="full-span">
               <span>固定后端回调地址</span>
-              <el-input :model-value="backendCallbackUrl" readonly />
+              <span class="readonly-prefix">{{ backendCallbackUrl }}</span>
             </label>
             <label class="full-span">
               <span>授权回跳地址</span>
@@ -332,42 +332,6 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="任务调度" name="job">
-          <div class="form-grid">
-            <label>
-              <span>任务编码</span>
-              <el-input v-model="jobForm.jobCode" readonly />
-            </label>
-            <label>
-              <span>同步方式</span>
-              <el-input v-model="jobForm.syncMode" readonly />
-            </label>
-            <label>
-              <span>执行间隔（分钟）</span>
-              <el-input-number v-model="jobForm.intervalMinutes" :min="1" controls-position="right" />
-            </label>
-            <label>
-              <span>重试次数</span>
-              <el-input-number v-model="jobForm.retryLimit" :min="0" controls-position="right" />
-            </label>
-            <label>
-              <span>队列名称</span>
-              <el-input v-model="jobForm.queueName" placeholder="请输入队列名称" />
-            </label>
-            <label>
-              <span>任务状态</span>
-              <el-select v-model="jobForm.status">
-                <el-option label="启用" value="ENABLED" />
-                <el-option label="停用" value="DISABLED" />
-              </el-select>
-            </label>
-          </div>
-
-          <div class="action-group action-group--section">
-            <el-button type="primary" :loading="savingJob" @click="handleSaveJob">保存调度</el-button>
-            <el-button :loading="triggering" @click="handleTrigger">立即执行</el-button>
-          </div>
-        </el-tab-pane>
       </el-tabs>
     </section>
   </div>
@@ -696,6 +660,17 @@ async function handleTrigger() {
 
 .platform-tabs :deep(.el-tabs__header) {
   margin-bottom: 20px;
+}
+
+.readonly-prefix {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+  word-break: break-all;
 }
 
 @media (max-width: 1280px) {

@@ -27,6 +27,10 @@ public class SchedulerModuleGuard {
         assertAllowed(check(context, "TRIGGER"), "scheduler trigger denied");
     }
 
+    public void checkDebug(PermissionRequestContext context) {
+        assertAllowed(check(context, "DEBUG"), "scheduler debug denied");
+    }
+
     private PermissionCheckResponse check(PermissionRequestContext context, String actionCode) {
         PermissionCheckRequest request = new PermissionCheckRequest();
         request.setModuleCode("SCHEDULER");

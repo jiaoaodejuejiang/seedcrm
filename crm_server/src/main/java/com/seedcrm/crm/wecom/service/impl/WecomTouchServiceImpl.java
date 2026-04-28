@@ -187,9 +187,9 @@ public class WecomTouchServiceImpl implements WecomTouchService {
                                                            List<String> employeeAccounts) {
         String contactWayId = "cw_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String generatedAt = LocalDateTime.now().format(LIVE_CODE_TIME_FORMATTER);
-        String summary = String.format("当前为 MOCK 模式，已生成演示活码并按轮询策略分配给 %d 名私域客服。", employeeNames.size());
+        String summary = String.format("当前为 MOCK 模式，已生成系统联调活码并按轮询策略分配给 %d 名私域客服。", employeeNames.size());
         String qrCodeUrl = buildLiveCodeQrCode(codeName, employeeNames, contactWayId);
-        String shortLink = "https://wecom.seedcrm.local/contact/" + contactWayId;
+        String shortLink = "/wecom/mock-contact/" + contactWayId;
 
         log.info("simulate wecom live code generate, codeName={}, scene={}, strategy={}, employeeNames={}, employeeAccounts={}, contactWayId={}",
                 codeName, scene, strategy, employeeNames, employeeAccounts, contactWayId);

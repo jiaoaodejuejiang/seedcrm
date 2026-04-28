@@ -160,6 +160,7 @@ class WecomTouchServiceImplTest {
         assertThat(response.getCodeName()).isEqualTo("门店引流活码");
         assertThat(response.getContactWayId()).startsWith("cw_");
         assertThat(response.getQrCodeUrl()).startsWith("data:image/svg+xml");
+        assertThat(response.getShortLink()).startsWith("/wecom/mock-contact/");
     }
 
     private Customer customer(Long id, String tag) {

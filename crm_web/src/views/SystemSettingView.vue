@@ -21,19 +21,36 @@
         </div>
       </div>
 
-      <el-collapse-transition>
-        <div v-show="settingEditorMode === 'menu'" class="inline-editor-shell">
-          <div class="panel-heading compact">
-            <div>
-              <h3>{{ menuForm.id ? '编辑菜单' : '新增菜单' }}</h3>
+      <el-drawer v-model="menuEditorVisible" class="config-editor-drawer" :size="drawerSize" :close-on-click-modal="false">
+        <template #header>
+          <div class="drawer-editor__header">
+            <span class="drawer-editor__eyebrow">菜单管理</span>
+            <h3>{{ menuForm.id ? `编辑菜单：${menuForm.menuName || '未命名'}` : '新增菜单' }}</h3>
+            <div class="drawer-editor__meta">
+              <span>{{ menuForm.menuGroup || '未设置一级菜单' }}</span>
+              <span>{{ menuForm.routePath || '未设置路由' }}</span>
             </div>
           </div>
+        </template>
 
+        <div class="drawer-editor__body">
           <div class="form-grid">
-            <label>
-              <span>一级菜单</span>
-              <el-input v-model="menuForm.menuGroup" placeholder="如 系统设置" />
-            </label>
+            <div class="form-control full-span">
+              <span>归属目录</span>
+              <el-radio-group v-model="menuGroupMode">
+                <el-radio-button value="existing">选择已有目录</el-radio-button>
+                <el-radio-button value="new">新增一级目录</el-radio-button>
+              </el-radio-group>
+              <el-select
+                v-if="menuGroupMode === 'existing'"
+                v-model="menuForm.menuGroup"
+                filterable
+                placeholder="请选择菜单归属目录"
+              >
+                <el-option v-for="item in menuGroupOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+              <el-input v-else v-model="newMenuGroupName" placeholder="请输入新的一级目录名称，如 系统设置" />
+            </div>
             <label>
               <span>菜单名称</span>
               <el-input v-model="menuForm.menuName" placeholder="请输入菜单名称" />
@@ -55,16 +72,18 @@
               </el-select>
             </label>
           </div>
-
-          <div class="action-group">
-            <el-button type="primary" @click="saveMenu">保存菜单</el-button>
-            <el-button @click="resetMenuForm">重置表单</el-button>
-            <el-button plain @click="closeSettingEditor('menu')">收起</el-button>
-          </div>
         </div>
-      </el-collapse-transition>
 
-      <el-table :data="menuPagination.rows" stripe>
+        <template #footer>
+          <div class="drawer-editor__footer">
+            <el-button @click="closeSettingEditor('menu')">取消</el-button>
+            <el-button @click="resetMenuForm">重置表单</el-button>
+            <el-button type="primary" @click="saveMenu">{{ menuForm.id ? '保存修改' : '保存菜单' }}</el-button>
+          </div>
+        </template>
+      </el-drawer>
+
+      <el-table :data="menuPagination.rows" :row-class-name="menuRowClassName" stripe>
         <el-table-column label="菜单" min-width="220">
           <template #default="{ row }">
             <div class="table-primary">
@@ -117,7 +136,7 @@
     <section v-else-if="currentMode === 'third-party'" class="panel">
       <div class="panel-heading">
         <div>
-          <h3>三方接口</h3>
+          <h3>接口配置</h3>
         </div>
         <div class="action-group">
           <el-button type="primary" @click="openSettingEditor('third-party')">新增接口</el-button>
@@ -602,7 +621,7 @@
               </label>
               <label>
                 <span>绑定接口</span>
-                <el-select v-model="jobForm.providerId" clearable placeholder="请选择三方接口">
+                <el-select v-model="jobForm.providerId" clearable placeholder="请选择接口配置">
                   <el-option
                     v-for="item in providerConfigs"
                     :key="item.id"
@@ -1026,6 +1045,8 @@ const jobs = ref([])
 const logs = ref([])
 const selectedJobCode = ref('')
 const settingEditorMode = ref('')
+const menuGroupMode = ref('existing')
+const newMenuGroupName = ref('')
 const jobWorkspace = ref('schedule')
 const menuPagination = useTablePagination(computed(() => state.menuConfigs))
 const thirdPartyPagination = useTablePagination(providerConfigs)
@@ -1038,6 +1059,32 @@ const dictionaryPagination = useTablePagination(computed(() => state.dictionarie
 const parameterPagination = useTablePagination(computed(() => state.parameters))
 
 const currentMode = computed(() => route.meta.settingMode || 'menu')
+const drawerSize = 'min(92vw, 640px)'
+const menuGroupOptions = computed(() => {
+  const seen = new Set()
+  return state.menuConfigs
+    .map((item) => String(item.menuGroup || '').trim())
+    .filter(Boolean)
+    .filter((group) => {
+      if (seen.has(group)) {
+        return false
+      }
+      seen.add(group)
+      return true
+    })
+    .map((group) => ({
+      label: group,
+      value: group
+    }))
+})
+const menuEditorVisible = computed({
+  get: () => settingEditorMode.value === 'menu',
+  set: (visible) => {
+    if (!visible) {
+      closeSettingEditor('menu')
+    }
+  }
+})
 const moduleOptions = [
   { label: '客资', value: 'CLUE' },
   { label: '订单', value: 'ORDER' },
@@ -1179,6 +1226,9 @@ function replaceState(nextState) {
 
 function resetMenuForm() {
   Object.assign(menuForm, createMenuForm())
+  menuGroupMode.value = 'existing'
+  newMenuGroupName.value = ''
+  menuForm.menuGroup = menuGroupOptions.value[0]?.value || ''
 }
 
 function resetThirdPartyForm() {
@@ -1249,14 +1299,22 @@ function pickMenu(row) {
     ...row,
     roleCodes: [...(row.roleCodes || [])]
   })
+  menuGroupMode.value = 'existing'
+  newMenuGroupName.value = ''
   settingEditorMode.value = 'menu'
 }
 
+function menuRowClassName({ row }) {
+  return settingEditorMode.value === 'menu' && menuForm.id === row.id ? 'is-editing-row' : ''
+}
+
 function saveMenu() {
-  if (!menuForm.menuGroup || !menuForm.menuName || !menuForm.routePath) {
+  const resolvedMenuGroup = menuGroupMode.value === 'new' ? newMenuGroupName.value.trim() : String(menuForm.menuGroup || '').trim()
+  if (!resolvedMenuGroup || !menuForm.menuName || !menuForm.routePath) {
     ElMessage.warning('请先完整填写菜单信息')
     return
   }
+  menuForm.menuGroup = resolvedMenuGroup
   const nextItems = [...state.menuConfigs]
   if (menuForm.id) {
     const index = nextItems.findIndex((item) => item.id === menuForm.id)

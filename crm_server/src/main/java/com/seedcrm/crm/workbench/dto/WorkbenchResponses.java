@@ -103,6 +103,12 @@ public final class WorkbenchResponses {
         private String contactWayId;
         private String qrCodeUrl;
         private String shortLink;
+        private String bindingState;
+        private Long bindingUserId;
+        private String bindingUserName;
+        private String bindingUserPhone;
+        private String bindingStatus;
+        private String bindingMessage;
         private List<String> storeNames;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime generatedAt;

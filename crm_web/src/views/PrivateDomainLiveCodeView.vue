@@ -21,7 +21,8 @@
           <h3>活码配置</h3>
         </div>
         <div class="action-group">
-          <el-button type="primary" :loading="savingConfig" @click="handleSaveConfig">保存配置</el-button>
+          <el-button :loading="savingDraft" @click="handleSaveDraft">保存草稿</el-button>
+          <el-button type="primary" :loading="savingConfig" @click="handleSaveConfig">保存并发布到门店</el-button>
           <el-button @click="resetLiveCodeForm">重置</el-button>
         </div>
       </div>
@@ -103,19 +104,20 @@
 
       <div class="live-code-preview-grid">
         <div class="live-code-preview-card">
-          <img class="live-code-preview" :src="generatedResult.qrCodeUrl" :alt="generatedResult.codeName" />
+          <img class="live-code-preview" :src="generatedQrImage || generatedResult.qrCodeUrl" :alt="generatedResult.codeName" />
         </div>
 
         <div class="detail-card">
           <h3>{{ generatedResult.codeName }}</h3>
+          <p>运行模式：{{ executionModeLabel }}</p>
           <p>应用场景：{{ generatedResult.scene || '--' }}</p>
           <p>分配策略：{{ strategyLabel(generatedResult.strategy) }}</p>
           <p>活码 ID：{{ generatedResult.contactWayId || '--' }}</p>
-          <p>短链地址：{{ generatedResult.shortLink || '--' }}</p>
+          <p>基础联调地址：{{ resolveLiveCodeLink(generatedResult) || '--' }}</p>
           <p>生成时间：{{ formatDateTime(generatedResult.generatedAt) }}</p>
           <p>轮询员工：{{ (generatedResult.employeeNames || []).join(' / ') || '--' }}</p>
           <p>覆盖门店：{{ (generatedResult.storeNames || []).join(' / ') || '暂未选择门店' }}</p>
-          <p>{{ generatedResult.summary || '保存配置后系统会同步活码链接与门店覆盖状态。' }}</p>
+          <p>{{ liveCodePreviewSummary(generatedResult) }}</p>
           <el-button v-if="generatedResult.shortLink || generatedResult.qrCodeUrl" text type="primary" @click="copyLiveCodeLink(generatedResult)">
             复制链接
           </el-button>
@@ -196,6 +198,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import QRCode from 'qrcode'
 import {
   fetchWecomConfig,
   fetchWecomLiveCodeConfigs,
@@ -205,7 +208,7 @@ import {
 } from '../api/wecom'
 import { useTablePagination } from '../composables/useTablePagination'
 import { formatDateTime } from '../utils/format'
-import { loadSystemConsoleState } from '../utils/systemConsoleStore'
+import { buildSystemUrl, loadSystemConsoleState } from '../utils/systemConsoleStore'
 
 const STRATEGY_ROUND_ROBIN = 'ROUND_ROBIN'
 const EMPLOYEE_NAME_MAP = {
@@ -221,8 +224,10 @@ const storeOptions = ['静安门店', '浦东门店', '徐汇门店']
 
 const state = reactive(loadSystemConsoleState())
 const configs = ref([])
+const savingDraft = ref(false)
 const savingConfig = ref(false)
 const generatedResult = ref(null)
+const generatedQrImage = ref('')
 const wecomConfig = ref({
   executionMode: 'MOCK',
   liveCodeType: 2,
@@ -245,6 +250,7 @@ const availableEmployees = computed(() => {
 
 const selectedEmployees = computed(() => availableEmployees.value.filter((item) => liveCodeForm.employeeIds.includes(item.id)))
 const publishedStoreCount = computed(() => new Set(configs.value.flatMap((item) => item.storeNames || [])).size)
+const executionModeLabel = computed(() => (wecomConfig.value?.executionMode === 'LIVE' ? '真实企业微信' : 'MOCK 联调'))
 
 onMounted(async () => {
   await Promise.all([loadConfigs(), loadWecomConfig()])
@@ -285,6 +291,7 @@ async function loadWecomConfig() {
 function resetLiveCodeForm() {
   Object.assign(liveCodeForm, createLiveCodeForm())
   generatedResult.value = null
+  generatedQrImage.value = ''
 }
 
 function displayEmployeeName(employee) {
@@ -331,6 +338,10 @@ async function handleSaveConfig() {
     ElMessage.warning('请先填写活码名称并选择轮询员工')
     return
   }
+  if (!liveCodeForm.storeNames.length) {
+    ElMessage.warning('请选择需要发布活码的门店')
+    return
+  }
   savingConfig.value = true
   try {
     const saved = await saveWecomLiveCodeConfig(buildPayload(liveCodeForm))
@@ -362,10 +373,33 @@ async function handleSaveConfig() {
       storeNames: latest.storeNames || saved.storeNames || []
     })
     generatedResult.value = latest
+    await refreshGeneratedQrImage()
     await loadConfigs()
-    ElMessage.success('活码配置已保存')
+    ElMessage.success(resolveSaveSuccessMessage(latest))
   } finally {
     savingConfig.value = false
+  }
+}
+
+async function handleSaveDraft() {
+  if (!liveCodeForm.codeName || !liveCodeForm.employeeIds.length) {
+    ElMessage.warning('请先填写活码名称并选择轮询员工')
+    return
+  }
+  savingDraft.value = true
+  try {
+    const saved = await saveWecomLiveCodeConfig(buildPayload(liveCodeForm))
+    Object.assign(liveCodeForm, {
+      ...saved,
+      employeeIds: resolveEmployeeIds(saved),
+      storeNames: saved.storeNames || []
+    })
+    generatedResult.value = saved.qrCodeUrl ? saved : null
+    await refreshGeneratedQrImage()
+    await loadConfigs()
+    ElMessage.success('草稿已保存，尚未生成或发布到门店')
+  } finally {
+    savingDraft.value = false
   }
 }
 
@@ -386,6 +420,7 @@ function pickLiveCodeConfig(row) {
         strategyLabel: strategyLabel(row.strategy)
       }
     : null
+  refreshGeneratedQrImage()
 }
 
 async function toggleLiveCodeConfig(row) {
@@ -398,7 +433,7 @@ async function toggleLiveCodeConfig(row) {
 }
 
 async function copyLiveCodeLink(row) {
-  const link = row?.shortLink || row?.qrCodeUrl
+  const link = resolveLiveCodeLink(row)
   if (!link) {
     ElMessage.warning('当前活码暂无可复制链接')
     return
@@ -409,6 +444,51 @@ async function copyLiveCodeLink(row) {
   } catch {
     ElMessage.warning('当前环境不支持自动复制')
   }
+}
+
+async function refreshGeneratedQrImage() {
+  const link = resolveLiveCodeLink(generatedResult.value)
+  if (wecomConfig.value?.executionMode !== 'LIVE' && link) {
+    generatedQrImage.value = await QRCode.toDataURL(link, {
+      width: 260,
+      margin: 2,
+      color: {
+        dark: '#173042',
+        light: '#ffffff'
+      }
+    })
+    return
+  }
+  generatedQrImage.value = ''
+}
+
+function resolveLiveCodeLink(row) {
+  const link = String(row?.shortLink || '').trim()
+  if (link) {
+    return /^https?:\/\//i.test(link) ? link : buildSystemUrl(state, 'callback', link)
+  }
+  const qrCodeUrl = String(row?.qrCodeUrl || '').trim()
+  if (!qrCodeUrl || qrCodeUrl.startsWith('data:image')) {
+    return ''
+  }
+  return qrCodeUrl
+}
+
+function resolveSaveSuccessMessage(latest) {
+  if (latest?.qrCodeUrl && (latest?.storeNames || []).length) {
+    return '配置已保存，活码已生成并发布到门店'
+  }
+  if (latest?.qrCodeUrl) {
+    return '配置已保存，活码已生成；选择覆盖门店后可发布到门店'
+  }
+  return '配置已保存，请检查企业微信配置后生成活码'
+}
+
+function liveCodePreviewSummary(row) {
+  if (wecomConfig.value?.executionMode === 'LIVE') {
+    return row?.summary || '真实企业微信码已生成；客户绑定以订单列表生成的专属码为准。'
+  }
+  return '基础码用于门店发布；客户绑定请在订单列表生成带 state 的专属企微码。'
 }
 </script>
 

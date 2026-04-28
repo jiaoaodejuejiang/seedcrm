@@ -22,6 +22,7 @@ import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.enums.OrderType;
 import com.seedcrm.crm.order.mapper.OrderMapper;
+import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.planorder.entity.OrderRoleRecord;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
@@ -32,11 +33,13 @@ import com.seedcrm.crm.salary.entity.WithdrawRecord;
 import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
 import com.seedcrm.crm.salary.mapper.WithdrawRecordMapper;
 import com.seedcrm.crm.wecom.entity.CustomerWecomRelation;
+import com.seedcrm.crm.wecom.entity.WecomAppConfig;
 import com.seedcrm.crm.wecom.entity.WecomLiveCodeConfig;
 import com.seedcrm.crm.wecom.entity.WecomTouchLog;
 import com.seedcrm.crm.wecom.mapper.CustomerWecomRelationMapper;
 import com.seedcrm.crm.wecom.mapper.WecomTouchLogMapper;
 import com.seedcrm.crm.wecom.service.WecomConsoleService;
+import com.seedcrm.crm.wecom.support.WecomBindingStateCodec;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CurrentRoleResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CustomerProfileResponse;
@@ -58,6 +61,8 @@ import com.seedcrm.crm.workbench.service.StaffDirectoryService;
 import com.seedcrm.crm.workbench.service.WorkbenchService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -72,8 +77,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestClient;
 
 @Service
 public class WorkbenchServiceImpl implements WorkbenchService {
@@ -215,13 +222,25 @@ public class WorkbenchServiceImpl implements WorkbenchService {
     }
 
     @Override
-    public StoreLiveCodePreviewResponse getOrderLiveCodePreview(Long orderId) {
+    public StoreLiveCodePreviewResponse getOrderLiveCodePreview(Long orderId, PermissionRequestContext context) {
         if (orderId == null || orderId <= 0) {
             throw new BusinessException("orderId is required");
         }
         Order order = orderMapper.selectById(orderId);
         if (order == null) {
             throw new BusinessException("order not found");
+        }
+        Long currentUserId = context == null ? null : context.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BusinessException("当前登录人信息缺失，无法生成专属企微活码");
+        }
+        Customer customer = order.getCustomerId() == null ? null : customerMapper.selectById(order.getCustomerId());
+        if (customer == null) {
+            throw new BusinessException("订单未绑定客户，无法生成专属企微活码");
+        }
+        String bindingUserPhone = staffDirectoryService.getUserPhone(currentUserId);
+        if (!StringUtils.hasText(bindingUserPhone)) {
+            throw new BusinessException("当前账号未维护手机号，无法生成专属企微活码，请联系管理员完善员工手机号");
         }
         String storeName = resolveVisibleStoreName(order.getClueId() == null ? order.getId() : order.getClueId());
         return wecomConsoleService.listLiveCodeConfigs().stream()
@@ -236,18 +255,112 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                         .comparing(WecomLiveCodeConfig::getPublishedAt, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(WecomLiveCodeConfig::getGeneratedAt, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(WecomLiveCodeConfig::getId, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(config -> new StoreLiveCodePreviewResponse(
-                        config.getId(),
-                        config.getCodeName(),
-                        storeName,
-                        config.getContactWayId(),
-                        config.getQrCodeUrl(),
-                        config.getShortLink(),
-                        config.getStoreNames(),
-                        config.getGeneratedAt(),
-                        config.getPublishedAt()))
+                .map(config -> buildOrderLiveCodePreview(config, order, customer, storeName, currentUserId, bindingUserPhone))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private StoreLiveCodePreviewResponse buildOrderLiveCodePreview(WecomLiveCodeConfig config,
+                                                                   Order order,
+                                                                   Customer customer,
+                                                                   String storeName,
+                                                                   Long currentUserId,
+                                                                   String bindingUserPhone) {
+        String bindingState = WecomBindingStateCodec.encode(order.getId(), currentUserId, customer.getId(), bindingUserPhone);
+        String bindingUserName = staffDirectoryService.getUserName(currentUserId);
+        BindingQr bindingQr = resolveBindingQr(config, bindingState, currentUserId);
+        return new StoreLiveCodePreviewResponse(
+                config.getId(),
+                config.getCodeName(),
+                storeName,
+                bindingQr.contactWayId(),
+                bindingQr.qrCodeUrl(),
+                bindingQr.shortLink(),
+                bindingState,
+                currentUserId,
+                bindingUserName,
+                bindingUserPhone,
+                bindingQr.status(),
+                bindingQr.message(),
+                config.getStoreNames(),
+                config.getGeneratedAt(),
+                config.getPublishedAt());
+    }
+
+    private BindingQr resolveBindingQr(WecomLiveCodeConfig config, String bindingState, Long currentUserId) {
+        WecomAppConfig wecomConfig = wecomConsoleService.getConfig();
+        boolean useLiveMode = wecomConfig != null
+                && wecomConfig.getEnabled() != null
+                && wecomConfig.getEnabled() == 1
+                && "LIVE".equalsIgnoreCase(wecomConfig.getExecutionMode());
+        if (!useLiveMode) {
+            String shortLink = appendQueryParameter(
+                    "/wecom/mock-contact/" + normalizeContactWayId(config.getContactWayId()),
+                    "state",
+                    bindingState);
+            return new BindingQr(
+                    config.getContactWayId(),
+                    config.getQrCodeUrl(),
+                    shortLink,
+                    "MOCK_READY",
+                    "模拟模式已生成系统联调二维码，扫码会走本系统 MOCK 回调完成绑定");
+        }
+
+        String wecomAccount = staffDirectoryService.getWecomAccount(currentUserId);
+        if (!StringUtils.hasText(wecomAccount)) {
+            return new BindingQr(
+                    config.getContactWayId(),
+                    null,
+                    null,
+                    "MISSING_ACCOUNT",
+                    "当前账号未维护企业微信账号，无法生成订单专属企微活码");
+        }
+        try {
+            String accessToken = wecomConsoleService.resolveAccessToken(wecomConfig);
+            Map<String, Object> request = new LinkedHashMap<>();
+            request.put("type", wecomConfig.getLiveCodeType() == null ? 2 : wecomConfig.getLiveCodeType());
+            request.put("scene", wecomConfig.getLiveCodeScene() == null ? 2 : wecomConfig.getLiveCodeScene());
+            request.put("style", wecomConfig.getLiveCodeStyle() == null ? 1 : wecomConfig.getLiveCodeStyle());
+            request.put("remark", config.getCodeName() + "-订单绑定");
+            request.put("skip_verify", wecomConfig.getSkipVerify() == null || wecomConfig.getSkipVerify() == 1);
+            request.put("state", bindingState);
+            request.put("user", List.of(wecomAccount));
+            com.fasterxml.jackson.databind.JsonNode response = RestClient.create()
+                    .post()
+                    .uri("https://qyapi.weixin.qq.com/cgi-bin/externalcontact/add_contact_way?access_token={token}", accessToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(com.fasterxml.jackson.databind.JsonNode.class);
+            int errorCode = response == null ? -1 : response.path("errcode").asInt(-1);
+            if (errorCode != 0) {
+                String message = response == null ? "企业微信专属活码生成失败" : response.path("errmsg").asText("企业微信专属活码生成失败");
+                return new BindingQr(config.getContactWayId(), null, null, "LIVE_FALLBACK", message);
+            }
+            String contactWayId = extractText(response, "config_id", "contact_way_id");
+            String qrCodeUrl = extractText(response, "qr_code", "data.qr_code");
+            return new BindingQr(contactWayId, qrCodeUrl, qrCodeUrl, "LIVE_READY", "真实模式已生成带 state 的订单专属活码");
+        } catch (Exception exception) {
+            return new BindingQr(
+                    config.getContactWayId(),
+                    null,
+                    null,
+                    "LIVE_FALLBACK",
+                    "专属活码生成失败：" + exception.getMessage());
+        }
+    }
+
+    private String normalizeContactWayId(String contactWayId) {
+        return StringUtils.hasText(contactWayId) ? contactWayId.trim() : "mock";
+    }
+
+    private String appendQueryParameter(String url, String key, String value) {
+        String separator = StringUtils.hasText(url) && url.contains("?") ? "&" : "?";
+        return (StringUtils.hasText(url) ? url.trim() : "")
+                + separator
+                + URLEncoder.encode(key, StandardCharsets.UTF_8)
+                + "="
+                + URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
     }
 
     @Override
@@ -736,6 +849,25 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         return value == null ? null : value.trim().toUpperCase(Locale.ROOT);
     }
 
+    private String extractText(com.fasterxml.jackson.databind.JsonNode node, String... candidates) {
+        if (node == null || candidates == null) {
+            return null;
+        }
+        for (String candidate : candidates) {
+            com.fasterxml.jackson.databind.JsonNode current = node;
+            for (String part : candidate.split("\\.")) {
+                if (current == null) {
+                    break;
+                }
+                current = current.path(part);
+            }
+            if (current != null && !current.isMissingNode() && !current.isNull() && StringUtils.hasText(current.asText())) {
+                return current.asText().trim();
+            }
+        }
+        return null;
+    }
+
     private String resolveProductSourceType(String sourceChannel,
                                             String legacySource,
                                             String rawData,
@@ -942,5 +1074,12 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         private TeamFinanceBucket(String teamLabel) {
             this.teamLabel = teamLabel;
         }
+    }
+
+    private record BindingQr(String contactWayId,
+                             String qrCodeUrl,
+                             String shortLink,
+                             String status,
+                             String message) {
     }
 }

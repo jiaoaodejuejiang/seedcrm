@@ -311,7 +311,10 @@ export function formatActionCode(value) {
       RECYCLE: '回收',
       FINISH: '完结',
       ASSIGN_ROLE: '分配角色',
+      REFUND_STORE: '门店退款',
+      REFUND_PAYMENT: '付款退款',
       TRIGGER: '触发',
+      DEBUG: '调试',
       CHECK: '核验'
     }[normalize(value)] || value || '--'
   )

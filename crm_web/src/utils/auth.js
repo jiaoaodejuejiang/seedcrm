@@ -1,5 +1,6 @@
 import { computed, reactive } from 'vue'
 import { fetchCurrentUser, login as loginRequest, logout as logoutRequest } from '../api/auth'
+import { loadSystemConsoleState } from './systemConsoleStore'
 
 const STORAGE_KEY = 'seedcrm.auth-token'
 
@@ -16,9 +17,15 @@ const accessibleRoutes = [
   { path: '/store-service/service-design', moduleCode: 'PLANORDER', roleCodes: ['STORE_MANAGER', 'ADMIN'] },
   { path: '/store-service/personnel', moduleCode: 'SYSTEM', roleCodes: ['STORE_MANAGER', 'ADMIN'] },
   { path: '/store-service/roles', moduleCode: 'SYSTEM', roleCodes: ['STORE_MANAGER', 'ADMIN'] },
+  { path: '/private-domain/live-code', moduleCode: 'WECOM', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'] },
+  { path: '/private-domain/customer-profile', moduleCode: 'WECOM', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'] },
+  { path: '/private-domain/moments', moduleCode: 'WECOM', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'] },
+  { path: '/private-domain/tags', moduleCode: 'WECOM', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'] },
   { path: '/finance', moduleCode: 'FINANCE' },
   { path: '/finance/salary/my', moduleCode: 'SALARY' },
   { path: '/finance/salary/settlements', moduleCode: 'SALARY', roleCodes: ['ADMIN', 'FINANCE'] },
+  { path: '/finance/salary/withdrawals', moduleCode: 'SALARY', roleCodes: ['ADMIN', 'FINANCE'] },
+  { path: '/finance/salary/refund-adjustments', moduleCode: 'SALARY', roleCodes: ['ADMIN', 'FINANCE'] },
   { path: '/finance/salary/settlement-config', moduleCode: 'SALARY', roleCodes: ['ADMIN', 'FINANCE'] },
   { path: '/finance/salary-config/distributor', moduleCode: 'SALARY', roleCodes: ['ADMIN'] },
   { path: '/system/departments', moduleCode: 'SYSTEM', roleCodes: ['ADMIN'] },
@@ -28,7 +35,10 @@ const accessibleRoutes = [
   { path: '/settings/menu', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
   { path: '/settings/payment', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
   { path: '/settings/integration/third-party', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-  { path: '/settings/integration/callback', moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
+  { path: '/settings/integration/callback', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+  { path: '/settings/integration/jobs', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+  { path: '/settings/integration/debug', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+  { path: '/settings/integration/distribution-api', moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
 ]
 
 export const authState = reactive({
@@ -168,6 +178,9 @@ export function clearAuthSession() {
 }
 
 export function hasRole(roleCodes = []) {
+  if (!isCurrentRoleEnabled()) {
+    return false
+  }
   if (!roleCodes?.length) {
     return true
   }
@@ -179,6 +192,13 @@ export function hasModule(moduleCode) {
   if (!moduleCode) {
     return true
   }
+  if (!isCurrentRoleEnabled()) {
+    return false
+  }
+  const configuredRole = getConfiguredCurrentRole()
+  if (configuredRole?.moduleCodes?.length) {
+    return configuredRole.moduleCodes.includes(moduleCode)
+  }
   const modules = authState.currentUser?.allowedModules || []
   return modules.includes(moduleCode)
 }
@@ -187,13 +207,98 @@ export function hasAccess(moduleCode, roleCodes = []) {
   return hasModule(moduleCode) && hasRole(roleCodes)
 }
 
+export function hasRouteAccess(path, moduleCode, roleCodes = []) {
+  if (!hasAccess(moduleCode, roleCodes)) {
+    return false
+  }
+  const normalizedPath = normalizePath(path)
+  const backendRoutes = getBackendMenuRoutes()
+  const hasBackendRouteSource = backendRoutes.length > 0
+  if (hasBackendRouteSource && !backendRoutes.includes(normalizedPath)) {
+    return false
+  }
+  const configuredMenu = getConfiguredMenuConfigs().find((item) => normalizePath(item.routePath) === normalizedPath)
+  if (configuredMenu) {
+    return configuredMenu.isEnabled !== 0
+      && hasModule(configuredMenu.moduleCode)
+      && hasRole(configuredMenu.roleCodes || [])
+  }
+  if (hasBackendRouteSource) {
+    return true
+  }
+  return true
+}
+
 export function getFirstAccessibleRoute() {
+  const defaultRoute = normalizePath(authState.currentUser?.defaultRoute)
+  if (defaultRoute && hasRouteAccess(defaultRoute)) {
+    return defaultRoute
+  }
+
+  const configuredRoute = getConfiguredMenuConfigs()
+    .filter((item) => item.isEnabled !== 0)
+    .sort((left, right) => Number(left.id || 0) - Number(right.id || 0))
+    .find((item) => hasRouteAccess(item.routePath, item.moduleCode, item.roleCodes || []))
+  if (configuredRoute?.routePath) {
+    return configuredRoute.routePath
+  }
+
+  const backendRoute = getBackendMenuRoutes()[0]
+  if (backendRoute) {
+    return backendRoute
+  }
+
   for (const route of accessibleRoutes) {
-    if (hasAccess(route.moduleCode, route.roleCodes)) {
+    if (hasRouteAccess(route.path, route.moduleCode, route.roleCodes)) {
       return route.path
     }
   }
   return '/login'
+}
+
+export function getEffectiveMenuConfigs() {
+  const currentRoleCode = getCurrentRoleCode()
+  const merged = new Map()
+  for (const item of flattenMenuTree(authState.currentUser?.menuTree || [])) {
+    if (!item.routePath) {
+      continue
+    }
+    merged.set(normalizePath(item.routePath), {
+      id: item.key,
+      menuGroup: item.menuGroup || '',
+      menuName: item.label,
+      routePath: item.routePath,
+      moduleCode: item.moduleCode,
+      roleCodes: currentRoleCode ? [currentRoleCode] : [],
+      isEnabled: 1,
+      permissionCode: item.permissionCode,
+      source: 'server'
+    })
+  }
+  for (const item of getConfiguredMenuConfigs()) {
+    const routePath = normalizePath(item.routePath)
+    if (!routePath) {
+      continue
+    }
+    const serverItem = merged.get(routePath)
+    if (serverItem) {
+      merged.set(routePath, {
+        ...serverItem,
+        menuGroup: item.menuGroup || serverItem.menuGroup,
+        menuName: item.menuName || serverItem.menuName,
+        routePath,
+        isEnabled: item.isEnabled,
+        source: 'server-local'
+      })
+    } else {
+      merged.set(routePath, {
+        ...item,
+        routePath,
+        source: 'local'
+      })
+    }
+  }
+  return Array.from(merged.values())
 }
 
 function persistToken() {
@@ -202,4 +307,64 @@ function persistToken() {
   } else {
     window.localStorage.removeItem(STORAGE_KEY)
   }
+}
+
+function getConfiguredCurrentRole() {
+  const currentRoleCode = getCurrentRoleCode()
+  if (!currentRoleCode) {
+    return null
+  }
+  try {
+    return (loadSystemConsoleState().roles || []).find((role) => String(role.roleCode || '').trim().toUpperCase() === currentRoleCode) || null
+  } catch {
+    return null
+  }
+}
+
+function isCurrentRoleEnabled() {
+  if (!authState.currentUser) {
+    return false
+  }
+  const configuredRole = getConfiguredCurrentRole()
+  return configuredRole ? configuredRole.isEnabled !== 0 : true
+}
+
+function getConfiguredMenuConfigs() {
+  try {
+    return loadSystemConsoleState().menuConfigs || []
+  } catch {
+    return []
+  }
+}
+
+function getCurrentRoleCode() {
+  return String(authState.currentUser?.roleCode || '').trim().toUpperCase()
+}
+
+function getBackendMenuRoutes() {
+  const routes = authState.currentUser?.menuRoutes || []
+  return routes.map(normalizePath).filter(Boolean)
+}
+
+function normalizePath(path) {
+  const value = String(path || '').trim()
+  if (!value) {
+    return ''
+  }
+  return value.startsWith('/') ? value : `/${value}`
+}
+
+function flattenMenuTree(nodes = [], parentGroup = '') {
+  const entries = []
+  for (const node of nodes || []) {
+    const nextGroup = node.routePath ? parentGroup : [parentGroup, node.label].filter(Boolean).join(' / ')
+    if (node.routePath) {
+      entries.push({
+        ...node,
+        menuGroup: parentGroup
+      })
+    }
+    entries.push(...flattenMenuTree(node.children || [], nextGroup))
+  }
+  return entries
 }

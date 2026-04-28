@@ -40,6 +40,10 @@ export function fetchWecomCallbackLogs(appCode) {
   })
 }
 
+export function debugWecomCallback(payload) {
+  return http.post('/wecom/callback/debug', payload)
+}
+
 export function sendWecomMessage(payload) {
   return http.post('/wecom/send', payload)
 }

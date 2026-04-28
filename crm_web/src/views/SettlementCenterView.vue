@@ -44,7 +44,7 @@
 
     <section class="panel">
       <el-tabs v-model="activeTab" class="platform-tabs">
-        <el-tab-pane label="结算台" name="settlement">
+        <el-tab-pane v-if="pageMode === 'settlement'" label="薪酬结算单" name="settlement">
           <div class="form-grid">
             <label class="full-span">
               <span>结算时间范围</span>
@@ -112,7 +112,7 @@
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane :label="withdrawTabLabel" name="withdraw">
+        <el-tab-pane v-if="pageMode === 'withdraw'" :label="withdrawTabLabel" name="withdraw">
           <template v-if="matchedMode === 'LEDGER_ONLY'">
             <el-empty description="当前角色只记账，不走提现流程" />
           </template>
@@ -186,7 +186,7 @@
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane label="退款冲正" name="refunds">
+        <el-tab-pane v-if="pageMode === 'refunds'" label="已核销退款冲正" name="refunds">
           <div class="settlement-refund-head">
             <el-alert
               title="这里处理已核销团购券/定金退款对薪酬的冲正；门店线下确认单金额退款仍在门店订单列表登记。"
@@ -307,8 +307,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRoute } from 'vue-router'
 import {
   approveSalaryWithdraw,
   confirmSalarySettlement,
@@ -338,6 +339,7 @@ import {
   toDateTimeString
 } from '../utils/format'
 
+const route = useRoute()
 const state = reactive(loadSystemConsoleState())
 const staffOptions = ref([])
 const selectedUserId = ref(null)
@@ -399,6 +401,7 @@ const matchedRule = computed(() => {
 const matchedMode = computed(() => matchedRule.value?.settlementMode || 'LEDGER_ONLY')
 const currentModeLabel = computed(() => formatSettlementMode(matchedMode.value))
 const withdrawTabLabel = computed(() => (matchedMode.value === 'LEDGER_ONLY' ? '记账记录' : '提现处理'))
+const pageMode = computed(() => route.meta?.settlementCenterMode || 'settlement')
 
 function staffLabel(staff) {
   return `${staff.userName} / ${formatRoleCode(staff.roleCode)}`
@@ -674,10 +677,23 @@ function formatServiceConfirmAmount(row) {
 }
 
 onMounted(async () => {
+  activeTab.value = pageMode.value
   await initSelection()
   await loadSalaryData()
-  await loadRefundableOrders()
+  if (pageMode.value === 'refunds') {
+    await loadRefundableOrders()
+  }
 })
+
+watch(
+  () => pageMode.value,
+  async (mode) => {
+    activeTab.value = mode
+    if (mode === 'refunds') {
+      await loadRefundableOrders()
+    }
+  }
+)
 </script>
 
 <style scoped>

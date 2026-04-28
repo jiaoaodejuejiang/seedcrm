@@ -2,11 +2,13 @@ package com.seedcrm.crm.permission.support;
 
 import com.seedcrm.crm.auth.model.AuthenticatedUser;
 import com.seedcrm.crm.auth.service.AuthService;
+import com.seedcrm.crm.common.exception.BusinessException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -14,9 +16,11 @@ import org.springframework.util.StringUtils;
 public class PermissionRequestContextResolver {
 
     private final AuthService authService;
+    private final Environment environment;
 
-    public PermissionRequestContextResolver(AuthService authService) {
+    public PermissionRequestContextResolver(AuthService authService, Environment environment) {
         this.authService = authService;
+        this.environment = environment;
     }
 
     public PermissionRequestContext resolve(HttpServletRequest request) {
@@ -34,7 +38,10 @@ public class PermissionRequestContextResolver {
             return context;
         }
         PermissionRequestContext context = new PermissionRequestContext();
-        context.setRoleCode(normalize(stringHeader(request, "X-Role-Code", "roleCode", "ADMIN")));
+        if (!allowHeaderFallback()) {
+            throw new BusinessException("登录状态已失效，请重新登录");
+        }
+        context.setRoleCode(normalize(stringHeader(request, "X-Role-Code", "roleCode", null)));
         context.setDataScope(normalize(stringHeader(request, "X-Data-Scope", "dataScope", null)));
         context.setCurrentUserId(longHeader(request, "X-User-Id", "userId"));
         context.setCurrentStoreId(longHeader(request, "X-Store-Id", "storeId"));
@@ -43,6 +50,12 @@ public class PermissionRequestContextResolver {
         context.setBoundCustomerUserId(longHeader(request, "X-Bound-Customer-User-Id", "boundCustomerUserId"));
         context.setTeamMemberIds(parseLongList(stringHeader(request, "X-Team-Member-Ids", "teamMemberIds", null)));
         return context;
+    }
+
+    private boolean allowHeaderFallback() {
+        return Arrays.stream(environment.getActiveProfiles())
+                .map(profile -> profile == null ? "" : profile.trim().toLowerCase(Locale.ROOT))
+                .anyMatch(profile -> profile.equals("local") || profile.equals("test") || profile.equals("dev"));
     }
 
     private AuthenticatedUser resolveAuthenticatedUser(HttpServletRequest request) {

@@ -283,15 +283,15 @@
           <div class="form-grid">
             <label>
               <span>系统基础域名</span>
-              <el-input :model-value="systemBaseUrl" readonly />
+              <span class="readonly-prefix">{{ systemBaseUrl }}</span>
             </label>
             <label>
               <span>API 域名</span>
-              <el-input :model-value="apiBaseUrl" readonly />
+              <span class="readonly-prefix">{{ apiBaseUrl }}</span>
             </label>
             <label class="full-span">
               <span>回调地址</span>
-              <el-input :model-value="wecomCallbackUrl" readonly />
+              <span class="readonly-prefix">{{ wecomCallbackUrl }}</span>
             </label>
             <label>
               <span>授权回跳地址</span>
@@ -551,6 +551,17 @@ async function handleTest() {
 
 .platform-tabs :deep(.el-tabs__header) {
   margin-bottom: 20px;
+}
+
+.readonly-prefix {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+  word-break: break-all;
 }
 
 .workspace-link-grid {

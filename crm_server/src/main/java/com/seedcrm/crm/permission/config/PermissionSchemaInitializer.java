@@ -165,8 +165,25 @@ public class PermissionSchemaInitializer {
         seedPolicy("SCHEDULER", "VIEW", "CLUE_MANAGER", "ALL", "scheduler monitor");
         seedPolicy("SCHEDULER", "UPDATE", "CLUE_MANAGER", "ALL", "scheduler config");
         seedPolicy("SCHEDULER", "TRIGGER", "CLUE_MANAGER", "ALL", "scheduler trigger");
+        seedPolicy("SCHEDULER", "VIEW", "ADMIN", "ALL", "scheduler admin monitor");
+        seedPolicy("SCHEDULER", "UPDATE", "ADMIN", "ALL", "scheduler admin config");
+        seedPolicy("SCHEDULER", "TRIGGER", "ADMIN", "ALL", "scheduler admin trigger");
+        seedPolicy("SCHEDULER", "DEBUG", "ADMIN", "ALL", "scheduler callback and interface debug");
         seedPolicy("WECOM", "VIEW", "PRIVATE_DOMAIN_SERVICE", "ALL", "wecom workspace");
         seedPolicy("WECOM", "UPDATE", "PRIVATE_DOMAIN_SERVICE", "ALL", "wecom workspace");
+
+        seedPolicy("SALARY", "VIEW", "ONLINE_CUSTOMER_SERVICE", "SELF", "self salary only");
+        seedPolicy("SALARY", "VIEW", "PRIVATE_DOMAIN_SERVICE", "SELF", "self salary only");
+        seedPolicy("SALARY", "VIEW", "STORE_SERVICE", "SELF", "self salary only");
+        seedPolicy("SALARY", "VIEW", "PHOTOGRAPHER", "SELF", "self salary only");
+        seedPolicy("SALARY", "VIEW", "MAKEUP_ARTIST", "SELF", "self salary only");
+        seedPolicy("SALARY", "VIEW", "PHOTO_SELECTOR", "SELF", "self salary only");
+        seedPolicy("SALARY", "VIEW", "CLUE_MANAGER", "SELF", "self salary only");
+        seedPolicy("SALARY", "VIEW", "CLUE_MANAGER", "TEAM", "managed clue team salary");
+        seedPolicy("SALARY", "VIEW", "STORE_MANAGER", "SELF", "self salary only");
+        seedPolicy("SALARY", "VIEW", "STORE_MANAGER", "TEAM", "managed store team salary");
+        seedPolicy("SALARY", "VIEW", "FINANCE", "ALL", "finance salary overview");
+        seedPolicy("SALARY", "UPDATE", "FINANCE", "ALL", "finance settlement operation");
 
         seedPolicy("PERMISSION", "VIEW", "ADMIN", "ALL", null);
         seedPolicy("PERMISSION", "UPDATE", "ADMIN", "ALL", null);

@@ -87,7 +87,7 @@
               <el-button type="primary" size="small" :disabled="!canOpenServiceForm(row)" @click="openServiceForm(row)">
                 {{ serviceButtonLabel(row) }}
               </el-button>
-              <el-button v-if="canRefundOrder(row)" type="danger" size="small" plain @click="handleRefund(row)">登记门店退款</el-button>
+              <el-button v-if="canRefundOrder(row)" type="danger" size="small" plain @click="handleRefund(row)">退款</el-button>
               <el-button size="small" plain @click="openWecomDialog(row)">企微活码</el-button>
               <el-button v-if="row.planOrderId && workflowStatus(row) === 'pending-service'" size="small" plain @click="openQrDialog(row)">
                 客户扫码签单
@@ -128,21 +128,28 @@
       </div>
     </el-dialog>
 
-    <el-dialog v-model="wecomDialogVisible" title="添加企业微信" width="440px">
+    <el-dialog v-model="wecomDialogVisible" title="请客户扫码添加接待企微" width="440px">
       <div v-loading="wecomLoading" class="wecom-dialog">
         <template v-if="wecomPreview">
           <div class="qr-panel__code">
-            <img :src="wecomPreview.qrCodeUrl" alt="企业微信活码" />
+            <img v-if="wecomQrImage" :src="wecomQrImage" alt="企业微信活码" />
+            <div v-else class="qr-panel__empty">暂无可用二维码</div>
           </div>
           <div class="wecom-dialog__meta">
             <strong>{{ activeOrderForWecom?.customerName || '未命名客户' }}</strong>
             <span>{{ activeOrderForWecom?.customerPhone || '--' }}</span>
             <span>{{ wecomPreview.storeName }}</span>
             <span>活码：{{ wecomPreview.codeName || '--' }}</span>
-            <el-tag type="success" effect="light">门店活码已就绪</el-tag>
+            <span>二维码类型：{{ wecomModeLabel(wecomPreview.bindingStatus) }}</span>
+            <span>绑定人：{{ wecomPreview.bindingUserName || '--' }} / {{ maskPhone(wecomPreview.bindingUserPhone) }}</span>
+            <span>订单绑定：{{ maskBindingState(wecomPreview.bindingState) }}</span>
+            <el-tag :type="wecomStatusTagType(wecomPreview.bindingStatus)" effect="light">
+              {{ wecomPreview.bindingMessage || '专属活码已就绪' }}
+            </el-tag>
+            <small v-if="wecomContactLink" class="wecom-dialog__link">{{ wecomContactLinkLabel }}：{{ wecomContactLink }}</small>
           </div>
           <div class="action-group action-group--center">
-            <el-button text type="primary" @click="copyWecomLink">复制添加链接</el-button>
+            <el-button text type="primary" :disabled="!wecomContactLink" @click="copyWecomLink">{{ wecomCopyButtonLabel }}</el-button>
             <el-button text @click="router.push('/private-domain/live-code')">去活码配置</el-button>
           </div>
         </template>
@@ -150,28 +157,6 @@
         <el-empty v-else description="当前门店未发布企业微信活码">
           <el-button type="primary" @click="router.push('/private-domain/live-code')">去活码配置</el-button>
         </el-empty>
-      </div>
-    </el-dialog>
-
-    <el-dialog v-model="legacyServiceDialogVisible" title="补录服务确认单" width="560px">
-      <div class="legacy-service-empty">
-        <el-empty description="该订单暂无服务确认单记录" />
-        <div v-if="legacyServiceOrder" class="legacy-service-empty__summary">
-          <span>客户：{{ legacyServiceOrder.customerName || legacyServiceOrder.customerPhone || '--' }}</span>
-          <span>门店：{{ legacyServiceOrder.storeName || '--' }}</span>
-          <span>核销金额：{{ formatMoney(resolveVerificationAmount(legacyServiceOrder)) }}</span>
-          <span>确认单金额：{{ formatServiceConfirmAmount(legacyServiceOrder) }}</span>
-        </div>
-        <el-alert
-          title="该入口用于历史数据补录，只保存服务确认单内容，不改变订单已完成状态。"
-          type="warning"
-          show-icon
-          :closable="false"
-        />
-        <div class="action-group action-group--center">
-          <el-button @click="legacyServiceDialogVisible = false">稍后处理</el-button>
-          <el-button type="primary" @click="handleBackfillLegacyServiceOrder">补录确认单</el-button>
-        </div>
       </div>
     </el-dialog>
 
@@ -233,7 +218,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import QRCode from 'qrcode'
 import { useRouter } from 'vue-router'
 import { createPlanOrder } from '../api/actions'
@@ -251,13 +236,12 @@ const customerNameKeyword = ref('')
 const customerPhoneKeyword = ref('')
 const qrDialogVisible = ref(false)
 const wecomDialogVisible = ref(false)
-const legacyServiceDialogVisible = ref(false)
 const refundDialogVisible = ref(false)
 const refundSubmitting = ref(false)
 const wecomLoading = ref(false)
 const activeOrderForWecom = ref(null)
 const wecomPreview = ref(null)
-const legacyServiceOrder = ref(null)
+const wecomQrImage = ref('')
 const systemState = loadSystemConsoleState()
 const qrPreview = ref({
   orderNo: '',
@@ -288,14 +272,12 @@ const pendingVerificationCount = computed(
 const pendingServiceCount = computed(() => storeServiceOrders.value.filter((item) => workflowStatus(item) === 'pending-service').length)
 const servingCount = computed(() => storeServiceOrders.value.filter((item) => workflowStatus(item) === 'serving').length)
 const completedCount = computed(() => storeServiceOrders.value.filter((item) => workflowStatus(item) === 'completed').length)
-const backfillCount = computed(() => storeServiceOrders.value.filter(needsServiceBackfill).length)
 
 const workflowOptions = computed(() => [
   { value: 'all', label: '全部', count: storeServiceOrders.value.length },
   { value: 'pending-verification', label: '待核销', count: pendingVerificationCount.value },
   { value: 'pending-service', label: '待确认服务', count: pendingServiceCount.value },
   { value: 'serving', label: '服务中', count: servingCount.value },
-  { value: 'backfill', label: '待补确认单', count: backfillCount.value },
   { value: 'completed', label: '已完成', count: completedCount.value }
 ])
 
@@ -357,9 +339,6 @@ function matchesStatusFilter(row) {
   if (statusFilter.value === 'all') {
     return true
   }
-  if (statusFilter.value === 'backfill') {
-    return needsServiceBackfill(row)
-  }
   return workflowStatus(row) === statusFilter.value
 }
 
@@ -390,7 +369,6 @@ function ensureAvailableStatusFilter() {
     'pending-verification': pendingVerificationCount.value,
     'pending-service': pendingServiceCount.value,
     serving: servingCount.value,
-    backfill: backfillCount.value,
     completed: completedCount.value,
     all: storeServiceOrders.value.length
   }
@@ -398,7 +376,7 @@ function ensureAvailableStatusFilter() {
     return
   }
   statusFilter.value =
-    ['pending-verification', 'pending-service', 'serving', 'backfill', 'completed', 'all'].find((key) => counts[key] > 0) || 'all'
+    ['pending-verification', 'pending-service', 'serving', 'completed', 'all'].find((key) => counts[key] > 0) || 'all'
 }
 
 async function ensurePlanOrder(row) {
@@ -419,9 +397,8 @@ async function openServiceForm(row) {
     ElMessage.warning(serviceButtonLabel(row))
     return
   }
-  if (needsServiceBackfill(row)) {
-    legacyServiceOrder.value = row
-    legacyServiceDialogVisible.value = true
+  if (workflowStatus(row) === 'completed' && (!row.planOrderId || !row.serviceDetailJson)) {
+    ElMessage.warning('该已完成订单缺少服务确认单，请先清理或补齐脏数据')
     return
   }
   const planOrderId = await ensurePlanOrder(row)
@@ -435,38 +412,6 @@ async function openServiceForm(row) {
     return
   }
   await router.push(`/plan-orders/${planOrderId}`)
-}
-
-async function handleBackfillLegacyServiceOrder() {
-  const row = legacyServiceOrder.value
-  if (!row?.id) {
-    return
-  }
-  try {
-    await ElMessageBox.confirm(
-      '将为该历史已完成订单补建服务确认单。此操作只用于补录确认单内容，不改变订单状态，是否继续？',
-      '补录确认单',
-      {
-        confirmButtonText: '继续补录',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-  } catch {
-    return
-  }
-  legacyServiceDialogVisible.value = false
-  try {
-    const planOrderId = row.planOrderId || (await ensurePlanOrder(row))
-    await router.push({
-      path: `/plan-orders/${planOrderId}`,
-      query: {
-        mode: 'backfill'
-      }
-    })
-  } catch (error) {
-    ElMessage.error(error?.message || '补录确认单失败，请稍后重试')
-  }
 }
 
 async function openQrDialog(row) {
@@ -488,10 +433,13 @@ async function openQrDialog(row) {
 
 async function openWecomDialog(row) {
   activeOrderForWecom.value = row
+  wecomPreview.value = null
+  wecomQrImage.value = ''
   wecomDialogVisible.value = true
   wecomLoading.value = true
   try {
     wecomPreview.value = await fetchOrderWecomLiveCode(row.id)
+    await refreshWecomQrImage()
   } finally {
     wecomLoading.value = false
   }
@@ -501,15 +449,12 @@ function serviceButtonLabel(row) {
   if (!canOpenServiceForm(row)) {
     return isAwaitingPayment(row) ? '待付款' : '暂不可用'
   }
-  if (needsServiceBackfill(row)) {
-    return '补录确认单'
-  }
   const currentWorkflow = workflowStatus(row)
   if (currentWorkflow === 'pending-verification') {
-    return '核销订单'
+    return '去核销'
   }
   if (currentWorkflow === 'pending-service') {
-    return row.serviceDetailJson ? '继续签单' : '请客户签确认单'
+    return row.serviceDetailJson ? '继续签确认单' : '签确认单'
   }
   if (currentWorkflow === 'serving') {
     return '完成服务'
@@ -518,11 +463,11 @@ function serviceButtonLabel(row) {
 }
 
 function serviceConfirmationLabel(row) {
-  if (needsServiceBackfill(row)) {
-    return '待补确认单'
-  }
   if (row.serviceDetailJson) {
     return '已生成'
+  }
+  if (workflowStatus(row) === 'completed') {
+    return '暂无记录'
   }
   if (row.planOrderId) {
     return '待填写'
@@ -531,11 +476,11 @@ function serviceConfirmationLabel(row) {
 }
 
 function serviceConfirmationTagType(row) {
-  if (needsServiceBackfill(row)) {
-    return 'warning'
-  }
   if (row.serviceDetailJson) {
     return 'success'
+  }
+  if (workflowStatus(row) === 'completed') {
+    return 'info'
   }
   if (row.planOrderId) {
     return 'primary'
@@ -556,10 +501,6 @@ function canCreatePlanOrder(row) {
   return ['PAID', 'PAID_DEPOSIT', 'APPOINTMENT', 'ARRIVED', 'SERVING', 'SERVICING', 'COMPLETED', 'FINISHED', 'USED'].includes(
     normalizedStatus
   )
-}
-
-function needsServiceBackfill(row) {
-  return workflowStatus(row) === 'completed' && (!row.planOrderId || !row.serviceDetailJson)
 }
 
 function isAwaitingPayment(row) {
@@ -685,7 +626,10 @@ function resolveServiceConfirmAmount(row) {
 
 function formatServiceConfirmAmount(row) {
   const amount = resolveServiceConfirmAmount(row)
-  return amount ? formatMoney(amount) : '待填写'
+  if (amount) {
+    return formatMoney(amount)
+  }
+  return workflowStatus(row) === 'completed' ? '暂无记录' : '待填写'
 }
 
 async function copyQrLink() {
@@ -701,15 +645,91 @@ async function copyQrLink() {
 }
 
 async function copyWecomLink() {
-  if (!wecomPreview.value?.shortLink && !wecomPreview.value?.qrCodeUrl) {
+  if (!wecomContactLink.value) {
     return
   }
   try {
-    await navigator.clipboard.writeText(wecomPreview.value.shortLink || wecomPreview.value.qrCodeUrl)
+    await navigator.clipboard.writeText(wecomContactLink.value)
     ElMessage.success('企业微信链接已复制')
   } catch {
     ElMessage.warning('当前环境不支持自动复制')
   }
+}
+
+function maskPhone(phone) {
+  const value = String(phone || '').trim()
+  if (!value) {
+    return '--'
+  }
+  return value.length >= 7 ? `${value.slice(0, 3)}****${value.slice(-4)}` : '已绑定'
+}
+
+function maskBindingState(state) {
+  const value = String(state || '').trim()
+  if (!value) {
+    return '--'
+  }
+  return `已生成（尾号 ${value.slice(-6)}）`
+}
+
+const wecomContactLink = computed(() => resolveWecomContactLink(wecomPreview.value))
+const wecomContactLinkLabel = computed(() => (wecomPreview.value?.bindingStatus === 'MOCK_READY' ? '系统 MOCK 地址' : '企业微信地址'))
+const wecomCopyButtonLabel = computed(() => (wecomPreview.value?.bindingStatus === 'MOCK_READY' ? '复制内部测试链接' : '复制客户添加链接'))
+
+async function refreshWecomQrImage() {
+  const preview = wecomPreview.value
+  if (!preview) {
+    wecomQrImage.value = ''
+    return
+  }
+  const contactLink = resolveWecomContactLink(preview)
+  if (preview.bindingStatus === 'MOCK_READY' && contactLink) {
+    wecomQrImage.value = await QRCode.toDataURL(contactLink, {
+      width: 260,
+      margin: 2,
+      color: {
+        dark: '#173042',
+        light: '#ffffff'
+      }
+    })
+    return
+  }
+  wecomQrImage.value = preview.qrCodeUrl || ''
+}
+
+function resolveWecomContactLink(preview) {
+  const link = String(preview?.shortLink || '').trim()
+  if (link) {
+    return /^https?:\/\//i.test(link) ? link : buildSystemUrl(systemState, 'callback', link)
+  }
+  const qrCodeUrl = String(preview?.qrCodeUrl || '').trim()
+  if (!qrCodeUrl || qrCodeUrl.startsWith('data:image')) {
+    return ''
+  }
+  return qrCodeUrl
+}
+
+function wecomStatusTagType(status) {
+  if (status === 'LIVE_READY') {
+    return 'success'
+  }
+  if (status === 'MOCK_READY') {
+    return 'warning'
+  }
+  return 'danger'
+}
+
+function wecomModeLabel(status) {
+  if (status === 'LIVE_READY') {
+    return 'LIVE 真实企微活码'
+  }
+  if (status === 'MOCK_READY') {
+    return 'MOCK 演示活码'
+  }
+  if (status === 'MISSING_ACCOUNT') {
+    return '未维护员工企微账号'
+  }
+  return '企微活码不可用'
 }
 
 onMounted(loadOrders)
@@ -770,24 +790,29 @@ onMounted(loadOrders)
   color: #64748b;
 }
 
+.wecom-dialog__link {
+  word-break: break-all;
+  color: #94a3b8;
+}
+
+.qr-panel__empty {
+  display: grid;
+  place-items: center;
+  width: 220px;
+  height: 220px;
+  border-radius: 22px;
+  border: 1px dashed #cbd5e1;
+  color: #94a3b8;
+  background: #f8fafc;
+}
+
 .action-group--center {
   justify-content: center;
 }
 
-.legacy-service-empty,
 .refund-dialog {
   display: grid;
   gap: 16px;
-}
-
-.legacy-service-empty__summary {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  padding: 14px;
-  border-radius: 16px;
-  background: #f8fafc;
-  color: #475569;
 }
 
 .refund-summary {

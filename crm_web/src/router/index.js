@@ -1,12 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from '../layouts/AppLayout.vue'
-import { getFirstAccessibleRoute, hasAccess, initializeAuth } from '../utils/auth'
+import { getFirstAccessibleRoute, hasRouteAccess, initializeAuth } from '../utils/auth'
 import ClueManagement from '../views/ClueManagement.vue'
 import ClueAutoAssignmentView from '../views/ClueAutoAssignmentView.vue'
 import CustomerDetail from '../views/CustomerDetail.vue'
+import DistributionApiView from '../views/DistributionApiView.vue'
 import DutyCustomerServiceView from '../views/DutyCustomerServiceView.vue'
 import DomainSettingView from '../views/DomainSettingView.vue'
 import FinanceOverview from '../views/FinanceOverview.vue'
+import InterfaceDebugView from '../views/InterfaceDebugView.vue'
 import LoginView from '../views/LoginView.vue'
 import MySalaryView from '../views/MySalaryView.vue'
 import OrderManagement from '../views/OrderManagement.vue'
@@ -21,6 +23,7 @@ import PrivateDomainLiveCodeView from '../views/PrivateDomainLiveCodeView.vue'
 import PrivateDomainMomentsView from '../views/PrivateDomainMomentsView.vue'
 import PrivateDomainTagManagementView from '../views/PrivateDomainTagManagementView.vue'
 import SalaryConfigView from '../views/SalaryConfigView.vue'
+import SchedulerCenter from '../views/SchedulerCenter.vue'
 import SettlementCenterView from '../views/SettlementCenterView.vue'
 import SettlementConfigView from '../views/SettlementConfigView.vue'
 import StorePersonnelManagementView from '../views/StorePersonnelManagementView.vue'
@@ -285,6 +288,32 @@ const routes = [
         }
       },
       {
+        path: 'finance/salary/withdrawals',
+        name: 'salary-withdrawals',
+        component: SettlementCenterView,
+        meta: {
+          title: '提现处理',
+          sectionTitle: '财务管理 / 薪酬结算',
+          moduleCode: 'SALARY',
+          roleCodes: ['ADMIN', 'FINANCE'],
+          navKey: 'salary-withdrawals',
+          settlementCenterMode: 'withdraw'
+        }
+      },
+      {
+        path: 'finance/salary/refund-adjustments',
+        name: 'salary-refund-adjustments',
+        component: SettlementCenterView,
+        meta: {
+          title: '退款冲正',
+          sectionTitle: '财务管理 / 薪酬结算',
+          moduleCode: 'SALARY',
+          roleCodes: ['ADMIN', 'FINANCE'],
+          navKey: 'salary-refund-adjustments',
+          settlementCenterMode: 'refunds'
+        }
+      },
+      {
         path: 'finance/salary/settlement-config',
         name: 'salary-settlement-config',
         component: SettlementConfigView,
@@ -404,7 +433,7 @@ const routes = [
         name: 'settings-third-party',
         component: PlatformDouyinConfigView,
         meta: {
-          title: '三方接口',
+          title: '抖音接口',
           sectionTitle: '系统设置 / 调度中心',
           moduleCode: 'SETTING',
           roleCodes: ['ADMIN'],
@@ -426,7 +455,39 @@ const routes = [
       },
       {
         path: 'settings/integration/jobs',
-        redirect: '/settings/integration/callback'
+        name: 'settings-jobs',
+        component: SchedulerCenter,
+        meta: {
+          title: '任务调度',
+          sectionTitle: '系统设置 / 调度中心',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-jobs'
+        }
+      },
+      {
+        path: 'settings/integration/debug',
+        name: 'settings-interface-debug',
+        component: InterfaceDebugView,
+        meta: {
+          title: '接口调试',
+          sectionTitle: '系统设置 / 调度中心',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-interface-debug'
+        }
+      },
+      {
+        path: 'settings/integration/distribution-api',
+        name: 'settings-distribution-api',
+        component: DistributionApiView,
+        meta: {
+          title: '分销接口',
+          sectionTitle: '系统设置 / 调度中心',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-distribution-api'
+        }
       },
       {
         path: 'settings/base/domain',
@@ -563,7 +624,7 @@ router.beforeEach(async (to) => {
     }
   }
 
-  if (!hasAccess(to.meta?.moduleCode, to.meta?.roleCodes)) {
+  if (!hasRouteAccess(to.path, to.meta?.moduleCode, to.meta?.roleCodes)) {
     return target
   }
 

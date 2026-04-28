@@ -1,0 +1,184 @@
+package com.seedcrm.crm.scheduler.controller;
+
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.seedcrm.crm.clue.entity.Clue;
+import com.seedcrm.crm.clue.mapper.ClueMapper;
+import com.seedcrm.crm.common.api.ApiResponse;
+import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
+import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/open/distribution")
+public class DistributionOpenController {
+
+    private static final String PROVIDER_DISTRIBUTION = "DISTRIBUTION";
+
+    private final ClueMapper clueMapper;
+    private final IntegrationProviderConfigMapper providerConfigMapper;
+
+    public DistributionOpenController(ClueMapper clueMapper,
+                                      IntegrationProviderConfigMapper providerConfigMapper) {
+        this.clueMapper = clueMapper;
+        this.providerConfigMapper = providerConfigMapper;
+    }
+
+    @GetMapping("/leads")
+    public ApiResponse<Map<String, Object>> listLeadsByGet(@RequestParam Map<String, String> parameters,
+                                                           HttpServletRequest request) {
+        return ApiResponse.success(buildLeadResponse(parameters, request));
+    }
+
+    @PostMapping("/leads")
+    public ApiResponse<Map<String, Object>> listLeadsByPost(@RequestParam Map<String, String> parameters,
+                                                            @RequestBody(required = false) Map<String, Object> body,
+                                                            HttpServletRequest request) {
+        Map<String, String> merged = new LinkedHashMap<>(parameters == null ? Map.of() : parameters);
+        if (body != null) {
+            body.forEach((key, value) -> merged.put(key, value == null ? null : String.valueOf(value)));
+        }
+        return ApiResponse.success(buildLeadResponse(merged, request));
+    }
+
+    private Map<String, Object> buildLeadResponse(Map<String, String> parameters, HttpServletRequest request) {
+        IntegrationProviderConfig provider = findDistributionProvider();
+        validateOpenRequest(provider, parameters);
+        int page = Math.max(1, parseInt(parameters.get("page"), 1));
+        int pageSize = Math.min(100, Math.max(1, parseInt(parameters.get("page_size"), parseInt(parameters.get("pageSize"), 30))));
+        List<Clue> rows = clueMapper.selectList(Wrappers.<Clue>lambdaQuery()
+                        .and(wrapper -> wrapper
+                                .eq(Clue::getSourceChannel, "DISTRIBUTION")
+                                .or()
+                                .eq(Clue::getSourceChannel, "DISTRIBUTOR")
+                                .or()
+                                .eq(Clue::getSource, "distribution"))
+                        .orderByDesc(Clue::getCreatedAt)
+                        .orderByDesc(Clue::getId))
+                .stream()
+                .skip((long) (page - 1) * pageSize)
+                .limit(pageSize)
+                .toList();
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("traceId", UUID.randomUUID().toString());
+        response.put("mode", provider == null ? "MOCK" : normalize(provider.getExecutionMode(), "MOCK"));
+        response.put("providerCode", PROVIDER_DISTRIBUTION);
+        response.put("page", page);
+        response.put("pageSize", pageSize);
+        response.put("receivedAt", LocalDateTime.now().toString());
+        response.put("requestIp", request == null ? null : request.getRemoteAddr());
+        response.put("records", rows.stream().map(this::toLeadPayload).toList());
+        return response;
+    }
+
+    private Map<String, Object> toLeadPayload(Clue clue) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("clue_id", clue.getId());
+        row.put("phone", clue.getPhone());
+        row.put("name", clue.getName());
+        row.put("source", "distribution");
+        row.put("product_type", resolveProductType(clue));
+        row.put("paid_amount", BigDecimal.ZERO);
+        row.put("status", clue.getStatus());
+        row.put("created_at", clue.getCreatedAt());
+        row.put("raw_data", clue.getRawData());
+        return row;
+    }
+
+    private void validateOpenRequest(IntegrationProviderConfig provider, Map<String, String> parameters) {
+        if (provider == null || !"LIVE".equalsIgnoreCase(provider.getExecutionMode())) {
+            return;
+        }
+        if (provider.getEnabled() != null && provider.getEnabled() == 0) {
+            throw new BusinessException("分销接口已停用");
+        }
+        String appId = firstNonBlank(parameters.get("app_id"), parameters.get("appId"));
+        String timestamp = parameters.get("timestamp");
+        String sign = parameters.get("sign");
+        if (!StringUtils.hasText(appId) || !StringUtils.hasText(timestamp) || !StringUtils.hasText(sign)) {
+            throw new BusinessException("LIVE 分销接口必须携带 app_id、timestamp、sign");
+        }
+        if (!appId.equals(provider.getAppId())) {
+            throw new BusinessException("分销接口 app_id 不匹配");
+        }
+        if (!StringUtils.hasText(provider.getClientSecret())) {
+            throw new BusinessException("分销接口未配置 AppSecret");
+        }
+        String page = firstNonBlank(parameters.get("page"), "1");
+        String pageSize = firstNonBlank(parameters.get("page_size"), parameters.get("pageSize"), "30");
+        String source = appId + "|" + timestamp + "|" + page + "|" + pageSize;
+        if (!hmacSha256(source, provider.getClientSecret()).equalsIgnoreCase(sign.trim())) {
+            throw new BusinessException("分销接口签名校验失败");
+        }
+    }
+
+    private IntegrationProviderConfig findDistributionProvider() {
+        return providerConfigMapper.selectOne(Wrappers.<IntegrationProviderConfig>lambdaQuery()
+                .eq(IntegrationProviderConfig::getProviderCode, PROVIDER_DISTRIBUTION)
+                .last("LIMIT 1"));
+    }
+
+    private String resolveProductType(Clue clue) {
+        String raw = String.valueOf(clue.getRawData()).toLowerCase(Locale.ROOT);
+        if (raw.contains("coupon") || raw.contains("团购")) {
+            return "coupon";
+        }
+        return "deposit";
+    }
+
+    private int parseInt(String value, int fallback) {
+        try {
+            return StringUtils.hasText(value) ? Integer.parseInt(value.trim()) : fallback;
+        } catch (NumberFormatException exception) {
+            return fallback;
+        }
+    }
+
+    private String normalize(String value, String fallback) {
+        return StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : fallback;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private String hmacSha256(String source, String secret) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] digest = mac.doFinal(source.getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder();
+            for (byte value : digest) {
+                builder.append(String.format("%02x", value));
+            }
+            return builder.toString();
+        } catch (Exception exception) {
+            throw new BusinessException("分销接口签名生成失败");
+        }
+    }
+}

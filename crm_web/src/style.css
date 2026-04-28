@@ -42,7 +42,8 @@ label {
   gap: 8px;
 }
 
-label > span {
+label > span,
+.form-control > span {
   color: #546274;
   font-size: 13px;
 }
@@ -358,6 +359,11 @@ label > span {
   grid-column: 1 / -1;
 }
 
+.form-control {
+  display: grid;
+  gap: 10px;
+}
+
 .form-group-title {
   margin-top: 4px;
   padding: 10px 14px;
@@ -602,6 +608,159 @@ label > span {
   border: 1px solid rgba(19, 33, 45, 0.08);
   border-radius: 20px;
   background: linear-gradient(180deg, #fbfdff 0%, #f6f9fc 100%);
+}
+
+.config-editor-drawer .el-drawer__header {
+  margin-bottom: 0;
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid rgba(19, 33, 45, 0.08);
+}
+
+.config-editor-drawer .el-drawer__body {
+  padding: 22px 24px;
+}
+
+.config-editor-drawer .el-drawer__footer {
+  padding: 14px 24px 18px;
+  border-top: 1px solid rgba(19, 33, 45, 0.08);
+  background: #ffffff;
+}
+
+.drawer-editor__header {
+  display: grid;
+  gap: 8px;
+}
+
+.drawer-editor__header h3 {
+  margin: 0;
+  color: #13212d;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.drawer-editor__eyebrow {
+  color: #0f6b7d;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.drawer-editor__meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.drawer-editor__meta span {
+  max-width: 100%;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #f2f6f8;
+  color: #607080;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-editor__body {
+  display: grid;
+  gap: 18px;
+}
+
+.drawer-editor__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.el-table .is-editing-row > td.el-table__cell {
+  background: #f0faf7 !important;
+}
+
+.el-table .is-editing-row .table-primary strong {
+  color: #0f6b7d;
+}
+
+.role-editor-tabs {
+  min-width: 0;
+}
+
+.permission-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.permission-panel__toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #f6f8fa;
+  border: 1px solid rgba(19, 33, 45, 0.08);
+}
+
+.permission-panel__toolbar > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.permission-panel__toolbar strong {
+  color: #13212d;
+}
+
+.permission-panel__toolbar span {
+  color: #69788a;
+  font-size: 12px;
+}
+
+.menu-permission-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.menu-permission-group {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid rgba(19, 33, 45, 0.08);
+}
+
+.menu-permission-group__title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #13212d;
+}
+
+.menu-permission-group__title span {
+  color: #69788a;
+  font-size: 12px;
+}
+
+.menu-permission-item {
+  width: 100%;
+  min-height: 44px;
+  margin-right: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.menu-permission-item .el-checkbox__label {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.menu-permission-item small {
+  color: #7b8794;
+  font-size: 12px;
 }
 
 .table-primary {
@@ -1240,6 +1399,42 @@ label > span {
 
 .clue-list-table .el-scrollbar__thumb {
   background: rgba(59, 130, 246, 0.3);
+}
+
+.floating-table-scrollbar {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  width: 100%;
+  height: 18px;
+  margin: 0 0 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 999px;
+  background: rgba(246, 245, 241, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(19, 33, 45, 0.06);
+}
+
+.floating-table-scrollbar__inner {
+  height: 1px;
+}
+
+.floating-table-scrollbar::-webkit-scrollbar {
+  height: 12px;
+}
+
+.floating-table-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.floating-table-scrollbar::-webkit-scrollbar-thumb {
+  border: 3px solid rgba(246, 245, 241, 0.92);
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.45);
+}
+
+.floating-table-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(37, 99, 235, 0.62);
 }
 
 .clue-list-table .follow-record-cell {

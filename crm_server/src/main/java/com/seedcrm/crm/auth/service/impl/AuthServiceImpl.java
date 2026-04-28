@@ -3,6 +3,7 @@ package com.seedcrm.crm.auth.service.impl;
 import com.seedcrm.crm.auth.dto.AuthStoreOptionResponse;
 import com.seedcrm.crm.auth.model.AuthenticatedUser;
 import com.seedcrm.crm.auth.service.AuthService;
+import com.seedcrm.crm.auth.support.AuthAccessCatalog;
 import com.seedcrm.crm.common.exception.BusinessException;
 import java.util.Comparator;
 import java.util.List;
@@ -32,10 +33,10 @@ public class AuthServiceImpl implements AuthService {
                     List.of("CLUE", "ORDER", "PLANORDER", "SALARY", "FINANCE", "SYSTEM", "SETTING", "WECOM"))),
             "clue_manager", new DemoAccount("clue_manager", "123456", new AuthenticatedUser(
                     "clue_manager", "客资主管", "CLUE_MANAGER", "客资主管", "ALL", 5001L, 10L, "总部",
-                    List.of(1001L, 1002L), null, List.of("CLUE", "ORDER", "SYSTEM"))),
+                    List.of(5001L, 1001L, 1002L), null, List.of("CLUE", "ORDER", "SYSTEM", "SALARY"))),
             "online_cs", new DemoAccount("online_cs", "123456", new AuthenticatedUser(
                     "online_cs", "在线客服", "ONLINE_CUSTOMER_SERVICE", "在线客服", "TEAM", 1001L, 10L, "总部",
-                    List.of(1001L, 1002L), null, List.of("CLUE", "ORDER"))),
+                    List.of(1001L, 1002L), null, List.of("CLUE", "ORDER", "SALARY"))),
             "store_service", new DemoAccount("store_service", "123456", new AuthenticatedUser(
                     "store_service", "门店服务A", "STORE_SERVICE", "门店服务", "STORE", 5101L, 10L, "静安门店",
                     List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY"))),
@@ -55,8 +56,8 @@ public class AuthServiceImpl implements AuthService {
                     "finance", "财务", "FINANCE", "财务", "ALL", 91001L, 10L, "总部",
                     List.of(91001L), null, List.of("ORDER", "SALARY", "FINANCE"))),
             "private_domain", new DemoAccount("private_domain", "123456", new AuthenticatedUser(
-                    "private_domain", "私域客服", "PRIVATE_DOMAIN_SERVICE", "私域客服", "SELF", 1001L, 10L, "总部",
-                    List.of(1001L), 1001L, List.of("WECOM"))));
+                    "private_domain", "私域客服", "PRIVATE_DOMAIN_SERVICE", "私域客服", "SELF", 1101L, 10L, "总部",
+                    List.of(1101L), 1101L, List.of("WECOM", "SALARY"))));
 
     private final Map<String, AuthenticatedUser> sessions = new ConcurrentHashMap<>();
 
@@ -75,7 +76,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         String token = UUID.randomUUID().toString().replace("-", "");
-        sessions.put(token, sessionUser);
+        sessions.put(token, AuthAccessCatalog.enrich(sessionUser));
         return token;
     }
 
@@ -115,7 +116,7 @@ public class AuthServiceImpl implements AuthService {
             return Optional.empty();
         }
         AuthenticatedUser user = sessions.get(token.trim());
-        return user == null ? Optional.empty() : Optional.of(copy(user));
+        return user == null ? Optional.empty() : Optional.of(AuthAccessCatalog.enrich(copy(user)));
     }
 
     @Override
@@ -164,7 +165,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private AuthenticatedUser copy(AuthenticatedUser source) {
-        return new AuthenticatedUser(
+        AuthenticatedUser target = new AuthenticatedUser(
                 source.getUsername(),
                 source.getDisplayName(),
                 source.getRoleCode(),
@@ -176,6 +177,11 @@ public class AuthServiceImpl implements AuthService {
                 source.getTeamMemberIds() == null ? List.of() : List.copyOf(source.getTeamMemberIds()),
                 source.getBoundCustomerUserId(),
                 source.getAllowedModules() == null ? List.of() : List.copyOf(source.getAllowedModules()));
+        target.setMenuRoutes(source.getMenuRoutes() == null ? List.of() : List.copyOf(source.getMenuRoutes()));
+        target.setMenuTree(source.getMenuTree() == null ? List.of() : List.copyOf(source.getMenuTree()));
+        target.setPermissions(source.getPermissions() == null ? List.of() : List.copyOf(source.getPermissions()));
+        target.setDefaultRoute(source.getDefaultRoute());
+        return target;
     }
 
     private record DemoAccount(String username, String password, AuthenticatedUser user) {

@@ -22,7 +22,7 @@
       <div class="toolbar">
         <div class="toolbar-tabs">
           <el-radio-group v-model="productSourceFilter" @change="applyFilters">
-            <el-radio-button value="ALL">全部来源形式</el-radio-button>
+            <el-radio-button value="ALL">全部产品</el-radio-button>
             <el-radio-button value="GROUP_BUY">团购</el-radio-button>
             <el-radio-button value="FORM">表单</el-radio-button>
           </el-radio-group>
@@ -55,7 +55,17 @@
         </div>
       </div>
 
+      <div
+        v-show="hasFloatingTableScrollbar"
+        ref="floatingTableScrollbarRef"
+        class="floating-table-scrollbar"
+        @scroll="handleFloatingTableScroll"
+      >
+        <div class="floating-table-scrollbar__inner" :style="{ width: `${floatingTableScrollWidth}px` }"></div>
+      </div>
+
       <el-table
+        ref="clueTableRef"
         class="clue-list-table"
         v-loading="loading"
         :data="pagination.rows"
@@ -448,7 +458,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { EditPen } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
@@ -478,9 +488,16 @@ const detailDrawerVisible = ref(false)
 const assignTarget = ref(null)
 const detailRowId = ref(null)
 const productSourceFilter = ref('ALL')
+const clueTableRef = ref(null)
+const floatingTableScrollbarRef = ref(null)
+const floatingTableScrollWidth = ref(0)
+const hasFloatingTableScrollbar = ref(false)
 const followRecordDrafts = reactive({})
 const cellDrafts = reactive({})
 let refreshTimer = null
+let tableScrollWrap = null
+let scrollSyncing = false
+let tableResizeObserver = null
 
 const filters = reactive({
   phone: '',
@@ -1019,8 +1036,71 @@ function goToScheduling(row) {
   })
 }
 
+function getTableScrollWrap() {
+  return clueTableRef.value?.$el?.querySelector('.el-scrollbar__wrap') || null
+}
+
+function syncFloatingScrollFromTable() {
+  if (scrollSyncing || !floatingTableScrollbarRef.value || !tableScrollWrap) {
+    return
+  }
+  scrollSyncing = true
+  floatingTableScrollbarRef.value.scrollLeft = tableScrollWrap.scrollLeft
+  window.requestAnimationFrame(() => {
+    scrollSyncing = false
+  })
+}
+
+function handleFloatingTableScroll() {
+  if (scrollSyncing) {
+    return
+  }
+  const wrap = getTableScrollWrap()
+  if (!wrap || !floatingTableScrollbarRef.value) {
+    return
+  }
+  scrollSyncing = true
+  wrap.scrollLeft = floatingTableScrollbarRef.value.scrollLeft
+  window.requestAnimationFrame(() => {
+    scrollSyncing = false
+  })
+}
+
+function bindTableScrollWrap() {
+  const wrap = getTableScrollWrap()
+  if (wrap === tableScrollWrap) {
+    return
+  }
+  if (tableScrollWrap) {
+    tableScrollWrap.removeEventListener('scroll', syncFloatingScrollFromTable)
+  }
+  tableScrollWrap = wrap
+  if (tableScrollWrap) {
+    tableScrollWrap.addEventListener('scroll', syncFloatingScrollFromTable, { passive: true })
+  }
+}
+
+async function updateFloatingTableScrollbar() {
+  await nextTick()
+  bindTableScrollWrap()
+  if (!tableScrollWrap) {
+    hasFloatingTableScrollbar.value = false
+    floatingTableScrollWidth.value = 0
+    return
+  }
+  floatingTableScrollWidth.value = tableScrollWrap.scrollWidth
+  hasFloatingTableScrollbar.value = tableScrollWrap.scrollWidth > tableScrollWrap.clientWidth + 1
+  syncFloatingScrollFromTable()
+}
+
 onMounted(async () => {
   await Promise.all([loadClues(), loadDutyStaff()])
+  await updateFloatingTableScrollbar()
+  tableResizeObserver = new ResizeObserver(updateFloatingTableScrollbar)
+  if (clueTableRef.value?.$el) {
+    tableResizeObserver.observe(clueTableRef.value.$el)
+  }
+  window.addEventListener('resize', updateFloatingTableScrollbar)
   refreshTimer = window.setInterval(loadClues, 15000)
 })
 
@@ -1028,5 +1108,15 @@ onUnmounted(() => {
   if (refreshTimer) {
     window.clearInterval(refreshTimer)
   }
+  window.removeEventListener('resize', updateFloatingTableScrollbar)
+  if (tableScrollWrap) {
+    tableScrollWrap.removeEventListener('scroll', syncFloatingScrollFromTable)
+  }
+  tableResizeObserver?.disconnect()
 })
+
+watch(
+  () => [pagination.rows.length, pagination.currentPage, pagination.pageSize],
+  updateFloatingTableScrollbar
+)
 </script>

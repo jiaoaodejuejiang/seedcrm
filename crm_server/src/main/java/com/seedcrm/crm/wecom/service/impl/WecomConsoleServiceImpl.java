@@ -5,6 +5,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.order.entity.Order;
+import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.scheduler.entity.IntegrationCallbackEventLog;
 import com.seedcrm.crm.scheduler.mapper.IntegrationCallbackEventLogMapper;
 import com.seedcrm.crm.wecom.entity.WecomAppConfig;
@@ -12,10 +14,14 @@ import com.seedcrm.crm.wecom.entity.WecomLiveCodeConfig;
 import com.seedcrm.crm.wecom.entity.WecomTouchLog;
 import com.seedcrm.crm.wecom.entity.WecomTouchRule;
 import com.seedcrm.crm.wecom.mapper.WecomAppConfigMapper;
+import com.seedcrm.crm.wecom.mapper.CustomerWecomRelationMapper;
 import com.seedcrm.crm.wecom.mapper.WecomLiveCodeConfigMapper;
 import com.seedcrm.crm.wecom.mapper.WecomTouchLogMapper;
 import com.seedcrm.crm.wecom.mapper.WecomTouchRuleMapper;
 import com.seedcrm.crm.wecom.service.WecomConsoleService;
+import com.seedcrm.crm.wecom.entity.CustomerWecomRelation;
+import com.seedcrm.crm.wecom.support.WecomBindingStateCodec;
+import com.seedcrm.crm.workbench.service.StaffDirectoryService;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -28,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
@@ -55,21 +62,30 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
     private final WecomTouchRuleMapper wecomTouchRuleMapper;
     private final WecomTouchLogMapper wecomTouchLogMapper;
     private final WecomLiveCodeConfigMapper wecomLiveCodeConfigMapper;
+    private final CustomerWecomRelationMapper customerWecomRelationMapper;
     private final IntegrationCallbackEventLogMapper integrationCallbackEventLogMapper;
+    private final OrderMapper orderMapper;
+    private final StaffDirectoryService staffDirectoryService;
     private final ObjectMapper objectMapper;
     private final Map<Long, AccessTokenCacheEntry> accessTokenCache = new ConcurrentHashMap<>();
 
     public WecomConsoleServiceImpl(WecomAppConfigMapper wecomAppConfigMapper,
                                    WecomTouchRuleMapper wecomTouchRuleMapper,
                                    WecomTouchLogMapper wecomTouchLogMapper,
-                                   WecomLiveCodeConfigMapper wecomLiveCodeConfigMapper,
-                                   IntegrationCallbackEventLogMapper integrationCallbackEventLogMapper,
-                                   ObjectMapper objectMapper) {
+                                     WecomLiveCodeConfigMapper wecomLiveCodeConfigMapper,
+                                     CustomerWecomRelationMapper customerWecomRelationMapper,
+                                     IntegrationCallbackEventLogMapper integrationCallbackEventLogMapper,
+                                     OrderMapper orderMapper,
+                                     StaffDirectoryService staffDirectoryService,
+                                     ObjectMapper objectMapper) {
         this.wecomAppConfigMapper = wecomAppConfigMapper;
         this.wecomTouchRuleMapper = wecomTouchRuleMapper;
         this.wecomTouchLogMapper = wecomTouchLogMapper;
         this.wecomLiveCodeConfigMapper = wecomLiveCodeConfigMapper;
+        this.customerWecomRelationMapper = customerWecomRelationMapper;
         this.integrationCallbackEventLogMapper = integrationCallbackEventLogMapper;
+        this.orderMapper = orderMapper;
+        this.staffDirectoryService = staffDirectoryService;
         this.objectMapper = objectMapper;
     }
 
@@ -263,6 +279,11 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
                 normalizedParameters.get("external_userid"),
                 extractText(payloadNode, "external_userid", "ExternalUserID"),
                 extractXmlValue(callbackEventPayload, "ExternalUserID"));
+        String wecomUserId = firstNonBlank(
+                normalizedParameters.get("userid"),
+                normalizedParameters.get("user_id"),
+                extractText(payloadNode, "userid", "user_id", "UserID"),
+                extractXmlValue(callbackEventPayload, "UserID"));
         String errorMessage = firstNonBlank(
                 normalizedParameters.get("error_description"),
                 normalizedParameters.get("error_msg"),
@@ -287,6 +308,12 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
                 : StringUtils.hasText(externalUserId)
                 ? "已接收企业微信客户事件"
                 : "已接收企业微信回调";
+        String bindingMessage = bindCustomerByStateIfPossible(callbackState, externalUserId, wecomUserId, trustedCallback);
+        if (StringUtils.hasText(bindingMessage)) {
+            boolean bindingFailed = bindingMessage.startsWith("BIND_FAILED:");
+            processMessage = bindingFailed ? bindingMessage.substring("BIND_FAILED:".length()) : bindingMessage;
+            processStatus = bindingFailed ? "FAILED" : "SUCCESS";
+        }
 
         if (config != null) {
             config.setLastCallbackStatus(processStatus);
@@ -355,6 +382,52 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
             return echostr;
         }
         return "success";
+    }
+
+    private String bindCustomerByStateIfPossible(String callbackState,
+                                                 String externalUserId,
+                                                 String wecomUserId,
+                                                 boolean trustedCallback) {
+        if (!trustedCallback || !StringUtils.hasText(callbackState) || !StringUtils.hasText(externalUserId)) {
+            return null;
+        }
+        WecomBindingStateCodec.BindingState bindingState = WecomBindingStateCodec.decode(callbackState);
+        if (bindingState == null || bindingState.customerId() == null) {
+            return null;
+        }
+        String expectedPhone = staffDirectoryService.getUserPhone(bindingState.userId());
+        if (!WecomBindingStateCodec.matchesPhoneHash(expectedPhone, bindingState.userPhoneHash())) {
+            return "BIND_FAILED:企微 state 员工手机号校验失败，已拒绝绑定客户关系";
+        }
+        Order order = orderMapper.selectById(bindingState.orderId());
+        if (order == null) {
+            return "BIND_FAILED:企微 state 对应订单不存在，已拒绝绑定客户关系";
+        }
+        if (!Objects.equals(order.getCustomerId(), bindingState.customerId())) {
+            return "BIND_FAILED:企微 state 客户与订单客户不一致，已拒绝绑定客户关系";
+        }
+        String expectedWecomAccount = staffDirectoryService.getWecomAccount(bindingState.userId());
+        if (StringUtils.hasText(wecomUserId)
+                && StringUtils.hasText(expectedWecomAccount)
+                && !expectedWecomAccount.equals(wecomUserId.trim())) {
+            return "BIND_FAILED:企微回调员工账号与 state 员工不一致，已拒绝绑定客户关系";
+        }
+        CustomerWecomRelation existing = customerWecomRelationMapper.selectOne(Wrappers.<CustomerWecomRelation>lambdaQuery()
+                .eq(CustomerWecomRelation::getCustomerId, bindingState.customerId())
+                .last("LIMIT 1"));
+        if (existing == null) {
+            CustomerWecomRelation relation = new CustomerWecomRelation();
+            relation.setCustomerId(bindingState.customerId());
+            relation.setExternalUserid(externalUserId);
+            relation.setWecomUserId(StringUtils.hasText(wecomUserId) ? wecomUserId.trim() : String.valueOf(bindingState.userId()));
+            relation.setCreateTime(LocalDateTime.now());
+            customerWecomRelationMapper.insert(relation);
+        } else {
+            existing.setExternalUserid(externalUserId);
+            existing.setWecomUserId(StringUtils.hasText(wecomUserId) ? wecomUserId.trim() : String.valueOf(bindingState.userId()));
+            customerWecomRelationMapper.updateById(existing);
+        }
+        return "已根据企微 state 绑定客户与当前员工，订单ID：" + bindingState.orderId();
     }
 
     @Override
@@ -851,7 +924,15 @@ public class WecomConsoleServiceImpl implements WecomConsoleService {
         config.setEmployeeNames(parseStringList(config.getEmployeeNamesJson()));
         config.setEmployeeAccounts(parseStringList(config.getEmployeeAccountsJson()));
         config.setStoreNames(parseStringList(config.getStoreNamesJson()));
+        if (isLegacyMockContactLink(config.getShortLink()) && StringUtils.hasText(config.getContactWayId())) {
+            config.setShortLink("/wecom/mock-contact/" + config.getContactWayId().trim());
+        }
         return config;
+    }
+
+    private boolean isLegacyMockContactLink(String shortLink) {
+        return StringUtils.hasText(shortLink)
+                && shortLink.trim().toLowerCase(Locale.ROOT).startsWith("https://wecom.seedcrm.local/contact/");
     }
 
     private void applyLiveCodeConfig(WecomLiveCodeConfig target, WecomLiveCodeConfig source) {

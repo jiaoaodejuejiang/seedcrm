@@ -127,7 +127,7 @@
 </template>
 
 <script setup>
-import { computed, markRaw } from 'vue'
+import { computed, markRaw, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import {
   ArrowRight,
@@ -157,11 +157,12 @@ import {
   WalletFilled
 } from '@element-plus/icons-vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { currentUser, hasAccess, logout } from '../utils/auth'
+import { currentUser, getEffectiveMenuConfigs, hasRouteAccess, logout } from '../utils/auth'
 import { formatRoleCode } from '../utils/format'
 
 const route = useRoute()
 const router = useRouter()
+const systemConsoleVersion = ref(0)
 
 const icon = (component) => markRaw(component)
 const storeRoleCodes = ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR', 'ADMIN']
@@ -322,8 +323,24 @@ const navGroups = [
           {
             key: 'salary-settlements',
             to: '/finance/salary/settlements',
-            label: '结算中心',
+            label: '结算单管理',
             icon: icon(WalletFilled),
+            moduleCode: 'SALARY',
+            roleCodes: ['ADMIN', 'FINANCE']
+          },
+          {
+            key: 'salary-withdrawals',
+            to: '/finance/salary/withdrawals',
+            label: '提现处理',
+            icon: icon(Money),
+            moduleCode: 'SALARY',
+            roleCodes: ['ADMIN', 'FINANCE']
+          },
+          {
+            key: 'salary-refund-adjustments',
+            to: '/finance/salary/refund-adjustments',
+            label: '退款冲正',
+            icon: icon(Operation),
             moduleCode: 'SALARY',
             roleCodes: ['ADMIN', 'FINANCE']
           },
@@ -446,9 +463,12 @@ const navGroups = [
         label: '调度中心',
         icon: icon(Timer),
         items: [
-          { key: 'settings-third-party', to: '/settings/integration/third-party', label: '三方接口', icon: icon(Link), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+          { key: 'settings-third-party', to: '/settings/integration/third-party', label: '抖音接口', icon: icon(Link), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
           { key: 'settings-callback', to: '/settings/integration/callback', label: '回调接口', icon: icon(Bell), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-          { key: 'settings-public-api', to: '/settings/integration/public-api', label: '对外接口', icon: icon(Connection), moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
+          { key: 'settings-jobs', to: '/settings/integration/jobs', label: '任务调度', icon: icon(Timer), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+          { key: 'settings-interface-debug', to: '/settings/integration/debug', label: '接口调试', icon: icon(Operation), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+          { key: 'settings-public-api', to: '/settings/integration/public-api', label: '对外接口', icon: icon(Connection), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+          { key: 'settings-distribution-api', to: '/settings/integration/distribution-api', label: '分销接口', icon: icon(Promotion), moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
         ]
       }
     ]
@@ -475,7 +495,9 @@ const routeTitleMap = {
   'private-domain-tags': '标签管理',
   finance: '财务看板',
   'salary-my': '我的薪酬',
-  'salary-settlements': '结算中心',
+  'salary-settlements': '结算单管理',
+  'salary-withdrawals': '提现处理',
+  'salary-refund-adjustments': '退款冲正',
   'salary-settlement-config': '结算配置',
   'salary-config-roles': '薪酬角色',
   'salary-config-grades': '薪酬档位',
@@ -484,12 +506,15 @@ const routeTitleMap = {
   'system-employees': '员工管理',
   'system-positions': '岗位管理',
   'system-roles': '角色管理',
-  'settings-third-party': '三方接口',
+  'settings-third-party': '抖音接口',
   'settings-callback': '回调接口',
+  'settings-jobs': '任务调度',
+  'settings-interface-debug': '接口调试',
   'settings-domain': '域名配置',
   'settings-wecom': '企业微信',
   'settings-menu': '菜单管理',
   'settings-public-api': '对外接口',
+  'settings-distribution-api': '分销接口',
   'settings-dictionaries': '字典管理',
   'settings-parameters': '参数管理',
   'settings-payment': '支付设置'
@@ -515,6 +540,8 @@ const routeSectionMap = {
   finance: '财务管理',
   'salary-my': '财务管理 / 薪酬中心',
   'salary-settlements': '财务管理 / 薪酬结算',
+  'salary-withdrawals': '财务管理 / 薪酬结算',
+  'salary-refund-adjustments': '财务管理 / 薪酬结算',
   'salary-settlement-config': '财务管理 / 薪酬结算',
   'salary-config-roles': '财务管理 / 薪酬配置',
   'salary-config-grades': '财务管理 / 薪酬配置',
@@ -525,10 +552,13 @@ const routeSectionMap = {
   'system-roles': '系统管理',
   'settings-third-party': '系统设置 / 调度中心',
   'settings-callback': '系统设置 / 调度中心',
+  'settings-jobs': '系统设置 / 调度中心',
+  'settings-interface-debug': '系统设置 / 调度中心',
   'settings-domain': '系统设置 / 基础配置',
   'settings-wecom': '系统设置 / 基础配置',
   'settings-menu': '系统设置 / 基础配置',
   'settings-public-api': '系统设置 / 调度中心',
+  'settings-distribution-api': '系统设置 / 调度中心',
   'settings-dictionaries': '系统设置 / 基础配置',
   'settings-parameters': '系统设置 / 基础配置',
   'settings-payment': '系统设置 / 基础配置'
@@ -541,7 +571,9 @@ const visibleGroups = computed(() =>
         const sections = group.sections
           .map((section) => ({
             ...section,
-            items: section.items.filter((item) => hasAccess(item.moduleCode, item.roleCodes))
+            items: section.items
+              .map(applyMenuConfig)
+              .filter((item) => item.isEnabled !== false && hasRouteAccess(item.to, item.moduleCode, item.roleCodes))
           }))
           .filter((section) => section.items.length)
 
@@ -554,17 +586,25 @@ const visibleGroups = computed(() =>
 
       return {
         ...group,
-        items: group.items.filter((item) => hasAccess(item.moduleCode, item.roleCodes)),
+        items: group.items
+          .map(applyMenuConfig)
+          .filter((item) => item.isEnabled !== false && hasRouteAccess(item.to, item.moduleCode, item.roleCodes)),
         sections: []
       }
     })
     .filter((group) => group.items.length || group.sections.length)
 )
 
+const menuConfigByRoute = computed(() => {
+  systemConsoleVersion.value
+  const items = getEffectiveMenuConfigs()
+  return new Map(items.map((item) => [String(item.routePath || '').trim(), item]).filter(([routePath]) => routePath))
+})
 const activeGroup = computed(() => visibleGroups.value.find((group) => groupHasActive(group)) || visibleGroups.value[0] || null)
 const currentRoleLabel = computed(() => formatRoleCode(currentUser.value?.roleCode))
 const standalonePage = computed(() => Boolean(route.meta?.standalone) || String(route.query.scan || '') === '1')
-const resolvedPageTitle = computed(() => routeTitleMap[route.name] || route.meta.title || activeGroup.value?.label || '系统模块')
+const configuredRouteLabel = computed(() => menuConfigByRoute.value.get(route.path)?.menuName || '')
+const resolvedPageTitle = computed(() => configuredRouteLabel.value || routeTitleMap[route.name] || route.meta.title || activeGroup.value?.label || '系统模块')
 const resolvedSectionTitle = computed(
   () => routeSectionMap[route.name] || route.meta.sectionTitle || activeGroup.value?.label || '系统模块'
 )
@@ -593,6 +633,32 @@ async function handleLogout() {
     await router.replace('/login')
   } catch {
     // ignore cancel
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('seedcrm:system-console-updated', refreshSystemConsoleVersion)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('seedcrm:system-console-updated', refreshSystemConsoleVersion)
+})
+
+function refreshSystemConsoleVersion() {
+  systemConsoleVersion.value += 1
+}
+
+function applyMenuConfig(item) {
+  const config = menuConfigByRoute.value.get(item.to)
+  if (!config) {
+    return item
+  }
+  return {
+    ...item,
+    label: config.menuName || item.label,
+    moduleCode: config.moduleCode || item.moduleCode,
+    roleCodes: config.roleCodes?.length ? config.roleCodes : item.roleCodes,
+    isEnabled: config.isEnabled !== 0
   }
 }
 

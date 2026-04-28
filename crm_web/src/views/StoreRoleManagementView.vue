@@ -21,47 +21,65 @@
           <h3>门店角色管理</h3>
         </div>
         <div class="action-group">
-          <el-button type="primary" @click="resetForm">新增角色</el-button>
+          <el-button type="primary" @click="openCreateRole">新增角色</el-button>
         </div>
       </div>
 
-      <div class="form-grid">
-        <label>
-          <span>角色编码</span>
-          <el-input v-model="form.roleCode" placeholder="如 STORE_MANAGER" />
-        </label>
-        <label>
-          <span>角色名称</span>
-          <el-input v-model="form.roleName" placeholder="请输入门店角色名称" />
-        </label>
-        <label>
-          <span>默认首页</span>
-          <el-select v-model="form.defaultEntry">
-            <el-option v-for="item in entryOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </label>
-        <label>
-          <span>数据范围</span>
-          <el-input model-value="门店" readonly />
-        </label>
-        <label class="full-span">
-          <span>模块权限</span>
-          <el-select v-model="form.moduleCodes" multiple placeholder="请选择门店角色可用模块">
-            <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </label>
-        <label class="full-span">
-          <span>备注</span>
-          <el-input v-model="form.remark" placeholder="请输入角色说明" />
-        </label>
-      </div>
+      <el-drawer v-model="roleEditorVisible" class="config-editor-drawer" :size="drawerSize" :close-on-click-modal="false">
+        <template #header>
+          <div class="drawer-editor__header">
+            <span class="drawer-editor__eyebrow">门店角色</span>
+            <h3>{{ form.id ? `编辑角色：${form.roleName || '未命名'}` : '新增角色' }}</h3>
+            <div class="drawer-editor__meta">
+              <span>{{ form.roleCode || '未设置编码' }}</span>
+              <span>数据范围：门店</span>
+            </div>
+          </div>
+        </template>
 
-      <div class="action-group action-group--section">
-        <el-button type="primary" @click="saveRole">保存角色</el-button>
-        <el-button @click="resetForm">重置</el-button>
-      </div>
+        <div class="drawer-editor__body">
+          <div class="form-grid">
+            <label>
+              <span>角色编码</span>
+              <el-input v-model="form.roleCode" placeholder="如 STORE_MANAGER" />
+            </label>
+            <label>
+              <span>角色名称</span>
+              <el-input v-model="form.roleName" placeholder="请输入门店角色名称" />
+            </label>
+            <label>
+              <span>默认首页</span>
+              <el-select v-model="form.defaultEntry">
+                <el-option v-for="item in entryOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </label>
+            <label>
+              <span>数据范围</span>
+              <el-input model-value="门店" readonly />
+            </label>
+            <label class="full-span">
+              <span>模块权限</span>
+              <el-select v-model="form.moduleCodes" multiple placeholder="请选择门店角色可用模块">
+                <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </label>
+            <label class="full-span">
+              <span>备注</span>
+              <el-input v-model="form.remark" placeholder="请输入角色说明" />
+            </label>
+          </div>
+        </div>
 
-      <el-table :data="pagination.rows" stripe>
+        <template #footer>
+          <div class="drawer-editor__footer">
+            <el-button @click="roleEditorVisible = false">取消</el-button>
+            <el-button @click="resetForm">重置表单</el-button>
+            <el-button type="primary" @click="saveRole">{{ form.id ? '保存修改' : '保存角色' }}</el-button>
+          </div>
+        </template>
+      </el-drawer>
+
+      <el-table :data="pagination.rows" :row-class-name="roleRowClassName" stripe>
         <el-table-column label="角色" min-width="180">
           <template #default="{ row }">
             <div class="table-primary">
@@ -104,7 +122,7 @@
 </template>
 
 <script setup>
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useTablePagination } from '../composables/useTablePagination'
 import { loadSystemConsoleState, nextSystemId, saveSystemConsoleState } from '../utils/systemConsoleStore'
@@ -129,6 +147,8 @@ const coveredEmployeeCount = computed(() =>
 )
 
 const form = reactive(createForm())
+const roleEditorVisible = ref(false)
+const drawerSize = 'min(92vw, 640px)'
 
 function createForm() {
   return {
@@ -148,6 +168,11 @@ function persistState(nextState) {
 
 function resetForm() {
   Object.assign(form, createForm())
+}
+
+function openCreateRole() {
+  resetForm()
+  roleEditorVisible.value = true
 }
 
 function saveRole() {
@@ -174,6 +199,7 @@ function saveRole() {
   persistState({ ...state, roles: items })
   pagination.reset()
   resetForm()
+  roleEditorVisible.value = false
   ElMessage.success('门店角色已保存')
 }
 
@@ -182,6 +208,11 @@ function pickRole(row) {
     ...row,
     moduleCodes: [...(row.moduleCodes || ['ORDER', 'PLANORDER'])]
   })
+  roleEditorVisible.value = true
+}
+
+function roleRowClassName({ row }) {
+  return roleEditorVisible.value && form.id === row.id ? 'is-editing-row' : ''
 }
 
 function toggleRole(row) {

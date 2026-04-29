@@ -14,6 +14,7 @@ public class CustomerTableInitializer {
 
     private static final String TABLE_NAME = "customer";
     private static final String UNIQUE_INDEX = "uk_customer_phone";
+    private static final String EXTERNAL_MEMBER_INDEX = "uk_customer_external_member";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -30,6 +31,7 @@ public class CustomerTableInitializer {
             ensureMissingColumns();
         }
         ensurePhoneUniqueIndex();
+        ensureExternalMemberIndex();
     }
 
     private boolean tableExists() {
@@ -76,6 +78,21 @@ public class CustomerTableInitializer {
         }
     }
 
+    private void ensureExternalMemberIndex() {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = ?
+                  AND INDEX_NAME = ?
+                """, Integer.class, TABLE_NAME, EXTERNAL_MEMBER_INDEX);
+        if (count == null || count == 0) {
+            jdbcTemplate.execute("ALTER TABLE " + TABLE_NAME
+                    + " ADD UNIQUE KEY " + EXTERNAL_MEMBER_INDEX + " (external_partner_code, external_member_id)");
+            log.info("added unique index {} on customer external member", EXTERNAL_MEMBER_INDEX);
+        }
+    }
+
     private String createTableSql() {
         return """
                 CREATE TABLE customer (
@@ -85,7 +102,12 @@ public class CustomerTableInitializer {
                     wechat VARCHAR(64),
                     source_clue_id BIGINT,
                     source_channel VARCHAR(32),
+                    source VARCHAR(32),
                     source_id BIGINT,
+                    external_partner_code VARCHAR(64),
+                    external_member_id VARCHAR(128),
+                    external_member_role VARCHAR(64),
+                    raw_data TEXT,
                     status VARCHAR(32) NOT NULL,
                     level VARCHAR(32),
                     tag VARCHAR(64),
@@ -106,7 +128,12 @@ public class CustomerTableInitializer {
         columns.put("wechat", "wechat VARCHAR(64)");
         columns.put("source_clue_id", "source_clue_id BIGINT");
         columns.put("source_channel", "source_channel VARCHAR(32)");
+        columns.put("source", "source VARCHAR(32)");
         columns.put("source_id", "source_id BIGINT");
+        columns.put("external_partner_code", "external_partner_code VARCHAR(64)");
+        columns.put("external_member_id", "external_member_id VARCHAR(128)");
+        columns.put("external_member_role", "external_member_role VARCHAR(64)");
+        columns.put("raw_data", "raw_data TEXT");
         columns.put("status", "status VARCHAR(32) NOT NULL DEFAULT 'NEW'");
         columns.put("level", "level VARCHAR(32)");
         columns.put("tag", "tag VARCHAR(64)");

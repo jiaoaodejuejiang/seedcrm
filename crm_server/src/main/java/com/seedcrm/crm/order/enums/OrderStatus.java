@@ -11,7 +11,12 @@ public enum OrderStatus {
     REFUNDED;
 
     public String getApiValue() {
-        return this == COMPLETED ? "used" : "paid";
+        return switch (this) {
+            case COMPLETED -> "used";
+            case CANCELLED -> "cancelled";
+            case REFUNDED -> "refunded";
+            default -> "paid";
+        };
     }
 
     public OrderStatus nextNormalStatus() {

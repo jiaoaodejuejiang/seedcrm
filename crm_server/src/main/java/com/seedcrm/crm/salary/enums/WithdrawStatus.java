@@ -5,7 +5,8 @@ import com.seedcrm.crm.common.exception.BusinessException;
 public enum WithdrawStatus {
     PENDING,
     APPROVED,
-    PAID;
+    PAID,
+    REJECTED;
 
     public static WithdrawStatus fromCode(String code) {
         try {

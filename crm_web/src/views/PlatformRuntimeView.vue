@@ -39,7 +39,26 @@
         <el-table-column label="事件类型" min-width="160" prop="eventType" />
         <el-table-column label="验签" width="120">
           <template #default="{ row }">
-            {{ formatCallbackSignatureStatus(row.signatureStatus) }}
+            <el-tag :type="statusTagType(row.signatureStatus)">
+              {{ formatCallbackSignatureStatus(row.signatureStatus) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="信任" width="120">
+          <template #default="{ row }">
+            <el-tag :type="statusTagType(row.trustLevel)">
+              {{ formatCallbackTrustLevel(row.trustLevel) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="幂等" width="120">
+          <template #default="{ row }">
+            {{ formatCallbackIdempotencyStatus(row.idempotencyStatus) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="策略" width="130">
+          <template #default="{ row }">
+            {{ formatCallbackProcessPolicy(row.processPolicy) }}
           </template>
         </el-table-column>
         <el-table-column label="处理状态" width="120">
@@ -137,8 +156,11 @@ import { debugSchedulerCallback, fetchIntegrationCallbackLogs } from '../api/sch
 import { debugWecomCallback, fetchWecomCallbackLogs } from '../api/wecom'
 import { useTablePagination } from '../composables/useTablePagination'
 import {
+  formatCallbackIdempotencyStatus,
   formatCallbackProcessStatus,
+  formatCallbackProcessPolicy,
   formatCallbackSignatureStatus,
+  formatCallbackTrustLevel,
   formatDateTime,
   statusTagType
 } from '../utils/format'

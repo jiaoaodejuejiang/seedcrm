@@ -12,6 +12,7 @@
               <span>预约：{{ appointmentLabel }}</span>
               <span>核销金额：{{ formatMoney(verificationAmount) }}</span>
               <span>确认单金额：{{ serviceConfirmAmountLabel }}</span>
+              <span v-if="serviceTemplateDisplay">模板：{{ serviceTemplateDisplay }}</span>
               <span>表单状态：{{ serviceFormStatusLabel }}</span>
               <span>核销：{{ formatVerificationStatus(detail.order?.verificationStatus || 'UNVERIFIED') }}</span>
               <span>履约：{{ serviceStage.label }}</span>
@@ -390,6 +391,7 @@ import {
   finishPlanOrder
 } from '../api/actions'
 import { saveOrderServiceDetail, verifyOrderVoucher } from '../api/order'
+import { previewServiceFormTemplate } from '../api/serviceFormTemplate'
 import { fetchPlanOrderDetail, fetchStaffOptions } from '../api/workbench'
 import { currentUser } from '../utils/auth'
 import { buildSystemUrl, loadSystemConsoleState } from '../utils/systemConsoleStore'
@@ -422,6 +424,7 @@ const scannerHint = ref('请将核销二维码置于取景框内')
 const scannerError = ref('')
 const autosaveMessage = ref('')
 const dirty = ref(false)
+const serviceTemplatePreview = ref(null)
 const state = reactive(loadSystemConsoleState())
 const serviceForm = reactive(createServiceForm())
 
@@ -467,7 +470,12 @@ const customerDisplayName = computed(() => detail.value?.customer?.name || detai
 const customerDisplayPhone = computed(() => detail.value?.customer?.phone || detail.value?.order?.customerPhone || '--')
 const storeDisplayName = computed(() => detail.value?.order?.storeName || currentUser.value?.storeName || '未分配门店')
 const appointmentLabel = computed(() => formatDateTime(detail.value?.order?.appointmentTime) || '待确认')
-const pageTitle = computed(() => (readOnlyMode.value ? '查看服务单' : '服务确认单'))
+const savedServiceTemplate = computed(() => serviceForm.serviceTemplate || null)
+const serviceTemplateTitle = computed(() => savedServiceTemplate.value?.title || serviceTemplatePreview.value?.template?.title || '')
+const serviceTemplateDisplay = computed(
+  () => savedServiceTemplate.value?.title || serviceTemplatePreview.value?.template?.title || serviceTemplatePreview.value?.template?.templateName || ''
+)
+const pageTitle = computed(() => serviceTemplateTitle.value || (readOnlyMode.value ? '查看服务单' : '服务确认单'))
 const verificationAmount = computed(() => {
   const deposit = toAmount(detail.value?.order?.deposit)
   if (deposit && deposit > 0) {
@@ -565,6 +573,7 @@ const orderSummaryItems = computed(() => [
   { label: '订单状态', value: formatOrderStatus(detail.value?.order?.status) },
   { label: '核销金额', value: formatMoney(verificationAmount.value) },
   { label: '确认单金额', value: serviceConfirmAmountLabel.value },
+  { label: '服务模板', value: serviceTemplateDisplay.value || '--' },
   { label: '来源渠道', value: formatChannel(detail.value?.order?.sourceChannel) },
   { label: '最近更新', value: formatDateTime(detail.value?.order?.updateTime || detail.value?.order?.createTime) || '--' }
 ])
@@ -598,7 +607,8 @@ function createServiceForm(payload = {}) {
     signature: String(payload.signature || ''),
     customerSignature: String(payload.customerSignature || ''),
     customerSignatureSignedAt: String(payload.customerSignatureSignedAt || ''),
-    internalRemark: String(payload.internalRemark || '')
+    internalRemark: String(payload.internalRemark || ''),
+    serviceTemplate: normalizeServiceTemplate(payload.serviceTemplate)
   }
 }
 
@@ -778,6 +788,7 @@ async function loadDetail(planOrderId) {
   detailLoading.value = true
   try {
     detail.value = await fetchPlanOrderDetail(planOrderId)
+    await loadServiceTemplatePreview()
     const parsed = safeParseJson(detail.value?.order?.serviceDetailJson)
     applyServiceForm(parsed)
     serviceForm.currentRoleCode = normalize(serviceForm.currentRoleCode || currentUser.value?.roleCode || 'STORE_SERVICE')
@@ -785,9 +796,20 @@ async function loadDetail(planOrderId) {
     await ensureCurrentRoleBound(planOrderId)
   } catch {
     detail.value = null
+    serviceTemplatePreview.value = null
     applyServiceForm()
   } finally {
     detailLoading.value = false
+  }
+}
+
+async function loadServiceTemplatePreview() {
+  try {
+    serviceTemplatePreview.value = await previewServiceFormTemplate({
+      storeName: detail.value?.order?.storeName || currentUser.value?.storeName || undefined
+    })
+  } catch {
+    serviceTemplatePreview.value = null
   }
 }
 
@@ -923,10 +945,23 @@ async function handleSaveServiceForm(options = {}) {
     autosaveMessage.value = '正在自动保存...'
   }
   try {
+    const templateSnapshot = buildServiceTemplateSnapshot()
+    const serviceDetail = {
+      ...createServiceForm(serviceForm),
+      serviceTemplate: templateSnapshot || serviceForm.serviceTemplate || null
+    }
     const response = await saveOrderServiceDetail({
       orderId: detail.value.order.id,
       serviceRequirement: serviceForm.serviceRequirement,
-      serviceDetailJson: JSON.stringify(createServiceForm(serviceForm))
+      serviceDetailJson: JSON.stringify(serviceDetail),
+      serviceTemplateId: templateSnapshot?.templateId,
+      serviceTemplateBindingId: templateSnapshot?.bindingId,
+      serviceTemplateCode: templateSnapshot?.templateCode,
+      serviceTemplateName: templateSnapshot?.templateName,
+      serviceTemplateTitle: templateSnapshot?.title,
+      serviceTemplateLayoutMode: templateSnapshot?.layoutMode,
+      serviceTemplateConfigJson: stringifyTemplateConfig(templateSnapshot?.config),
+      serviceTemplateSnapshotJson: templateSnapshot ? JSON.stringify(templateSnapshot) : undefined
     })
     detail.value.order = {
       ...detail.value.order,
@@ -1172,6 +1207,38 @@ function safeParseJson(value) {
   } catch {
     return null
   }
+}
+
+function normalizeServiceTemplate(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  return { ...value }
+}
+
+function buildServiceTemplateSnapshot() {
+  const template = serviceTemplatePreview.value?.template
+  if (!template) {
+    return serviceForm.serviceTemplate || null
+  }
+  const config = safeParseJson(template.configJson)
+  return {
+    templateId: template.id ?? null,
+    bindingId: serviceTemplatePreview.value?.binding?.id ?? null,
+    templateCode: template.templateCode || '',
+    templateName: template.templateName || '',
+    title: template.title || '',
+    layoutMode: template.layoutMode || '',
+    storeName: serviceTemplatePreview.value?.storeName || storeDisplayName.value,
+    config: config || template.configJson || null
+  }
+}
+
+function stringifyTemplateConfig(config) {
+  if (!config) {
+    return undefined
+  }
+  return typeof config === 'string' ? config : JSON.stringify(config)
 }
 
 function goBackToOrders() {

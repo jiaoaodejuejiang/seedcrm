@@ -7,5 +7,7 @@ import lombok.Data;
 public class WithdrawCreateRequest {
 
     private Long userId;
+    private String subjectType;
+    private String roleCode;
     private BigDecimal amount;
 }

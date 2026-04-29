@@ -1,7 +1,7 @@
 <template>
   <div class="stack-page">
-    <section class="panel">
-      <div class="panel-heading">
+    <section class="panel interface-debug-panel">
+      <div class="panel-heading compact-heading">
         <div>
           <h3>接口调试</h3>
         </div>
@@ -11,7 +11,7 @@
       </div>
 
       <div class="debug-layout">
-        <div class="inline-editor-shell">
+        <div class="debug-form">
           <div class="form-grid">
             <label>
               <span>运行模式</span>
@@ -43,14 +43,23 @@
               <span class="readonly-prefix">{{ requestTargetLabel }}</span>
             </label>
             <label class="full-span">
-              <span>传递参数</span>
-              <el-input v-model="form.payload" type="textarea" :rows="12" />
+              <span>请求头 / 参数</span>
+              <el-input v-model="form.parametersText" type="textarea" :rows="6" />
+            </label>
+            <label class="full-span">
+              <span>请求内容</span>
+              <el-input v-model="form.payload" type="textarea" :rows="14" />
             </label>
           </div>
         </div>
 
         <div class="debug-result">
-          <h4>返回结果</h4>
+          <div class="result-title">
+            <h4>返回结果</h4>
+            <el-tag v-if="result" :type="result.success === false ? 'danger' : 'success'" effect="dark">
+              {{ result.success === false ? '预检异常' : '预检完成' }}
+            </el-tag>
+          </div>
           <pre>{{ resultText }}</pre>
         </div>
       </div>
@@ -70,11 +79,52 @@ const modeOptions = [
 
 const interfaceTemplates = [
   {
+    key: 'DISTRIBUTION_ORDER_PAID',
+    label: '分销已支付订单入站',
+    providerCode: 'DISTRIBUTION',
+    requestMethod: 'POST',
+    path: '/open/distribution/events',
+    parameters: {
+      'X-Partner-Code': 'DISTRIBUTION',
+      'X-Idempotency-Key': 'idem-debug-001',
+      'X-Timestamp': '2026-04-29T10:00:00Z',
+      'X-Nonce': 'nonce-debug-001',
+      'X-Signature': 'mock-signature'
+    },
+    payload: {
+      eventType: 'distribution.order.paid',
+      eventId: 'evt_debug_001',
+      partnerCode: 'DISTRIBUTION',
+      occurredAt: '2026-04-29T10:00:00+08:00',
+      member: {
+        externalMemberId: 'm_10001',
+        name: '张三',
+        phone: '13800000000',
+        role: 'member'
+      },
+      promoter: {
+        externalPromoterId: 'p_90001',
+        role: 'leader'
+      },
+      order: {
+        externalOrderId: 'o_20001',
+        externalTradeNo: 'pay_30001',
+        type: 'coupon',
+        amount: 19900,
+        paidAt: '2026-04-29T09:58:00+08:00',
+        storeCode: 'store_001',
+        status: 'paid'
+      },
+      rawData: {}
+    }
+  },
+  {
     key: 'DOUYIN_CLUE_PULL',
     label: '抖音客资拉取',
     providerCode: 'DOUYIN_LAIKE',
     requestMethod: 'POST',
     path: '/goodlife/v1/clue/douyin/list/',
+    parameters: {},
     payload: {
       account_id: 'life_account_id',
       start_time: '2026-04-27 00:00:00',
@@ -89,23 +139,10 @@ const interfaceTemplates = [
     providerCode: 'DOUYIN_LAIKE',
     requestMethod: 'POST',
     path: '/goodlife/v1/fulfilment/certificate/verify/',
+    parameters: {},
     payload: {
       encrypted_codes: ['mock-voucher-code'],
       poi_id: 'mock-poi-id'
-    }
-  },
-  {
-    key: 'DISTRIBUTION_LEAD_PULL',
-    label: '分销客资接口',
-    providerCode: 'DISTRIBUTION',
-    requestMethod: 'POST',
-    path: '/open/distribution/leads',
-    payload: {
-      app_id: 'distribution-app-id',
-      timestamp: '2026-04-27T10:00:00+08:00',
-      page: 1,
-      page_size: 30,
-      sign: 'mock-sign'
     }
   },
   {
@@ -114,6 +151,7 @@ const interfaceTemplates = [
     providerCode: 'WECOM',
     requestMethod: 'POST',
     path: '/wecom/callback/PRIVATE_DOMAIN',
+    parameters: {},
     payload: {
       Event: 'add_external_contact',
       State: 'sc.order.user.customer.sign',
@@ -132,14 +170,15 @@ const form = reactive({
   providerCode: '',
   requestMethod: 'POST',
   path: '',
+  parametersText: '{}',
   payload: ''
 })
 
 const resultText = computed(() => (result.value ? JSON.stringify(result.value, null, 2) : '暂无调试结果'))
 const requestTargetLabel = computed(() =>
   form.mode === 'LIVE'
-    ? `真实模式：将校验 ${form.providerCode || '--'} ${form.requestMethod || 'POST'} ${form.path || '--'}`
-    : `模拟模式：仅在系统内生成 ${form.providerCode || '--'} ${form.interfaceCode || '--'} 的模拟响应`
+    ? `真实模式：校验 ${form.providerCode || '--'} ${form.requestMethod || 'POST'} ${form.path || '--'}，不会直接改写业务数据`
+    : `模拟模式：仅在系统内预检 ${form.providerCode || '--'} ${form.interfaceCode || '--'}，不落核心业务表`
 )
 
 applyTemplate()
@@ -152,16 +191,40 @@ function applyTemplate() {
     providerCode: template.providerCode,
     requestMethod: template.requestMethod,
     path: template.path,
+    parametersText: JSON.stringify(template.parameters || {}, null, 2),
     payload: JSON.stringify(template.payload, null, 2)
   })
   result.value = null
 }
 
+function parseJsonObject(text, fieldName) {
+  if (!text || !text.trim()) {
+    return {}
+  }
+  try {
+    const parsed = JSON.parse(text)
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+      throw new Error(`${fieldName}必须是 JSON 对象`)
+    }
+    return parsed
+  } catch (error) {
+    throw new Error(`${fieldName}格式不是有效 JSON：${error.message}`)
+  }
+}
+
 async function handleTest() {
+  let parameters
+  try {
+    parameters = parseJsonObject(form.parametersText, '请求头 / 参数')
+    JSON.parse(form.payload || '{}')
+  } catch (error) {
+    ElMessage.warning(error.message)
+    return
+  }
   if (form.mode === 'LIVE') {
     try {
       await ElMessageBox.confirm(
-        '真实模式会按当前接口配置发起联调校验。请确认配置无误后继续；本系统不会在接口调试中直接改写业务数据。',
+        '真实模式会按当前接口配置做联调校验。接口调试不会直接写入 Customer、Order 或 PlanOrder，但请确认密钥、请求头和参数无误。',
         '确认真实接口调试',
         {
           confirmButtonText: '确认发送',
@@ -181,6 +244,7 @@ async function handleTest() {
       providerCode: form.providerCode,
       requestMethod: form.requestMethod,
       path: form.path,
+      parameters,
       payload: form.payload
     })
     ElMessage.success('接口调试完成')
@@ -191,28 +255,55 @@ async function handleTest() {
 </script>
 
 <style scoped>
+.interface-debug-panel {
+  overflow: hidden;
+}
+
+.compact-heading {
+  align-items: center;
+}
+
 .debug-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+  grid-template-columns: minmax(0, 1.05fr) minmax(380px, 0.95fr);
   gap: 18px;
 }
 
-.debug-result {
+.debug-form {
   border: 1px solid #e5edf4;
   border-radius: 18px;
   padding: 16px;
-  background: #0f172a;
+  background: #ffffff;
+}
+
+.debug-result {
+  border: 1px solid #0f172a;
+  border-radius: 18px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(56, 189, 248, 0.18), transparent 26%),
+    #0f172a;
   color: #dbeafe;
-  min-height: 320px;
+  min-height: 420px;
+}
+
+.result-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .debug-result h4 {
-  margin: 0 0 12px;
+  margin: 0;
   color: #ffffff;
 }
 
 .debug-result pre {
   margin: 0;
+  max-height: 680px;
+  overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 13px;
@@ -221,7 +312,7 @@ async function handleTest() {
 
 .readonly-prefix {
   display: inline-flex;
-  min-height: 32px;
+  min-height: 34px;
   align-items: center;
   padding: 0 12px;
   border-radius: 10px;

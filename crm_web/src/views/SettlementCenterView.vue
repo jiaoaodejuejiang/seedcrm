@@ -30,7 +30,7 @@
         <div class="rule-strip">
           <article class="rule-strip__card">
             <span>命中规则</span>
-            <strong>{{ matchedRule?.ruleName || '未命中规则' }}</strong>
+            <strong>{{ matchedRule?.policyName || '未命中规则' }}</strong>
             <small>{{ matchedRule?.remark || '请先在结算配置中维护规则。' }}</small>
           </article>
           <article class="rule-strip__card">
@@ -158,6 +158,11 @@
                 {{ formatMoney(row.amount) }}
               </template>
             </el-table-column>
+            <el-table-column label="结算方式" min-width="140">
+              <template #default="{ row }">
+                {{ formatSettlementMode(row.settlementMode || matchedMode) }}
+              </template>
+            </el-table-column>
             <el-table-column label="状态" width="120">
               <template #default="{ row }">
                 <el-tag :type="statusTagType(row.status)">{{ formatOrderStatus(row.status) }}</el-tag>
@@ -168,7 +173,12 @@
                 {{ formatDateTime(row.createTime) }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="160" fixed="right">
+            <el-table-column label="审核说明" min-width="180">
+              <template #default="{ row }">
+                {{ row.auditRemark || '--' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="210" fixed="right">
               <template #default="{ row }">
                 <div class="action-group">
                   <el-button
@@ -178,6 +188,15 @@
                     @click="handleApproveWithdraw(row)"
                   >
                     审核打款
+                  </el-button>
+                  <el-button
+                    v-if="matchedMode === 'WITHDRAW_AUDIT' && normalize(row.status) === 'PENDING'"
+                    size="small"
+                    type="danger"
+                    plain
+                    @click="handleRejectWithdraw(row)"
+                  >
+                    驳回
                   </el-button>
                   <el-button size="small" plain @click="fillWithdrawAmount(row)">带入金额</el-button>
                 </div>
@@ -308,13 +327,14 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute } from 'vue-router'
 import {
   approveSalaryWithdraw,
   confirmSalarySettlement,
   createSalarySettlement,
   createSalaryWithdraw,
+  fetchSettlementPolicies,
   fetchSalaryBalance,
   fetchSalarySettlements,
   fetchSalaryStat,
@@ -348,6 +368,7 @@ const balance = ref(null)
 const withdrawable = ref(0)
 const settlements = ref([])
 const withdraws = ref([])
+const policyRows = ref([])
 const refundableOrders = ref([])
 const activeTab = ref('settlement')
 const refundOrdersLoading = ref(false)
@@ -383,20 +404,16 @@ const selectedStaff = computed(() => staffMembers.value.find((item) => item.user
 const hasSelectedUser = computed(() => Boolean(selectedUserId.value))
 const activeStaffLabel = computed(() => (selectedStaff.value ? staffLabel(selectedStaff.value) : '未选择'))
 const selectedRoleCode = computed(() => selectedStaff.value?.roleCode || currentUser.value?.roleCode || '')
-const matchedRule = computed(() => {
-  const enabledRules = (state.salarySettlementRules || []).filter((item) => item.enabled === 1)
-  const amountMatch = enabledRules.find((item) => {
-    if (item.scopeType !== 'AMOUNT') {
-      return false
-    }
-    const min = Number(item.amountMin || 0)
-    const max = item.amountMax === '' ? Number.POSITIVE_INFINITY : Number(item.amountMax || 0)
-    return withdrawable.value >= min && withdrawable.value <= max
+const activeSettlementRules = computed(() => {
+  const rows = policyRows.value.length ? policyRows.value : (state.salarySettlementRules || []).map(normalizeLegacySettlementRule)
+  return rows.filter((item) => {
+    const enabled = item.enabled === undefined ? 1 : item.enabled
+    const status = normalize(item.status || 'PUBLISHED')
+    return enabled === 1 && status === 'PUBLISHED' && normalize(item.subjectType || 'INTERNAL_STAFF') === 'INTERNAL_STAFF'
   })
-  if (amountMatch) {
-    return amountMatch
-  }
-  return enabledRules.find((item) => item.scopeType === 'ROLE' && (item.roleCodes || []).includes(selectedRoleCode.value)) || null
+})
+const matchedRule = computed(() => {
+  return activeSettlementRules.value.find((item) => item.scopeType === 'ROLE' && (item.roleCodes || []).includes(selectedRoleCode.value)) || null
 })
 const matchedMode = computed(() => matchedRule.value?.settlementMode || 'LEDGER_ONLY')
 const currentModeLabel = computed(() => formatSettlementMode(matchedMode.value))
@@ -405,6 +422,31 @@ const pageMode = computed(() => route.meta?.settlementCenterMode || 'settlement'
 
 function staffLabel(staff) {
   return `${staff.userName} / ${formatRoleCode(staff.roleCode)}`
+}
+
+function normalizeLegacySettlementRule(row) {
+  return {
+    id: row.id,
+    policyName: row.ruleName,
+    subjectType: row.scopeType === 'AMOUNT' ? 'DISTRIBUTOR' : 'INTERNAL_STAFF',
+    scopeType: row.scopeType,
+    roleCodes: row.roleCodes || [],
+    amountMin: row.amountMin === '' ? null : row.amountMin,
+    amountMax: row.amountMax === '' ? null : row.amountMax,
+    settlementCycle: row.settlementMode === 'LEDGER_ONLY' ? 'MONTHLY' : 'INSTANT',
+    settlementMode: row.settlementMode,
+    enabled: row.enabled,
+    status: row.enabled === 1 ? 'PUBLISHED' : 'DISABLED',
+    remark: row.remark
+  }
+}
+
+async function loadPolicyRows() {
+  try {
+    policyRows.value = await fetchSettlementPolicies()
+  } catch {
+    policyRows.value = []
+  }
 }
 
 function fillSettlementRange(row) {
@@ -435,10 +477,26 @@ async function initSelection() {
   }
   if (canChooseUser.value) {
     const currentUserId = currentUser.value?.userId || null
-    selectedUserId.value = staffMembers.value.some((item) => item.userId === currentUserId) ? currentUserId : null
+    const currentStaff = staffMembers.value.find((item) => item.userId === currentUserId) || null
+    const defaultStaff = currentStaff && hasSettlementRuleForRole(currentStaff.roleCode)
+      ? currentStaff
+      : findDefaultSalaryStaff()
+    selectedUserId.value = defaultStaff?.userId || currentStaff?.userId || null
   } else {
     selectedUserId.value = currentUser.value?.userId || null
   }
+}
+
+function findDefaultSalaryStaff() {
+  return staffMembers.value.find((item) => hasSettlementRuleForRole(item.roleCode)) || null
+}
+
+function hasSettlementRuleForRole(roleCode) {
+  const normalizedRoleCode = normalize(roleCode)
+  if (!normalizedRoleCode) {
+    return false
+  }
+  return activeSettlementRules.value.some((item) => item.scopeType === 'ROLE' && (item.roleCodes || []).includes(normalizedRoleCode))
 }
 
 async function handleUserChange() {
@@ -522,6 +580,8 @@ async function handlePaySettlement(row) {
 async function handleCreateWithdraw() {
   await createSalaryWithdraw({
     userId: selectedUserId.value,
+    subjectType: resolveWithdrawSubjectType(),
+    roleCode: selectedRoleCode.value,
     amount: withdrawForm.amount
   })
   ElMessage.success('提现申请已创建')
@@ -529,25 +589,62 @@ async function handleCreateWithdraw() {
 }
 
 async function handleApproveWithdraw(row) {
+  try {
+    await ElMessageBox.confirm('确认通过该提现并登记为已打款吗？', '审核打款', {
+      type: 'warning',
+      confirmButtonText: '确认打款',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
   await approveSalaryWithdraw({
     withdrawId: row.id,
-    status: 'PAID'
+    status: 'PAID',
+    auditRemark: '财务审核通过'
   })
   ElMessage.success('提现状态已更新')
   await loadSalaryData()
 }
 
-async function handleAutoWithdraw() {
-  const created = await createSalaryWithdraw({
-    userId: selectedUserId.value,
-    amount: withdrawForm.amount
-  })
+async function handleRejectWithdraw(row) {
+  let auditRemark = ''
+  try {
+    const result = await ElMessageBox.prompt('请填写驳回原因，驳回后该金额会释放为可提现余额。', '驳回提现', {
+      inputType: 'textarea',
+      inputPlaceholder: '例如：收款信息不完整，请补充后重新发起。',
+      inputPattern: /\S+/,
+      inputErrorMessage: '请填写驳回原因',
+      confirmButtonText: '确认驳回',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    auditRemark = result.value
+  } catch {
+    return
+  }
   await approveSalaryWithdraw({
-    withdrawId: created?.id,
-    status: 'PAID'
+    withdrawId: row.id,
+    status: 'REJECTED',
+    auditRemark
+  })
+  ElMessage.success('提现已驳回')
+  await loadSalaryData()
+}
+
+async function handleAutoWithdraw() {
+  await createSalaryWithdraw({
+    userId: selectedUserId.value,
+    subjectType: resolveWithdrawSubjectType(),
+    roleCode: selectedRoleCode.value,
+    amount: withdrawForm.amount
   })
   ElMessage.success('自动提现已完成')
   await loadSalaryData()
+}
+
+function resolveWithdrawSubjectType() {
+  return matchedRule.value?.subjectType || (matchedRule.value?.scopeType === 'AMOUNT' ? 'DISTRIBUTOR' : 'INTERNAL_STAFF')
 }
 
 function isFinanceRefundableOrder(row) {
@@ -678,6 +775,7 @@ function formatServiceConfirmAmount(row) {
 
 onMounted(async () => {
   activeTab.value = pageMode.value
+  await loadPolicyRows()
   await initSelection()
   await loadSalaryData()
   if (pageMode.value === 'refunds') {

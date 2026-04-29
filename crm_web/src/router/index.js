@@ -10,6 +10,7 @@ import DomainSettingView from '../views/DomainSettingView.vue'
 import FinanceOverview from '../views/FinanceOverview.vue'
 import InterfaceDebugView from '../views/InterfaceDebugView.vue'
 import LoginView from '../views/LoginView.vue'
+import MemberInfoView from '../views/MemberInfoView.vue'
 import MySalaryView from '../views/MySalaryView.vue'
 import OrderManagement from '../views/OrderManagement.vue'
 import PaidOrderManagement from '../views/PaidOrderManagement.vue'
@@ -30,6 +31,7 @@ import StorePersonnelManagementView from '../views/StorePersonnelManagementView.
 import StoreRoleManagementView from '../views/StoreRoleManagementView.vue'
 import StoreScheduleManagementView from '../views/StoreScheduleManagementView.vue'
 import StoreServiceTemplateView from '../views/StoreServiceTemplateView.vue'
+import SystemFlowView from '../views/SystemFlowView.vue'
 import SystemOrganizationView from '../views/SystemOrganizationView.vue'
 import SystemSettingView from '../views/SystemSettingView.vue'
 
@@ -197,7 +199,7 @@ const routes = [
           title: '客户详情',
           sectionTitle: '门店服务',
           moduleCode: 'ORDER',
-          roleCodes: storeRoleCodes,
+          roleCodes: [...storeRoleCodes, 'PRIVATE_DOMAIN_SERVICE'],
           navKey: 'store-service-orders'
         }
       },
@@ -215,6 +217,18 @@ const routes = [
           moduleCode: 'WECOM',
           roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
           navKey: 'private-domain-live-code'
+        }
+      },
+      {
+        path: 'private-domain/members',
+        name: 'private-domain-members',
+        component: MemberInfoView,
+        meta: {
+          title: '会员信息',
+          sectionTitle: '私域客服',
+          moduleCode: 'WECOM',
+          roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'],
+          navKey: 'private-domain-members'
         }
       },
       {
@@ -487,6 +501,18 @@ const routes = [
           moduleCode: 'SETTING',
           roleCodes: ['ADMIN'],
           navKey: 'settings-distribution-api'
+        }
+      },
+      {
+        path: 'settings/system-flow',
+        name: 'settings-system-flow',
+        component: SystemFlowView,
+        meta: {
+          title: '系统流程',
+          sectionTitle: '系统设置 / 流程配置',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-system-flow'
         }
       },
       {

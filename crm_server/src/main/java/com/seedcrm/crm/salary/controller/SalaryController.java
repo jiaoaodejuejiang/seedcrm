@@ -8,6 +8,7 @@ import com.seedcrm.crm.permission.support.SalaryModuleGuard;
 import com.seedcrm.crm.salary.dto.SalaryBalanceResponse;
 import com.seedcrm.crm.salary.dto.SalaryRecalculateRequest;
 import com.seedcrm.crm.salary.dto.SalarySettlementCreateRequest;
+import com.seedcrm.crm.salary.dto.SalarySettlementPolicyDtos;
 import com.seedcrm.crm.salary.dto.SalarySettlementStatusRequest;
 import com.seedcrm.crm.salary.dto.SalaryStatResponse;
 import com.seedcrm.crm.salary.dto.WithdrawApproveRequest;
@@ -18,6 +19,7 @@ import com.seedcrm.crm.salary.entity.WithdrawRecord;
 import com.seedcrm.crm.salary.enums.SalarySettlementStatus;
 import com.seedcrm.crm.salary.enums.WithdrawStatus;
 import com.seedcrm.crm.salary.service.SalaryService;
+import com.seedcrm.crm.salary.service.SalarySettlementPolicyService;
 import com.seedcrm.crm.salary.service.SettlementService;
 import com.seedcrm.crm.salary.service.WithdrawService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,17 +38,20 @@ public class SalaryController {
 
     private final SalaryService salaryService;
     private final SettlementService settlementService;
+    private final SalarySettlementPolicyService salarySettlementPolicyService;
     private final WithdrawService withdrawService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
     private final SalaryModuleGuard salaryModuleGuard;
 
     public SalaryController(SalaryService salaryService,
                             SettlementService settlementService,
+                            SalarySettlementPolicyService salarySettlementPolicyService,
                             WithdrawService withdrawService,
                             PermissionRequestContextResolver permissionRequestContextResolver,
                             SalaryModuleGuard salaryModuleGuard) {
         this.salaryService = salaryService;
         this.settlementService = settlementService;
+        this.salarySettlementPolicyService = salarySettlementPolicyService;
         this.withdrawService = withdrawService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
         this.salaryModuleGuard = salaryModuleGuard;
@@ -83,7 +88,51 @@ public class SalaryController {
     public ApiResponse<List<WithdrawRecord>> withdraws(@RequestParam(required = false) Long userId,
                                                        HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
-        return ApiResponse.success(withdrawService.listWithdraws(resolveSettlementUserId(userId, context)));
+        Long resolvedUserId = resolveSettlementUserId(userId, context);
+        if (resolvedUserId == null) {
+            salaryModuleGuard.checkUpdate(context);
+        } else {
+            salaryModuleGuard.checkView(context, resolvedUserId);
+        }
+        return ApiResponse.success(withdrawService.listWithdraws(resolvedUserId));
+    }
+
+    @GetMapping("/settlement-policies")
+    public ApiResponse<List<SalarySettlementPolicyDtos.PolicyResponse>> settlementPolicies(HttpServletRequest request) {
+        requireSettlementOperator(request);
+        return ApiResponse.success(salarySettlementPolicyService.listPolicies());
+    }
+
+    @PostMapping("/settlement-policies/save-draft")
+    public ApiResponse<SalarySettlementPolicyDtos.PolicyResponse> saveSettlementPolicyDraft(
+            @RequestBody SalarySettlementPolicyDtos.SavePolicyRequest request,
+            HttpServletRequest httpServletRequest) {
+        PermissionRequestContext context = requireSettlementOperator(httpServletRequest);
+        return ApiResponse.success(salarySettlementPolicyService.saveDraft(request, context));
+    }
+
+    @PostMapping("/settlement-policies/publish")
+    public ApiResponse<SalarySettlementPolicyDtos.PolicyResponse> publishSettlementPolicy(
+            @RequestBody SalarySettlementPolicyDtos.PolicyStatusRequest request,
+            HttpServletRequest httpServletRequest) {
+        PermissionRequestContext context = requireSettlementOperator(httpServletRequest);
+        return ApiResponse.success(salarySettlementPolicyService.publish(request, context));
+    }
+
+    @PostMapping("/settlement-policies/disable")
+    public ApiResponse<SalarySettlementPolicyDtos.PolicyResponse> disableSettlementPolicy(
+            @RequestBody SalarySettlementPolicyDtos.PolicyStatusRequest request,
+            HttpServletRequest httpServletRequest) {
+        PermissionRequestContext context = requireSettlementOperator(httpServletRequest);
+        return ApiResponse.success(salarySettlementPolicyService.disable(request, context));
+    }
+
+    @PostMapping("/settlement-policies/simulate")
+    public ApiResponse<SalarySettlementPolicyDtos.SimulateResponse> simulateSettlementPolicy(
+            @RequestBody SalarySettlementPolicyDtos.SimulateRequest request,
+            HttpServletRequest httpServletRequest) {
+        requireSettlementOperator(httpServletRequest);
+        return ApiResponse.success(salarySettlementPolicyService.simulate(request));
     }
 
     @PostMapping("/recalculate")
@@ -119,8 +168,8 @@ public class SalaryController {
     @PostMapping("/withdraw")
     public ApiResponse<WithdrawRecord> withdraw(@RequestBody WithdrawCreateRequest request,
                                                 HttpServletRequest httpServletRequest) {
-        requireSettlementOperator(httpServletRequest);
-        return ApiResponse.success(withdrawService.createWithdraw(request));
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
+        return ApiResponse.success(withdrawService.createWithdraw(resolveWithdrawCreateRequest(request, context)));
     }
 
     @PostMapping("/withdraw/approve")
@@ -129,7 +178,8 @@ public class SalaryController {
         requireSettlementOperator(httpServletRequest);
         return ApiResponse.success(withdrawService.approveWithdraw(
                 request == null ? null : request.getWithdrawId(),
-                WithdrawStatus.fromCode(request == null ? null : request.getStatus())));
+                WithdrawStatus.fromCode(request == null ? null : request.getStatus()),
+                request == null ? null : request.getAuditRemark()));
     }
 
     private Long resolveReadableSalaryUserId(Long requestedUserId, HttpServletRequest request) {
@@ -145,12 +195,40 @@ public class SalaryController {
         return context.getCurrentUserId();
     }
 
-    private void requireSettlementOperator(HttpServletRequest request) {
+    private PermissionRequestContext requireSettlementOperator(HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         if (!isSettlementOperator(context)) {
             throw new BusinessException("薪酬结算操作仅限管理员或财务");
         }
         salaryModuleGuard.checkUpdate(context);
+        return context;
+    }
+
+    private WithdrawCreateRequest resolveWithdrawCreateRequest(WithdrawCreateRequest request,
+                                                               PermissionRequestContext context) {
+        if (request == null) {
+            throw new BusinessException("request body is required");
+        }
+        WithdrawCreateRequest resolved = new WithdrawCreateRequest();
+        resolved.setAmount(request.getAmount());
+        resolved.setSubjectType(request.getSubjectType());
+        resolved.setRoleCode(request.getRoleCode());
+        if (isSettlementOperator(context)) {
+            salaryModuleGuard.checkUpdate(context);
+            resolved.setUserId(request.getUserId());
+            return resolved;
+        }
+
+        Long currentUserId = context == null ? null : context.getCurrentUserId();
+        salaryModuleGuard.checkView(context, currentUserId);
+        if (request.getUserId() != null && !request.getUserId().equals(currentUserId)) {
+            throw new BusinessException("只能为当前登录人发起提现");
+        }
+        resolved.setUserId(currentUserId);
+        resolved.setRoleCode(context.getRoleCode());
+        // 普通登录人只能按自身员工身份发起；外部分销提现由分销接口/财务台按配置处理。
+        resolved.setSubjectType("INTERNAL_STAFF");
+        return resolved;
     }
 
     private boolean isSettlementOperator(PermissionRequestContext context) {

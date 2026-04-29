@@ -43,6 +43,12 @@ public class IntegrationProviderConfig {
     @TableField("endpoint_path")
     private String endpointPath;
 
+    @TableField("status_query_path")
+    private String statusQueryPath;
+
+    @TableField("reconciliation_pull_path")
+    private String reconciliationPullPath;
+
     @TableField("voucher_prepare_path")
     private String voucherPreparePath;
 
@@ -96,6 +102,9 @@ public class IntegrationProviderConfig {
 
     @TableField("refund_status_mapping")
     private String refundStatusMapping;
+
+    @TableField("status_mapping")
+    private String statusMapping;
 
     @TableField("client_key")
     private String clientKey;

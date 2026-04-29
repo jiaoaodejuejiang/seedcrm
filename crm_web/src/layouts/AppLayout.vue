@@ -276,6 +276,14 @@ const navGroups = [
         roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE']
       },
       {
+        key: 'private-domain-members',
+        to: '/private-domain/members',
+        label: '会员信息',
+        icon: icon(User),
+        moduleCode: 'WECOM',
+        roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE']
+      },
+      {
         key: 'private-domain-profile',
         to: '/private-domain/customer-profile',
         label: '客户画像',
@@ -470,6 +478,14 @@ const navGroups = [
           { key: 'settings-public-api', to: '/settings/integration/public-api', label: '对外接口', icon: icon(Connection), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
           { key: 'settings-distribution-api', to: '/settings/integration/distribution-api', label: '分销接口', icon: icon(Promotion), moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
         ]
+      },
+      {
+        key: 'system-setting-flow',
+        label: '流程配置',
+        icon: icon(SetUp),
+        items: [
+          { key: 'settings-system-flow', to: '/settings/system-flow', label: '系统流程', icon: icon(SetUp), moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
+        ]
       }
     ]
   }
@@ -490,6 +506,7 @@ const routeTitleMap = {
   'plan-orders-scan': '扫码服务单',
   customers: '客户详情',
   'private-domain-live-code': '活码配置',
+  'private-domain-members': '会员信息',
   'private-domain-customer-profile': '客户画像',
   'private-domain-moments': '朋友圈定时群发',
   'private-domain-tags': '标签管理',
@@ -517,7 +534,8 @@ const routeTitleMap = {
   'settings-distribution-api': '分销接口',
   'settings-dictionaries': '字典管理',
   'settings-parameters': '参数管理',
-  'settings-payment': '支付设置'
+  'settings-payment': '支付设置',
+  'settings-system-flow': '系统流程'
 }
 
 const routeSectionMap = {
@@ -534,6 +552,7 @@ const routeSectionMap = {
   'plan-orders-scan': '门店服务',
   customers: '门店服务',
   'private-domain-live-code': '私域客服',
+  'private-domain-members': '私域客服',
   'private-domain-customer-profile': '私域客服',
   'private-domain-moments': '私域客服',
   'private-domain-tags': '私域客服',
@@ -561,7 +580,8 @@ const routeSectionMap = {
   'settings-distribution-api': '系统设置 / 调度中心',
   'settings-dictionaries': '系统设置 / 基础配置',
   'settings-parameters': '系统设置 / 基础配置',
-  'settings-payment': '系统设置 / 基础配置'
+  'settings-payment': '系统设置 / 基础配置',
+  'settings-system-flow': '系统设置 / 流程配置'
 }
 
 const visibleGroups = computed(() =>

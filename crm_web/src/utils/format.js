@@ -18,7 +18,8 @@ const ORDER_TYPE_LABELS = {
   1: '定金',
   2: '团购券',
   DEPOSIT: '定金',
-  COUPON: '团购券'
+  COUPON: '团购券',
+  DISTRIBUTION_PRODUCT: '分销商品'
 }
 
 const ORDER_STATUS_LABELS = {
@@ -36,6 +37,7 @@ const ORDER_STATUS_LABELS = {
   REFUNDED: '已退款',
   APPROVED: '已通过',
   PENDING: '待处理',
+  REJECTED: '已驳回',
   INIT: '待确认',
   CONFIRMED: '已确认',
   PAID_OUT: '已打款',
@@ -150,10 +152,14 @@ const AUTH_TYPE_LABELS = {
 
 const CALLBACK_SIGNATURE_LABELS = {
   VERIFIED: '已验签',
+  PASSED: '已验签',
   NOT_VERIFIED: '未验签',
   LOCAL_BYPASS: '本地跳过',
   SKIPPED: '已跳过',
-  FAILED: '验签失败'
+  SKIPPED_LOCAL: '本地跳过',
+  FAILED: '验签失败',
+  EXPIRED: '时间过期',
+  REPLAYED: '重复重放'
 }
 
 const CALLBACK_PROCESS_LABELS = {
@@ -162,7 +168,33 @@ const CALLBACK_PROCESS_LABELS = {
   FAILED: '失败',
   RECEIVED: '已接收',
   PROCESSED: '已处理',
-  PENDING: '待处理'
+  PENDING: '待处理',
+  UNVERIFIED: '未可信',
+  DUPLICATE: '重复忽略',
+  IGNORED: '已忽略',
+  VERIFIED: '已校验'
+}
+
+const CALLBACK_TRUST_LABELS = {
+  LOCAL: '本地联调',
+  MOCK: '模拟模式',
+  VERIFIED: '可信',
+  UNVERIFIED: '未可信',
+  BLOCKED: '已阻断'
+}
+
+const CALLBACK_IDEMPOTENCY_LABELS = {
+  NEW: '首次处理',
+  DUPLICATE: '重复忽略',
+  MISSING: '幂等键缺失',
+  CONFLICT: '重复冲突'
+}
+
+const CALLBACK_PROCESS_POLICY_LABELS = {
+  LOG_ONLY: '只留痕',
+  AUTH_UPDATE_ONLY: '仅更新授权',
+  QUEUE_ONLY: '仅入队',
+  REJECTED: '已拒绝'
 }
 
 const RESULT_STATUS_LABELS = {
@@ -296,6 +328,7 @@ export function formatModuleCode(value) {
       PERMISSION: '权限',
       SALARY: '薪酬',
       DISTRIBUTOR: '分销',
+      DISTRIBUTION: '分销',
       FINANCE: '财务'
     }[normalize(value)] || value || '--'
   )
@@ -362,6 +395,18 @@ export function formatCallbackProcessStatus(value) {
   return pickLabel(CALLBACK_PROCESS_LABELS, value, 'callback_process_status')
 }
 
+export function formatCallbackTrustLevel(value) {
+  return pickLabel(CALLBACK_TRUST_LABELS, value, 'callback_trust_level')
+}
+
+export function formatCallbackIdempotencyStatus(value) {
+  return pickLabel(CALLBACK_IDEMPOTENCY_LABELS, value, 'callback_idempotency_status')
+}
+
+export function formatCallbackProcessPolicy(value) {
+  return pickLabel(CALLBACK_PROCESS_POLICY_LABELS, value, 'callback_process_policy')
+}
+
 export function formatResultStatus(value) {
   return pickLabel(RESULT_STATUS_LABELS, value)
 }
@@ -419,6 +464,15 @@ export function statusTagType(value) {
       SUCCESS: 'success',
       FAIL: 'danger',
       FAILED: 'danger',
+      UNVERIFIED: 'warning',
+      DUPLICATE: 'info',
+      IGNORED: 'info',
+      SKIPPED: 'info',
+      LOCAL_BYPASS: 'warning',
+      NOT_VERIFIED: 'warning',
+      EXPIRED: 'danger',
+      REPLAYED: 'danger',
+      BLOCKED: 'danger',
       ACTIVE: 'success',
       INACTIVE: 'info',
       ENABLED: 'success',
@@ -426,6 +480,7 @@ export function statusTagType(value) {
       QUEUED: 'warning',
       RUNNING: 'primary',
       APPROVED: 'success',
+      REJECTED: 'danger',
       VERIFIED: 'success',
       UNVERIFIED: 'warning',
       INIT: 'warning',

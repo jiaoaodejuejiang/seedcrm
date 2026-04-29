@@ -18,6 +18,7 @@ const accessibleRoutes = [
   { path: '/store-service/personnel', moduleCode: 'SYSTEM', roleCodes: ['STORE_MANAGER', 'ADMIN'] },
   { path: '/store-service/roles', moduleCode: 'SYSTEM', roleCodes: ['STORE_MANAGER', 'ADMIN'] },
   { path: '/private-domain/live-code', moduleCode: 'WECOM', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'] },
+  { path: '/private-domain/members', moduleCode: 'WECOM', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'] },
   { path: '/private-domain/customer-profile', moduleCode: 'WECOM', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'] },
   { path: '/private-domain/moments', moduleCode: 'WECOM', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'] },
   { path: '/private-domain/tags', moduleCode: 'WECOM', roleCodes: ['ADMIN', 'PRIVATE_DOMAIN_SERVICE'] },
@@ -38,7 +39,8 @@ const accessibleRoutes = [
   { path: '/settings/integration/callback', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
   { path: '/settings/integration/jobs', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
   { path: '/settings/integration/debug', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-  { path: '/settings/integration/distribution-api', moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
+  { path: '/settings/integration/distribution-api', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+  { path: '/settings/system-flow', moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
 ]
 
 export const authState = reactive({

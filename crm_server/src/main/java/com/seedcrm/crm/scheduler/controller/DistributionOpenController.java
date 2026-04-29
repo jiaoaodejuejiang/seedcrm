@@ -1,12 +1,15 @@
 package com.seedcrm.crm.scheduler.controller;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.common.api.ApiResponse;
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.scheduler.dto.DistributionEventDtos.DistributionEventResponse;
 import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
 import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
+import com.seedcrm.crm.scheduler.service.DistributionEventIngestService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -34,11 +37,14 @@ public class DistributionOpenController {
 
     private final ClueMapper clueMapper;
     private final IntegrationProviderConfigMapper providerConfigMapper;
+    private final DistributionEventIngestService distributionEventIngestService;
 
     public DistributionOpenController(ClueMapper clueMapper,
-                                      IntegrationProviderConfigMapper providerConfigMapper) {
+                                      IntegrationProviderConfigMapper providerConfigMapper,
+                                      DistributionEventIngestService distributionEventIngestService) {
         this.clueMapper = clueMapper;
         this.providerConfigMapper = providerConfigMapper;
+        this.distributionEventIngestService = distributionEventIngestService;
     }
 
     @GetMapping("/leads")
@@ -56,6 +62,12 @@ public class DistributionOpenController {
             body.forEach((key, value) -> merged.put(key, value == null ? null : String.valueOf(value)));
         }
         return ApiResponse.success(buildLeadResponse(merged, request));
+    }
+
+    @PostMapping("/events")
+    public ApiResponse<DistributionEventResponse> receiveEvent(@RequestBody JsonNode body,
+                                                               HttpServletRequest request) {
+        return ApiResponse.success(distributionEventIngestService.ingest(body, request));
     }
 
     private Map<String, Object> buildLeadResponse(Map<String, String> parameters, HttpServletRequest request) {

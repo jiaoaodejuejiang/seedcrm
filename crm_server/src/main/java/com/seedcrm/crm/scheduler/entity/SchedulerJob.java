@@ -47,6 +47,12 @@ public class SchedulerJob {
     @TableField("next_run_time")
     private LocalDateTime nextRunTime;
 
+    @TableField("lock_owner")
+    private String lockOwner;
+
+    @TableField("lock_until")
+    private LocalDateTime lockUntil;
+
     @TableField("created_at")
     private LocalDateTime createdAt;
 

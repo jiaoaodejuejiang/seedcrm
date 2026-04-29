@@ -28,6 +28,11 @@ public class SchedulerIntegrationSchemaInitializer {
     private static final String DOUYIN_REFUND_AUDIT_CALLBACK_PATH = "/scheduler/callback/douyin/refund-audit";
     private static final String DOUYIN_REFUND_AMOUNT_UNIT = "CENT";
     private static final String DOUYIN_VERIFY_CODE_FIELD = "encrypted_codes";
+    private static final String DISTRIBUTION_PROVIDER_CODE = "DISTRIBUTION";
+    private static final String DISTRIBUTION_PROVIDER_NAME = "外部分销系统";
+    private static final String DISTRIBUTION_EVENT_ENDPOINT = "/open/distribution/events";
+    private static final String DISTRIBUTION_STATUS_QUERY_PATH = "/open/distribution/orders/status";
+    private static final String DISTRIBUTION_RECONCILIATION_PULL_PATH = "/open/distribution/orders/reconcile";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -40,8 +45,11 @@ public class SchedulerIntegrationSchemaInitializer {
         ensureTable("integration_provider_config", createProviderSql(), providerColumns());
         ensureTable("integration_callback_config", createCallbackSql(), callbackColumns());
         ensureTable("integration_callback_event_log", createCallbackEventLogSql(), callbackEventLogColumns());
+        ensureIndex("integration_callback_event_log", "idx_callback_idempotency_key",
+                "CREATE INDEX idx_callback_idempotency_key ON integration_callback_event_log (idempotency_key)");
         ensureSchedulerJobProviderColumn();
         seedDefaultProvider();
+        seedDefaultDistributionProvider();
         bindDefaultSchedulerJob();
     }
 
@@ -80,6 +88,25 @@ public class SchedulerIntegrationSchemaInitializer {
         return count != null && count > 0;
     }
 
+    private void ensureIndex(String tableName, String indexName, String createSql) {
+        if (!tableExists(tableName) || indexExists(tableName, indexName)) {
+            return;
+        }
+        jdbcTemplate.execute(createSql);
+        log.info("created index {}.{}", tableName, indexName);
+    }
+
+    private boolean indexExists(String tableName, String indexName) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = ?
+                  AND INDEX_NAME = ?
+                """, Integer.class, tableName, indexName);
+        return count != null && count > 0;
+    }
+
     private String createProviderSql() {
         return """
                 CREATE TABLE integration_provider_config (
@@ -93,6 +120,8 @@ public class SchedulerIntegrationSchemaInitializer {
                     base_url VARCHAR(255),
                     token_url VARCHAR(255),
                     endpoint_path VARCHAR(255),
+                    status_query_path VARCHAR(255),
+                    reconciliation_pull_path VARCHAR(255),
                     voucher_prepare_path VARCHAR(255),
                     voucher_verify_path VARCHAR(255),
                     voucher_cancel_path VARCHAR(255),
@@ -111,6 +140,7 @@ public class SchedulerIntegrationSchemaInitializer {
                     refund_notify_url_field VARCHAR(64),
                     refund_amount_unit VARCHAR(16),
                     refund_status_mapping VARCHAR(255),
+                    status_mapping VARCHAR(512),
                     client_key VARCHAR(128),
                     client_secret VARCHAR(255),
                     redirect_uri VARCHAR(255),
@@ -183,6 +213,7 @@ public class SchedulerIntegrationSchemaInitializer {
                 CREATE TABLE integration_callback_event_log (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
                     provider_code VARCHAR(64),
+                    provider_id BIGINT,
                     callback_name VARCHAR(128),
                     app_code VARCHAR(64),
                     request_method VARCHAR(16),
@@ -192,14 +223,34 @@ public class SchedulerIntegrationSchemaInitializer {
                     auth_code VARCHAR(255),
                     callback_state VARCHAR(255),
                     event_type VARCHAR(128),
+                    event_id VARCHAR(128),
+                    idempotency_key VARCHAR(128),
+                    idempotency_status VARCHAR(32),
                     trace_id VARCHAR(64),
+                    signature_mode VARCHAR(64),
+                    signature_value_masked VARCHAR(128),
                     signature_status VARCHAR(32),
+                    trust_level VARCHAR(32),
+                    received_ip VARCHAR(64),
+                    user_agent VARCHAR(255),
+                    timestamp_value VARCHAR(64),
+                    nonce VARCHAR(128),
+                    body_hash VARCHAR(128),
+                    process_policy VARCHAR(32),
                     process_status VARCHAR(32),
                     process_message VARCHAR(255),
+                    related_job_code VARCHAR(128),
+                    related_run_id VARCHAR(128),
+                    related_customer_id BIGINT,
+                    related_order_id BIGINT,
+                    error_code VARCHAR(64),
+                    error_message VARCHAR(255),
                     received_at DATETIME,
+                    processed_at DATETIME,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     KEY idx_callback_provider_received (provider_code, received_at),
-                    KEY idx_callback_trace_id (trace_id)
+                    KEY idx_callback_trace_id (trace_id),
+                    KEY idx_callback_idempotency_key (idempotency_key)
                 )
                 """;
     }
@@ -300,6 +351,7 @@ public class SchedulerIntegrationSchemaInitializer {
         Map<String, String> columns = new LinkedHashMap<>();
         columns.put("id", "id BIGINT PRIMARY KEY AUTO_INCREMENT");
         columns.put("provider_code", "provider_code VARCHAR(64)");
+        columns.put("provider_id", "provider_id BIGINT");
         columns.put("callback_name", "callback_name VARCHAR(128)");
         columns.put("app_code", "app_code VARCHAR(64)");
         columns.put("request_method", "request_method VARCHAR(16)");
@@ -309,11 +361,30 @@ public class SchedulerIntegrationSchemaInitializer {
         columns.put("auth_code", "auth_code VARCHAR(255)");
         columns.put("callback_state", "callback_state VARCHAR(255)");
         columns.put("event_type", "event_type VARCHAR(128)");
+        columns.put("event_id", "event_id VARCHAR(128)");
+        columns.put("idempotency_key", "idempotency_key VARCHAR(128)");
+        columns.put("idempotency_status", "idempotency_status VARCHAR(32)");
         columns.put("trace_id", "trace_id VARCHAR(64)");
+        columns.put("signature_mode", "signature_mode VARCHAR(64)");
+        columns.put("signature_value_masked", "signature_value_masked VARCHAR(128)");
         columns.put("signature_status", "signature_status VARCHAR(32)");
+        columns.put("trust_level", "trust_level VARCHAR(32)");
+        columns.put("received_ip", "received_ip VARCHAR(64)");
+        columns.put("user_agent", "user_agent VARCHAR(255)");
+        columns.put("timestamp_value", "timestamp_value VARCHAR(64)");
+        columns.put("nonce", "nonce VARCHAR(128)");
+        columns.put("body_hash", "body_hash VARCHAR(128)");
+        columns.put("process_policy", "process_policy VARCHAR(32)");
         columns.put("process_status", "process_status VARCHAR(32)");
         columns.put("process_message", "process_message VARCHAR(255)");
+        columns.put("related_job_code", "related_job_code VARCHAR(128)");
+        columns.put("related_run_id", "related_run_id VARCHAR(128)");
+        columns.put("related_customer_id", "related_customer_id BIGINT");
+        columns.put("related_order_id", "related_order_id BIGINT");
+        columns.put("error_code", "error_code VARCHAR(64)");
+        columns.put("error_message", "error_message VARCHAR(255)");
         columns.put("received_at", "received_at DATETIME");
+        columns.put("processed_at", "processed_at DATETIME");
         columns.put("created_at", "created_at DATETIME DEFAULT CURRENT_TIMESTAMP");
         return columns;
     }
@@ -403,6 +474,58 @@ public class SchedulerIntegrationSchemaInitializer {
                 DOUYIN_VERIFY_CODE_FIELD,
                 20, 60, 10, 10000,
                 1, "默认使用 MOCK 模式，可切换为真实授权与核销配置", "MOCK", now, now);
+    }
+
+    private void seedDefaultDistributionProvider() {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM integration_provider_config
+                WHERE provider_code = ?
+                """, Integer.class, DISTRIBUTION_PROVIDER_CODE);
+        LocalDateTime now = LocalDateTime.now();
+        if (count != null && count > 0) {
+            jdbcTemplate.update("""
+                    UPDATE integration_provider_config
+                    SET provider_name = COALESCE(NULLIF(provider_name, ''), ?),
+                        module_code = 'SCHEDULER',
+                        execution_mode = COALESCE(NULLIF(execution_mode, ''), 'MOCK'),
+                        auth_type = COALESCE(NULLIF(auth_type, ''), 'HMAC_SHA256'),
+                        endpoint_path = ?,
+                        enabled = COALESCE(enabled, 1),
+                        remark = ?,
+                        updated_at = ?
+                    WHERE provider_code = ?
+                    """,
+                    DISTRIBUTION_PROVIDER_NAME,
+                    DISTRIBUTION_EVENT_ENDPOINT,
+                    "SeedCRM 方案B：只承接外部分销已支付订单，匹配/创建 Customer 并创建 Order(paid)，不进入 Clue，资金流由外部系统处理",
+                    now,
+                    DISTRIBUTION_PROVIDER_CODE);
+            return;
+        }
+        jdbcTemplate.update("""
+                INSERT INTO integration_provider_config(
+                    provider_code, provider_name, module_code, execution_mode, auth_type,
+                    endpoint_path, page_size, pull_window_minutes, overlap_minutes, request_timeout_ms,
+                    enabled, remark, auth_status, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                DISTRIBUTION_PROVIDER_CODE,
+                DISTRIBUTION_PROVIDER_NAME,
+                "SCHEDULER",
+                "MOCK",
+                "HMAC_SHA256",
+                DISTRIBUTION_EVENT_ENDPOINT,
+                30,
+                60,
+                10,
+                10000,
+                1,
+                "SeedCRM 方案B：只承接外部分销已支付订单，资金流由外部系统处理",
+                "MOCK",
+                now,
+                now);
     }
 
     private void ensureSchedulerJobProviderColumn() {

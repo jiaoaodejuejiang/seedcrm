@@ -191,7 +191,8 @@ const DEFAULT_STATE = {
     { id: 35, menuGroup: '系统设置 / 基础配置', menuName: '参数管理', routePath: '/settings/parameters', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 36, menuGroup: '系统设置 / 基础配置', menuName: '支付设置', routePath: '/settings/payment', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 37, menuGroup: '财务管理 / 薪酬结算', menuName: '提现处理', routePath: '/finance/salary/withdrawals', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
-    { id: 38, menuGroup: '财务管理 / 薪酬结算', menuName: '退款冲正', routePath: '/finance/salary/refund-adjustments', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 }
+    { id: 38, menuGroup: '财务管理 / 薪酬结算', menuName: '退款冲正', routePath: '/finance/salary/refund-adjustments', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 39, menuGroup: '系统设置 / 流程配置', menuName: '系统流程', routePath: '/settings/system-flow', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 }
   ],
   salaryRoles: [
     { id: 1, roleName: '普通客服', roleCode: 'NORMAL_CS', employeeIds: [3, 4], isEnabled: 1, remark: '参与个人档位计算' },

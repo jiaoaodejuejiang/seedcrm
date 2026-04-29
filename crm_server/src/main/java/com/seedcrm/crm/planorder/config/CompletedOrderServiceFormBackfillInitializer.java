@@ -3,6 +3,7 @@ package com.seedcrm.crm.planorder.config;
 import jakarta.annotation.PostConstruct;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -13,13 +14,20 @@ import org.springframework.stereotype.Component;
 public class CompletedOrderServiceFormBackfillInitializer {
 
     private final JdbcTemplate jdbcTemplate;
+    private final boolean enabled;
 
-    public CompletedOrderServiceFormBackfillInitializer(DataSource dataSource) {
+    public CompletedOrderServiceFormBackfillInitializer(DataSource dataSource,
+                                                        @Value("${seedcrm.backfill.completed-service-form.enabled:false}") boolean enabled) {
         this.jdbcTemplate = new JdbcTemplate(dataSource);
+        this.enabled = enabled;
     }
 
     @PostConstruct
     public void initialize() {
+        if (!enabled) {
+            log.info("completed order service form backfill skipped, set seedcrm.backfill.completed-service-form.enabled=true to run it");
+            return;
+        }
         backfillMissingPlanOrders();
         normalizeCompletedPlanOrders();
         backfillMissingServiceForms();

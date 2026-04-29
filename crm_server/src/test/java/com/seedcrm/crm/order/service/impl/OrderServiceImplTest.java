@@ -36,6 +36,7 @@ import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.risk.service.DbLockService;
 import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -393,6 +394,39 @@ class OrderServiceImplTest {
         assertThat(updated.getRemark()).isEqualTo("customer must complete consult before package confirmation");
         assertThat(updated.getServiceDetailJson()).isEqualTo("{\"serviceRequirement\":\"customer must complete consult before package confirmation\"}");
         verify(customerService).refreshCustomerLifecycle(206L);
+    }
+
+    @Test
+    void updateServiceDetailShouldPersistServiceTemplateSnapshot() throws Exception {
+        Order order = new Order();
+        order.setId(16L);
+        order.setCustomerId(216L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setVerificationStatus("VERIFIED");
+        when(orderMapper.selectById(16L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(216L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderServiceDetailDTO dto = new OrderServiceDetailDTO();
+        dto.setOrderId(16L);
+        dto.setServiceRequirement("template snapshot must be fixed");
+        dto.setServiceDetailJson("{\"serviceRequirement\":\"template snapshot must be fixed\"}");
+        dto.setServiceTemplateId(8L);
+        dto.setServiceTemplateBindingId(18L);
+        dto.setServiceTemplateCode("PHOTO_CLASSIC");
+        dto.setServiceTemplateName("肖像服务经典版");
+        dto.setServiceTemplateTitle("到店服务确认单");
+        dto.setServiceTemplateLayoutMode("classic");
+        dto.setServiceTemplateConfigJson("{\"sections\":[\"基础信息\",\"客户签名\"]}");
+
+        Order updated = orderService.updateServiceDetail(dto);
+
+        JsonNode root = new ObjectMapper().readTree(updated.getServiceDetailJson());
+        assertThat(root.path("serviceTemplate").path("templateId").asLong()).isEqualTo(8L);
+        assertThat(root.path("serviceTemplate").path("bindingId").asLong()).isEqualTo(18L);
+        assertThat(root.path("serviceTemplate").path("title").asText()).isEqualTo("到店服务确认单");
+        assertThat(root.path("serviceTemplate").path("config").path("sections").get(1).asText()).isEqualTo("客户签名");
+        assertThat(root.path("serviceTemplate").path("snapshotAt").asText()).isNotBlank();
     }
 
     @Test

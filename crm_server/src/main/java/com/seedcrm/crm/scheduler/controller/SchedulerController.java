@@ -7,14 +7,22 @@ import com.seedcrm.crm.permission.support.SchedulerModuleGuard;
 import com.seedcrm.crm.scheduler.dto.SchedulerJobUpsertRequest;
 import com.seedcrm.crm.scheduler.dto.SchedulerCallbackDebugRequest;
 import com.seedcrm.crm.scheduler.dto.SchedulerInterfaceDebugRequest;
+import com.seedcrm.crm.scheduler.dto.SchedulerQueueActionRequest;
 import com.seedcrm.crm.scheduler.dto.SchedulerTriggerRequest;
+import com.seedcrm.crm.scheduler.entity.DistributionExceptionRecord;
 import com.seedcrm.crm.scheduler.entity.IntegrationCallbackConfig;
 import com.seedcrm.crm.scheduler.entity.IntegrationCallbackEventLog;
 import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
 import com.seedcrm.crm.scheduler.entity.SchedulerJob;
+import com.seedcrm.crm.scheduler.entity.SchedulerJobAuditLog;
 import com.seedcrm.crm.scheduler.entity.SchedulerJobLog;
+import com.seedcrm.crm.scheduler.entity.SchedulerOutboxEvent;
+import com.seedcrm.crm.scheduler.service.DistributionExceptionService;
+import com.seedcrm.crm.scheduler.service.DistributionExceptionRetryService;
 import com.seedcrm.crm.scheduler.service.SchedulerIntegrationService;
+import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
 import com.seedcrm.crm.scheduler.service.SchedulerService;
+import com.seedcrm.crm.scheduler.service.impl.DistributionEventDryRunService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.LinkedHashMap;
@@ -33,15 +41,27 @@ public class SchedulerController {
 
     private final SchedulerService schedulerService;
     private final SchedulerIntegrationService schedulerIntegrationService;
+    private final DistributionEventDryRunService distributionEventDryRunService;
+    private final SchedulerOutboxService schedulerOutboxService;
+    private final DistributionExceptionService distributionExceptionService;
+    private final DistributionExceptionRetryService distributionExceptionRetryService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
     private final SchedulerModuleGuard schedulerModuleGuard;
 
     public SchedulerController(SchedulerService schedulerService,
                                SchedulerIntegrationService schedulerIntegrationService,
+                               DistributionEventDryRunService distributionEventDryRunService,
+                               SchedulerOutboxService schedulerOutboxService,
+                               DistributionExceptionService distributionExceptionService,
+                               DistributionExceptionRetryService distributionExceptionRetryService,
                                PermissionRequestContextResolver permissionRequestContextResolver,
                                SchedulerModuleGuard schedulerModuleGuard) {
         this.schedulerService = schedulerService;
         this.schedulerIntegrationService = schedulerIntegrationService;
+        this.distributionEventDryRunService = distributionEventDryRunService;
+        this.schedulerOutboxService = schedulerOutboxService;
+        this.distributionExceptionService = distributionExceptionService;
+        this.distributionExceptionRetryService = distributionExceptionRetryService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
         this.schedulerModuleGuard = schedulerModuleGuard;
     }
@@ -59,6 +79,70 @@ public class SchedulerController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkView(context);
         return ApiResponse.success(schedulerService.listLogs(jobCode));
+    }
+
+    @GetMapping("/audit-logs")
+    public ApiResponse<List<SchedulerJobAuditLog>> listAuditLogs(@RequestParam(required = false) String jobCode,
+                                                                 HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        schedulerModuleGuard.checkView(context);
+        return ApiResponse.success(schedulerService.listAuditLogs(jobCode));
+    }
+
+    @GetMapping("/outbox/events")
+    public ApiResponse<List<SchedulerOutboxEvent>> listOutboxEvents(@RequestParam(required = false) String status,
+                                                                    HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        schedulerModuleGuard.checkView(context);
+        return ApiResponse.success(schedulerOutboxService.list(status));
+    }
+
+    @PostMapping("/outbox/retry")
+    public ApiResponse<SchedulerOutboxEvent> retryOutboxEvent(@RequestBody(required = false) SchedulerQueueActionRequest request,
+                                                              HttpServletRequest httpServletRequest) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
+        schedulerModuleGuard.checkTrigger(context);
+        return ApiResponse.success(schedulerOutboxService.retry(actionId(request), context));
+    }
+
+    @PostMapping("/outbox/process")
+    public ApiResponse<List<SchedulerOutboxEvent>> processOutboxEvents(@RequestParam(required = false) Integer limit,
+                                                                       HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        schedulerModuleGuard.checkTrigger(context);
+        return ApiResponse.success(schedulerOutboxService.processDue(limit == null ? 20 : limit));
+    }
+
+    @GetMapping("/distribution/exceptions")
+    public ApiResponse<List<DistributionExceptionRecord>> listDistributionExceptions(@RequestParam(required = false) String status,
+                                                                                    HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        schedulerModuleGuard.checkView(context);
+        return ApiResponse.success(distributionExceptionService.list(status));
+    }
+
+    @PostMapping("/distribution/exceptions/retry")
+    public ApiResponse<DistributionExceptionRecord> retryDistributionException(@RequestBody(required = false) SchedulerQueueActionRequest request,
+                                                                              HttpServletRequest httpServletRequest) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
+        schedulerModuleGuard.checkTrigger(context);
+        return ApiResponse.success(distributionExceptionService.retry(actionId(request), context, actionRemark(request)));
+    }
+
+    @PostMapping("/distribution/exceptions/handled")
+    public ApiResponse<DistributionExceptionRecord> markDistributionExceptionHandled(@RequestBody(required = false) SchedulerQueueActionRequest request,
+                                                                                   HttpServletRequest httpServletRequest) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
+        schedulerModuleGuard.checkUpdate(context);
+        return ApiResponse.success(distributionExceptionService.markHandled(actionId(request), context, actionRemark(request)));
+    }
+
+    @PostMapping("/distribution/exceptions/process")
+    public ApiResponse<List<DistributionExceptionRecord>> processDistributionExceptionRetries(@RequestParam(required = false) Integer limit,
+                                                                                             HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        schedulerModuleGuard.checkTrigger(context);
+        return ApiResponse.success(distributionExceptionRetryService.processRetryQueue(limit == null ? 10 : limit));
     }
 
     @GetMapping("/providers")
@@ -133,7 +217,7 @@ public class SchedulerController {
                 callbackName,
                 callbackPath,
                 requestMethod,
-                parameters,
+                withRequestMetadata(parameters, httpServletRequest),
                 payload);
         List<IntegrationCallbackEventLog> logs = schedulerIntegrationService.listCallbackLogs(providerCode);
         Map<String, Object> response = new LinkedHashMap<>();
@@ -149,7 +233,7 @@ public class SchedulerController {
                                              HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
         schedulerModuleGuard.checkUpdate(context);
-        return ApiResponse.success(schedulerService.saveJob(request));
+        return ApiResponse.success(schedulerService.saveJob(request, context));
     }
 
     @PostMapping("/trigger")
@@ -157,7 +241,7 @@ public class SchedulerController {
                                                 HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
         schedulerModuleGuard.checkTrigger(context);
-        return ApiResponse.success(schedulerService.trigger(request));
+        return ApiResponse.success(schedulerService.trigger(request, context));
     }
 
     @PostMapping("/retry")
@@ -165,7 +249,15 @@ public class SchedulerController {
                                                     HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkTrigger(context);
-        return ApiResponse.success(schedulerService.retryFailed(jobCode));
+        return ApiResponse.success(schedulerService.retryFailed(jobCode, context));
+    }
+
+    @PostMapping("/retry-log")
+    public ApiResponse<SchedulerJobLog> retryLog(@RequestParam Long logId,
+                                                 HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        schedulerModuleGuard.checkTrigger(context);
+        return ApiResponse.success(schedulerService.retryLog(logId, context));
     }
 
     @PostMapping("/interface/debug")
@@ -180,6 +272,9 @@ public class SchedulerController {
         String interfaceCode = request == null || request.getInterfaceCode() == null
                 ? "DOUYIN_CLUE_PULL"
                 : request.getInterfaceCode().trim().toUpperCase();
+        if ("DISTRIBUTION".equals(providerCode) || interfaceCode.startsWith("DISTRIBUTION_")) {
+            return ApiResponse.success(distributionEventDryRunService.dryRun(request));
+        }
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("mode", mode);
         response.put("providerCode", providerCode);
@@ -217,7 +312,7 @@ public class SchedulerController {
                 "抖音来客授权回调",
                 request.getRequestURI(),
                 request.getMethod(),
-                parameters,
+                withRequestMetadata(parameters, request),
                 null);
         return "success";
     }
@@ -231,7 +326,7 @@ public class SchedulerController {
                 "抖音来客授权回调",
                 request.getRequestURI(),
                 request.getMethod(),
-                parameters,
+                withRequestMetadata(parameters, request),
                 payload);
         return "success";
     }
@@ -245,7 +340,7 @@ public class SchedulerController {
                 "抖音来客退款回调",
                 request.getRequestURI(),
                 request.getMethod(),
-                parameters,
+                withRequestMetadata(parameters, request),
                 payload);
         return "success";
     }
@@ -259,8 +354,60 @@ public class SchedulerController {
                 "抖音来客退款审核回调",
                 request.getRequestURI(),
                 request.getMethod(),
-                parameters,
+                withRequestMetadata(parameters, request),
                 payload);
         return "success";
+    }
+
+    private Long actionId(SchedulerQueueActionRequest request) {
+        return request == null ? null : request.getId();
+    }
+
+    private String actionRemark(SchedulerQueueActionRequest request) {
+        return request == null ? null : request.getRemark();
+    }
+
+    private Map<String, String> withRequestMetadata(Map<String, String> parameters, HttpServletRequest request) {
+        Map<String, String> merged = new LinkedHashMap<>();
+        if (parameters != null) {
+            merged.putAll(parameters);
+        }
+        if (request == null) {
+            return merged;
+        }
+        putIfPresent(merged, "__remote_ip", firstNonBlank(
+                request.getHeader("X-Forwarded-For"),
+                request.getHeader("X-Real-IP"),
+                request.getRemoteAddr()));
+        putIfPresent(merged, "__user_agent", request.getHeader("User-Agent"));
+        putIfPresent(merged, "__header_x_signature", request.getHeader("X-Signature"));
+        putIfPresent(merged, "__header_x_seedcrm_signature", request.getHeader("X-Seedcrm-Signature"));
+        putIfPresent(merged, "__header_x_douyin_signature", request.getHeader("X-Douyin-Signature"));
+        putIfPresent(merged, "__header_x_timestamp", firstNonBlank(
+                request.getHeader("X-Timestamp"),
+                request.getHeader("X-Seedcrm-Timestamp")));
+        putIfPresent(merged, "__header_x_nonce", firstNonBlank(
+                request.getHeader("X-Nonce"),
+                request.getHeader("X-Seedcrm-Nonce")));
+        putIfPresent(merged, "__header_authorization", request.getHeader("Authorization"));
+        return merged;
+    }
+
+    private void putIfPresent(Map<String, String> target, String key, String value) {
+        if (value != null && !value.isBlank()) {
+            target.put(key, value.trim());
+        }
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 }

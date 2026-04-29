@@ -24,6 +24,9 @@ public class SalarySchemaInitializer {
         ensureTable("salary_detail", salaryDetailCreateSql(), salaryDetailColumns());
         ensureTable("salary_settlement", salarySettlementCreateSql(), salarySettlementColumns());
         ensureTable("withdraw_record", withdrawRecordCreateSql(), withdrawRecordColumns());
+        ensureTable("salary_settlement_policy", salarySettlementPolicyCreateSql(), salarySettlementPolicyColumns());
+        ensureTable("salary_settlement_policy_audit_log", salarySettlementPolicyAuditLogCreateSql(),
+                salarySettlementPolicyAuditLogColumns());
         replaceLegacySalaryDetailUniqueIndex();
         ensureIndex("salary_detail", "idx_salary_detail_plan_user_role",
                 "CREATE INDEX idx_salary_detail_plan_user_role ON salary_detail(plan_order_id, user_id, role_code)");
@@ -37,6 +40,16 @@ public class SalarySchemaInitializer {
         ensureDefaultRule("PHOTOGRAPHER", "PERCENT", "0.1200");
         ensureDefaultRule("MAKEUP_ARTIST", "PERCENT", "0.0600");
         ensureDefaultRule("PHOTO_SELECTOR", "PERCENT", "0.0700");
+        ensureDefaultSettlementPolicy("内部员工按月记账", "INTERNAL_STAFF", "ROLE",
+                "ONLINE_CUSTOMER_SERVICE,CLUE_MANAGER,STORE_SERVICE,STORE_MANAGER,PHOTOGRAPHER,MAKEUP_ARTIST,PHOTO_SELECTOR,PRIVATE_DOMAIN_SERVICE",
+                null, null, "MONTHLY", "LEDGER_ONLY", null, 10,
+                "公司内部员工按月出结算单，只记账不走提现");
+        ensureDefaultSettlementPolicy("分销小额自动提现", "DISTRIBUTOR", "AMOUNT",
+                "", "0.00", "2999.99", "INSTANT", "WITHDRAW_DIRECT", "3000.00", 20,
+                "外部分销小额佣金可随时提现并自动通过");
+        ensureDefaultSettlementPolicy("分销大额提现审核", "DISTRIBUTOR", "AMOUNT",
+                "", "3000.00", null, "INSTANT", "WITHDRAW_AUDIT", "3000.00", 30,
+                "外部分销大额提现必须进入财务审核");
     }
 
     private void ensureTable(String tableName, String createSql, Map<String, String> expectedColumns) {
@@ -121,6 +134,38 @@ public class SalarySchemaInitializer {
                 VALUES (?, ?, ?, 1, NOW())
                 """, roleCode, ruleType, ruleValue);
         log.info("inserted default salary rule for role {}", roleCode);
+    }
+
+    private void ensureDefaultSettlementPolicy(String policyName,
+                                               String subjectType,
+                                               String scopeType,
+                                               String roleCodes,
+                                               String amountMin,
+                                               String amountMax,
+                                               String settlementCycle,
+                                               String settlementMode,
+                                               String auditThresholdAmount,
+                                               int priority,
+                                               String remark) {
+        Integer activeCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM salary_settlement_policy
+                WHERE policy_name = ?
+                  AND status = 'PUBLISHED'
+                """, Integer.class, policyName);
+        if (activeCount != null && activeCount > 0) {
+            return;
+        }
+        jdbcTemplate.update("""
+                INSERT INTO salary_settlement_policy(
+                    policy_name, subject_type, scope_type, role_codes, amount_min, amount_max,
+                    settlement_cycle, settlement_mode, audit_threshold_amount, priority,
+                    enabled, status, remark, create_time, update_time, published_time
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'PUBLISHED', ?, NOW(), NOW(), NOW())
+                """, policyName, subjectType, scopeType, roleCodes, amountMin, amountMax, settlementCycle,
+                settlementMode, auditThresholdAmount, priority, remark);
+        log.info("inserted default salary settlement policy {}", policyName);
     }
 
     private String salaryRuleCreateSql() {
@@ -222,8 +267,14 @@ public class SalarySchemaInitializer {
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
                     user_id BIGINT NOT NULL,
                     amount DECIMAL(12,2) NOT NULL,
+                    subject_type VARCHAR(32),
+                    settlement_mode VARCHAR(32),
+                    audit_required TINYINT DEFAULT 1,
+                    audit_remark VARCHAR(500),
                     status VARCHAR(16) NOT NULL,
                     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    approve_time DATETIME,
+                    paid_time DATETIME,
                     KEY idx_withdraw_record_user_id (user_id),
                     KEY idx_withdraw_record_status (status)
                 )
@@ -235,7 +286,93 @@ public class SalarySchemaInitializer {
         columns.put("id", "id BIGINT PRIMARY KEY AUTO_INCREMENT");
         columns.put("user_id", "user_id BIGINT NOT NULL");
         columns.put("amount", "amount DECIMAL(12,2) NOT NULL");
+        columns.put("subject_type", "subject_type VARCHAR(32)");
+        columns.put("settlement_mode", "settlement_mode VARCHAR(32)");
+        columns.put("audit_required", "audit_required TINYINT DEFAULT 1");
+        columns.put("audit_remark", "audit_remark VARCHAR(500)");
         columns.put("status", "status VARCHAR(16) NOT NULL");
+        columns.put("create_time", "create_time DATETIME DEFAULT CURRENT_TIMESTAMP");
+        columns.put("approve_time", "approve_time DATETIME");
+        columns.put("paid_time", "paid_time DATETIME");
+        return columns;
+    }
+
+    private String salarySettlementPolicyCreateSql() {
+        return """
+                CREATE TABLE salary_settlement_policy (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    source_policy_id BIGINT,
+                    policy_name VARCHAR(100) NOT NULL,
+                    subject_type VARCHAR(32) NOT NULL,
+                    scope_type VARCHAR(32) NOT NULL,
+                    role_codes VARCHAR(500),
+                    amount_min DECIMAL(12,2),
+                    amount_max DECIMAL(12,2),
+                    settlement_cycle VARCHAR(32) NOT NULL,
+                    settlement_mode VARCHAR(32) NOT NULL,
+                    audit_threshold_amount DECIMAL(12,2),
+                    priority INT NOT NULL DEFAULT 100,
+                    enabled TINYINT NOT NULL DEFAULT 0,
+                    status VARCHAR(32) NOT NULL DEFAULT 'DRAFT',
+                    remark VARCHAR(500),
+                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    published_time DATETIME,
+                    KEY idx_salary_policy_subject_status (subject_type, status, enabled),
+                    KEY idx_salary_policy_source (source_policy_id)
+                )
+                """;
+    }
+
+    private Map<String, String> salarySettlementPolicyColumns() {
+        Map<String, String> columns = new LinkedHashMap<>();
+        columns.put("id", "id BIGINT PRIMARY KEY AUTO_INCREMENT");
+        columns.put("source_policy_id", "source_policy_id BIGINT");
+        columns.put("policy_name", "policy_name VARCHAR(100) NOT NULL");
+        columns.put("subject_type", "subject_type VARCHAR(32) NOT NULL");
+        columns.put("scope_type", "scope_type VARCHAR(32) NOT NULL");
+        columns.put("role_codes", "role_codes VARCHAR(500)");
+        columns.put("amount_min", "amount_min DECIMAL(12,2)");
+        columns.put("amount_max", "amount_max DECIMAL(12,2)");
+        columns.put("settlement_cycle", "settlement_cycle VARCHAR(32) NOT NULL");
+        columns.put("settlement_mode", "settlement_mode VARCHAR(32) NOT NULL");
+        columns.put("audit_threshold_amount", "audit_threshold_amount DECIMAL(12,2)");
+        columns.put("priority", "priority INT NOT NULL DEFAULT 100");
+        columns.put("enabled", "enabled TINYINT NOT NULL DEFAULT 0");
+        columns.put("status", "status VARCHAR(32) NOT NULL DEFAULT 'DRAFT'");
+        columns.put("remark", "remark VARCHAR(500)");
+        columns.put("create_time", "create_time DATETIME DEFAULT CURRENT_TIMESTAMP");
+        columns.put("update_time", "update_time DATETIME DEFAULT CURRENT_TIMESTAMP");
+        columns.put("published_time", "published_time DATETIME");
+        return columns;
+    }
+
+    private String salarySettlementPolicyAuditLogCreateSql() {
+        return """
+                CREATE TABLE salary_settlement_policy_audit_log (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    policy_id BIGINT,
+                    action_type VARCHAR(32) NOT NULL,
+                    actor_role_code VARCHAR(64),
+                    actor_user_id BIGINT,
+                    summary VARCHAR(500),
+                    snapshot_json TEXT,
+                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    KEY idx_salary_policy_audit_policy (policy_id),
+                    KEY idx_salary_policy_audit_action (action_type, create_time)
+                )
+                """;
+    }
+
+    private Map<String, String> salarySettlementPolicyAuditLogColumns() {
+        Map<String, String> columns = new LinkedHashMap<>();
+        columns.put("id", "id BIGINT PRIMARY KEY AUTO_INCREMENT");
+        columns.put("policy_id", "policy_id BIGINT");
+        columns.put("action_type", "action_type VARCHAR(32) NOT NULL");
+        columns.put("actor_role_code", "actor_role_code VARCHAR(64)");
+        columns.put("actor_user_id", "actor_user_id BIGINT");
+        columns.put("summary", "summary VARCHAR(500)");
+        columns.put("snapshot_json", "snapshot_json TEXT");
         columns.put("create_time", "create_time DATETIME DEFAULT CURRENT_TIMESTAMP");
         return columns;
     }

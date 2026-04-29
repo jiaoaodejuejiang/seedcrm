@@ -71,3 +71,23 @@ export function createSalaryWithdraw(payload) {
 export function approveSalaryWithdraw(payload) {
   return http.post('/salary/withdraw/approve', payload)
 }
+
+export function fetchSettlementPolicies() {
+  return http.get('/salary/settlement-policies')
+}
+
+export function saveSettlementPolicyDraft(payload) {
+  return http.post('/salary/settlement-policies/save-draft', payload)
+}
+
+export function publishSettlementPolicy(payload) {
+  return http.post('/salary/settlement-policies/publish', payload)
+}
+
+export function disableSettlementPolicy(payload) {
+  return http.post('/salary/settlement-policies/disable', payload)
+}
+
+export function simulateSettlementPolicy(payload) {
+  return http.post('/salary/settlement-policies/simulate', payload)
+}

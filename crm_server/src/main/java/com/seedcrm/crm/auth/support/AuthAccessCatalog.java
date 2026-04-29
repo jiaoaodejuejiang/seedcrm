@@ -27,6 +27,7 @@ public final class AuthAccessCatalog {
             menu(9, "门店服务", "门店角色", "/store-service/roles", "SYSTEM", "system:role:update", "ADMIN", "STORE_MANAGER"),
             menu(10, "系统设置 / 基础配置", "企业微信", "/settings/base/wecom", "SETTING", "setting:wecom:update", "ADMIN"),
             menu(11, "私域客服", "活码配置", "/private-domain/live-code", "WECOM", "wecom:live-code:update", "ADMIN", "PRIVATE_DOMAIN_SERVICE"),
+            menu(12, "私域客服", "会员信息", "/private-domain/members", "WECOM", "member:view", "ADMIN", "PRIVATE_DOMAIN_SERVICE"),
             menu(12, "私域客服", "客户画像", "/private-domain/customer-profile", "WECOM", "wecom:profile:view", "ADMIN", "PRIVATE_DOMAIN_SERVICE"),
             menu(13, "私域客服", "朋友圈定时群发", "/private-domain/moments", "WECOM", "wecom:moments:update", "ADMIN", "PRIVATE_DOMAIN_SERVICE"),
             menu(14, "私域客服", "标签管理", "/private-domain/tags", "WECOM", "wecom:tags:update", "ADMIN", "PRIVATE_DOMAIN_SERVICE"),
@@ -53,7 +54,8 @@ public final class AuthAccessCatalog {
             menu(35, "系统设置 / 基础配置", "参数管理", "/settings/parameters", "SETTING", "setting:parameter:update", "ADMIN"),
             menu(36, "系统设置 / 基础配置", "支付设置", "/settings/payment", "SETTING", "setting:payment:update", "ADMIN"),
             menu(37, "财务管理 / 薪酬结算", "提现处理", "/finance/salary/withdrawals", "SALARY", "salary:update", "ADMIN", "FINANCE"),
-            menu(38, "财务管理 / 薪酬结算", "退款冲正", "/finance/salary/refund-adjustments", "SALARY", "salary:update", "ADMIN", "FINANCE")
+            menu(38, "财务管理 / 薪酬结算", "退款冲正", "/finance/salary/refund-adjustments", "SALARY", "salary:update", "ADMIN", "FINANCE"),
+            menu(39, "系统设置 / 流程配置", "系统流程", "/settings/system-flow", "SETTING", "setting:system-flow:view", "ADMIN")
     );
 
     private AuthAccessCatalog() {

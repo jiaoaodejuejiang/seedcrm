@@ -12,7 +12,7 @@ public interface WithdrawService {
 
     WithdrawRecord createWithdraw(WithdrawCreateRequest request);
 
-    WithdrawRecord approveWithdraw(Long withdrawId, WithdrawStatus targetStatus);
+    WithdrawRecord approveWithdraw(Long withdrawId, WithdrawStatus targetStatus, String auditRemark);
 
     List<WithdrawRecord> listWithdraws(Long userId);
 }

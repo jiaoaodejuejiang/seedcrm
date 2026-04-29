@@ -76,7 +76,19 @@
             </el-table-column>
             <el-table-column label="验签" width="120">
               <template #default="{ row }">
-                {{ formatCallbackSignatureStatus(row.signatureStatus) }}
+                <el-tag :type="statusTagType(row.signatureStatus)">
+                  {{ formatCallbackSignatureStatus(row.signatureStatus) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="信任" width="120">
+              <template #default="{ row }">
+                {{ formatCallbackTrustLevel(row.trustLevel) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="幂等" width="120">
+              <template #default="{ row }">
+                {{ formatCallbackIdempotencyStatus(row.idempotencyStatus) }}
               </template>
             </el-table-column>
             <el-table-column label="事件" min-width="160" prop="eventType" />
@@ -351,10 +363,13 @@ import {
 } from '../api/scheduler'
 import { useTablePagination } from '../composables/useTablePagination'
 import {
+  formatCallbackIdempotencyStatus,
   formatCallbackProcessStatus,
   formatCallbackSignatureStatus,
+  formatCallbackTrustLevel,
   formatDateTime,
-  formatResultStatus
+  formatResultStatus,
+  statusTagType
 } from '../utils/format'
 import { buildSystemUrl, loadSystemConsoleState } from '../utils/systemConsoleStore'
 

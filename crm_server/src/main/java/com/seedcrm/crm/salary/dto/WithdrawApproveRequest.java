@@ -7,4 +7,5 @@ public class WithdrawApproveRequest {
 
     private Long withdrawId;
     private String status;
+    private String auditRemark;
 }

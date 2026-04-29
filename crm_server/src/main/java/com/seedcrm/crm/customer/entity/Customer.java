@@ -30,8 +30,23 @@ public class Customer {
     @TableField("source_channel")
     private String sourceChannel;
 
+    @TableField("source")
+    private String source;
+
     @TableField("source_id")
     private Long sourceId;
+
+    @TableField("external_partner_code")
+    private String externalPartnerCode;
+
+    @TableField("external_member_id")
+    private String externalMemberId;
+
+    @TableField("external_member_role")
+    private String externalMemberRole;
+
+    @TableField("raw_data")
+    private String rawData;
 
     @TableField("status")
     private String status;

@@ -425,7 +425,14 @@
             </label>
             <label>
               <span>签名方式</span>
-              <el-input v-model="callbackForm.signatureMode" placeholder="如 HMAC-SHA256" />
+              <el-select v-model="callbackForm.signatureMode">
+                <el-option
+                  v-for="item in callbackSignatureModeOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
             </label>
             <label class="full-span">
               <span>回调地址</span>
@@ -475,7 +482,11 @@
         <el-table-column label="平台" width="120" prop="providerCode" />
         <el-table-column label="回调名称" min-width="180" prop="callbackName" />
         <el-table-column label="回调地址" min-width="260" prop="callbackUrl" />
-        <el-table-column label="签名方式" width="160" prop="signatureMode" />
+        <el-table-column label="签名方式" width="160">
+          <template #default="{ row }">
+            {{ formatCallbackSignatureMode(row.signatureMode) }}
+          </template>
+        </el-table-column>
         <el-table-column label="最近状态" width="140">
           <template #default="{ row }">
             {{ formatCallbackProcessStatus(row.lastCallbackStatus || '--') }}
@@ -536,6 +547,7 @@
           </el-table-column>
           <el-table-column label="平台" width="120" prop="providerCode" />
           <el-table-column label="回调" min-width="160" prop="callbackName" />
+          <el-table-column label="事件" min-width="140" prop="eventType" />
           <el-table-column label="状态" width="120">
             <template #default="{ row }">
               <el-tag :type="row.processStatus === 'SUCCESS' ? 'success' : row.processStatus === 'FAILED' ? 'danger' : 'info'">
@@ -545,12 +557,26 @@
           </el-table-column>
           <el-table-column label="验签" width="120">
             <template #default="{ row }">
-              {{ formatCallbackSignatureStatus(row.signatureStatus || '--') }}
+              <el-tag :type="statusTagType(row.signatureStatus)">
+                {{ formatCallbackSignatureStatus(row.signatureStatus || '--') }}
+              </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="授权码" min-width="150">
+          <el-table-column label="信任" width="120">
             <template #default="{ row }">
-              {{ row.authCode ? `${row.authCode.slice(0, 2)}****${row.authCode.slice(-2)}` : '--' }}
+              <el-tag :type="statusTagType(row.trustLevel)">
+                {{ formatCallbackTrustLevel(row.trustLevel || '--') }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="幂等" width="120">
+            <template #default="{ row }">
+              {{ formatCallbackIdempotencyStatus(row.idempotencyStatus || '--') }}
+            </template>
+          </el-table-column>
+          <el-table-column label="策略" width="130">
+            <template #default="{ row }">
+              {{ formatCallbackProcessPolicy(row.processPolicy || '--') }}
             </template>
           </el-table-column>
           <el-table-column label="结果" min-width="220" prop="processMessage" />
@@ -1024,8 +1050,11 @@ import { useTablePagination } from '../composables/useTablePagination'
 import {
   formatAuthStatus,
   formatAuthType,
+  formatCallbackIdempotencyStatus,
   formatCallbackProcessStatus,
+  formatCallbackProcessPolicy,
   formatCallbackSignatureStatus,
+  formatCallbackTrustLevel,
   formatDateTime,
   formatExecutionMode,
   formatModuleCode,
@@ -1095,6 +1124,14 @@ const moduleOptions = [
   { label: '系统管理', value: 'SYSTEM' },
   { label: '系统设置', value: 'SETTING' },
   { label: '私域客服', value: 'WECOM' }
+]
+
+const callbackSignatureModeOptions = [
+  { label: '本地/模拟免签', value: 'NONE_LOCAL_ONLY' },
+  { label: 'Token 校验', value: 'TOKEN_QUERY' },
+  { label: 'HMAC-SHA256', value: 'HMAC_SHA256' },
+  { label: '授权 State', value: 'OAUTH_STATE' },
+  { label: '平台专用验签', value: 'DYNAMIC_PROVIDER' }
 ]
 
 const menuForm = reactive(createMenuForm())
@@ -1174,7 +1211,7 @@ function createCallbackForm() {
     providerCode: 'WECOM',
     callbackName: '',
     callbackUrl: '',
-    signatureMode: 'WECOM_CALLBACK',
+    signatureMode: 'NONE_LOCAL_ONLY',
     tokenValue: '',
     tokenMasked: '',
     aesKey: '',
@@ -1188,6 +1225,11 @@ function createCallbackForm() {
     enabled: 1,
     remark: ''
   }
+}
+
+function formatCallbackSignatureMode(value) {
+  const normalized = String(value || '').trim().toUpperCase()
+  return callbackSignatureModeOptions.find((item) => item.value === normalized)?.label || value || '--'
 }
 
 function createPublicApiForm() {

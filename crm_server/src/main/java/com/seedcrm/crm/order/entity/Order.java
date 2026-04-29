@@ -28,8 +28,35 @@ public class Order {
     @TableField("source_channel")
     private String sourceChannel;
 
+    @TableField("source")
+    private String source;
+
     @TableField("source_id")
     private Long sourceId;
+
+    @TableField("external_partner_code")
+    private String externalPartnerCode;
+
+    @TableField("external_order_id")
+    private String externalOrderId;
+
+    @TableField("external_trade_no")
+    private String externalTradeNo;
+
+    @TableField("external_member_id")
+    private String externalMemberId;
+
+    @TableField("external_promoter_id")
+    private String externalPromoterId;
+
+    @TableField("external_status")
+    private String externalStatus;
+
+    @TableField("refund_status")
+    private String refundStatus;
+
+    @TableField("raw_data")
+    private String rawData;
 
     @TableField("type")
     private Integer type;

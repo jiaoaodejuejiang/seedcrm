@@ -148,6 +148,11 @@ public class PermissionSchemaInitializer {
         seedPolicy("PLANORDER", "VIEW", "STORE_MANAGER", "STORE", null);
         seedPolicy("PLANORDER", "UPDATE", "STORE_MANAGER", "STORE", null);
         seedPolicy("PLANORDER", "ASSIGN_ROLE", "STORE_MANAGER", "STORE", null);
+        seedPolicy("PLANORDER", "TEMPLATE_VIEW", "STORE_MANAGER", "STORE", "service form template catalog");
+        seedPolicy("PLANORDER", "TEMPLATE_BIND", "STORE_MANAGER", "STORE", "bind published service form template to current store");
+        seedPolicy("PLANORDER", "TEMPLATE_VIEW", "ADMIN", "ALL", "service form template catalog");
+        seedPolicy("PLANORDER", "TEMPLATE_BIND", "ADMIN", "ALL", "bind published service form template to store");
+        seedPolicy("PLANORDER", "TEMPLATE_MANAGE", "ADMIN", "ALL", "manage global service form template");
         seedPolicy("PLANORDER", "VIEW", "PHOTOGRAPHER", "STORE", null);
         seedPolicy("PLANORDER", "UPDATE", "PHOTOGRAPHER", "STORE", null);
         seedPolicy("PLANORDER", "VIEW", "MAKEUP_ARTIST", "STORE", null);
@@ -188,6 +193,13 @@ public class PermissionSchemaInitializer {
         seedPolicy("PERMISSION", "VIEW", "ADMIN", "ALL", null);
         seedPolicy("PERMISSION", "UPDATE", "ADMIN", "ALL", null);
         seedPolicy("PERMISSION", "CHECK", "ADMIN", "ALL", null);
+        seedPolicy("SETTING", "VIEW", "ADMIN", "ALL", "system setting view");
+        seedPolicy("SETTING", "UPDATE", "ADMIN", "ALL", "system setting update");
+        seedPolicy("SETTING", "DEBUG", "ADMIN", "ALL", "system setting simulation and debug");
+        seedPolicy("SETTING", "SYSTEM_FLOW_VIEW", "ADMIN", "ALL", "system flow view");
+        seedPolicy("SETTING", "SYSTEM_FLOW_DRAFT", "ADMIN", "ALL", "system flow draft config");
+        seedPolicy("SETTING", "SYSTEM_FLOW_PUBLISH", "ADMIN", "ALL", "system flow publish config version");
+        seedPolicy("SETTING", "SYSTEM_FLOW_DEBUG", "ADMIN", "ALL", "system flow read-only simulation");
     }
 
     private void seedPolicy(String moduleCode,

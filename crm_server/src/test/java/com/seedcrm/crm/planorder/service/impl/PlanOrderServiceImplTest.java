@@ -23,6 +23,7 @@ import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
 import com.seedcrm.crm.wecom.service.WecomTouchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,12 +55,16 @@ class PlanOrderServiceImplTest {
     @Mock
     private DbLockService dbLockService;
 
+    @Mock
+    private SchedulerOutboxService schedulerOutboxService;
+
     private PlanOrderServiceImpl planOrderService;
 
     @BeforeEach
     void setUp() {
         planOrderService = new PlanOrderServiceImpl(planOrderMapper, orderMapper, orderRoleRecordService,
-                orderSettlementService, wecomTouchService, orderActionRecordMapper, dbLockService);
+                orderSettlementService, wecomTouchService, orderActionRecordMapper, dbLockService,
+                schedulerOutboxService);
     }
 
     @Test
@@ -214,6 +219,8 @@ class PlanOrderServiceImplTest {
         order.setId(30L);
         order.setStatus(OrderStatus.CREATED.name());
         order.setVerificationStatus("VERIFIED");
+        order.setExternalPartnerCode("DISTRIBUTION");
+        order.setExternalOrderId("o_20001");
         order.setServiceDetailJson("{\"serviceRequirement\":\"已确认到店需求\",\"customerSignature\":\"data:image/png;base64,test\"}");
         when(dbLockService.lockOrder(30L)).thenReturn(order);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
@@ -229,6 +236,7 @@ class PlanOrderServiceImplTest {
         assertThat(order.getCompleteTime()).isNotNull();
         verify(orderActionRecordMapper).insert(any(OrderActionRecord.class));
         verify(orderSettlementService).settleCompletedOrder(30L);
+        verify(schedulerOutboxService).enqueueFulfillmentEvent(order, planOrder, "crm.order.used");
     }
 
     @Test

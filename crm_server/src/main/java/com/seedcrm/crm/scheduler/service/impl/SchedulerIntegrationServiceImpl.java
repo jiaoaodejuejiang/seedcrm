@@ -13,13 +13,19 @@ import com.seedcrm.crm.scheduler.mapper.IntegrationCallbackEventLogMapper;
 import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
 import com.seedcrm.crm.scheduler.service.SchedulerIntegrationService;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -34,6 +40,13 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     private static final String MODE_LIVE = "LIVE";
     private static final String PROVIDER_DOUYIN = "DOUYIN_LAIKE";
     private static final String AUTH_TYPE_AUTH_CODE = "AUTH_CODE";
+    private static final String SIGNATURE_MODE_NONE_LOCAL_ONLY = "NONE_LOCAL_ONLY";
+    private static final String SIGNATURE_MODE_TOKEN_QUERY = "TOKEN_QUERY";
+    private static final String SIGNATURE_MODE_HMAC_SHA256 = "HMAC_SHA256";
+    private static final String SIGNATURE_MODE_OAUTH_STATE = "OAUTH_STATE";
+    private static final String SIGNATURE_MODE_DYNAMIC_PROVIDER = "DYNAMIC_PROVIDER";
+    private static final String PROCESS_POLICY_LOG_ONLY = "LOG_ONLY";
+    private static final String PROCESS_POLICY_AUTH_UPDATE_ONLY = "AUTH_UPDATE_ONLY";
     private static final String DOUYIN_TOKEN_URL = "https://open.douyin.com/oauth/access_token/";
     private static final String DOUYIN_REFRESH_TOKEN_URL = "https://open.douyin.com/oauth/refresh_token/";
     private static final String DOUYIN_DEFAULT_VOUCHER_PREPARE_PATH = "/goodlife/v1/fulfilment/certificate/prepare/";
@@ -227,28 +240,61 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
                 .eq(IntegrationProviderConfig::getProviderCode, normalizedProviderCode)
                 .last("LIMIT 1"));
         IntegrationCallbackConfig callbackConfig = findCallbackByProviderOrName(normalizedProviderCode, callbackName);
-        boolean trustedCallback = isTrustedCallback(provider, callbackConfig);
-        String callbackStatus = StringUtils.hasText(errorMessage)
+        CallbackTrustResult trust = resolveCallbackTrust(provider, callbackConfig, normalizedParameters, payload, authorizationCallback);
+        String bodyHash = sha256Hex(StringUtils.hasText(payload) ? payload.trim() : "");
+        String queryHash = sha256Hex(toCompactJson(idempotencyParameters(normalizedParameters)));
+        String eventId = firstNonBlank(
+                normalizedParameters.get("event_id"),
+                normalizedParameters.get("eventId"),
+                extractText(payloadNode, "event_id", "eventId", "data.event_id", "data.refund_id", "refund_id"));
+        String idempotencyKey = buildIdempotencyKey(
+                normalizedProviderCode,
+                callbackPath,
+                eventType,
+                callbackState,
+                authCode,
+                accessToken,
+                eventId,
+                queryHash,
+                bodyHash);
+        IntegrationCallbackEventLog duplicateLog = findCallbackLogByIdempotencyKey(idempotencyKey);
+        boolean duplicate = duplicateLog != null;
+        boolean businessEvent = isBusinessStateCallback(eventType, callbackName);
+        boolean providerLive = MODE_LIVE.equals(provider == null ? null : provider.getExecutionMode());
+        boolean trustedCallback = trust.trusted();
+        boolean canUpdateAuthorization = !duplicate
+                && trustedCallback
+                && authorizationCallback
+                && !businessEvent
+                && !StringUtils.hasText(errorMessage);
+        String processPolicy = canUpdateAuthorization ? PROCESS_POLICY_AUTH_UPDATE_ONLY : PROCESS_POLICY_LOG_ONLY;
+        String callbackStatus = duplicate
+                ? "DUPLICATE"
+                : StringUtils.hasText(errorMessage)
                 ? "FAILED"
-                : !trustedCallback && MODE_LIVE.equals(provider == null ? null : provider.getExecutionMode())
+                : !trustedCallback && providerLive
                 ? "UNVERIFIED"
-                : StringUtils.hasText(authCode) || StringUtils.hasText(accessToken)
+                : canUpdateAuthorization
                 ? "SUCCESS"
                 : "RECEIVED";
-        String callbackMessage = StringUtils.hasText(errorMessage)
+        String callbackMessage = duplicate
+                ? "重复回调已记录并忽略，未再次处理"
+                : StringUtils.hasText(errorMessage)
                 ? errorMessage
-                : !trustedCallback && MODE_LIVE.equals(provider == null ? null : provider.getExecutionMode())
-                ? "收到回调请求但未通过签名校验，已记录日志"
-                : StringUtils.hasText(authCode)
+                : !trustedCallback && providerLive
+                ? firstNonBlank(trust.message(), "收到回调请求但未通过可信校验，已记录日志")
+                : businessEvent
+                ? "V1 仅记录该业务回调，不直接变更订单、服务单或薪酬"
+                : canUpdateAuthorization && StringUtils.hasText(authCode)
                 ? "已接收授权回调"
                 : "已接收回调请求";
         String callbackPayload = buildCallbackPayload(normalizedParameters, payload);
-        if (provider != null) {
+        if (provider != null && !duplicate) {
             provider.setLastCallbackStatus(callbackStatus);
             provider.setLastCallbackMessage(trimMessage(callbackMessage));
             provider.setLastCallbackAt(now);
             provider.setLastCallbackPayload(trimPayload(callbackPayload));
-            if (trustedCallback && authorizationCallback) {
+            if (canUpdateAuthorization) {
                 provider.setAuthCode(resolveSensitiveValue(authCode, provider.getAuthCode()));
                 provider.setAuthCodeStatus(StringUtils.hasText(authCode) ? "RECEIVED" : provider.getAuthCodeStatus());
                 provider.setAccessToken(resolveSensitiveValue(accessToken, provider.getAccessToken()));
@@ -273,12 +319,12 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             providerConfigMapper.updateById(provider);
         }
 
-        if (callbackConfig != null) {
+        if (callbackConfig != null && !duplicate) {
             callbackConfig.setLastCallbackStatus(callbackStatus);
             callbackConfig.setLastCallbackMessage(trimMessage(callbackMessage));
             callbackConfig.setLastCallbackAt(now);
             callbackConfig.setLastTraceId(traceId);
-            if (trustedCallback && authorizationCallback) {
+            if (canUpdateAuthorization) {
                 callbackConfig.setLastAuthCode(resolveSensitiveValue(authCode, callbackConfig.getLastAuthCode()));
             }
             callbackConfig.setUpdatedAt(now);
@@ -287,6 +333,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
 
         IntegrationCallbackEventLog eventLog = new IntegrationCallbackEventLog();
         eventLog.setProviderCode(normalizedProviderCode);
+        eventLog.setProviderId(provider == null ? null : provider.getId());
         eventLog.setCallbackName(StringUtils.hasText(callbackName) ? callbackName.trim() : normalizedProviderCode + "-CALLBACK");
         eventLog.setRequestMethod(StringUtils.hasText(requestMethod) ? requestMethod.trim().toUpperCase(Locale.ROOT) : "GET");
         eventLog.setCallbackPath(trimToNull(callbackPath));
@@ -295,11 +342,26 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         eventLog.setAuthCode(maskValue(authCode));
         eventLog.setCallbackState(trimToNull(callbackState));
         eventLog.setEventType(trimToNull(eventType));
+        eventLog.setEventId(trimToNull(eventId));
+        eventLog.setIdempotencyKey(idempotencyKey);
+        eventLog.setIdempotencyStatus(duplicate ? "DUPLICATE" : "NEW");
         eventLog.setTraceId(traceId);
-        eventLog.setSignatureStatus(resolveProviderSignatureStatus(provider, trustedCallback));
+        eventLog.setSignatureMode(trust.signatureMode());
+        eventLog.setSignatureValueMasked(trust.signatureValueMasked());
+        eventLog.setSignatureStatus(trust.signatureStatus());
+        eventLog.setTrustLevel(trust.trustLevel());
+        eventLog.setReceivedIp(trimToNull(firstRemoteIp(normalizedParameters.get("__remote_ip"))));
+        eventLog.setUserAgent(trimMessage(normalizedParameters.get("__user_agent")));
+        eventLog.setTimestampValue(trimToNull(trust.timestampValue()));
+        eventLog.setNonce(trimToNull(trust.nonce()));
+        eventLog.setBodyHash(bodyHash);
+        eventLog.setProcessPolicy(processPolicy);
         eventLog.setProcessStatus(callbackStatus);
         eventLog.setProcessMessage(trimMessage(callbackMessage));
+        eventLog.setErrorCode(resolveCallbackErrorCode(duplicate, errorMessage, trust, providerLive));
+        eventLog.setErrorMessage(trimMessage(StringUtils.hasText(errorMessage) ? errorMessage : trust.message()));
         eventLog.setReceivedAt(now);
+        eventLog.setProcessedAt(now);
         eventLog.setCreatedAt(now);
         callbackEventLogMapper.insert(eventLog);
 
@@ -568,7 +630,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         target.setProviderCode(StringUtils.hasText(source.getProviderCode()) ? normalize(source.getProviderCode()) : null);
         target.setCallbackName(source.getCallbackName().trim());
         target.setCallbackUrl(source.getCallbackUrl().trim());
-        target.setSignatureMode(StringUtils.hasText(source.getSignatureMode()) ? source.getSignatureMode().trim() : "NONE");
+        target.setSignatureMode(StringUtils.hasText(source.getSignatureMode()) ? source.getSignatureMode().trim() : SIGNATURE_MODE_NONE_LOCAL_ONLY);
         target.setTokenValue(resolveSensitiveValue(source.getTokenValue(), existing == null ? null : existing.getTokenValue()));
         target.setAesKey(resolveSensitiveValue(source.getAesKey(), existing == null ? null : existing.getAesKey()));
         target.setEnabled(source.getEnabled() == null ? 1 : source.getEnabled());
@@ -848,31 +910,360 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         return null;
     }
 
-    private boolean isTrustedCallback(IntegrationProviderConfig provider, IntegrationCallbackConfig callbackConfig) {
-        if (provider == null || !MODE_LIVE.equals(provider.getExecutionMode())) {
-            return true;
+    private CallbackTrustResult resolveCallbackTrust(IntegrationProviderConfig provider,
+                                                     IntegrationCallbackConfig callbackConfig,
+                                                     Map<String, String> parameters,
+                                                     String payload,
+                                                     boolean authorizationCallback) {
+        String signatureMode = normalizeSignatureMode(callbackConfig == null ? null : callbackConfig.getSignatureMode());
+        String signatureValue = firstNonBlank(
+                parameters.get("signature"),
+                parameters.get("sign"),
+                parameters.get("msg_signature"),
+                parameters.get("__header_x_signature"),
+                parameters.get("__header_x_seedcrm_signature"),
+                parameters.get("__header_x_douyin_signature"));
+        String timestampValue = firstNonBlank(
+                parameters.get("timestamp"),
+                parameters.get("ts"),
+                parameters.get("__header_x_timestamp"));
+        String nonce = firstNonBlank(
+                parameters.get("nonce"),
+                parameters.get("__header_x_nonce"));
+        if (provider == null) {
+            return new CallbackTrustResult(signatureMode, "NOT_VERIFIED", "BLOCKED", false,
+                    maskValue(signatureValue), timestampValue, nonce, "来源接口未配置");
         }
-        return isLocalUrl(provider.getCallbackUrl()) || (callbackConfig != null && isLocalUrl(callbackConfig.getCallbackUrl()));
+        if (provider.getEnabled() != null && provider.getEnabled() == 0) {
+            return new CallbackTrustResult(signatureMode, "NOT_VERIFIED", "BLOCKED", false,
+                    maskValue(signatureValue), timestampValue, nonce, "来源接口已停用");
+        }
+        if (callbackConfig != null && callbackConfig.getEnabled() != null && callbackConfig.getEnabled() == 0) {
+            return new CallbackTrustResult(signatureMode, "NOT_VERIFIED", "BLOCKED", false,
+                    maskValue(signatureValue), timestampValue, nonce, "回调配置已停用");
+        }
+        if (!MODE_LIVE.equals(provider.getExecutionMode())) {
+            return new CallbackTrustResult(signatureMode, "SKIPPED", "MOCK", true,
+                    maskValue(signatureValue), timestampValue, nonce, "模拟模式跳过验签");
+        }
+        if (isLocalCallback(provider, callbackConfig, parameters)) {
+            return new CallbackTrustResult(signatureMode, "LOCAL_BYPASS", "LOCAL", true,
+                    maskValue(signatureValue), timestampValue, nonce, "本地联调跳过验签");
+        }
+        if (callbackConfig == null) {
+            return new CallbackTrustResult(signatureMode, "NOT_VERIFIED", "UNVERIFIED", false,
+                    maskValue(signatureValue), timestampValue, nonce, "未配置回调签名策略");
+        }
+        return switch (signatureMode) {
+            case SIGNATURE_MODE_TOKEN_QUERY -> verifyTokenQuery(callbackConfig, parameters, signatureValue, timestampValue, nonce);
+            case SIGNATURE_MODE_HMAC_SHA256 -> verifyHmacSha256(callbackConfig, payload, signatureValue, timestampValue, nonce);
+            case SIGNATURE_MODE_OAUTH_STATE -> verifyOauthState(callbackConfig, authorizationCallback, parameters, signatureValue, timestampValue, nonce);
+            case SIGNATURE_MODE_DYNAMIC_PROVIDER -> new CallbackTrustResult(signatureMode, "NOT_VERIFIED", "UNVERIFIED", false,
+                    maskValue(signatureValue), timestampValue, nonce, "平台专用验签器尚未启用");
+            default -> new CallbackTrustResult(signatureMode, "NOT_VERIFIED", "UNVERIFIED", false,
+                    maskValue(signatureValue), timestampValue, nonce, "LIVE 模式不允许无签名回调");
+        };
     }
 
-    private String resolveProviderSignatureStatus(IntegrationProviderConfig provider, boolean trustedCallback) {
-        if (provider == null || !MODE_LIVE.equals(provider.getExecutionMode())) {
-            return "SKIPPED";
+    private CallbackTrustResult verifyTokenQuery(IntegrationCallbackConfig callbackConfig,
+                                                 Map<String, String> parameters,
+                                                 String signatureValue,
+                                                 String timestampValue,
+                                                 String nonce) {
+        String expected = callbackConfig.getTokenValue();
+        String actual = firstNonBlank(
+                parameters.get("token"),
+                parameters.get("callback_token"),
+                parameters.get("__header_authorization"),
+                signatureValue);
+        if (!StringUtils.hasText(expected) || !StringUtils.hasText(actual)) {
+            return new CallbackTrustResult(SIGNATURE_MODE_TOKEN_QUERY, "FAILED", "UNVERIFIED", false,
+                    maskValue(actual), timestampValue, nonce, "Token 校验参数缺失");
         }
-        return trustedCallback ? "LOCAL_BYPASS" : "NOT_VERIFIED";
+        if (!safeEquals(normalizeBearer(actual), expected.trim())) {
+            return new CallbackTrustResult(SIGNATURE_MODE_TOKEN_QUERY, "FAILED", "UNVERIFIED", false,
+                    maskValue(actual), timestampValue, nonce, "Token 不匹配");
+        }
+        return new CallbackTrustResult(SIGNATURE_MODE_TOKEN_QUERY, "VERIFIED", "VERIFIED", true,
+                maskValue(actual), timestampValue, nonce, "Token 校验通过");
+    }
+
+    private CallbackTrustResult verifyHmacSha256(IntegrationCallbackConfig callbackConfig,
+                                                 String payload,
+                                                 String signatureValue,
+                                                 String timestampValue,
+                                                 String nonce) {
+        String secret = firstNonBlank(callbackConfig.getTokenValue(), callbackConfig.getAesKey());
+        if (!StringUtils.hasText(secret) || !StringUtils.hasText(signatureValue)) {
+            return new CallbackTrustResult(SIGNATURE_MODE_HMAC_SHA256, "FAILED", "UNVERIFIED", false,
+                    maskValue(signatureValue), timestampValue, nonce, "HMAC 密钥或签名缺失");
+        }
+        if (!StringUtils.hasText(timestampValue) || !StringUtils.hasText(nonce)) {
+            return new CallbackTrustResult(SIGNATURE_MODE_HMAC_SHA256, "FAILED", "UNVERIFIED", false,
+                    maskValue(signatureValue), timestampValue, nonce, "HMAC 时间戳或 nonce 缺失");
+        }
+        if (isTimestampExpired(timestampValue)) {
+            return new CallbackTrustResult(SIGNATURE_MODE_HMAC_SHA256, "EXPIRED", "UNVERIFIED", false,
+                    maskValue(signatureValue), timestampValue, nonce, "HMAC 时间戳过期");
+        }
+        String base = timestampValue.trim() + nonce.trim() + (StringUtils.hasText(payload) ? payload.trim() : "");
+        String hexSignature = hmacSha256(secret.trim(), base);
+        String base64Signature = base64HmacSha256(secret.trim(), base);
+        String cleanSignature = normalizeSignature(signatureValue);
+        boolean matched = safeEquals(cleanSignature == null ? null : cleanSignature.toLowerCase(Locale.ROOT), hexSignature)
+                || safeEquals(cleanSignature, base64Signature);
+        return new CallbackTrustResult(SIGNATURE_MODE_HMAC_SHA256,
+                matched ? "VERIFIED" : "FAILED",
+                matched ? "VERIFIED" : "UNVERIFIED",
+                matched,
+                maskValue(signatureValue),
+                timestampValue,
+                nonce,
+                matched ? "HMAC 校验通过" : "HMAC 签名不匹配");
+    }
+
+    private CallbackTrustResult verifyOauthState(IntegrationCallbackConfig callbackConfig,
+                                                 boolean authorizationCallback,
+                                                 Map<String, String> parameters,
+                                                 String signatureValue,
+                                                 String timestampValue,
+                                                 String nonce) {
+        String expectedState = callbackConfig.getTokenValue();
+        String actualState = parameters.get("state");
+        if (!authorizationCallback) {
+            return new CallbackTrustResult(SIGNATURE_MODE_OAUTH_STATE, "FAILED", "UNVERIFIED", false,
+                    maskValue(signatureValue), timestampValue, nonce, "OAUTH_STATE 只能用于授权回调");
+        }
+        if (!StringUtils.hasText(expectedState) || !StringUtils.hasText(actualState)) {
+            return new CallbackTrustResult(SIGNATURE_MODE_OAUTH_STATE, "FAILED", "UNVERIFIED", false,
+                    maskValue(signatureValue), timestampValue, nonce, "授权 state 缺失");
+        }
+        boolean matched = safeEquals(actualState.trim(), expectedState.trim());
+        return new CallbackTrustResult(SIGNATURE_MODE_OAUTH_STATE,
+                matched ? "VERIFIED" : "FAILED",
+                matched ? "VERIFIED" : "UNVERIFIED",
+                matched,
+                maskValue(actualState),
+                timestampValue,
+                nonce,
+                matched ? "授权 state 校验通过" : "授权 state 不匹配");
+    }
+
+    private IntegrationCallbackEventLog findCallbackLogByIdempotencyKey(String idempotencyKey) {
+        if (!StringUtils.hasText(idempotencyKey)) {
+            return null;
+        }
+        return callbackEventLogMapper.selectOne(Wrappers.<IntegrationCallbackEventLog>lambdaQuery()
+                .eq(IntegrationCallbackEventLog::getIdempotencyKey, idempotencyKey)
+                .orderByAsc(IntegrationCallbackEventLog::getId)
+                .last("LIMIT 1"));
+    }
+
+    private String buildIdempotencyKey(String providerCode,
+                                       String callbackPath,
+                                       String eventType,
+                                       String callbackState,
+                                       String authCode,
+                                       String accessToken,
+                                       String eventId,
+                                       String queryHash,
+                                       String bodyHash) {
+        String keySource = String.join("|",
+                nullToEmpty(providerCode),
+                nullToEmpty(callbackPath),
+                nullToEmpty(eventType),
+                nullToEmpty(callbackState),
+                nullToEmpty(authCode),
+                nullToEmpty(accessToken),
+                nullToEmpty(eventId),
+                nullToEmpty(queryHash),
+                nullToEmpty(bodyHash));
+        return sha256Hex(keySource);
+    }
+
+    private Map<String, String> idempotencyParameters(Map<String, String> parameters) {
+        Map<String, String> filtered = new LinkedHashMap<>();
+        if (parameters == null) {
+            return filtered;
+        }
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            String key = entry.getKey();
+            if (!StringUtils.hasText(key) || isTransportOnlyKey(key)) {
+                continue;
+            }
+            filtered.put(key.trim(), entry.getValue());
+        }
+        return filtered;
+    }
+
+    private boolean isTransportOnlyKey(String key) {
+        String normalizedKey = key.trim().toLowerCase(Locale.ROOT);
+        return normalizedKey.startsWith("__")
+                || normalizedKey.equals("signature")
+                || normalizedKey.equals("sign")
+                || normalizedKey.equals("msg_signature")
+                || normalizedKey.contains("signature")
+                || normalizedKey.equals("timestamp")
+                || normalizedKey.equals("ts")
+                || normalizedKey.equals("nonce")
+                || normalizedKey.equals("token")
+                || normalizedKey.equals("callback_token");
+    }
+
+    private boolean isBusinessStateCallback(String eventType, String callbackName) {
+        String value = (nullToEmpty(eventType) + " " + nullToEmpty(callbackName)).toUpperCase(Locale.ROOT);
+        return value.contains("REFUND")
+                || value.contains("VERIFY")
+                || value.contains("VOUCHER")
+                || value.contains("ORDER")
+                || value.contains("SALARY")
+                || value.contains("PAY")
+                || value.contains("USED")
+                || value.contains("核销")
+                || value.contains("退款")
+                || value.contains("订单")
+                || value.contains("薪酬");
+    }
+
+    private String resolveCallbackErrorCode(boolean duplicate,
+                                            String errorMessage,
+                                            CallbackTrustResult trust,
+                                            boolean providerLive) {
+        if (duplicate) {
+            return "DUPLICATE";
+        }
+        if (StringUtils.hasText(errorMessage)) {
+            return "CALLBACK_ERROR";
+        }
+        if (providerLive && !trust.trusted()) {
+            return "SIGNATURE_UNVERIFIED";
+        }
+        return null;
+    }
+
+    private boolean isLocalCallback(IntegrationProviderConfig provider,
+                                    IntegrationCallbackConfig callbackConfig,
+                                    Map<String, String> parameters) {
+        return isLocalUrl(provider.getCallbackUrl())
+                || (callbackConfig != null && isLocalUrl(callbackConfig.getCallbackUrl()))
+                || isLocalHost(firstRemoteIp(parameters.get("__remote_ip")));
+    }
+
+    private String normalizeSignatureMode(String signatureMode) {
+        String normalized = normalize(signatureMode);
+        if (!StringUtils.hasText(normalized) || "NONE".equals(normalized) || "LOCAL_BYPASS".equals(normalized)) {
+            return SIGNATURE_MODE_NONE_LOCAL_ONLY;
+        }
+        if ("HMAC-SHA256".equals(normalized)) {
+            return SIGNATURE_MODE_HMAC_SHA256;
+        }
+        return normalized;
+    }
+
+    private boolean isTimestampExpired(String timestampValue) {
+        if (!StringUtils.hasText(timestampValue)) {
+            return true;
+        }
+        try {
+            long raw = Long.parseLong(timestampValue.trim());
+            long epochSeconds = raw > 9_999_999_999L ? raw / 1000 : raw;
+            long nowSeconds = LocalDateTime.now().toEpochSecond(ZoneOffset.ofHours(8));
+            return Math.abs(nowSeconds - epochSeconds) > 600;
+        } catch (NumberFormatException ignored) {
+            return true;
+        }
+    }
+
+    private String hmacSha256(String secret, String value) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return bytesToHex(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception exception) {
+            throw new BusinessException("HMAC 签名计算失败");
+        }
+    }
+
+    private String base64HmacSha256(String secret, String value) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return Base64.getEncoder().encodeToString(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception exception) {
+            throw new BusinessException("HMAC 签名计算失败");
+        }
+    }
+
+    private String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return bytesToHex(digest.digest(nullToEmpty(value).getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception exception) {
+            throw new BusinessException("摘要计算失败");
+        }
+    }
+
+    private String bytesToHex(byte[] bytes) {
+        StringBuilder builder = new StringBuilder(bytes.length * 2);
+        for (byte item : bytes) {
+            builder.append(String.format("%02x", item));
+        }
+        return builder.toString();
+    }
+
+    private boolean safeEquals(String left, String right) {
+        if (left == null || right == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(left.getBytes(StandardCharsets.UTF_8), right.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String normalizeBearer(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.regionMatches(true, 0, "Bearer ", 0, 7) ? trimmed.substring(7).trim() : trimmed;
+    }
+
+    private String normalizeSignature(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.regionMatches(true, 0, "sha256=", 0, 7)) {
+            trimmed = trimmed.substring(7);
+        }
+        return trimmed.trim();
+    }
+
+    private String firstRemoteIp(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.split(",")[0].trim();
+    }
+
+    private boolean isLocalHost(String host) {
+        return StringUtils.hasText(host)
+                && ("127.0.0.1".equals(host)
+                || "localhost".equalsIgnoreCase(host)
+                || "0.0.0.0".equals(host)
+                || "::1".equals(host));
+    }
+
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private boolean isLocalUrl(String url) {
         if (!StringUtils.hasText(url)) {
-            return true;
+            return false;
         }
         try {
             URI uri = URI.create(url.trim());
             String host = uri.getHost();
-            return host == null
-                    || "127.0.0.1".equals(host)
-                    || "localhost".equalsIgnoreCase(host)
-                    || "0.0.0.0".equals(host);
+            return isLocalHost(host);
         } catch (IllegalArgumentException ignored) {
             return false;
         }
@@ -934,6 +1325,12 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
                 || normalizedKey.equals("access_token")
                 || normalizedKey.equals("refresh_token")
                 || normalizedKey.equals("token")
+                || normalizedKey.equals("callback_token")
+                || normalizedKey.equals("signature")
+                || normalizedKey.equals("sign")
+                || normalizedKey.equals("msg_signature")
+                || normalizedKey.contains("signature")
+                || normalizedKey.equals("__header_authorization")
                 || normalizedKey.equals("client_secret")
                 || normalizedKey.equals("app_secret")
                 || normalizedKey.equals("corpsecret")
@@ -1040,5 +1437,15 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             return "****";
         }
         return trimmed.substring(0, 2) + "****" + trimmed.substring(trimmed.length() - 2);
+    }
+
+    private record CallbackTrustResult(String signatureMode,
+                                       String signatureStatus,
+                                       String trustLevel,
+                                       boolean trusted,
+                                       String signatureValueMasked,
+                                       String timestampValue,
+                                       String nonce,
+                                       String message) {
     }
 }

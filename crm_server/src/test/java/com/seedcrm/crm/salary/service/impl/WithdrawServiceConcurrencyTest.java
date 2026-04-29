@@ -9,11 +9,13 @@ import com.seedcrm.crm.finance.service.FinanceService;
 import com.seedcrm.crm.risk.service.DbLockService;
 import com.seedcrm.crm.risk.service.IdempotentService;
 import com.seedcrm.crm.risk.service.impl.RiskControlServiceImpl;
+import com.seedcrm.crm.salary.dto.SalarySettlementPolicyDtos;
 import com.seedcrm.crm.salary.dto.WithdrawCreateRequest;
 import com.seedcrm.crm.salary.entity.SalarySettlement;
 import com.seedcrm.crm.salary.entity.WithdrawRecord;
 import com.seedcrm.crm.salary.mapper.SalarySettlementMapper;
 import com.seedcrm.crm.salary.mapper.WithdrawRecordMapper;
+import com.seedcrm.crm.salary.service.SalarySettlementPolicyService;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +36,9 @@ class WithdrawServiceConcurrencyTest {
     private WithdrawRecordMapper withdrawRecordMapper;
 
     @Mock
+    private SalarySettlementPolicyService salarySettlementPolicyService;
+
+    @Mock
     private FinanceService financeService;
 
     @Mock
@@ -46,8 +51,8 @@ class WithdrawServiceConcurrencyTest {
 
     @BeforeEach
     void setUp() {
-        withdrawService = new WithdrawServiceImpl(salarySettlementMapper, withdrawRecordMapper, financeService,
-                dbLockService, idempotentService, new RiskControlServiceImpl());
+        withdrawService = new WithdrawServiceImpl(salarySettlementMapper, withdrawRecordMapper, salarySettlementPolicyService,
+                financeService, dbLockService, idempotentService, new RiskControlServiceImpl());
     }
 
     @Test
@@ -55,6 +60,7 @@ class WithdrawServiceConcurrencyTest {
         SalarySettlement settlement = new SalarySettlement();
         settlement.setTotalAmount(new BigDecimal("100.00"));
         when(salarySettlementMapper.selectList(any())).thenReturn(List.of(settlement));
+        when(salarySettlementPolicyService.simulate(any())).thenReturn(auditPolicy());
 
         List<WithdrawRecord> existingWithdraws = new ArrayList<>();
         AtomicLong idSequence = new AtomicLong(1L);
@@ -68,6 +74,7 @@ class WithdrawServiceConcurrencyTest {
 
         WithdrawCreateRequest request = new WithdrawCreateRequest();
         request.setUserId(9L);
+        request.setSubjectType("DISTRIBUTOR");
         request.setAmount(new BigDecimal("80.00"));
 
         WithdrawRecord first = withdrawService.createWithdraw(request);
@@ -75,5 +82,14 @@ class WithdrawServiceConcurrencyTest {
         assertThat(first.getId()).isEqualTo(1L);
         assertThatThrownBy(() -> withdrawService.createWithdraw(request))
                 .hasMessageContaining("exceeds account balance");
+    }
+
+    private SalarySettlementPolicyDtos.SimulateResponse auditPolicy() {
+        SalarySettlementPolicyDtos.SimulateResponse response = new SalarySettlementPolicyDtos.SimulateResponse();
+        response.setMatched(true);
+        response.setSubjectType("DISTRIBUTOR");
+        response.setSettlementMode("WITHDRAW_AUDIT");
+        response.setRequiresAudit(true);
+        return response;
     }
 }

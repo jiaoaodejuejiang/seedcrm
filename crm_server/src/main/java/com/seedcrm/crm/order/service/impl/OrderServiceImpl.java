@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.enums.SourceChannel;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
@@ -338,15 +339,112 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setRemark(StringUtils.hasText(orderServiceDetailDTO.getServiceRequirement())
                 ? orderServiceDetailDTO.getServiceRequirement().trim()
                 : null);
-        order.setServiceDetailJson(StringUtils.hasText(orderServiceDetailDTO.getServiceDetailJson())
-                ? orderServiceDetailDTO.getServiceDetailJson().trim()
-                : null);
+        order.setServiceDetailJson(normalizeServiceDetailJson(orderServiceDetailDTO));
         order.setUpdateTime(LocalDateTime.now());
         if (orderMapper.updateById(order) <= 0) {
             throw new BusinessException("failed to update order service detail");
         }
         refreshCustomerLifecycle(order.getCustomerId());
         return order;
+    }
+
+    private String normalizeServiceDetailJson(OrderServiceDetailDTO orderServiceDetailDTO) {
+        ObjectNode root = createServiceDetailRoot(orderServiceDetailDTO == null ? null : orderServiceDetailDTO.getServiceDetailJson());
+        ObjectNode templateSnapshot = buildServiceTemplateSnapshot(orderServiceDetailDTO);
+        if (templateSnapshot != null && !templateSnapshot.isEmpty()) {
+            root.set("serviceTemplate", templateSnapshot);
+        }
+        if (root.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(root);
+        } catch (Exception exception) {
+            throw new BusinessException("服务确认单保存失败，请检查表单内容");
+        }
+    }
+
+    private ObjectNode createServiceDetailRoot(String serviceDetailJson) {
+        if (!StringUtils.hasText(serviceDetailJson)) {
+            return objectMapper.createObjectNode();
+        }
+        try {
+            JsonNode node = objectMapper.readTree(serviceDetailJson.trim());
+            if (!node.isObject()) {
+                throw new BusinessException("服务确认单内容必须是 JSON 对象");
+            }
+            return (ObjectNode) node;
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BusinessException("服务确认单内容 JSON 格式不正确");
+        }
+    }
+
+    private ObjectNode buildServiceTemplateSnapshot(OrderServiceDetailDTO orderServiceDetailDTO) {
+        if (orderServiceDetailDTO == null || !hasServiceTemplateSnapshot(orderServiceDetailDTO)) {
+            return null;
+        }
+        ObjectNode snapshot = parseTemplateSnapshot(orderServiceDetailDTO.getServiceTemplateSnapshotJson());
+        putIfPresent(snapshot, "templateId", orderServiceDetailDTO.getServiceTemplateId());
+        putIfPresent(snapshot, "bindingId", orderServiceDetailDTO.getServiceTemplateBindingId());
+        putIfPresent(snapshot, "templateCode", orderServiceDetailDTO.getServiceTemplateCode());
+        putIfPresent(snapshot, "templateName", orderServiceDetailDTO.getServiceTemplateName());
+        putIfPresent(snapshot, "title", orderServiceDetailDTO.getServiceTemplateTitle());
+        putIfPresent(snapshot, "layoutMode", orderServiceDetailDTO.getServiceTemplateLayoutMode());
+        if (StringUtils.hasText(orderServiceDetailDTO.getServiceTemplateConfigJson())) {
+            snapshot.set("config", parseTemplateConfig(orderServiceDetailDTO.getServiceTemplateConfigJson()));
+        }
+        snapshot.put("snapshotAt", LocalDateTime.now().toString());
+        return snapshot;
+    }
+
+    private boolean hasServiceTemplateSnapshot(OrderServiceDetailDTO orderServiceDetailDTO) {
+        return orderServiceDetailDTO.getServiceTemplateId() != null
+                || orderServiceDetailDTO.getServiceTemplateBindingId() != null
+                || StringUtils.hasText(orderServiceDetailDTO.getServiceTemplateCode())
+                || StringUtils.hasText(orderServiceDetailDTO.getServiceTemplateName())
+                || StringUtils.hasText(orderServiceDetailDTO.getServiceTemplateTitle())
+                || StringUtils.hasText(orderServiceDetailDTO.getServiceTemplateLayoutMode())
+                || StringUtils.hasText(orderServiceDetailDTO.getServiceTemplateConfigJson())
+                || StringUtils.hasText(orderServiceDetailDTO.getServiceTemplateSnapshotJson());
+    }
+
+    private ObjectNode parseTemplateSnapshot(String snapshotJson) {
+        if (!StringUtils.hasText(snapshotJson)) {
+            return objectMapper.createObjectNode();
+        }
+        try {
+            JsonNode node = objectMapper.readTree(snapshotJson.trim());
+            if (!node.isObject()) {
+                throw new BusinessException("服务单模板快照必须是 JSON 对象");
+            }
+            return (ObjectNode) node;
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BusinessException("服务单模板快照 JSON 格式不正确");
+        }
+    }
+
+    private JsonNode parseTemplateConfig(String configJson) {
+        try {
+            return objectMapper.readTree(configJson.trim());
+        } catch (Exception exception) {
+            throw new BusinessException("服务单模板配置 JSON 格式不正确");
+        }
+    }
+
+    private void putIfPresent(ObjectNode node, String fieldName, Long value) {
+        if (value != null) {
+            node.put(fieldName, value);
+        }
+    }
+
+    private void putIfPresent(ObjectNode node, String fieldName, String value) {
+        if (StringUtils.hasText(value)) {
+            node.put(fieldName, value.trim());
+        }
     }
 
     private void validateCreateRequest(OrderCreateDTO orderCreateDTO) {

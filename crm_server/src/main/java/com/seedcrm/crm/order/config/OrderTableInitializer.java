@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 public class OrderTableInitializer {
 
     private static final String TABLE_NAME = "order_info";
+    private static final String EXTERNAL_ORDER_INDEX = "uk_order_external_order";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -28,6 +29,7 @@ public class OrderTableInitializer {
         } else {
             ensureMissingColumns();
         }
+        ensureExternalOrderIndex();
         normalizeLegacyVerificationStates();
         normalizeLegacyPlanOrderStates();
     }
@@ -63,6 +65,21 @@ public class OrderTableInitializer {
         return count != null && count > 0;
     }
 
+    private void ensureExternalOrderIndex() {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = ?
+                  AND INDEX_NAME = ?
+                """, Integer.class, TABLE_NAME, EXTERNAL_ORDER_INDEX);
+        if (count == null || count == 0) {
+            jdbcTemplate.execute("ALTER TABLE " + TABLE_NAME
+                    + " ADD UNIQUE KEY " + EXTERNAL_ORDER_INDEX + " (external_partner_code, external_order_id)");
+            log.info("added unique index {} on order external id", EXTERNAL_ORDER_INDEX);
+        }
+    }
+
     private String createTableSql() {
         return """
                 CREATE TABLE order_info (
@@ -71,7 +88,16 @@ public class OrderTableInitializer {
                     clue_id BIGINT,
                     customer_id BIGINT,
                     source_channel VARCHAR(32),
+                    source VARCHAR(32),
                     source_id BIGINT,
+                    external_partner_code VARCHAR(64),
+                    external_order_id VARCHAR(128),
+                    external_trade_no VARCHAR(128),
+                    external_member_id VARCHAR(128),
+                    external_promoter_id VARCHAR(128),
+                    external_status VARCHAR(64),
+                    refund_status VARCHAR(64),
+                    raw_data TEXT,
                     type INT NOT NULL,
                     amount DECIMAL(10,2),
                     deposit DECIMAL(10,2),
@@ -100,7 +126,16 @@ public class OrderTableInitializer {
         columns.put("clue_id", "clue_id BIGINT");
         columns.put("customer_id", "customer_id BIGINT");
         columns.put("source_channel", "source_channel VARCHAR(32)");
+        columns.put("source", "source VARCHAR(32)");
         columns.put("source_id", "source_id BIGINT");
+        columns.put("external_partner_code", "external_partner_code VARCHAR(64)");
+        columns.put("external_order_id", "external_order_id VARCHAR(128)");
+        columns.put("external_trade_no", "external_trade_no VARCHAR(128)");
+        columns.put("external_member_id", "external_member_id VARCHAR(128)");
+        columns.put("external_promoter_id", "external_promoter_id VARCHAR(128)");
+        columns.put("external_status", "external_status VARCHAR(64)");
+        columns.put("refund_status", "refund_status VARCHAR(64)");
+        columns.put("raw_data", "raw_data TEXT");
         columns.put("type", "type INT NOT NULL");
         columns.put("amount", "amount DECIMAL(10,2)");
         columns.put("deposit", "deposit DECIMAL(10,2)");

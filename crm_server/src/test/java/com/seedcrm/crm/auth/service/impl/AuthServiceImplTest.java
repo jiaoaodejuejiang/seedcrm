@@ -61,8 +61,8 @@ class AuthServiceImplTest {
 
         assertThat(user.getDefaultRoute()).isEqualTo("/clues");
         assertThat(user.getMenuRoutes())
-                .contains("/settings/menu", "/settings/integration/third-party", "/system/roles");
-        assertThat(user.getPermissions()).contains("setting:menu:update", "system:role:update");
+                .contains("/settings/menu", "/settings/integration/third-party", "/settings/system-flow", "/system/roles");
+        assertThat(user.getPermissions()).contains("setting:menu:update", "setting:system-flow:view", "system:role:update");
     }
 
     @Test

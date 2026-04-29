@@ -35,24 +35,27 @@
 
  :: Spring Boot ::                (v3.5.9)
 
-2026-04-28T17:43:59.976+08:00  INFO 31040 --- [           main] com.seedcrm.crm.CrmApplication           : Starting CrmApplication using Java 17.0.18 with PID 31040 (E:\studio\test\seedcrm\crm_server\target\classes started by Administrator in E:\studio\test\seedcrm\crm_server)
-2026-04-28T17:43:59.996+08:00  INFO 31040 --- [           main] com.seedcrm.crm.CrmApplication           : No active profile set, falling back to 1 default profile: "default"
-2026-04-28T17:44:02.282+08:00  INFO 31040 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
-2026-04-28T17:44:02.304+08:00  INFO 31040 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-2026-04-28T17:44:02.304+08:00  INFO 31040 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.50]
-2026-04-28T17:44:02.391+08:00  INFO 31040 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2026-04-28T17:44:02.398+08:00  INFO 31040 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 2297 ms
+2026-04-29T22:15:21.309+08:00  INFO 17328 --- [           main] com.seedcrm.crm.CrmApplication           : Starting CrmApplication using Java 17.0.18 with PID 17328 (E:\studio\test\seedcrm\crm_server\target\classes started by Administrator in E:\studio\test\seedcrm\crm_server)
+2026-04-29T22:15:21.314+08:00  INFO 17328 --- [           main] com.seedcrm.crm.CrmApplication           : No active profile set, falling back to 1 default profile: "default"
+2026-04-29T22:15:23.060+08:00  INFO 17328 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-04-29T22:15:23.082+08:00  INFO 17328 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-04-29T22:15:23.082+08:00  INFO 17328 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.50]
+2026-04-29T22:15:23.153+08:00  INFO 17328 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-04-29T22:15:23.153+08:00  INFO 17328 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1766 ms
  _ _   |_  _ _|_. ___ _ |    _ 
 | | |\/|_)(_| | |_\  |_)||_|_\ 
      /               |         
                         3.5.15 
-2026-04-28T17:44:03.342+08:00  INFO 31040 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
-2026-04-28T17:44:03.797+08:00  INFO 31040 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@2b79c8ff
-2026-04-28T17:44:03.797+08:00  INFO 31040 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
-2026-04-28T17:44:04.425+08:00  INFO 31040 --- [           main] c.s.c.a.s.AuthAccessSchemaInitializer    : auth access system tables initialized with 38 menu seeds
-2026-04-28T17:44:07.549+08:00  INFO 31040 --- [           main] m.e.s.MybatisPlusApplicationContextAware : Register ApplicationContext instances org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext@12d2ce03
-2026-04-28T17:44:07.799+08:00  INFO 31040 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
-2026-04-28T17:44:07.932+08:00  INFO 31040 --- [           main] com.seedcrm.crm.CrmApplication           : Started CrmApplication in 8.879 seconds (process running for 9.52)
-2026-04-28T17:44:38.410+08:00  INFO 31040 --- [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-04-28T17:44:38.410+08:00  INFO 31040 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-2026-04-28T17:44:38.412+08:00  INFO 31040 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms
+2026-04-29T22:15:23.842+08:00  INFO 17328 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-04-29T22:15:24.205+08:00  INFO 17328 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@7c9beb51
+2026-04-29T22:15:24.213+08:00  INFO 17328 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-04-29T22:15:24.726+08:00  INFO 17328 --- [           main] c.s.c.a.s.AuthAccessSchemaInitializer    : auth access system tables initialized with 40 menu seeds
+2026-04-29T22:15:26.074+08:00  INFO 17328 --- [           main] letedOrderServiceFormBackfillInitializer : completed order service form backfill skipped, set seedcrm.backfill.completed-service-form.enabled=true to run it
+2026-04-29T22:15:27.067+08:00  INFO 17328 --- [           main] m.e.s.MybatisPlusApplicationContextAware : Register ApplicationContext instances org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext@12d2ce03
+2026-04-29T22:15:27.190+08:00  INFO 17328 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-04-29T22:15:27.201+08:00  INFO 17328 --- [           main] com.seedcrm.crm.CrmApplication           : Started CrmApplication in 6.533 seconds (process running for 6.979)
+2026-04-29T22:17:39.026+08:00  INFO 17328 --- [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-04-29T22:17:39.038+08:00  INFO 17328 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-04-29T22:17:39.038+08:00  INFO 17328 --- [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms
+2026-04-30T01:54:04.414+08:00  WARN 17328 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=3h3m9s548ms920?s800ns).
+2026-04-30T07:12:23.114+08:00  WARN 17328 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=4h34m18s80ms693?s100ns).

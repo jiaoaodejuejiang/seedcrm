@@ -21,6 +21,7 @@ import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.planorder.service.OrderRoleRecordService;
 import com.seedcrm.crm.planorder.service.PlanOrderService;
 import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
 import com.seedcrm.crm.wecom.entity.WecomTouchLog;
 import com.seedcrm.crm.wecom.service.WecomTouchService;
 import java.time.LocalDateTime;
@@ -52,14 +53,16 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     private final WecomTouchService wecomTouchService;
     private final OrderActionRecordMapper orderActionRecordMapper;
     private final DbLockService dbLockService;
+    private final SchedulerOutboxService schedulerOutboxService;
 
     public PlanOrderServiceImpl(PlanOrderMapper planOrderMapper,
                                 OrderMapper orderMapper,
                                 OrderRoleRecordService orderRoleRecordService,
-                                OrderSettlementService orderSettlementService,
-                                WecomTouchService wecomTouchService,
-                                OrderActionRecordMapper orderActionRecordMapper,
-                                DbLockService dbLockService) {
+                                 OrderSettlementService orderSettlementService,
+                                 WecomTouchService wecomTouchService,
+                                 OrderActionRecordMapper orderActionRecordMapper,
+                                 DbLockService dbLockService,
+                                 SchedulerOutboxService schedulerOutboxService) {
         this.planOrderMapper = planOrderMapper;
         this.orderMapper = orderMapper;
         this.orderRoleRecordService = orderRoleRecordService;
@@ -67,6 +70,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         this.wecomTouchService = wecomTouchService;
         this.orderActionRecordMapper = orderActionRecordMapper;
         this.dbLockService = dbLockService;
+        this.schedulerOutboxService = schedulerOutboxService;
     }
 
     @Override
@@ -200,6 +204,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         recordOrderAction(order.getId(), "SERVICE_FINISH", fromStatus, OrderStatus.COMPLETED.name(),
                 operatorUserId, "服务完成");
         orderSettlementService.settleCompletedOrder(order.getId());
+        schedulerOutboxService.enqueueFulfillmentEvent(order, planOrder, "crm.order.used");
         return planOrder;
     }
 

@@ -138,6 +138,8 @@ ExternalDistributionPaidOrder → Customer → Order(paid) → PlanOrder
   - DOUYIN_CLUE_INCREMENTAL：抖音客资增量拉取，只进入 Clue
   - DISTRIBUTION_OUTBOX_PROCESS：处理履约状态 Outbox 回推队列
   - DISTRIBUTION_EXCEPTION_RETRY：处理分销异常重试队列
+  - DISTRIBUTION_STATUS_CHECK：回查外部分销订单状态，发现取消 / 退款状态后转成入站事件重放
+  - DISTRIBUTION_RECONCILE_PULL：拉取外部分销对账记录，统一转成入站事件处理
 - Distribution 调度任务只能处理队列、重试、补偿和对账，不允许直接写 Customer / Order / PlanOrder
 
 ---
@@ -188,6 +190,9 @@ ExternalDistributionPaidOrder → Customer → Order(paid) → PlanOrder
 - 异常队列重试必须由 Scheduler 以可信重放方式重新调用 DistributionEventIngestService
 - 可信重放可以跳过外部请求签名头校验，但仍必须保留 partner_code、idempotency_key、raw_data、callback log
 - 重放成功后异常记录标记为 HANDLED；重放失败后回到 OPEN，等待人工修复配置或数据后再次入队
+- 分销状态回查 / 对账拉取只能读取外部状态或本地 MOCK 数据；如需改变订单状态，必须生成 distribution.order.* 事件并调用 DistributionEventIngestService.replayFromScheduler
+- 分销状态回查 / 对账拉取不得直接更新 Customer / Order / PlanOrder；paid 事件可由对账拉取创建或匹配 Customer + Order(paid)，本地已有订单的 paid 状态回查视为无变化
+- LIVE 模式下分销状态回查、对账拉取接口路径必须可配置；MOCK 模式必须可独立运行，便于联调和回归测试
 
 ---
 

@@ -267,6 +267,8 @@ public class SchedulerIntegrationSchemaInitializer {
         columns.put("base_url", "base_url VARCHAR(255)");
         columns.put("token_url", "token_url VARCHAR(255)");
         columns.put("endpoint_path", "endpoint_path VARCHAR(255)");
+        columns.put("status_query_path", "status_query_path VARCHAR(255)");
+        columns.put("reconciliation_pull_path", "reconciliation_pull_path VARCHAR(255)");
         columns.put("voucher_prepare_path", "voucher_prepare_path VARCHAR(255)");
         columns.put("voucher_verify_path", "voucher_verify_path VARCHAR(255)");
         columns.put("voucher_cancel_path", "voucher_cancel_path VARCHAR(255)");
@@ -285,6 +287,7 @@ public class SchedulerIntegrationSchemaInitializer {
         columns.put("refund_notify_url_field", "refund_notify_url_field VARCHAR(64)");
         columns.put("refund_amount_unit", "refund_amount_unit VARCHAR(16)");
         columns.put("refund_status_mapping", "refund_status_mapping VARCHAR(255)");
+        columns.put("status_mapping", "status_mapping VARCHAR(512)");
         columns.put("client_key", "client_key VARCHAR(128)");
         columns.put("client_secret", "client_secret VARCHAR(255)");
         columns.put("redirect_uri", "redirect_uri VARCHAR(255)");
@@ -491,6 +494,9 @@ public class SchedulerIntegrationSchemaInitializer {
                         execution_mode = COALESCE(NULLIF(execution_mode, ''), 'MOCK'),
                         auth_type = COALESCE(NULLIF(auth_type, ''), 'HMAC_SHA256'),
                         endpoint_path = ?,
+                        status_query_path = COALESCE(status_query_path, ?),
+                        reconciliation_pull_path = COALESCE(reconciliation_pull_path, ?),
+                        status_mapping = COALESCE(status_mapping, 'paid=distribution.order.paid,cancelled=distribution.order.cancelled,refund_pending=distribution.order.refund_pending,refunded=distribution.order.refunded'),
                         enabled = COALESCE(enabled, 1),
                         remark = ?,
                         updated_at = ?
@@ -498,6 +504,8 @@ public class SchedulerIntegrationSchemaInitializer {
                     """,
                     DISTRIBUTION_PROVIDER_NAME,
                     DISTRIBUTION_EVENT_ENDPOINT,
+                    DISTRIBUTION_STATUS_QUERY_PATH,
+                    DISTRIBUTION_RECONCILIATION_PULL_PATH,
                     "SeedCRM 方案B：只承接外部分销已支付订单，匹配/创建 Customer 并创建 Order(paid)，不进入 Clue，资金流由外部系统处理",
                     now,
                     DISTRIBUTION_PROVIDER_CODE);
@@ -506,10 +514,11 @@ public class SchedulerIntegrationSchemaInitializer {
         jdbcTemplate.update("""
                 INSERT INTO integration_provider_config(
                     provider_code, provider_name, module_code, execution_mode, auth_type,
-                    endpoint_path, page_size, pull_window_minutes, overlap_minutes, request_timeout_ms,
+                    endpoint_path, status_query_path, reconciliation_pull_path, status_mapping,
+                    page_size, pull_window_minutes, overlap_minutes, request_timeout_ms,
                     enabled, remark, auth_status, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 DISTRIBUTION_PROVIDER_CODE,
                 DISTRIBUTION_PROVIDER_NAME,
@@ -517,6 +526,9 @@ public class SchedulerIntegrationSchemaInitializer {
                 "MOCK",
                 "HMAC_SHA256",
                 DISTRIBUTION_EVENT_ENDPOINT,
+                DISTRIBUTION_STATUS_QUERY_PATH,
+                DISTRIBUTION_RECONCILIATION_PULL_PATH,
+                "paid=distribution.order.paid,cancelled=distribution.order.cancelled,refund_pending=distribution.order.refund_pending,refunded=distribution.order.refunded",
                 30,
                 60,
                 10,
@@ -554,5 +566,25 @@ public class SchedulerIntegrationSchemaInitializer {
                 WHERE job_code = ?
                   AND (provider_id IS NULL OR provider_id = 0)
                 """, providerId, "DOUYIN_CLUE_INCREMENTAL");
+        Long distributionProviderId = jdbcTemplate.queryForObject("""
+                SELECT id
+                FROM integration_provider_config
+                WHERE provider_code = ?
+                LIMIT 1
+                """, Long.class, DISTRIBUTION_PROVIDER_CODE);
+        if (distributionProviderId == null) {
+            return;
+        }
+        jdbcTemplate.update("""
+                UPDATE scheduler_job
+                SET provider_id = ?
+                WHERE job_code IN (?, ?, ?, ?)
+                  AND (provider_id IS NULL OR provider_id = 0)
+                """,
+                distributionProviderId,
+                "DISTRIBUTION_OUTBOX_PROCESS",
+                "DISTRIBUTION_EXCEPTION_RETRY",
+                "DISTRIBUTION_STATUS_CHECK",
+                "DISTRIBUTION_RECONCILE_PULL");
     }
 }

@@ -44,12 +44,12 @@ public final class AuthAccessCatalog {
             menu(25, "系统管理", "角色管理", "/system/roles", "SYSTEM", "system:role:update", "ADMIN"),
             menu(26, "系统设置 / 基础配置", "域名配置", "/settings/base/domain", "SETTING", "setting:domain:update", "ADMIN"),
             menu(27, "系统设置 / 基础配置", "菜单管理", "/settings/menu", "SETTING", "setting:menu:update", "ADMIN"),
-            menu(28, "系统设置 / 调度中心", "抖音接口", "/settings/integration/third-party", "SETTING", "setting:douyin:update", "ADMIN"),
-            menu(29, "系统设置 / 调度中心", "回调接口", "/settings/integration/callback", "SETTING", "setting:callback:update", "ADMIN"),
-            menu(30, "系统设置 / 调度中心", "任务调度", "/settings/integration/jobs", "SETTING", "setting:scheduler:update", "ADMIN"),
-            menu(31, "系统设置 / 调度中心", "接口调试", "/settings/integration/debug", "SETTING", "setting:debug:update", "ADMIN"),
-            menu(32, "系统设置 / 调度中心", "对外接口", "/settings/integration/public-api", "SETTING", "setting:public-api:update", "ADMIN"),
-            menu(33, "系统设置 / 调度中心", "分销接口", "/settings/integration/distribution-api", "SETTING", "setting:distribution-api:update", "ADMIN"),
+            menu(28, "系统设置 / 调度中心", "抖音接口", "/settings/integration/third-party", "SETTING", "setting:douyin:update", "ADMIN", "INTEGRATION_ADMIN"),
+            menu(29, "系统设置 / 调度中心", "回调接口", "/settings/integration/callback", "SETTING", "setting:callback:update", "ADMIN", "INTEGRATION_ADMIN", "INTEGRATION_OPERATOR"),
+            menu(30, "系统设置 / 调度中心", "任务调度", "/settings/integration/jobs", "SETTING", "setting:scheduler:update", "ADMIN", "INTEGRATION_ADMIN", "INTEGRATION_OPERATOR"),
+            menu(31, "系统设置 / 调度中心", "接口调试", "/settings/integration/debug", "SETTING", "setting:debug:update", "ADMIN", "INTEGRATION_ADMIN", "INTEGRATION_OPERATOR"),
+            menu(32, "系统设置 / 调度中心", "对外接口", "/settings/integration/public-api", "SETTING", "setting:public-api:update", "ADMIN", "INTEGRATION_ADMIN"),
+            menu(33, "系统设置 / 调度中心", "分销接口", "/settings/integration/distribution-api", "SETTING", "setting:distribution-api:update", "ADMIN", "INTEGRATION_ADMIN", "INTEGRATION_OPERATOR"),
             menu(34, "系统设置 / 基础配置", "字典管理", "/settings/dictionaries", "SETTING", "setting:dictionary:update", "ADMIN"),
             menu(35, "系统设置 / 基础配置", "参数管理", "/settings/parameters", "SETTING", "setting:parameter:update", "ADMIN"),
             menu(36, "系统设置 / 基础配置", "支付设置", "/settings/payment", "SETTING", "setting:payment:update", "ADMIN"),
@@ -76,7 +76,10 @@ public final class AuthAccessCatalog {
                 new RoleSeed("MAKEUP_ARTIST", "化妆师", "STORE", "STORE", 70),
                 new RoleSeed("PHOTO_SELECTOR", "选片负责人", "STORE", "STORE", 80),
                 new RoleSeed("FINANCE", "财务", "ALL", "FINANCE", 90),
-                new RoleSeed("PRIVATE_DOMAIN_SERVICE", "私域客服", "SELF", "BUSINESS", 100)
+                new RoleSeed("PRIVATE_DOMAIN_SERVICE", "私域客服", "SELF", "BUSINESS", 100),
+                new RoleSeed("INTEGRATION_ADMIN", "集成管理员", "ALL", "SYSTEM", 110),
+                new RoleSeed("INTEGRATION_OPERATOR", "集成操作员", "ALL", "SYSTEM", 120),
+                new RoleSeed("PARTNER_APP", "外部伙伴应用", "PARTNER", "OPEN_API", 130)
         );
     }
 

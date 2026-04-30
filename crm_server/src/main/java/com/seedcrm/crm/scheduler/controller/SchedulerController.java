@@ -5,6 +5,7 @@ import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
 import com.seedcrm.crm.permission.support.SchedulerModuleGuard;
 import com.seedcrm.crm.scheduler.dto.SchedulerJobUpsertRequest;
+import com.seedcrm.crm.scheduler.dto.DistributionReconciliationDtos.DistributionReconciliationResult;
 import com.seedcrm.crm.scheduler.dto.SchedulerCallbackDebugRequest;
 import com.seedcrm.crm.scheduler.dto.SchedulerInterfaceDebugRequest;
 import com.seedcrm.crm.scheduler.dto.SchedulerQueueActionRequest;
@@ -19,10 +20,12 @@ import com.seedcrm.crm.scheduler.entity.SchedulerJobLog;
 import com.seedcrm.crm.scheduler.entity.SchedulerOutboxEvent;
 import com.seedcrm.crm.scheduler.service.DistributionExceptionService;
 import com.seedcrm.crm.scheduler.service.DistributionExceptionRetryService;
+import com.seedcrm.crm.scheduler.service.DistributionReconciliationService;
 import com.seedcrm.crm.scheduler.service.SchedulerIntegrationService;
 import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
 import com.seedcrm.crm.scheduler.service.SchedulerService;
 import com.seedcrm.crm.scheduler.service.impl.DistributionEventDryRunService;
+import com.seedcrm.crm.scheduler.support.SchedulerSensitiveDataMasker;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.LinkedHashMap;
@@ -45,8 +48,10 @@ public class SchedulerController {
     private final SchedulerOutboxService schedulerOutboxService;
     private final DistributionExceptionService distributionExceptionService;
     private final DistributionExceptionRetryService distributionExceptionRetryService;
+    private final DistributionReconciliationService distributionReconciliationService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
     private final SchedulerModuleGuard schedulerModuleGuard;
+    private final SchedulerSensitiveDataMasker schedulerSensitiveDataMasker;
 
     public SchedulerController(SchedulerService schedulerService,
                                SchedulerIntegrationService schedulerIntegrationService,
@@ -54,16 +59,20 @@ public class SchedulerController {
                                SchedulerOutboxService schedulerOutboxService,
                                DistributionExceptionService distributionExceptionService,
                                DistributionExceptionRetryService distributionExceptionRetryService,
+                               DistributionReconciliationService distributionReconciliationService,
                                PermissionRequestContextResolver permissionRequestContextResolver,
-                               SchedulerModuleGuard schedulerModuleGuard) {
+                               SchedulerModuleGuard schedulerModuleGuard,
+                               SchedulerSensitiveDataMasker schedulerSensitiveDataMasker) {
         this.schedulerService = schedulerService;
         this.schedulerIntegrationService = schedulerIntegrationService;
         this.distributionEventDryRunService = distributionEventDryRunService;
         this.schedulerOutboxService = schedulerOutboxService;
         this.distributionExceptionService = distributionExceptionService;
         this.distributionExceptionRetryService = distributionExceptionRetryService;
+        this.distributionReconciliationService = distributionReconciliationService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
         this.schedulerModuleGuard = schedulerModuleGuard;
+        this.schedulerSensitiveDataMasker = schedulerSensitiveDataMasker;
     }
 
     @GetMapping("/jobs")
@@ -118,7 +127,9 @@ public class SchedulerController {
                                                                                     HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkView(context);
-        return ApiResponse.success(distributionExceptionService.list(status));
+        return ApiResponse.success(schedulerSensitiveDataMasker.maskDistributionExceptions(
+                distributionExceptionService.list(status),
+                context));
     }
 
     @PostMapping("/distribution/exceptions/retry")
@@ -143,6 +154,22 @@ public class SchedulerController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkTrigger(context);
         return ApiResponse.success(distributionExceptionRetryService.processRetryQueue(limit == null ? 10 : limit));
+    }
+
+    @PostMapping("/distribution/status-check/process")
+    public ApiResponse<List<DistributionReconciliationResult>> processDistributionStatusCheck(@RequestParam(required = false) Integer limit,
+                                                                                              HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        schedulerModuleGuard.checkTrigger(context);
+        return ApiResponse.success(distributionReconciliationService.checkOrderStatus(limit == null ? 20 : limit));
+    }
+
+    @PostMapping("/distribution/reconcile/process")
+    public ApiResponse<List<DistributionReconciliationResult>> processDistributionReconciliation(@RequestParam(required = false) Integer limit,
+                                                                                                HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        schedulerModuleGuard.checkTrigger(context);
+        return ApiResponse.success(distributionReconciliationService.pullReconciliation(limit == null ? 20 : limit));
     }
 
     @GetMapping("/providers")
@@ -180,7 +207,9 @@ public class SchedulerController {
                                                                            HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkView(context);
-        return ApiResponse.success(schedulerIntegrationService.listCallbackLogs(providerCode));
+        return ApiResponse.success(schedulerSensitiveDataMasker.maskCallbackLogs(
+                schedulerIntegrationService.listCallbackLogs(providerCode),
+                context));
     }
 
     @PostMapping("/callback/save")

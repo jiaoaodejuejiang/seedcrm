@@ -30,6 +30,12 @@ public class DistributionExceptionRecord {
     @TableField("external_order_id")
     private String externalOrderId;
 
+    @TableField("related_order_id")
+    private Long relatedOrderId;
+
+    @TableField("related_order_no")
+    private String relatedOrderNo;
+
     @TableField("external_member_id")
     private String externalMemberId;
 
@@ -41,6 +47,9 @@ public class DistributionExceptionRecord {
 
     @TableField("error_message")
     private String errorMessage;
+
+    @TableField("conflict_detail_json")
+    private String conflictDetailJson;
 
     @TableField("raw_payload")
     private String rawPayload;

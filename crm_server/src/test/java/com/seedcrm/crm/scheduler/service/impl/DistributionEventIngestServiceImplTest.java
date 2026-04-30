@@ -19,6 +19,7 @@ import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
 import com.seedcrm.crm.scheduler.mapper.IntegrationCallbackEventLogMapper;
 import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
 import com.seedcrm.crm.scheduler.service.DistributionExceptionService;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -135,6 +136,95 @@ class DistributionEventIngestServiceImplTest {
     }
 
     @Test
+    void shouldRefreshExistingExternalOrderWhenDuplicatePaidPayloadIsConsistent() throws Exception {
+        when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
+        when(eventLogMapper.selectOne(any())).thenReturn(null);
+        Order existingOrder = existingDistributionOrder();
+        existingOrder.setExternalTradeNo(null);
+        existingOrder.setRawData("old-raw");
+        when(orderMapper.selectOne(any())).thenReturn(existingOrder);
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        DistributionEventResponse response = service.ingest(readPayload(), request("idem-existing-001"));
+
+        assertThat(response.getIdempotencyResult()).isEqualTo("EXISTING");
+        assertThat(response.getCustomerId()).isEqualTo(101L);
+        assertThat(response.getOrderId()).isEqualTo(202L);
+        verify(customerMapper, never()).insert(any(Customer.class));
+        verify(orderMapper, never()).insert(any(Order.class));
+
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderMapper).updateById(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getExternalTradeNo()).isEqualTo("pay_30001");
+        assertThat(orderCaptor.getValue().getRawData()).contains("\"externalOrderId\":\"o_20001\"");
+    }
+
+    @Test
+    void shouldQueueExceptionWhenDuplicatePaidOrderConflictsWithExistingSnapshot() throws Exception {
+        when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
+        when(eventLogMapper.selectOne(any())).thenReturn(null);
+        Order existingOrder = existingDistributionOrder();
+        existingOrder.setRawData("old-raw");
+        when(orderMapper.selectOne(any())).thenReturn(existingOrder);
+
+        DistributionEventResponse response = service.ingest(readConflictingPaidPayload(), request("idem-conflict-001"));
+
+        assertThat(response.getIdempotencyResult()).isEqualTo("EXCEPTION_QUEUED");
+        assertThat(response.getProcessStatus()).isEqualTo("SUCCESS");
+        assertThat(response.getCustomerId()).isEqualTo(101L);
+        assertThat(response.getOrderId()).isEqualTo(202L);
+        assertThat(existingOrder.getRawData()).isEqualTo("old-raw");
+        verify(customerMapper, never()).insert(any(Customer.class));
+        verify(orderMapper, never()).insert(any(Order.class));
+        verify(orderMapper, never()).updateById(any(Order.class));
+        verify(distributionExceptionService).recordFailure(
+                org.mockito.ArgumentMatchers.eq("DISTRIBUTION"),
+                any(),
+                any(),
+                any(),
+                org.mockito.ArgumentMatchers.eq("idem-conflict-001"),
+                org.mockito.ArgumentMatchers.eq("EXTERNAL_ORDER_CONFLICT"),
+                org.mockito.ArgumentMatchers.contains("amount"),
+                org.mockito.ArgumentMatchers.eq(202L),
+                org.mockito.ArgumentMatchers.eq("ORD-DIST-202"),
+                org.mockito.ArgumentMatchers.contains("\"field\":\"amount\""));
+
+        ArgumentCaptor<IntegrationCallbackEventLog> logCaptor = ArgumentCaptor.forClass(IntegrationCallbackEventLog.class);
+        verify(eventLogWriter).write(logCaptor.capture());
+        assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("SUCCESS");
+        assertThat(logCaptor.getValue().getIdempotencyStatus()).isEqualTo("EXCEPTION_QUEUED");
+        assertThat(logCaptor.getValue().getRelatedOrderId()).isEqualTo(202L);
+    }
+
+    @Test
+    void shouldReevaluatePreviouslyQueuedExceptionEventInsteadOfTreatingItAsDuplicate() throws Exception {
+        when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
+        IntegrationCallbackEventLog queued = new IntegrationCallbackEventLog();
+        queued.setProcessStatus("SUCCESS");
+        queued.setIdempotencyStatus("EXCEPTION_QUEUED");
+        queued.setRelatedCustomerId(101L);
+        queued.setRelatedOrderId(202L);
+        when(eventLogMapper.selectOne(any())).thenReturn(queued);
+        when(orderMapper.selectOne(any())).thenReturn(existingDistributionOrder());
+
+        DistributionEventResponse response = service.ingest(readConflictingPaidPayload(), request("idem-conflict-001"));
+
+        assertThat(response.getIdempotencyResult()).isEqualTo("EXCEPTION_QUEUED");
+        verify(orderMapper).selectOne(any());
+        verify(distributionExceptionService).recordFailure(
+                org.mockito.ArgumentMatchers.eq("DISTRIBUTION"),
+                any(),
+                any(),
+                any(),
+                org.mockito.ArgumentMatchers.eq("idem-conflict-001"),
+                org.mockito.ArgumentMatchers.eq("EXTERNAL_ORDER_CONFLICT"),
+                org.mockito.ArgumentMatchers.contains("duplicate external order conflict"),
+                org.mockito.ArgumentMatchers.eq(202L),
+                org.mockito.ArgumentMatchers.eq("ORD-DIST-202"),
+                org.mockito.ArgumentMatchers.contains("\"field\":\"amount\""));
+    }
+
+    @Test
     void shouldRejectOrderStatusEventWithoutExistingExternalOrderAndKeepFailureLog() throws Exception {
         when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
         when(eventLogMapper.selectOne(any())).thenReturn(null);
@@ -159,6 +249,50 @@ class DistributionEventIngestServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("idem-refund-001"),
                 org.mockito.ArgumentMatchers.eq("INGEST_FAILED"),
                 org.mockito.ArgumentMatchers.contains("external order does not exist"));
+    }
+
+    @Test
+    void shouldQueueManualHandlingWhenExternalRefundConflictsWithCompletedOrder() throws Exception {
+        when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
+        when(eventLogMapper.selectOne(any())).thenReturn(null);
+        Order existingOrder = new Order();
+        existingOrder.setId(202L);
+        existingOrder.setCustomerId(101L);
+        existingOrder.setStatus("COMPLETED");
+        existingOrder.setExternalPartnerCode("DISTRIBUTION");
+        existingOrder.setExternalOrderId("o_20001");
+        when(orderMapper.selectOne(any())).thenReturn(existingOrder);
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        DistributionEventResponse response = service.ingest(readRefundedPayload(), request("idem-refunded-completed-001"));
+
+        assertThat(response.getIdempotencyResult()).isEqualTo("EXCEPTION_QUEUED");
+        assertThat(response.getProcessStatus()).isEqualTo("SUCCESS");
+        assertThat(response.getOrderId()).isEqualTo(202L);
+
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderMapper).updateById(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getStatus()).isEqualTo("COMPLETED");
+        assertThat(orderCaptor.getValue().getRefundStatus()).isEqualTo("refunded");
+        assertThat(orderCaptor.getValue().getExternalStatus()).isEqualTo("refunded");
+
+        verify(distributionExceptionService).recordFailure(
+                org.mockito.ArgumentMatchers.eq("DISTRIBUTION"),
+                any(),
+                any(),
+                any(),
+                org.mockito.ArgumentMatchers.eq("idem-refunded-completed-001"),
+                org.mockito.ArgumentMatchers.eq("EXTERNAL_STATUS_CONFLICT"),
+                org.mockito.ArgumentMatchers.contains("COMPLETED"),
+                org.mockito.ArgumentMatchers.eq(202L),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.contains("\"field\":\"status\""));
+
+        ArgumentCaptor<IntegrationCallbackEventLog> logCaptor = ArgumentCaptor.forClass(IntegrationCallbackEventLog.class);
+        verify(eventLogWriter).write(logCaptor.capture());
+        assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("SUCCESS");
+        assertThat(logCaptor.getValue().getIdempotencyStatus()).isEqualTo("EXCEPTION_QUEUED");
+        assertThat(logCaptor.getValue().getRelatedOrderId()).isEqualTo(202L);
     }
 
     @Test
@@ -287,6 +421,37 @@ class DistributionEventIngestServiceImplTest {
                 """);
     }
 
+    private JsonNode readConflictingPaidPayload() throws Exception {
+        return objectMapper.readTree("""
+                {
+                  "eventType": "distribution.order.paid",
+                  "eventId": "evt_conflict_001",
+                  "partnerCode": "DISTRIBUTION",
+                  "occurredAt": "2026-04-29T10:00:00+08:00",
+                  "member": {
+                    "externalMemberId": "m_conflict_001",
+                    "name": "Li Si",
+                    "phone": "13900000000",
+                    "role": "member"
+                  },
+                  "promoter": {
+                    "externalPromoterId": "p_90002",
+                    "role": "leader"
+                  },
+                  "order": {
+                    "externalOrderId": "o_20001",
+                    "externalTradeNo": "pay_conflict_001",
+                    "type": "deposit",
+                    "amount": 29900,
+                    "paidAt": "2026-04-29T09:58:00+08:00",
+                    "storeCode": "store_001",
+                    "status": "paid"
+                  },
+                  "rawData": {}
+                }
+                """);
+    }
+
     private JsonNode readRefundPendingPayload() throws Exception {
         return objectMapper.readTree("""
                 {
@@ -305,6 +470,26 @@ class DistributionEventIngestServiceImplTest {
                 """);
     }
 
+    private JsonNode readRefundedPayload() throws Exception {
+        return objectMapper.readTree("""
+                {
+                  "eventType": "distribution.order.refunded",
+                  "eventId": "evt_refunded_001",
+                  "partnerCode": "DISTRIBUTION",
+                  "occurredAt": "2026-04-29T10:00:00+08:00",
+                  "order": {
+                    "externalOrderId": "o_20001",
+                    "externalTradeNo": "pay_30001",
+                    "refundStatus": "refunded",
+                    "status": "refunded",
+                    "refundAmount": 19900,
+                    "refundAt": "2026-04-29T10:00:00+08:00"
+                  },
+                  "rawData": {}
+                }
+                """);
+    }
+
     private IntegrationProviderConfig distributionProvider() {
         IntegrationProviderConfig provider = new IntegrationProviderConfig();
         provider.setId(1L);
@@ -313,6 +498,23 @@ class DistributionEventIngestServiceImplTest {
         provider.setExecutionMode("MOCK");
         provider.setEnabled(1);
         return provider;
+    }
+
+    private Order existingDistributionOrder() {
+        Order order = new Order();
+        order.setId(202L);
+        order.setOrderNo("ORD-DIST-202");
+        order.setCustomerId(101L);
+        order.setExternalPartnerCode("DISTRIBUTION");
+        order.setExternalOrderId("o_20001");
+        order.setExternalTradeNo("pay_30001");
+        order.setExternalMemberId("m_10001");
+        order.setExternalPromoterId("p_90001");
+        order.setType(2);
+        order.setAmount(new BigDecimal("199.00"));
+        order.setStatus("PAID_DEPOSIT");
+        order.setExternalStatus("paid");
+        return order;
     }
 
     private IntegrationProviderConfig liveDistributionProvider(String secret) {

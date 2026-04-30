@@ -14,6 +14,7 @@ import com.seedcrm.crm.scheduler.mapper.SchedulerJobAuditLogMapper;
 import com.seedcrm.crm.scheduler.mapper.SchedulerJobLogMapper;
 import com.seedcrm.crm.scheduler.mapper.SchedulerJobMapper;
 import com.seedcrm.crm.scheduler.service.DistributionExceptionRetryService;
+import com.seedcrm.crm.scheduler.service.DistributionReconciliationService;
 import com.seedcrm.crm.scheduler.service.SchedulerIntegrationService;
 import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
 import java.time.LocalDateTime;
@@ -48,13 +49,17 @@ class SchedulerServiceImplTest {
     @Mock
     private DistributionExceptionRetryService distributionExceptionRetryService;
 
+    @Mock
+    private DistributionReconciliationService distributionReconciliationService;
+
     private SchedulerServiceImpl schedulerService;
 
     @BeforeEach
     void setUp() {
         schedulerService = new SchedulerServiceImpl(
                 schedulerJobMapper, schedulerJobLogMapper, schedulerJobAuditLogMapper, douyinClueSyncService,
-                schedulerIntegrationService, schedulerOutboxService, distributionExceptionRetryService);
+                schedulerIntegrationService, schedulerOutboxService, distributionExceptionRetryService,
+                distributionReconciliationService);
     }
 
     @Test
@@ -332,6 +337,62 @@ class SchedulerServiceImplTest {
         assertThat(queuedLog.getStatus()).isEqualTo("SUCCESS");
         assertThat(queuedLog.getImportedCount()).isEqualTo(1);
         verify(distributionExceptionRetryService).processRetryQueue(10);
+        verify(schedulerJobLogMapper).updateById(queuedLog);
+    }
+
+    @Test
+    void shouldExecuteDistributionStatusCheckJobFromQueue() {
+        SchedulerJob job = new SchedulerJob();
+        job.setId(4L);
+        job.setJobCode("DISTRIBUTION_STATUS_CHECK");
+        job.setModuleCode("DISTRIBUTION");
+        job.setStatus("ENABLED");
+        job.setRetryLimit(3);
+        SchedulerJobLog queuedLog = new SchedulerJobLog();
+        queuedLog.setId(400L);
+        queuedLog.setJobCode("DISTRIBUTION_STATUS_CHECK");
+        queuedLog.setStatus("QUEUED");
+        queuedLog.setRetryCount(0);
+
+        when(schedulerJobLogMapper.selectList(any())).thenReturn(List.of(queuedLog));
+        when(schedulerJobMapper.selectOne(any())).thenReturn(job);
+        when(schedulerJobLogMapper.update(any(), any())).thenReturn(1);
+        when(distributionReconciliationService.checkOrderStatus(20))
+                .thenReturn(List.of(new com.seedcrm.crm.scheduler.dto.DistributionReconciliationDtos.DistributionReconciliationResult()));
+
+        schedulerService.processQueuedLogs();
+
+        assertThat(queuedLog.getStatus()).isEqualTo("SUCCESS");
+        assertThat(queuedLog.getImportedCount()).isEqualTo(1);
+        verify(distributionReconciliationService).checkOrderStatus(20);
+        verify(schedulerJobLogMapper).updateById(queuedLog);
+    }
+
+    @Test
+    void shouldExecuteDistributionReconcilePullJobFromQueue() {
+        SchedulerJob job = new SchedulerJob();
+        job.setId(5L);
+        job.setJobCode("DISTRIBUTION_RECONCILE_PULL");
+        job.setModuleCode("DISTRIBUTION");
+        job.setStatus("ENABLED");
+        job.setRetryLimit(3);
+        SchedulerJobLog queuedLog = new SchedulerJobLog();
+        queuedLog.setId(500L);
+        queuedLog.setJobCode("DISTRIBUTION_RECONCILE_PULL");
+        queuedLog.setStatus("QUEUED");
+        queuedLog.setRetryCount(0);
+
+        when(schedulerJobLogMapper.selectList(any())).thenReturn(List.of(queuedLog));
+        when(schedulerJobMapper.selectOne(any())).thenReturn(job);
+        when(schedulerJobLogMapper.update(any(), any())).thenReturn(1);
+        when(distributionReconciliationService.pullReconciliation(20))
+                .thenReturn(List.of(new com.seedcrm.crm.scheduler.dto.DistributionReconciliationDtos.DistributionReconciliationResult()));
+
+        schedulerService.processQueuedLogs();
+
+        assertThat(queuedLog.getStatus()).isEqualTo("SUCCESS");
+        assertThat(queuedLog.getImportedCount()).isEqualTo(1);
+        verify(distributionReconciliationService).pullReconciliation(20);
         verify(schedulerJobLogMapper).updateById(queuedLog);
     }
 }

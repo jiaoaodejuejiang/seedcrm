@@ -15,6 +15,27 @@ public interface DistributionExceptionService {
                        String errorCode,
                        String errorMessage);
 
+    void recordFailure(String partnerCode,
+                       DistributionEventRequest event,
+                       String rawPayload,
+                       String traceId,
+                       String idempotencyKey,
+                       String errorCode,
+                       String errorMessage,
+                       Long relatedOrderId,
+                       String relatedOrderNo);
+
+    void recordFailure(String partnerCode,
+                       DistributionEventRequest event,
+                       String rawPayload,
+                       String traceId,
+                       String idempotencyKey,
+                       String errorCode,
+                       String errorMessage,
+                       Long relatedOrderId,
+                       String relatedOrderNo,
+                       String conflictDetailJson);
+
     List<DistributionExceptionRecord> list(String status);
 
     DistributionExceptionRecord retry(Long id, PermissionRequestContext context, String remark);

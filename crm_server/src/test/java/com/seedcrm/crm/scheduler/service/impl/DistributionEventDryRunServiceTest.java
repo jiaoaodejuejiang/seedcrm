@@ -6,12 +6,14 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.customer.mapper.CustomerMapper;
+import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.scheduler.dto.SchedulerInterfaceDebugRequest;
 import com.seedcrm.crm.scheduler.entity.IntegrationCallbackEventLog;
 import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
 import com.seedcrm.crm.scheduler.mapper.IntegrationCallbackEventLogMapper;
 import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -88,6 +90,55 @@ class DistributionEventDryRunServiceTest {
         assertThat(idempotency).containsEntry("idempotencyResult", "DUPLICATE");
     }
 
+    @Test
+    void shouldPreviewDuplicateExternalOrderConflict() {
+        when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
+        when(customerMapper.selectOne(any())).thenReturn(null);
+        Order existingOrder = new Order();
+        existingOrder.setId(202L);
+        existingOrder.setExternalTradeNo("pay_30001");
+        existingOrder.setExternalMemberId("m_10001");
+        existingOrder.setType(2);
+        existingOrder.setAmount(new BigDecimal("99.00"));
+        existingOrder.setStatus("PAID_DEPOSIT");
+        when(orderMapper.selectOne(any())).thenReturn(existingOrder);
+        when(eventLogMapper.selectOne(any())).thenReturn(null);
+
+        Map<String, Object> result = service.dryRun(request());
+
+        Map<String, Object> idempotency = castMap(result.get("orderIdempotency"));
+        assertThat(idempotency).containsEntry("orderExists", true);
+        assertThat(idempotency).containsEntry("idempotencyResult", "EXCEPTION_QUEUED");
+        assertThat(idempotency.get("conflicts")).asList().anySatisfy(item ->
+                assertThat(item).asString().contains("amount"));
+    }
+
+    @Test
+    void shouldPreviewDistributionStatusCheckWithoutWritingBusinessTables() {
+        IntegrationProviderConfig provider = distributionProvider();
+        provider.setStatusQueryPath("/open/distribution/orders/status");
+        provider.setStatusMapping("refund_success=distribution.order.refunded");
+        when(providerConfigMapper.selectOne(any())).thenReturn(provider);
+
+        Map<String, Object> result = service.dryRun(statusCheckRequest());
+
+        assertThat(result).containsEntry("dryRun", true);
+        assertThat(result).containsEntry("success", true);
+        assertThat(result.get("message")).asString().contains("不写核心业务表");
+
+        Map<String, Object> schedulerJob = castMap(result.get("schedulerJob"));
+        assertThat(schedulerJob).containsEntry("jobCode", "DISTRIBUTION_STATUS_CHECK");
+        assertThat(schedulerJob).containsEntry("controllerEndpoint", "/scheduler/distribution/status-check/process");
+
+        Map<String, Object> fieldMapping = castMap(result.get("fieldMapping"));
+        assertThat(fieldMapping).containsEntry("externalOrderId", "o_status_001");
+        assertThat(fieldMapping).containsEntry("mappedEventType", "distribution.order.refunded");
+
+        Map<String, Object> willExecute = castMap(result.get("willExecute"));
+        assertThat(willExecute).containsEntry("directWriteCustomerOrderPlanOrder", false);
+        assertThat(willExecute).containsEntry("replayThrough", "DistributionEventIngestService.replayFromScheduler");
+    }
+
     @SuppressWarnings("unchecked")
     private Map<String, Object> castMap(Object value) {
         return (Map<String, Object>) value;
@@ -127,6 +178,21 @@ class DistributionEventDryRunServiceTest {
                     "status": "paid"
                   },
                   "rawData": {}
+                }
+                """);
+        return request;
+    }
+
+    private SchedulerInterfaceDebugRequest statusCheckRequest() {
+        SchedulerInterfaceDebugRequest request = new SchedulerInterfaceDebugRequest();
+        request.setMode("MOCK");
+        request.setProviderCode("DISTRIBUTION");
+        request.setInterfaceCode("DISTRIBUTION_STATUS_CHECK");
+        request.setPath("/open/distribution/orders/status");
+        request.setPayload("""
+                {
+                  "externalOrderId": "o_status_001",
+                  "status": "refund_success"
                 }
                 """);
         return request;

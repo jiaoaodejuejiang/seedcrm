@@ -174,6 +174,14 @@ public class PermissionSchemaInitializer {
         seedPolicy("SCHEDULER", "UPDATE", "ADMIN", "ALL", "scheduler admin config");
         seedPolicy("SCHEDULER", "TRIGGER", "ADMIN", "ALL", "scheduler admin trigger");
         seedPolicy("SCHEDULER", "DEBUG", "ADMIN", "ALL", "scheduler callback and interface debug");
+        seedPolicy("SCHEDULER", "VIEW", "INTEGRATION_ADMIN", "ALL", "integration config and queue monitor");
+        seedPolicy("SCHEDULER", "UPDATE", "INTEGRATION_ADMIN", "ALL", "integration provider, callback, mapping and scheduler config");
+        seedPolicy("SCHEDULER", "TRIGGER", "INTEGRATION_ADMIN", "ALL", "integration queue processing and retry");
+        seedPolicy("SCHEDULER", "DEBUG", "INTEGRATION_ADMIN", "ALL", "integration callback and interface debug");
+        seedPolicy("SCHEDULER", "VIEW", "INTEGRATION_OPERATOR", "ALL", "integration logs and exception queue monitor");
+        seedPolicy("SCHEDULER", "TRIGGER", "INTEGRATION_OPERATOR", "ALL", "integration retry and queue processing without config update");
+        seedPolicy("SCHEDULER", "DEBUG", "INTEGRATION_OPERATOR", "ALL", "integration interface dry-run debug");
+        seedPolicy("SCHEDULER", "VIEW", "PARTNER_APP", "PARTNER", "partner scoped open api status");
         seedPolicy("WECOM", "VIEW", "PRIVATE_DOMAIN_SERVICE", "ALL", "wecom workspace");
         seedPolicy("WECOM", "UPDATE", "PRIVATE_DOMAIN_SERVICE", "ALL", "wecom workspace");
 

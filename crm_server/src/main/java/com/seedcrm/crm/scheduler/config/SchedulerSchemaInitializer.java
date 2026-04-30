@@ -171,10 +171,13 @@ public class SchedulerSchemaInitializer {
                     event_id VARCHAR(128),
                     idempotency_key VARCHAR(128),
                     external_order_id VARCHAR(128),
+                    related_order_id BIGINT,
+                    related_order_no VARCHAR(64),
                     external_member_id VARCHAR(128),
                     phone VARCHAR(32),
                     error_code VARCHAR(64),
                     error_message VARCHAR(512),
+                    conflict_detail_json LONGTEXT,
                     raw_payload LONGTEXT,
                     callback_log_trace_id VARCHAR(64),
                     handling_status VARCHAR(32) NOT NULL,
@@ -188,6 +191,7 @@ public class SchedulerSchemaInitializer {
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     KEY idx_distribution_exception_status (handling_status, created_at),
                     KEY idx_distribution_exception_order (partner_code, external_order_id),
+                    KEY idx_distribution_exception_related_order (related_order_id),
                     KEY idx_distribution_exception_idempotency (idempotency_key)
                 )
                 """;
@@ -282,10 +286,13 @@ public class SchedulerSchemaInitializer {
         columns.put("event_id", "event_id VARCHAR(128)");
         columns.put("idempotency_key", "idempotency_key VARCHAR(128)");
         columns.put("external_order_id", "external_order_id VARCHAR(128)");
+        columns.put("related_order_id", "related_order_id BIGINT");
+        columns.put("related_order_no", "related_order_no VARCHAR(64)");
         columns.put("external_member_id", "external_member_id VARCHAR(128)");
         columns.put("phone", "phone VARCHAR(32)");
         columns.put("error_code", "error_code VARCHAR(64)");
         columns.put("error_message", "error_message VARCHAR(512)");
+        columns.put("conflict_detail_json", "conflict_detail_json LONGTEXT");
         columns.put("raw_payload", "raw_payload LONGTEXT");
         columns.put("callback_log_trace_id", "callback_log_trace_id VARCHAR(64)");
         columns.put("handling_status", "handling_status VARCHAR(32) NOT NULL");
@@ -307,6 +314,10 @@ public class SchedulerSchemaInitializer {
                 "distribution-outbox", "/scheduler/outbox/process", "ENABLED");
         seedJobIfMissing("DISTRIBUTION_EXCEPTION_RETRY", "DISTRIBUTION", "INCREMENTAL", 1, 5,
                 "distribution-exception-retry", "/scheduler/distribution/exceptions/process", "ENABLED");
+        seedJobIfMissing("DISTRIBUTION_STATUS_CHECK", "DISTRIBUTION", "INCREMENTAL", 5, 5,
+                "distribution-status-check", "/scheduler/distribution/status-check/process", "ENABLED");
+        seedJobIfMissing("DISTRIBUTION_RECONCILE_PULL", "DISTRIBUTION", "INCREMENTAL", 10, 5,
+                "distribution-reconcile-pull", "/scheduler/distribution/reconcile/process", "ENABLED");
     }
 
     private void seedJobIfMissing(String jobCode,

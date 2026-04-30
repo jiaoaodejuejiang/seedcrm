@@ -66,6 +66,34 @@ class AuthServiceImplTest {
     }
 
     @Test
+    void integrationAdminShouldReceiveConfigAndSchedulerPermissions() {
+        String token = authService.login("integration_admin", "123456", null, null);
+
+        var user = authService.getUserOrThrow(token);
+
+        assertThat(user.getDefaultRoute()).isEqualTo("/settings/integration/third-party");
+        assertThat(user.getMenuRoutes())
+                .contains("/settings/integration/third-party", "/settings/integration/distribution-api", "/settings/integration/jobs");
+        assertThat(user.getAllowedModules()).contains("SETTING", "SCHEDULER");
+        assertThat(user.getPermissions()).contains("scheduler:view", "setting:distribution-api:update");
+    }
+
+    @Test
+    void integrationOperatorShouldReceiveMonitorAndRetryMenusWithoutConfigMenu() {
+        String token = authService.login("integration_operator", "123456", null, null);
+
+        var user = authService.getUserOrThrow(token);
+
+        assertThat(user.getDefaultRoute()).isEqualTo("/settings/integration/callback");
+        assertThat(user.getMenuRoutes())
+                .contains("/settings/integration/callback", "/settings/integration/debug", "/settings/integration/distribution-api")
+                .doesNotContain("/settings/integration/third-party", "/settings/integration/public-api");
+        assertThat(user.getAllowedModules()).contains("SETTING", "SCHEDULER");
+        assertThat(user.getPermissions()).contains("scheduler:view", "setting:distribution-api:update");
+        assertThat(user.getPermissions()).doesNotContain("scheduler:update");
+    }
+
+    @Test
     void storeStaffShouldStartFromStoreOrderWorkspace() {
         String token = authService.login("store_service", "123456", 10L, "静安门店");
 

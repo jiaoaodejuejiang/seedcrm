@@ -25,4 +25,8 @@ public class PermissionCheckRequest {
     private List<Long> teamMemberIds;
 
     private Long boundCustomerUserId;
+
+    private String currentPartnerCode;
+
+    private String resourcePartnerCode;
 }

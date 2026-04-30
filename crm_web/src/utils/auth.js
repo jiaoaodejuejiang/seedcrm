@@ -35,11 +35,11 @@ const accessibleRoutes = [
   { path: '/settings/base/wecom', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
   { path: '/settings/menu', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
   { path: '/settings/payment', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-  { path: '/settings/integration/third-party', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-  { path: '/settings/integration/callback', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-  { path: '/settings/integration/jobs', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-  { path: '/settings/integration/debug', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-  { path: '/settings/integration/distribution-api', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+  { path: '/settings/integration/third-party', moduleCode: 'SETTING', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN'] },
+  { path: '/settings/integration/callback', moduleCode: 'SETTING', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'] },
+  { path: '/settings/integration/jobs', moduleCode: 'SETTING', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'] },
+  { path: '/settings/integration/debug', moduleCode: 'SETTING', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'] },
+  { path: '/settings/integration/distribution-api', moduleCode: 'SETTING', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'] },
   { path: '/settings/system-flow', moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
 ]
 
@@ -125,6 +125,20 @@ export const demoAccounts = [
     password: '123456',
     title: '私域客服',
     description: '使用企业微信触达客户并维护私域运营能力',
+    loginMode: 'hq'
+  },
+  {
+    username: 'integration_admin',
+    password: '123456',
+    title: '集成管理员',
+    description: '配置抖音、分销、回调、调度和接口联调能力',
+    loginMode: 'hq'
+  },
+  {
+    username: 'integration_operator',
+    password: '123456',
+    title: '集成操作员',
+    description: '查看接口日志、异常队列、调试和重试结果，不修改渠道配置',
     loginMode: 'hq'
   }
 ]

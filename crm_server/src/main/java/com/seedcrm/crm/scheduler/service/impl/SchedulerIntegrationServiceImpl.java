@@ -427,6 +427,8 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             working.setBaseUrl(existing.getBaseUrl());
             working.setTokenUrl(existing.getTokenUrl());
             working.setEndpointPath(existing.getEndpointPath());
+            working.setStatusQueryPath(existing.getStatusQueryPath());
+            working.setReconciliationPullPath(existing.getReconciliationPullPath());
             working.setVoucherPreparePath(existing.getVoucherPreparePath());
             working.setVoucherVerifyPath(existing.getVoucherVerifyPath());
             working.setVoucherCancelPath(existing.getVoucherCancelPath());
@@ -445,6 +447,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             working.setRefundNotifyUrlField(existing.getRefundNotifyUrlField());
             working.setRefundAmountUnit(existing.getRefundAmountUnit());
             working.setRefundStatusMapping(existing.getRefundStatusMapping());
+            working.setStatusMapping(existing.getStatusMapping());
             working.setClientKey(existing.getClientKey());
             working.setClientSecret(existing.getClientSecret());
             working.setRedirectUri(existing.getRedirectUri());
@@ -525,6 +528,10 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         target.setBaseUrl(trimToNull(source.getBaseUrl()));
         target.setTokenUrl(trimToNull(source.getTokenUrl()));
         target.setEndpointPath(trimToNull(source.getEndpointPath()));
+        target.setStatusQueryPath(resolveOptionalConfigValue(source.getStatusQueryPath(),
+                existing == null ? null : existing.getStatusQueryPath()));
+        target.setReconciliationPullPath(resolveOptionalConfigValue(source.getReconciliationPullPath(),
+                existing == null ? null : existing.getReconciliationPullPath()));
         target.setVoucherPreparePath(resolveDouyinPathConfig(
                 source.getVoucherPreparePath(),
                 existing == null ? null : existing.getVoucherPreparePath(),
@@ -583,6 +590,8 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
                 existing == null ? null : existing.getRefundAmountUnit()));
         target.setRefundStatusMapping(resolveOptionalConfigValue(source.getRefundStatusMapping(),
                 existing == null ? null : existing.getRefundStatusMapping()));
+        target.setStatusMapping(resolveOptionalConfigValue(source.getStatusMapping(),
+                existing == null ? null : existing.getStatusMapping()));
         target.setClientKey(trimToNull(source.getClientKey()));
         target.setClientSecret(resolveSensitiveValue(source.getClientSecret(), existing == null ? null : existing.getClientSecret()));
         target.setRedirectUri(trimToNull(source.getRedirectUri()));

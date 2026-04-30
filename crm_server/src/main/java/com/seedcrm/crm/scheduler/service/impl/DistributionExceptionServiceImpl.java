@@ -42,23 +42,61 @@ public class DistributionExceptionServiceImpl implements DistributionExceptionSe
                               String idempotencyKey,
                               String errorCode,
                               String errorMessage) {
+        recordFailure(partnerCode, event, rawPayload, traceId, idempotencyKey, errorCode, errorMessage, null, null);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordFailure(String partnerCode,
+                              DistributionEventRequest event,
+                              String rawPayload,
+                              String traceId,
+                              String idempotencyKey,
+                              String errorCode,
+                              String errorMessage,
+                              Long relatedOrderId,
+                              String relatedOrderNo) {
+        recordFailure(partnerCode, event, rawPayload, traceId, idempotencyKey, errorCode, errorMessage,
+                relatedOrderId, relatedOrderNo, null);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordFailure(String partnerCode,
+                              DistributionEventRequest event,
+                              String rawPayload,
+                              String traceId,
+                              String idempotencyKey,
+                              String errorCode,
+                              String errorMessage,
+                              Long relatedOrderId,
+                              String relatedOrderNo,
+                              String conflictDetailJson) {
         LocalDateTime now = LocalDateTime.now();
-        DistributionExceptionRecord record = findExisting(idempotencyKey, event == null ? null : event.getEventId(), traceId);
+        String normalizedPartnerCode = normalize(firstNonBlank(partnerCode, event == null ? null : event.getPartnerCode(), "DISTRIBUTION"));
+        DistributionExceptionRecord record = findExisting(
+                normalizedPartnerCode,
+                idempotencyKey,
+                event == null ? null : event.getEventId(),
+                traceId);
         boolean creating = record == null;
         if (creating) {
             record = new DistributionExceptionRecord();
             record.setCreatedAt(now);
             record.setRetryCount(0);
         }
-        record.setPartnerCode(normalize(firstNonBlank(partnerCode, event == null ? null : event.getPartnerCode(), "DISTRIBUTION")));
+        record.setPartnerCode(normalizedPartnerCode);
         record.setEventType(event == null ? null : event.getEventType());
         record.setEventId(event == null ? null : event.getEventId());
         record.setIdempotencyKey(idempotencyKey);
         record.setExternalOrderId(resolveExternalOrderId(event, rawPayload));
+        record.setRelatedOrderId(relatedOrderId);
+        record.setRelatedOrderNo(trim(relatedOrderNo, 64));
         record.setExternalMemberId(resolveExternalMemberId(event, rawPayload));
         record.setPhone(resolvePhone(event, rawPayload));
         record.setErrorCode(errorCode);
         record.setErrorMessage(trim(errorMessage, 512));
+        record.setConflictDetailJson(conflictDetailJson);
         record.setRawPayload(rawPayload);
         record.setCallbackLogTraceId(traceId);
         record.setHandlingStatus(STATUS_OPEN);
@@ -111,11 +149,12 @@ public class DistributionExceptionServiceImpl implements DistributionExceptionSe
         record.setUpdatedAt(LocalDateTime.now());
     }
 
-    private DistributionExceptionRecord findExisting(String idempotencyKey, String eventId, String traceId) {
+    private DistributionExceptionRecord findExisting(String partnerCode, String idempotencyKey, String eventId, String traceId) {
         if (!StringUtils.hasText(idempotencyKey) && !StringUtils.hasText(eventId) && !StringUtils.hasText(traceId)) {
             return null;
         }
         return exceptionRecordMapper.selectOne(Wrappers.<DistributionExceptionRecord>lambdaQuery()
+                .eq(StringUtils.hasText(partnerCode), DistributionExceptionRecord::getPartnerCode, partnerCode)
                 .and(wrapper -> wrapper
                         .eq(StringUtils.hasText(idempotencyKey), DistributionExceptionRecord::getIdempotencyKey, idempotencyKey)
                         .or()

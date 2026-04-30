@@ -132,3 +132,19 @@ export function processDistributionExceptionRetries(limit = 10) {
     }
   })
 }
+
+export function processDistributionStatusCheck(limit = 20) {
+  return http.post('/scheduler/distribution/status-check/process', null, {
+    params: {
+      limit
+    }
+  })
+}
+
+export function processDistributionReconciliation(limit = 20) {
+  return http.post('/scheduler/distribution/reconcile/process', null, {
+    params: {
+      limit
+    }
+  })
+}

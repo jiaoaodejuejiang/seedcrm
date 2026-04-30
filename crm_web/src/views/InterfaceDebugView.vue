@@ -119,6 +119,50 @@ const interfaceTemplates = [
     }
   },
   {
+    key: 'DISTRIBUTION_STATUS_CHECK',
+    label: '分销订单状态回查',
+    providerCode: 'DISTRIBUTION',
+    requestMethod: 'POST',
+    path: '/open/distribution/orders/status',
+    parameters: {},
+    payload: {
+      externalOrderId: 'o_20001',
+      status: 'refund_success',
+      rawData: {
+        source: 'scheduler-debug'
+      }
+    }
+  },
+  {
+    key: 'DISTRIBUTION_RECONCILE_PULL',
+    label: '分销对账拉取',
+    providerCode: 'DISTRIBUTION',
+    requestMethod: 'POST',
+    path: '/open/distribution/orders/reconcile',
+    parameters: {},
+    payload: {
+      limit: 20,
+      lastSyncTime: '2026-04-29T00:00:00',
+      orders: [
+        {
+          externalOrderId: 'o_20001',
+          externalTradeNo: 'pay_30001',
+          status: 'paid',
+          amount: 19900,
+          member: {
+            externalMemberId: 'm_10001',
+            phone: '13800000000'
+          }
+        },
+        {
+          externalOrderId: 'o_20002',
+          status: 'refunded',
+          refundAmount: 9900
+        }
+      ]
+    }
+  },
+  {
     key: 'DOUYIN_CLUE_PULL',
     label: '抖音客资拉取',
     providerCode: 'DOUYIN_LAIKE',

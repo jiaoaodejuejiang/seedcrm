@@ -119,6 +119,9 @@ public class PermissionServiceImpl implements PermissionService {
                     && request.getTeamMemberIds().contains(request.getResourceOwnerId());
             case "STORE" -> request.getCurrentStoreId() != null
                     && Objects.equals(request.getCurrentStoreId(), request.getResourceStoreId());
+            case "PARTNER" -> StringUtils.hasText(request.getCurrentPartnerCode())
+                    && request.getCurrentPartnerCode().trim().equalsIgnoreCase(
+                    StringUtils.hasText(request.getResourcePartnerCode()) ? request.getResourcePartnerCode().trim() : "");
             default -> false;
         };
     }

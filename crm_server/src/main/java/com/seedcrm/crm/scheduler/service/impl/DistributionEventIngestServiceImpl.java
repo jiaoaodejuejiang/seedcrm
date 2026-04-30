@@ -31,7 +31,9 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -112,7 +114,7 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
             validatePartner(provider, rawPayload, idempotencyKey, request);
 
             IntegrationCallbackEventLog duplicateLog = findDuplicateLog(partnerCode, event.getEventId(), idempotencyKey);
-            if (duplicateLog != null && "SUCCESS".equalsIgnoreCase(duplicateLog.getProcessStatus())) {
+            if (isCompletedDuplicateLog(duplicateLog)) {
                 DistributionEventResponse response = response(traceId, "DUPLICATE",
                         duplicateLog.getRelatedCustomerId(), duplicateLog.getRelatedOrderId(),
                         "SUCCESS", "duplicate event ignored");
@@ -126,9 +128,9 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
 
             DistributionEventResponse response;
             if ("distribution.order.paid".equals(eventType)) {
-                response = processPaidEvent(event, partnerCode, rawPayload, traceId);
+                response = processPaidEvent(event, partnerCode, rawPayload, traceId, idempotencyKey);
             } else if (eventType.startsWith("distribution.order.")) {
-                response = processOrderStatusEvent(event, partnerCode, rawPayload, traceId, eventType);
+                response = processOrderStatusEvent(event, partnerCode, rawPayload, traceId, idempotencyKey, eventType);
             } else {
                 response = response(traceId, "LOGGED", null, null, "RECEIVED", "event logged only in V1");
             }
@@ -146,7 +148,8 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
     private DistributionEventResponse processPaidEvent(DistributionEventRequest event,
                                                        String partnerCode,
                                                        String rawPayload,
-                                                       String traceId) {
+                                                       String traceId,
+                                                       String idempotencyKey) {
         DistributionOrderPayload orderPayload = requireOrder(event);
         DistributionMemberPayload member = requireMember(event);
         String externalOrderId = requireText(orderPayload.getExternalOrderId(), "externalOrderId is required");
@@ -155,6 +158,16 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
 
         Order existingOrder = findOrder(partnerCode, externalOrderId);
         if (existingOrder != null) {
+            List<ConflictDetail> conflicts = detectExistingOrderConflicts(existingOrder, event);
+            if (!conflicts.isEmpty()) {
+                String message = "duplicate external order conflict: "
+                        + String.join("; ", conflicts.stream().map(ConflictDetail::detail).toList());
+                distributionExceptionService.recordFailure(partnerCode, event, rawPayload, traceId, idempotencyKey,
+                        "EXTERNAL_ORDER_CONFLICT", message, existingOrder.getId(), existingOrder.getOrderNo(),
+                        toConflictDetailJson(conflicts));
+                return response(traceId, "EXCEPTION_QUEUED", existingOrder.getCustomerId(), existingOrder.getId(),
+                        "SUCCESS", "duplicate external order conflict queued for manual handling");
+            }
             refreshExternalOrderSnapshot(existingOrder, event, rawPayload);
             orderMapper.updateById(existingOrder);
             return response(traceId, "EXISTING", existingOrder.getCustomerId(), existingOrder.getId(),
@@ -249,10 +262,96 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
                 "distribution paid order created");
     }
 
+    private List<ConflictDetail> detectExistingOrderConflicts(Order existingOrder, DistributionEventRequest event) {
+        List<ConflictDetail> conflicts = new ArrayList<>();
+        if (existingOrder == null || event == null) {
+            return conflicts;
+        }
+        DistributionOrderPayload orderPayload = requireOrder(event);
+        DistributionMemberPayload member = requireMember(event);
+
+        addTextConflict(conflicts, "externalTradeNo", existingOrder.getExternalTradeNo(), orderPayload.getExternalTradeNo());
+        addTextConflict(conflicts, "externalMemberId", existingOrder.getExternalMemberId(), member.getExternalMemberId());
+        if (StringUtils.hasText(orderPayload.getType())
+                && existingOrder.getType() != null
+                && existingOrder.getType() != resolveOrderType(orderPayload.getType())) {
+            addConflict(conflicts, "type", "订单类型",
+                    OrderType.toApiValue(existingOrder.getType()),
+                    normalizeLower(orderPayload.getType()));
+        }
+        if (orderPayload.getAmount() != null && existingOrder.getAmount() != null) {
+            BigDecimal incomingAmount = scaleMoneyFromCent(orderPayload.getAmount());
+            if (existingOrder.getAmount().setScale(2, RoundingMode.HALF_UP).compareTo(incomingAmount) != 0) {
+                addConflict(conflicts, "amount", "订单金额",
+                        existingOrder.getAmount().setScale(2, RoundingMode.HALF_UP).toPlainString(),
+                        incomingAmount.toPlainString());
+            }
+        }
+        return conflicts;
+    }
+
+    private void addTextConflict(List<ConflictDetail> conflicts, String fieldName, String existingValue, String incomingValue) {
+        if (StringUtils.hasText(existingValue)
+                && StringUtils.hasText(incomingValue)
+                && !existingValue.trim().equals(incomingValue.trim())) {
+            addConflict(conflicts, fieldName, conflictFieldLabel(fieldName), existingValue.trim(), incomingValue.trim());
+        }
+    }
+
+    private void addConflict(List<ConflictDetail> conflicts,
+                             String field,
+                             String fieldLabel,
+                             String existingValue,
+                             String incomingValue) {
+        String detail = field + " existing=" + existingValue + " incoming=" + incomingValue;
+        conflicts.add(new ConflictDetail(field, fieldLabel, existingValue, incomingValue, detail));
+    }
+
+    private String conflictFieldLabel(String field) {
+        return switch (field) {
+            case "externalTradeNo" -> "支付流水";
+            case "externalMemberId" -> "外部会员";
+            case "type" -> "订单类型";
+            case "amount" -> "订单金额";
+            case "status" -> "订单状态";
+            default -> field;
+        };
+    }
+
+    private String toConflictDetailJson(List<ConflictDetail> conflicts) {
+        try {
+            return objectMapper.writeValueAsString(conflicts.stream()
+                    .map(item -> {
+                        Map<String, Object> detail = new LinkedHashMap<>();
+                        detail.put("field", item.field());
+                        detail.put("fieldLabel", item.fieldLabel());
+                        detail.put("existingValue", item.existingValue());
+                        detail.put("incomingValue", item.incomingValue());
+                        detail.put("detail", item.detail());
+                        return detail;
+                    })
+                    .toList());
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private ConflictDetail statusConflictDetail(String localStatus, String eventType, Order order) {
+        String incoming = firstNonBlank(
+                order == null ? null : order.getRefundStatus(),
+                order == null ? null : order.getExternalStatus(),
+                eventType);
+        String existing = firstNonBlank(localStatus, "UNKNOWN");
+        String incomingValue = firstNonBlank(incoming, eventType, "UNKNOWN");
+        return new ConflictDetail("status", "订单状态", existing, incomingValue,
+                "status existing=" + existing + " incoming=" + incomingValue);
+    }
+
     private DistributionEventResponse processOrderStatusEvent(DistributionEventRequest event,
                                                               String partnerCode,
                                                               String rawPayload,
                                                               String traceId,
+                                                              String idempotencyKey,
                                                               String eventType) {
         DistributionOrderPayload orderPayload = requireOrder(event);
         String externalOrderId = requireText(orderPayload.getExternalOrderId(), "externalOrderId is required");
@@ -260,7 +359,23 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         if (order == null) {
             throw new BusinessException("external order does not exist for status event");
         }
+        String originalStatus = normalizeUpper(order.getStatus());
         refreshExternalOrderSnapshot(order, event, rawPayload);
+        if (requiresManualExternalStatusHandling(originalStatus, eventType)) {
+            order.setUpdateTime(LocalDateTime.now());
+            if (orderMapper.updateById(order) <= 0) {
+                throw new BusinessException("failed to update distribution order status");
+            }
+            distributionExceptionService.recordFailure(partnerCode, event, rawPayload, traceId, idempotencyKey,
+                    "EXTERNAL_STATUS_CONFLICT",
+                    "external " + eventType + " received for local order status " + originalStatus
+                            + ", queued for manual handling",
+                    order.getId(),
+                    order.getOrderNo(),
+                    toConflictDetailJson(List.of(statusConflictDetail(originalStatus, eventType, order))));
+            return response(traceId, "EXCEPTION_QUEUED", order.getCustomerId(), order.getId(), "SUCCESS",
+                    "external status conflict queued for manual handling");
+        }
         if ("distribution.order.cancelled".equals(eventType) && canApplyExternalTerminalStatus(order)) {
             order.setStatus(OrderStatus.CANCELLED.name());
         }
@@ -322,6 +437,13 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
                         .eq(StringUtils.hasText(eventId), IntegrationCallbackEventLog::getEventId, eventId))
                 .orderByDesc(IntegrationCallbackEventLog::getId)
                 .last("LIMIT 1"));
+    }
+
+    private boolean isCompletedDuplicateLog(IntegrationCallbackEventLog duplicateLog) {
+        if (duplicateLog == null || !"SUCCESS".equalsIgnoreCase(duplicateLog.getProcessStatus())) {
+            return false;
+        }
+        return !"EXCEPTION_QUEUED".equalsIgnoreCase(duplicateLog.getIdempotencyStatus());
     }
 
     private void insertFailureLog(IntegrationProviderConfig provider,
@@ -563,7 +685,28 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
 
     private boolean canApplyExternalTerminalStatus(Order order) {
         String status = normalizeUpper(order == null ? null : order.getStatus());
-        return "CREATED".equals(status) || "PAID_DEPOSIT".equals(status) || "APPOINTMENT".equals(status);
+        return "CREATED".equals(status) || "PAID_DEPOSIT".equals(status);
+    }
+
+    private boolean requiresManualExternalStatusHandling(String originalStatus, String eventType) {
+        String status = normalizeUpper(originalStatus);
+        String normalizedEvent = normalizeLower(eventType);
+        if (!StringUtils.hasText(normalizedEvent)) {
+            return false;
+        }
+        if (!normalizedEvent.endsWith("cancelled")
+                && !normalizedEvent.endsWith("refund_pending")
+                && !normalizedEvent.endsWith("refunded")) {
+            return false;
+        }
+        if (normalizedEvent.endsWith("cancelled") && "CANCELLED".equals(status)) {
+            return false;
+        }
+        if (normalizedEvent.endsWith("refunded") && "REFUNDED".equals(status)) {
+            return false;
+        }
+        return Set.of("APPOINTMENT", "ARRIVED", "SERVING", "SERVICING", "COMPLETED", "FINISHED", "USED")
+                .contains(status);
     }
 
     private String resolveRefundStatus(String eventType) {
@@ -847,5 +990,12 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
     }
 
     private record FailureLogMeta(String errorCode, String signatureStatus) {
+    }
+
+    private record ConflictDetail(String field,
+                                  String fieldLabel,
+                                  String existingValue,
+                                  String incomingValue,
+                                  String detail) {
     }
 }

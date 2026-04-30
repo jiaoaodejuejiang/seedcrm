@@ -28,38 +28,44 @@ public class AuthServiceImpl implements AuthService {
             "MAKEUP_ARTIST",
             "PHOTO_SELECTOR");
 
-    private static final Map<String, DemoAccount> ACCOUNT_CATALOG = Map.of(
-            "admin", new DemoAccount("admin", "123456", new AuthenticatedUser(
+    private static final Map<String, DemoAccount> ACCOUNT_CATALOG = Map.ofEntries(
+            Map.entry("admin", new DemoAccount("admin", "123456", new AuthenticatedUser(
                     "admin", "系统管理员", "ADMIN", "管理员", "ALL", 1L, 10L, "总部",
                     List.of(1001L, 1002L, 2001L, 2002L, 3001L, 3002L), null,
-                    List.of("CLUE", "ORDER", "PLANORDER", "SALARY", "FINANCE", "SYSTEM", "SETTING", "WECOM"))),
-            "clue_manager", new DemoAccount("clue_manager", "123456", new AuthenticatedUser(
+                    List.of("CLUE", "ORDER", "PLANORDER", "SALARY", "FINANCE", "SYSTEM", "SETTING", "WECOM")))),
+            Map.entry("clue_manager", new DemoAccount("clue_manager", "123456", new AuthenticatedUser(
                     "clue_manager", "客资主管", "CLUE_MANAGER", "客资主管", "ALL", 5001L, 10L, "总部",
-                    List.of(5001L, 1001L, 1002L), null, List.of("CLUE", "ORDER", "SYSTEM", "SALARY"))),
-            "online_cs", new DemoAccount("online_cs", "123456", new AuthenticatedUser(
+                    List.of(5001L, 1001L, 1002L), null, List.of("CLUE", "ORDER", "SYSTEM", "SALARY")))),
+            Map.entry("online_cs", new DemoAccount("online_cs", "123456", new AuthenticatedUser(
                     "online_cs", "在线客服", "ONLINE_CUSTOMER_SERVICE", "在线客服", "TEAM", 1001L, 10L, "总部",
-                    List.of(1001L, 1002L), null, List.of("CLUE", "ORDER", "SALARY"))),
-            "store_service", new DemoAccount("store_service", "123456", new AuthenticatedUser(
+                    List.of(1001L, 1002L), null, List.of("CLUE", "ORDER", "SALARY")))),
+            Map.entry("store_service", new DemoAccount("store_service", "123456", new AuthenticatedUser(
                     "store_service", "门店服务A", "STORE_SERVICE", "门店服务", "STORE", 5101L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY"))),
-            "store_manager", new DemoAccount("store_manager", "123456", new AuthenticatedUser(
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY")))),
+            Map.entry("store_manager", new DemoAccount("store_manager", "123456", new AuthenticatedUser(
                     "store_manager", "静安店长", "STORE_MANAGER", "店长", "STORE", 5002L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SYSTEM", "SALARY"))),
-            "photo_a", new DemoAccount("photo_a", "123456", new AuthenticatedUser(
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SYSTEM", "SALARY")))),
+            Map.entry("photo_a", new DemoAccount("photo_a", "123456", new AuthenticatedUser(
                     "photo_a", "摄影A", "PHOTOGRAPHER", "摄影", "STORE", 2001L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY"))),
-            "makeup_a", new DemoAccount("makeup_a", "123456", new AuthenticatedUser(
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY")))),
+            Map.entry("makeup_a", new DemoAccount("makeup_a", "123456", new AuthenticatedUser(
                     "makeup_a", "化妆师A", "MAKEUP_ARTIST", "化妆师", "STORE", 3001L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY"))),
-            "selector_a", new DemoAccount("selector_a", "123456", new AuthenticatedUser(
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY")))),
+            Map.entry("selector_a", new DemoAccount("selector_a", "123456", new AuthenticatedUser(
                     "selector_a", "选片负责人A", "PHOTO_SELECTOR", "选片负责人", "STORE", 4001L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY"))),
-            "finance", new DemoAccount("finance", "123456", new AuthenticatedUser(
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY")))),
+            Map.entry("finance", new DemoAccount("finance", "123456", new AuthenticatedUser(
                     "finance", "财务", "FINANCE", "财务", "ALL", 91001L, 10L, "总部",
-                    List.of(91001L), null, List.of("ORDER", "SALARY", "FINANCE"))),
-            "private_domain", new DemoAccount("private_domain", "123456", new AuthenticatedUser(
+                    List.of(91001L), null, List.of("ORDER", "SALARY", "FINANCE")))),
+            Map.entry("integration_admin", new DemoAccount("integration_admin", "123456", new AuthenticatedUser(
+                    "integration_admin", "集成管理员", "INTEGRATION_ADMIN", "集成管理员", "ALL", 92001L, 10L, "总部",
+                    List.of(92001L), null, List.of("SETTING", "SCHEDULER")))),
+            Map.entry("integration_operator", new DemoAccount("integration_operator", "123456", new AuthenticatedUser(
+                    "integration_operator", "集成操作员", "INTEGRATION_OPERATOR", "集成操作员", "ALL", 92002L, 10L, "总部",
+                    List.of(92002L), null, List.of("SETTING", "SCHEDULER")))),
+            Map.entry("private_domain", new DemoAccount("private_domain", "123456", new AuthenticatedUser(
                     "private_domain", "私域客服", "PRIVATE_DOMAIN_SERVICE", "私域客服", "SELF", 1101L, 10L, "总部",
-                    List.of(1101L), 1101L, List.of("WECOM", "SALARY"))));
+                    List.of(1101L), 1101L, List.of("WECOM", "SALARY")))));
 
     private final Map<String, AuthenticatedUser> sessions = new ConcurrentHashMap<>();
     private final AuthAccessProvider authAccessProvider;

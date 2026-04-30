@@ -55,6 +55,27 @@ class DistributionExceptionServiceImplTest {
     }
 
     @Test
+    void shouldRecordRelatedOrderForExternalOrderConflict() {
+        when(exceptionRecordMapper.selectOne(any())).thenReturn(null);
+        when(exceptionRecordMapper.insert(any(DistributionExceptionRecord.class))).thenReturn(1);
+
+        service.recordFailure("distribution", event(), "{\"order\":{\"externalOrderId\":\"o_raw\"}}",
+                "trace-002", "idem-002", "EXTERNAL_ORDER_CONFLICT",
+                "duplicate external order conflict: amount existing=199.00 incoming=299.00",
+                202L, "ORD-DIST-202",
+                "[{\"field\":\"amount\",\"fieldLabel\":\"订单金额\",\"existingValue\":\"199.00\",\"incomingValue\":\"299.00\"}]");
+
+        ArgumentCaptor<DistributionExceptionRecord> captor = ArgumentCaptor.forClass(DistributionExceptionRecord.class);
+        verify(exceptionRecordMapper).insert(captor.capture());
+        DistributionExceptionRecord record = captor.getValue();
+        assertThat(record.getRelatedOrderId()).isEqualTo(202L);
+        assertThat(record.getRelatedOrderNo()).isEqualTo("ORD-DIST-202");
+        assertThat(record.getErrorCode()).isEqualTo("EXTERNAL_ORDER_CONFLICT");
+        assertThat(record.getConflictDetailJson()).contains("\"field\":\"amount\"");
+        assertThat(record.getCallbackLogTraceId()).isEqualTo("trace-002");
+    }
+
+    @Test
     void shouldMarkExceptionHandledWithOperatorContext() {
         DistributionExceptionRecord record = new DistributionExceptionRecord();
         record.setId(5L);

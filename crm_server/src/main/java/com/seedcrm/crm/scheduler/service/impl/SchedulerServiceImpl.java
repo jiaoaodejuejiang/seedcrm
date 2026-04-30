@@ -14,6 +14,7 @@ import com.seedcrm.crm.scheduler.mapper.SchedulerJobAuditLogMapper;
 import com.seedcrm.crm.scheduler.mapper.SchedulerJobLogMapper;
 import com.seedcrm.crm.scheduler.mapper.SchedulerJobMapper;
 import com.seedcrm.crm.scheduler.service.DistributionExceptionRetryService;
+import com.seedcrm.crm.scheduler.service.DistributionReconciliationService;
 import com.seedcrm.crm.scheduler.service.SchedulerIntegrationService;
 import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
 import com.seedcrm.crm.scheduler.service.SchedulerService;
@@ -32,9 +33,13 @@ public class SchedulerServiceImpl implements SchedulerService {
     private static final int JOB_LOCK_SECONDS = 30;
     private static final String JOB_DISTRIBUTION_OUTBOX_PROCESS = "DISTRIBUTION_OUTBOX_PROCESS";
     private static final String JOB_DISTRIBUTION_EXCEPTION_RETRY = "DISTRIBUTION_EXCEPTION_RETRY";
+    private static final String JOB_DISTRIBUTION_STATUS_CHECK = "DISTRIBUTION_STATUS_CHECK";
+    private static final String JOB_DISTRIBUTION_RECONCILE_PULL = "DISTRIBUTION_RECONCILE_PULL";
     private static final Set<String> DISTRIBUTION_JOB_CODES = Set.of(
             JOB_DISTRIBUTION_OUTBOX_PROCESS,
-            JOB_DISTRIBUTION_EXCEPTION_RETRY);
+            JOB_DISTRIBUTION_EXCEPTION_RETRY,
+            JOB_DISTRIBUTION_STATUS_CHECK,
+            JOB_DISTRIBUTION_RECONCILE_PULL);
 
     private final SchedulerJobMapper schedulerJobMapper;
     private final SchedulerJobLogMapper schedulerJobLogMapper;
@@ -43,6 +48,7 @@ public class SchedulerServiceImpl implements SchedulerService {
     private final SchedulerIntegrationService schedulerIntegrationService;
     private final SchedulerOutboxService schedulerOutboxService;
     private final DistributionExceptionRetryService distributionExceptionRetryService;
+    private final DistributionReconciliationService distributionReconciliationService;
 
     public SchedulerServiceImpl(SchedulerJobMapper schedulerJobMapper,
                                 SchedulerJobLogMapper schedulerJobLogMapper,
@@ -50,7 +56,8 @@ public class SchedulerServiceImpl implements SchedulerService {
                                 DouyinClueSyncService douyinClueSyncService,
                                 SchedulerIntegrationService schedulerIntegrationService,
                                 SchedulerOutboxService schedulerOutboxService,
-                                DistributionExceptionRetryService distributionExceptionRetryService) {
+                                DistributionExceptionRetryService distributionExceptionRetryService,
+                                DistributionReconciliationService distributionReconciliationService) {
         this.schedulerJobMapper = schedulerJobMapper;
         this.schedulerJobLogMapper = schedulerJobLogMapper;
         this.schedulerJobAuditLogMapper = schedulerJobAuditLogMapper;
@@ -58,6 +65,7 @@ public class SchedulerServiceImpl implements SchedulerService {
         this.schedulerIntegrationService = schedulerIntegrationService;
         this.schedulerOutboxService = schedulerOutboxService;
         this.distributionExceptionRetryService = distributionExceptionRetryService;
+        this.distributionReconciliationService = distributionReconciliationService;
     }
 
     @Override
@@ -381,6 +389,12 @@ public class SchedulerServiceImpl implements SchedulerService {
         }
         if (JOB_DISTRIBUTION_EXCEPTION_RETRY.equals(jobCode)) {
             return distributionExceptionRetryService.processRetryQueue(10).size();
+        }
+        if (JOB_DISTRIBUTION_STATUS_CHECK.equals(jobCode)) {
+            return distributionReconciliationService.checkOrderStatus(20).size();
+        }
+        if (JOB_DISTRIBUTION_RECONCILE_PULL.equals(jobCode)) {
+            return distributionReconciliationService.pullReconciliation(20).size();
         }
         throw new BusinessException("unsupported distribution scheduler job");
     }

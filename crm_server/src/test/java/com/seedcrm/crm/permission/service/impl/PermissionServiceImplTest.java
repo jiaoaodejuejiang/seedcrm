@@ -73,4 +73,39 @@ class PermissionServiceImplTest {
         assertThat(response.isAllowed()).isFalse();
         assertThat(response.getReason()).contains("ABAC");
     }
+
+    @Test
+    void shouldAllowPartnerScopedPermissionOnlyForSamePartnerCode() {
+        PermissionPolicy policy = new PermissionPolicy();
+        policy.setModuleCode("SCHEDULER");
+        policy.setActionCode("VIEW");
+        policy.setRoleCode("PARTNER_APP");
+        policy.setDataScope("PARTNER");
+        policy.setIsEnabled(1);
+        when(permissionPolicyMapper.selectList(any())).thenReturn(List.of(policy));
+
+        PermissionCheckRequest allowedRequest = new PermissionCheckRequest();
+        allowedRequest.setModuleCode("scheduler");
+        allowedRequest.setActionCode("view");
+        allowedRequest.setRoleCode("partner_app");
+        allowedRequest.setDataScope("partner");
+        allowedRequest.setCurrentPartnerCode("DISTRIBUTION_A");
+        allowedRequest.setResourcePartnerCode("distribution_a");
+
+        PermissionCheckResponse allowedResponse = permissionService.check(allowedRequest);
+        assertThat(allowedResponse.isAllowed()).isTrue();
+        assertThat(allowedResponse.getDataScope()).isEqualTo("PARTNER");
+
+        PermissionCheckRequest rejectedRequest = new PermissionCheckRequest();
+        rejectedRequest.setModuleCode("scheduler");
+        rejectedRequest.setActionCode("view");
+        rejectedRequest.setRoleCode("partner_app");
+        rejectedRequest.setDataScope("partner");
+        rejectedRequest.setCurrentPartnerCode("DISTRIBUTION_A");
+        rejectedRequest.setResourcePartnerCode("DISTRIBUTION_B");
+
+        PermissionCheckResponse rejectedResponse = permissionService.check(rejectedRequest);
+        assertThat(rejectedResponse.isAllowed()).isFalse();
+        assertThat(rejectedResponse.getReason()).contains("ABAC");
+    }
 }

@@ -34,6 +34,8 @@
                 <el-option label="抖音客资增量拉取" value="DOUYIN_CLUE_INCREMENTAL" />
                 <el-option label="分销履约回推队列" value="DISTRIBUTION_OUTBOX_PROCESS" />
                 <el-option label="分销异常重试队列" value="DISTRIBUTION_EXCEPTION_RETRY" />
+                <el-option label="分销状态回查" value="DISTRIBUTION_STATUS_CHECK" />
+                <el-option label="分销对账拉取" value="DISTRIBUTION_RECONCILE_PULL" />
                 <el-option label="自定义" value="CUSTOM" />
               </el-select>
             </label>
@@ -319,6 +321,26 @@ const presets = {
     queueName: 'distribution-exception-retry',
     endpoint: '/scheduler/distribution/exceptions/process',
     description: '处理分销异常队列，重试时复用统一入站服务，不绕过 Customer / Order 规则。'
+  },
+  DISTRIBUTION_STATUS_CHECK: {
+    jobCode: 'DISTRIBUTION_STATUS_CHECK',
+    moduleCode: 'DISTRIBUTION',
+    syncMode: 'INCREMENTAL',
+    intervalMinutes: 5,
+    retryLimit: 5,
+    queueName: 'distribution-status-check',
+    endpoint: '/scheduler/distribution/status-check/process',
+    description: '回查外部分销订单状态，发现取消或退款后转成分销事件重放，不直接写订单表。'
+  },
+  DISTRIBUTION_RECONCILE_PULL: {
+    jobCode: 'DISTRIBUTION_RECONCILE_PULL',
+    moduleCode: 'DISTRIBUTION',
+    syncMode: 'INCREMENTAL',
+    intervalMinutes: 10,
+    retryLimit: 5,
+    queueName: 'distribution-reconcile-pull',
+    endpoint: '/scheduler/distribution/reconcile/process',
+    description: '拉取外部分销对账记录，统一复用入站事件服务处理 paid / cancelled / refund 状态。'
   }
 }
 

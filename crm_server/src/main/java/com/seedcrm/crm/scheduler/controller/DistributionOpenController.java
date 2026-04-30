@@ -2,8 +2,6 @@ package com.seedcrm.crm.scheduler.controller;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.seedcrm.crm.clue.entity.Clue;
-import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.common.api.ApiResponse;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.scheduler.dto.DistributionEventDtos.DistributionEventResponse;
@@ -11,11 +9,9 @@ import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
 import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
 import com.seedcrm.crm.scheduler.service.DistributionEventIngestService;
 import jakarta.servlet.http.HttpServletRequest;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -34,15 +30,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class DistributionOpenController {
 
     private static final String PROVIDER_DISTRIBUTION = "DISTRIBUTION";
+    private static final String DISTRIBUTION_EVENT_ENDPOINT = "/open/distribution/events";
 
-    private final ClueMapper clueMapper;
     private final IntegrationProviderConfigMapper providerConfigMapper;
     private final DistributionEventIngestService distributionEventIngestService;
 
-    public DistributionOpenController(ClueMapper clueMapper,
-                                      IntegrationProviderConfigMapper providerConfigMapper,
+    public DistributionOpenController(IntegrationProviderConfigMapper providerConfigMapper,
                                       DistributionEventIngestService distributionEventIngestService) {
-        this.clueMapper = clueMapper;
         this.providerConfigMapper = providerConfigMapper;
         this.distributionEventIngestService = distributionEventIngestService;
     }
@@ -75,43 +69,23 @@ public class DistributionOpenController {
         validateOpenRequest(provider, parameters);
         int page = Math.max(1, parseInt(parameters.get("page"), 1));
         int pageSize = Math.min(100, Math.max(1, parseInt(parameters.get("page_size"), parseInt(parameters.get("pageSize"), 30))));
-        List<Clue> rows = clueMapper.selectList(Wrappers.<Clue>lambdaQuery()
-                        .and(wrapper -> wrapper
-                                .eq(Clue::getSourceChannel, "DISTRIBUTION")
-                                .or()
-                                .eq(Clue::getSourceChannel, "DISTRIBUTOR")
-                                .or()
-                                .eq(Clue::getSource, "distribution"))
-                        .orderByDesc(Clue::getCreatedAt)
-                        .orderByDesc(Clue::getId))
-                .stream()
-                .skip((long) (page - 1) * pageSize)
-                .limit(pageSize)
-                .toList();
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("traceId", UUID.randomUUID().toString());
         response.put("mode", provider == null ? "MOCK" : normalize(provider.getExecutionMode(), "MOCK"));
         response.put("providerCode", PROVIDER_DISTRIBUTION);
+        response.put("deprecatedEndpoint", true);
+        response.put("contractVersion", "distribution-scheme-b-v1");
+        response.put("message", "当前分销方案B不再向外部分销系统输出 Clue 客资；外部分销已支付订单请推送到 " + DISTRIBUTION_EVENT_ENDPOINT);
+        response.put("dataPolicy", "distribution paid order 不进入 Clue；SeedCRM 只承接 Customer + Order(paid) + PlanOrder 履约状态回推");
+        response.put("supportedInboundEndpoint", DISTRIBUTION_EVENT_ENDPOINT);
+        response.put("clueCreated", false);
+        response.put("customerOrderCreatedByThisEndpoint", false);
         response.put("page", page);
         response.put("pageSize", pageSize);
         response.put("receivedAt", LocalDateTime.now().toString());
         response.put("requestIp", request == null ? null : request.getRemoteAddr());
-        response.put("records", rows.stream().map(this::toLeadPayload).toList());
+        response.put("records", java.util.List.of());
         return response;
-    }
-
-    private Map<String, Object> toLeadPayload(Clue clue) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("clue_id", clue.getId());
-        row.put("phone", clue.getPhone());
-        row.put("name", clue.getName());
-        row.put("source", "distribution");
-        row.put("product_type", resolveProductType(clue));
-        row.put("paid_amount", BigDecimal.ZERO);
-        row.put("status", clue.getStatus());
-        row.put("created_at", clue.getCreatedAt());
-        row.put("raw_data", clue.getRawData());
-        return row;
     }
 
     private void validateOpenRequest(IntegrationProviderConfig provider, Map<String, String> parameters) {
@@ -145,14 +119,6 @@ public class DistributionOpenController {
         return providerConfigMapper.selectOne(Wrappers.<IntegrationProviderConfig>lambdaQuery()
                 .eq(IntegrationProviderConfig::getProviderCode, PROVIDER_DISTRIBUTION)
                 .last("LIMIT 1"));
-    }
-
-    private String resolveProductType(Clue clue) {
-        String raw = String.valueOf(clue.getRawData()).toLowerCase(Locale.ROOT);
-        if (raw.contains("coupon") || raw.contains("团购")) {
-            return "coupon";
-        }
-        return "deposit";
     }
 
     private int parseInt(String value, int fallback) {

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.customer.entity.Customer;
 import com.seedcrm.crm.customer.mapper.CustomerMapper;
 import com.seedcrm.crm.order.entity.Order;
+import com.seedcrm.crm.order.enums.OrderType;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.scheduler.dto.SchedulerInterfaceDebugRequest;
 import com.seedcrm.crm.scheduler.entity.IntegrationCallbackEventLog;
@@ -13,12 +14,15 @@ import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
 import com.seedcrm.crm.scheduler.mapper.IntegrationCallbackEventLogMapper;
 import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import javax.crypto.Mac;
@@ -65,6 +69,11 @@ public class DistributionEventDryRunService {
                 PROVIDER_DISTRIBUTION));
         String mode = normalizeUpper(firstNonBlank(request == null ? null : request.getMode(), "MOCK"));
         IntegrationProviderConfig provider = findProvider(providerCode);
+        String interfaceCode = normalizeUpper(request == null ? null : request.getInterfaceCode());
+        if ("DISTRIBUTION_STATUS_CHECK".equals(interfaceCode)
+                || "DISTRIBUTION_RECONCILE_PULL".equals(interfaceCode)) {
+            return schedulerReconciliationPreview(interfaceCode, mode, providerCode, provider, payload);
+        }
 
         String eventType = normalizeLower(text(payload, "eventType"));
         String eventId = text(payload, "eventId");
@@ -93,7 +102,7 @@ public class DistributionEventDryRunService {
         response.put("fieldMapping", fieldMapping(payload));
         response.put("statusMapping", statusMapping(eventType));
         response.put("customerMatch", customerMatchPreview(matchedCustomer, externalCustomer, phoneCustomer, externalMemberId, phone));
-        response.put("orderIdempotency", orderIdempotencyPreview(existingOrder, duplicateLog, externalOrderId));
+        response.put("orderIdempotency", orderIdempotencyPreview(existingOrder, duplicateLog, externalOrderId, payload));
         response.put("validation", validationPreview(provider, eventType, eventId, idempotencyKey, externalMemberId, phone, externalOrderId, payload));
         response.put("willWrite", willWritePreview(eventType, matchedCustomer, existingOrder));
         response.put("rawDataPolicy", Map.of(
@@ -111,7 +120,97 @@ public class DistributionEventDryRunService {
         result.put("executionMode", provider == null ? mode : provider.getExecutionMode());
         result.put("secretConfigured", provider != null && StringUtils.hasText(provider.getClientSecret()));
         result.put("endpointPath", provider == null ? "/open/distribution/events" : provider.getEndpointPath());
+        result.put("statusQueryPath", provider == null ? null : provider.getStatusQueryPath());
+        result.put("reconciliationPullPath", provider == null ? null : provider.getReconciliationPullPath());
+        result.put("statusMapping", provider == null ? null : provider.getStatusMapping());
         return result;
+    }
+
+    private Map<String, Object> schedulerReconciliationPreview(String interfaceCode,
+                                                               String mode,
+                                                               String providerCode,
+                                                               IntegrationProviderConfig provider,
+                                                               JsonNode payload) {
+        String externalOrderId = firstNonBlank(
+                text(payload, "order.externalOrderId"),
+                text(payload, "externalOrderId"),
+                text(payload, "external_order_id"),
+                text(payload, "order_id"));
+        String externalStatus = firstNonBlank(
+                text(payload, "order.refundStatus"),
+                text(payload, "refundStatus"),
+                text(payload, "refund_status"),
+                text(payload, "order.status"),
+                text(payload, "status"),
+                text(payload, "externalStatus"));
+        String mappedEventType = mapExternalStatusToEvent(provider, externalStatus);
+        Order existingOrder = findOrder(providerCode, externalOrderId);
+        boolean statusCheck = "DISTRIBUTION_STATUS_CHECK".equals(interfaceCode);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("dryRun", true);
+        response.put("success", true);
+        response.put("message", statusCheck
+                ? "分销状态回查 dry-run 完成，本次调试不调用外部接口、不写核心业务表"
+                : "分销对账拉取 dry-run 完成，本次调试不调用外部接口、不写核心业务表");
+        response.put("provider", providerPreview(providerCode, provider, mode));
+        response.put("schedulerJob", Map.of(
+                "jobCode", interfaceCode,
+                "queueName", statusCheck ? "distribution-status-check" : "distribution-reconcile-pull",
+                "controllerEndpoint", statusCheck
+                        ? "/scheduler/distribution/status-check/process"
+                        : "/scheduler/distribution/reconcile/process",
+                "executionMode", provider == null ? mode : firstNonBlank(provider.getExecutionMode(), mode)));
+        Map<String, Object> fieldMapping = new LinkedHashMap<>();
+        fieldMapping.put("externalOrderId", externalOrderId);
+        fieldMapping.put("externalStatus", externalStatus);
+        fieldMapping.put("mappedEventType", mappedEventType);
+        fieldMapping.put("localOrderMatched", existingOrder != null);
+        fieldMapping.put("localOrderId", existingOrder == null ? null : existingOrder.getId());
+        response.put("fieldMapping", fieldMapping);
+
+        Map<String, Object> statusMappingPreview = new LinkedHashMap<>();
+        statusMappingPreview.put("externalStatus", externalStatus);
+        statusMappingPreview.put("configuredMapping", provider == null ? null : provider.getStatusMapping());
+        statusMappingPreview.put("mappedEventType", mappedEventType);
+        statusMappingPreview.put("paidStatusPolicy", statusCheck
+                ? "状态回查遇到 paid 视为无变化，不反向创建订单"
+                : "对账拉取可将 paid 记录转为入站事件，由统一入站服务决定是否创建 Customer + Order(paid)");
+        response.put("statusMapping", statusMappingPreview);
+        response.put("willExecute", Map.of(
+                "willCallExternalInDryRun", false,
+                "willCallExternalWhenLiveJobRuns", "LIVE".equals(provider == null ? mode : normalizeUpper(provider.getExecutionMode())),
+                "directWriteCustomerOrderPlanOrder", false,
+                "replayThrough", "DistributionEventIngestService.replayFromScheduler",
+                "clueCreated", false,
+                "planOrderCreated", false));
+        response.put("validation", schedulerReconciliationValidation(provider, interfaceCode, externalOrderId, externalStatus, mappedEventType));
+        response.put("rawDataPolicy", Map.of(
+                "dryRunStored", false,
+                "formalJobPolicy", "正式任务只通过分销事件重放写入日志和受控业务服务"));
+        return response;
+    }
+
+    private java.util.List<Map<String, Object>> schedulerReconciliationValidation(IntegrationProviderConfig provider,
+                                                                                  String interfaceCode,
+                                                                                  String externalOrderId,
+                                                                                  String externalStatus,
+                                                                                  String mappedEventType) {
+        java.util.List<Map<String, Object>> items = new java.util.ArrayList<>();
+        addValidation(items, provider != null, "PROVIDER_CONFIG", "ERROR", "未找到分销接口配置");
+        addValidation(items, provider == null || provider.getEnabled() == null || provider.getEnabled() == 1,
+                "PROVIDER_ENABLED", "ERROR", "分销接口配置已停用");
+        if ("DISTRIBUTION_STATUS_CHECK".equals(interfaceCode)) {
+            addValidation(items, StringUtils.hasText(externalOrderId), "EXTERNAL_ORDER_ID", "ERROR", "状态回查需要 externalOrderId");
+        }
+        addValidation(items, StringUtils.hasText(externalStatus), "EXTERNAL_STATUS", "WARN", "未提供外部状态时只能预览任务配置，无法预览事件映射");
+        if (StringUtils.hasText(externalStatus)) {
+            addValidation(items, StringUtils.hasText(mappedEventType), "STATUS_MAPPING", "WARN", "当前外部状态未映射到 distribution.order.* 事件");
+        }
+        if (items.isEmpty()) {
+            items.add(Map.of("code", "READY", "level", "INFO", "message", "调度预检通过，可进入任务调度或接口联调"));
+        }
+        return items;
     }
 
     private Map<String, Object> envelopePreview(String eventType,
@@ -253,17 +352,64 @@ public class DistributionEventDryRunService {
 
     private Map<String, Object> orderIdempotencyPreview(Order order,
                                                         IntegrationCallbackEventLog duplicateLog,
-                                                        String externalOrderId) {
+                                                        String externalOrderId,
+                                                        JsonNode payload) {
+        List<String> conflicts = detectExistingOrderConflicts(order, payload);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("externalOrderId", externalOrderId);
         result.put("orderExists", order != null);
         result.put("orderId", order == null ? null : order.getId());
         result.put("currentOrderStatus", order == null ? null : order.getStatus());
         result.put("eventDuplicate", duplicateLog != null && "SUCCESS".equalsIgnoreCase(duplicateLog.getProcessStatus()));
-        result.put("idempotencyResult", duplicateLog != null && "SUCCESS".equalsIgnoreCase(duplicateLog.getProcessStatus())
-                ? "DUPLICATE"
-                : order == null ? "NEW_ORDER_AVAILABLE" : "EXISTING_ORDER_UPDATE");
+        result.put("conflicts", conflicts);
+        if (duplicateLog != null && "SUCCESS".equalsIgnoreCase(duplicateLog.getProcessStatus())) {
+            result.put("idempotencyResult", "DUPLICATE");
+            result.put("nextAction", "duplicate event ignored");
+        } else if (order == null) {
+            result.put("idempotencyResult", "NEW_ORDER_AVAILABLE");
+            result.put("nextAction", "formal ingest can create Customer + Order(paid)");
+        } else if (!conflicts.isEmpty()) {
+            result.put("idempotencyResult", "EXCEPTION_QUEUED");
+            result.put("nextAction", "formal ingest will queue EXTERNAL_ORDER_CONFLICT and will not update core order fields");
+        } else {
+            result.put("idempotencyResult", "EXISTING_ORDER_UPDATE");
+            result.put("nextAction", "formal ingest can refresh external order snapshot");
+        }
         return result;
+    }
+
+    private List<String> detectExistingOrderConflicts(Order order, JsonNode payload) {
+        List<String> conflicts = new ArrayList<>();
+        if (order == null || payload == null) {
+            return conflicts;
+        }
+        addTextConflict(conflicts, "externalTradeNo", order.getExternalTradeNo(), text(payload, "order.externalTradeNo"));
+        addTextConflict(conflicts, "externalMemberId", order.getExternalMemberId(), text(payload, "member.externalMemberId"));
+
+        String incomingType = text(payload, "order.type");
+        Integer existingType = OrderType.normalizeCode(order.getType());
+        Integer incomingTypeCode = resolveOrderType(incomingType);
+        if (StringUtils.hasText(incomingType) && existingType != null && incomingTypeCode != null
+                && !existingType.equals(incomingTypeCode)) {
+            conflicts.add("type existing=" + OrderType.toApiValue(order.getType())
+                    + " incoming=" + normalizeLower(incomingType));
+        }
+
+        BigDecimal incomingAmount = amountYuanValue(payload);
+        if (incomingAmount != null && order.getAmount() != null
+                && order.getAmount().setScale(2, RoundingMode.HALF_UP).compareTo(incomingAmount) != 0) {
+            conflicts.add("amount existing=" + order.getAmount().setScale(2, RoundingMode.HALF_UP)
+                    + " incoming=" + incomingAmount);
+        }
+        return conflicts;
+    }
+
+    private void addTextConflict(List<String> conflicts, String fieldName, String existingValue, String incomingValue) {
+        if (StringUtils.hasText(existingValue)
+                && StringUtils.hasText(incomingValue)
+                && !existingValue.trim().equals(incomingValue.trim())) {
+            conflicts.add(fieldName + " existing=" + existingValue.trim() + " incoming=" + incomingValue.trim());
+        }
     }
 
     private java.util.List<Map<String, Object>> validationPreview(IntegrationProviderConfig provider,
@@ -414,11 +560,27 @@ public class DistributionEventDryRunService {
     }
 
     private String amountYuan(JsonNode payload) {
+        BigDecimal value = amountYuanValue(payload);
+        return value == null ? null : value.toPlainString();
+    }
+
+    private BigDecimal amountYuanValue(JsonNode payload) {
         JsonNode node = payload.at("/order/amount");
         if (!node.isNumber()) {
             return null;
         }
-        return BigDecimal.valueOf(node.asDouble()).divide(BigDecimal.valueOf(100)).setScale(2).toPlainString();
+        return node.decimalValue().divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+    }
+
+    private Integer resolveOrderType(String type) {
+        String normalized = normalizeLower(type);
+        if (!StringUtils.hasText(normalized)) {
+            return null;
+        }
+        if ("deposit".equals(normalized)) {
+            return OrderType.DEPOSIT.getCode();
+        }
+        return OrderType.COUPON.getCode();
     }
 
     private String validateTimestamp(String timestamp) {
@@ -463,6 +625,50 @@ public class DistributionEventDryRunService {
         }
         String trimmed = phone.trim();
         return trimmed.substring(0, 3) + "****" + trimmed.substring(trimmed.length() - 4);
+    }
+
+    private String mapExternalStatusToEvent(IntegrationProviderConfig provider, String status) {
+        String normalizedStatus = normalizeExternalStatus(status);
+        if (!StringUtils.hasText(normalizedStatus)) {
+            return null;
+        }
+        Map<String, String> configured = parseStatusMapping(provider == null ? null : provider.getStatusMapping());
+        return firstNonBlank(configured.get(normalizedStatus), switch (normalizedStatus) {
+            case "paid" -> "distribution.order.paid";
+            case "cancelled" -> "distribution.order.cancelled";
+            case "refund_pending" -> "distribution.order.refund_pending";
+            case "refunded" -> "distribution.order.refunded";
+            default -> null;
+        });
+    }
+
+    private Map<String, String> parseStatusMapping(String value) {
+        Map<String, String> mapping = new LinkedHashMap<>();
+        if (!StringUtils.hasText(value)) {
+            return mapping;
+        }
+        for (String item : value.split(",")) {
+            String[] pair = item.split("=", 2);
+            if (pair.length == 2 && StringUtils.hasText(pair[0]) && StringUtils.hasText(pair[1])) {
+                mapping.put(normalizeExternalStatus(pair[0]), pair[1].trim().toLowerCase(Locale.ROOT));
+            }
+        }
+        return mapping;
+    }
+
+    private String normalizeExternalStatus(String status) {
+        String value = normalizeLower(status);
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        value = value.replace('-', '_').replace(' ', '_');
+        return switch (value) {
+            case "paid_deposit", "appointment", "arrived", "serving", "success", "pay_success", "paid_success" -> "paid";
+            case "cancel", "canceled", "cancelled", "closed" -> "cancelled";
+            case "refunding", "refund_auditing", "refund_pending", "refund_apply" -> "refund_pending";
+            case "refund_success", "refund_finished", "refunded" -> "refunded";
+            default -> value;
+        };
     }
 
     private String firstNonBlank(String... values) {

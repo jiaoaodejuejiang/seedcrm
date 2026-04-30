@@ -372,6 +372,161 @@ public class SystemFlowServiceImpl implements SystemFlowService {
             }, normalizedFlowCode);
     }
 
+    @Override
+    public SystemFlowDtos.RuntimeOverviewResponse runtimeOverview(String flowCode) {
+        String normalizedFlowCode = normalizeFlowCode(flowCode);
+        SystemFlowDtos.RuntimeOverviewResponse response = new SystemFlowDtos.RuntimeOverviewResponse();
+        response.setFlowCode(normalizedFlowCode);
+        response.setRunningCount(queryCount("""
+                SELECT COUNT(1)
+                FROM system_flow_instance
+                WHERE flow_code = ? AND status = 'RUNNING'
+                """, normalizedFlowCode));
+        response.setOpenTaskCount(queryCount("""
+                SELECT COUNT(1)
+                FROM system_flow_task
+                WHERE flow_code = ? AND status = 'OPEN'
+                """, normalizedFlowCode));
+        response.setRecentInstances(listRuntimeInstances(normalizedFlowCode, 10));
+        response.setOpenTasks(listOpenTasks(normalizedFlowCode));
+        response.setRecentEvents(jdbcTemplate.query("""
+                SELECT id, instance_id, flow_code, version_no, action_code, from_node_code, to_node_code,
+                       actor_role_code, actor_user_id, summary, event_time
+                FROM system_flow_event_log
+                WHERE flow_code = ?
+                ORDER BY event_time DESC, id DESC
+                LIMIT 20
+                """, (rs, rowNum) -> mapEvent(rs), normalizedFlowCode));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public SystemFlowDtos.InstanceResponse startInstance(SystemFlowDtos.StartInstanceRequest request, PermissionRequestContext context) {
+        String flowCode = normalizeFlowCode(request == null ? null : request.getFlowCode());
+        SystemFlowDtos.DetailResponse detail = detail(flowCode, null);
+        String businessObject = normalizeCode(request == null ? null : request.getBusinessObject());
+        Long businessId = request == null ? null : request.getBusinessId();
+        if (!StringUtils.hasText(businessObject) || businessId == null || businessId <= 0) {
+            throw new BusinessException("businessObject and businessId are required");
+        }
+        String startNodeCode = normalizeCode(request.getStartNodeCode());
+        if (!StringUtils.hasText(startNodeCode)) {
+            startNodeCode = detail.getNodes().isEmpty() ? null : detail.getNodes().get(0).getNodeCode();
+        }
+        SystemFlowDtos.NodeResponse startNode = findNode(detail.getNodes(), startNodeCode);
+        if (startNode == null) {
+            throw new BusinessException("start node not found");
+        }
+        Long existingId = queryLongOrNull("""
+                SELECT id
+                FROM system_flow_instance
+                WHERE flow_code = ? AND business_object = ? AND business_id = ?
+                LIMIT 1
+                """, flowCode, businessObject, businessId);
+        if (existingId != null) {
+            return getRuntimeInstance(existingId);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        jdbcTemplate.update("""
+                INSERT INTO system_flow_instance(
+                    flow_code, version_id, version_no, business_object, business_id, current_node_code, status,
+                    title, created_by_role_code, created_by_user_id, create_time, update_time
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?, ?, ?)
+                """, flowCode, detail.getVersion().getId(), detail.getVersion().getVersionNo(), businessObject, businessId,
+                startNode.getNodeCode(), trimToNull(request.getTitle()),
+                context == null ? null : context.getRoleCode(),
+                context == null ? null : context.getCurrentUserId(),
+                now, now);
+        Long instanceId = queryLongOrNull("""
+                SELECT id
+                FROM system_flow_instance
+                WHERE flow_code = ? AND business_object = ? AND business_id = ?
+                LIMIT 1
+                """, flowCode, businessObject, businessId);
+        createOpenTask(instanceId, flowCode, startNode, "待处理：" + startNode.getNodeName(), null);
+        insertRuntimeEvent(instanceId, flowCode, detail.getVersion().getVersionNo(), "INSTANCE_START", null, startNode.getNodeCode(),
+                context, StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : "创建流程实例");
+        return getRuntimeInstance(instanceId);
+    }
+
+    @Override
+    @Transactional
+    public SystemFlowDtos.InstanceResponse transitionInstance(SystemFlowDtos.TransitionInstanceRequest request, PermissionRequestContext context) {
+        Long instanceId = request == null ? null : request.getInstanceId();
+        if (instanceId == null || instanceId <= 0) {
+            throw new BusinessException("instanceId is required");
+        }
+        String actionCode = normalizeCode(request.getActionCode());
+        if (!StringUtils.hasText(actionCode)) {
+            throw new BusinessException("actionCode is required");
+        }
+        SystemFlowDtos.InstanceResponse instance = getRuntimeInstance(instanceId);
+        if (!"RUNNING".equalsIgnoreCase(instance.getStatus())) {
+            return instance;
+        }
+        SystemFlowDtos.DetailResponse detail = detail(instance.getFlowCode(), instance.getVersionId());
+        SystemFlowDtos.TransitionResponse transition = detail.getTransitions().stream()
+                .filter(item -> instance.getCurrentNodeCode().equalsIgnoreCase(item.getFromNodeCode()))
+                .filter(item -> actionCode.equalsIgnoreCase(item.getActionCode()))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException("no transition found for current node and action"));
+        SystemFlowDtos.NodeResponse sourceNode = findNode(detail.getNodes(), instance.getCurrentNodeCode());
+        if (!isRoleAllowedForSimulation(context == null ? null : context.getRoleCode(), sourceNode)) {
+            throw new BusinessException("current role cannot process this workflow node");
+        }
+        SystemFlowDtos.NodeResponse targetNode = findNode(detail.getNodes(), transition.getToNodeCode());
+        if (targetNode == null) {
+            throw new BusinessException("target node not found");
+        }
+        jdbcTemplate.update("""
+                UPDATE system_flow_task
+                SET status = 'DONE', completed_at = ?, remark = ?
+                WHERE instance_id = ? AND status = 'OPEN'
+                """, LocalDateTime.now(), trimToNull(request.getRemark()), instanceId);
+        String nextStatus = "END".equalsIgnoreCase(targetNode.getNodeType()) ? "COMPLETED" : "RUNNING";
+        jdbcTemplate.update("""
+                UPDATE system_flow_instance
+                SET current_node_code = ?, status = ?, update_time = ?
+                WHERE id = ?
+                """, targetNode.getNodeCode(), nextStatus, LocalDateTime.now(), instanceId);
+        if ("RUNNING".equals(nextStatus)) {
+            createOpenTask(instanceId, instance.getFlowCode(), targetNode, transition.getActionName(), null);
+        }
+        insertRuntimeEvent(instanceId, instance.getFlowCode(), instance.getVersionNo(), actionCode,
+                transition.getFromNodeCode(), transition.getToNodeCode(), context,
+                StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : transition.getActionName());
+        return getRuntimeInstance(instanceId);
+    }
+
+    @Override
+    public List<SystemFlowDtos.TaskResponse> listOpenTasks(String flowCode) {
+        String normalizedFlowCode = normalizeFlowCode(flowCode);
+        return jdbcTemplate.query("""
+                SELECT id, instance_id, flow_code, node_code, node_name, task_name, role_code, assignee_user_id,
+                       status, opened_at, completed_at, remark
+                FROM system_flow_task
+                WHERE flow_code = ? AND status = 'OPEN'
+                ORDER BY opened_at DESC, id DESC
+                LIMIT 50
+                """, (rs, rowNum) -> mapTask(rs), normalizedFlowCode);
+    }
+
+    @Override
+    public List<SystemFlowDtos.EventLogResponse> listInstanceEvents(Long instanceId) {
+        if (instanceId == null || instanceId <= 0) {
+            throw new BusinessException("instanceId is required");
+        }
+        return jdbcTemplate.query("""
+                SELECT id, instance_id, flow_code, version_no, action_code, from_node_code, to_node_code,
+                       actor_role_code, actor_user_id, summary, event_time
+                FROM system_flow_event_log
+                WHERE instance_id = ?
+                ORDER BY event_time DESC, id DESC
+                """, (rs, rowNum) -> mapEvent(rs), instanceId);
+    }
+
     private void compareDefinitionDiff(List<SystemFlowDtos.DiffItemResponse> items,
                                        SystemFlowDtos.DefinitionResponse base,
                                        SystemFlowDtos.SaveDraftRequest draft) {

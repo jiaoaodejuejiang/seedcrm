@@ -208,4 +208,80 @@ public final class SystemFlowDtos {
         private String summary;
         private LocalDateTime createdAt;
     }
+
+    @Data
+    public static class StartInstanceRequest {
+        private String flowCode;
+        private String businessObject;
+        private Long businessId;
+        private String title;
+        private String startNodeCode;
+        private String remark;
+    }
+
+    @Data
+    public static class TransitionInstanceRequest {
+        private Long instanceId;
+        private String actionCode;
+        private String remark;
+    }
+
+    @Data
+    public static class InstanceResponse {
+        private Long id;
+        private String flowCode;
+        private Long versionId;
+        private Integer versionNo;
+        private String businessObject;
+        private Long businessId;
+        private String currentNodeCode;
+        private String currentNodeName;
+        private String status;
+        private String title;
+        private String createdByRoleCode;
+        private Long createdByUserId;
+        private LocalDateTime createTime;
+        private LocalDateTime updateTime;
+    }
+
+    @Data
+    public static class TaskResponse {
+        private Long id;
+        private Long instanceId;
+        private String flowCode;
+        private String nodeCode;
+        private String nodeName;
+        private String taskName;
+        private String roleCode;
+        private Long assigneeUserId;
+        private String status;
+        private LocalDateTime openedAt;
+        private LocalDateTime completedAt;
+        private String remark;
+    }
+
+    @Data
+    public static class EventLogResponse {
+        private Long id;
+        private Long instanceId;
+        private String flowCode;
+        private Integer versionNo;
+        private String actionCode;
+        private String fromNodeCode;
+        private String toNodeCode;
+        private String actorRoleCode;
+        private Long actorUserId;
+        private String summary;
+        private LocalDateTime eventTime;
+    }
+
+    @Data
+    public static class RuntimeOverviewResponse {
+        private String flowCode;
+        private Integer runningCount;
+        private Integer openTaskCount;
+        private List<InstanceResponse> recentInstances = new ArrayList<>();
+        private List<TaskResponse> openTasks = new ArrayList<>();
+        private List<EventLogResponse> recentEvents = new ArrayList<>();
+    }
 }

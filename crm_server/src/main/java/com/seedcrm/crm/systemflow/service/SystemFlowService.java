@@ -27,4 +27,14 @@ public interface SystemFlowService {
     SystemFlowDtos.TriggerLinkageReportResponse triggerLinkageReport(String flowCode, Long versionId);
 
     List<SystemFlowDtos.AuditLogResponse> listAuditLogs(String flowCode);
+
+    SystemFlowDtos.RuntimeOverviewResponse runtimeOverview(String flowCode);
+
+    SystemFlowDtos.InstanceResponse startInstance(SystemFlowDtos.StartInstanceRequest request, PermissionRequestContext context);
+
+    SystemFlowDtos.InstanceResponse transitionInstance(SystemFlowDtos.TransitionInstanceRequest request, PermissionRequestContext context);
+
+    List<SystemFlowDtos.TaskResponse> listOpenTasks(String flowCode);
+
+    List<SystemFlowDtos.EventLogResponse> listInstanceEvents(Long instanceId);
 }

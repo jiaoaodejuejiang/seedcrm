@@ -112,6 +112,60 @@ public class SystemFlowSchemaInitializer {
                     KEY idx_system_flow_audit_flow (flow_code, created_at)
                 )
                 """);
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS system_flow_instance (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    flow_code VARCHAR(64) NOT NULL,
+                    version_id BIGINT NOT NULL,
+                    version_no INT NOT NULL,
+                    business_object VARCHAR(64) NOT NULL,
+                    business_id BIGINT NOT NULL,
+                    current_node_code VARCHAR(64) NOT NULL,
+                    status VARCHAR(32) NOT NULL,
+                    title VARCHAR(200),
+                    created_by_role_code VARCHAR(64),
+                    created_by_user_id BIGINT,
+                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_system_flow_instance_biz (flow_code, business_object, business_id),
+                    KEY idx_system_flow_instance_status (flow_code, status, update_time)
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS system_flow_task (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    instance_id BIGINT NOT NULL,
+                    flow_code VARCHAR(64) NOT NULL,
+                    node_code VARCHAR(64) NOT NULL,
+                    node_name VARCHAR(100),
+                    task_name VARCHAR(100) NOT NULL,
+                    role_code VARCHAR(64),
+                    assignee_user_id BIGINT,
+                    status VARCHAR(32) NOT NULL,
+                    opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    completed_at DATETIME,
+                    remark VARCHAR(500),
+                    KEY idx_system_flow_task_instance (instance_id),
+                    KEY idx_system_flow_task_status (flow_code, status, role_code)
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS system_flow_event_log (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    instance_id BIGINT NOT NULL,
+                    flow_code VARCHAR(64) NOT NULL,
+                    version_no INT,
+                    action_code VARCHAR(64) NOT NULL,
+                    from_node_code VARCHAR(64),
+                    to_node_code VARCHAR(64),
+                    actor_role_code VARCHAR(64),
+                    actor_user_id BIGINT,
+                    summary VARCHAR(500),
+                    event_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    KEY idx_system_flow_event_instance (instance_id, event_time),
+                    KEY idx_system_flow_event_action (flow_code, action_code, event_time)
+                )
+                """);
     }
 
     private void seedStandardOrderFlow() {

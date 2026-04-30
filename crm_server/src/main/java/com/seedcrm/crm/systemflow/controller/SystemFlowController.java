@@ -120,4 +120,44 @@ public class SystemFlowController {
         settingModuleGuard.checkSystemFlowView(context);
         return ApiResponse.success(systemFlowService.listAuditLogs(flowCode));
     }
+
+    @GetMapping("/runtime-overview")
+    public ApiResponse<SystemFlowDtos.RuntimeOverviewResponse> runtimeOverview(@RequestParam(required = false) String flowCode,
+                                                                               HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkSystemFlowView(context);
+        return ApiResponse.success(systemFlowService.runtimeOverview(flowCode));
+    }
+
+    @PostMapping("/runtime/start")
+    public ApiResponse<SystemFlowDtos.InstanceResponse> startRuntime(@RequestBody SystemFlowDtos.StartInstanceRequest requestBody,
+                                                                     HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkSystemFlowDebug(context);
+        return ApiResponse.success(systemFlowService.startInstance(requestBody, context));
+    }
+
+    @PostMapping("/runtime/transition")
+    public ApiResponse<SystemFlowDtos.InstanceResponse> transitionRuntime(@RequestBody SystemFlowDtos.TransitionInstanceRequest requestBody,
+                                                                         HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkSystemFlowDebug(context);
+        return ApiResponse.success(systemFlowService.transitionInstance(requestBody, context));
+    }
+
+    @GetMapping("/runtime/tasks")
+    public ApiResponse<List<SystemFlowDtos.TaskResponse>> runtimeTasks(@RequestParam(required = false) String flowCode,
+                                                                       HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkSystemFlowView(context);
+        return ApiResponse.success(systemFlowService.listOpenTasks(flowCode));
+    }
+
+    @GetMapping("/runtime/events")
+    public ApiResponse<List<SystemFlowDtos.EventLogResponse>> runtimeEvents(@RequestParam Long instanceId,
+                                                                            HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkSystemFlowView(context);
+        return ApiResponse.success(systemFlowService.listInstanceEvents(instanceId));
+    }
 }

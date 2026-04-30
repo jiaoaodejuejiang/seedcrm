@@ -19,6 +19,7 @@ import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StoreLiveCodePreviewResp
 import com.seedcrm.crm.workbench.service.WorkbenchService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,6 +30,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/workbench")
 public class WorkbenchController {
+
+    private static final Set<String> STORE_AMOUNT_RESTRICTED_ROLES = Set.of(
+            "STORE_SERVICE",
+            "STORE_MANAGER",
+            "PHOTOGRAPHER",
+            "MAKEUP_ARTIST",
+            "PHOTO_SELECTOR");
 
     private final WorkbenchService workbenchService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
@@ -72,6 +80,7 @@ public class WorkbenchController {
         List<OrderItemResponse> orders = workbenchService.listOrders(status, customerName, customerPhone).stream()
                 .filter(order -> orderPermissionGuard.canView(context, order.getId()))
                 .filter(order -> matchesStoreScope(context, order.getStoreName()))
+                .peek(order -> maskOrderAmountsIfNeeded(order, context))
                 .collect(Collectors.toList());
         return ApiResponse.success(orders);
     }
@@ -90,6 +99,7 @@ public class WorkbenchController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         List<PlanOrderItemResponse> planOrders = workbenchService.listPlanOrders(status).stream()
                 .filter(planOrder -> planOrderPermissionGuard.canView(context, planOrder.getPlanOrderId()))
+                .peek(planOrder -> maskPlanOrderAmountsIfNeeded(planOrder, context))
                 .collect(Collectors.toList());
         return ApiResponse.success(planOrders);
     }
@@ -109,7 +119,36 @@ public class WorkbenchController {
                                                                    HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         planOrderPermissionGuard.checkView(context, planOrderId);
-        return ApiResponse.success(workbenchService.getPlanOrderWorkbench(planOrderId));
+        PlanOrderWorkbenchResponse response = workbenchService.getPlanOrderWorkbench(planOrderId);
+        maskPlanOrderWorkbenchAmountsIfNeeded(response, context);
+        return ApiResponse.success(response);
+    }
+
+    private void maskPlanOrderWorkbenchAmountsIfNeeded(PlanOrderWorkbenchResponse response, PermissionRequestContext context) {
+        if (response == null || !shouldMaskAmounts(context)) {
+            return;
+        }
+        maskPlanOrderAmountsIfNeeded(response.getSummary(), context);
+        maskOrderAmountsIfNeeded(response.getOrder(), context);
+    }
+
+    private void maskPlanOrderAmountsIfNeeded(PlanOrderItemResponse response, PermissionRequestContext context) {
+        if (response != null && shouldMaskAmounts(context)) {
+            response.setAmount(null);
+        }
+    }
+
+    private void maskOrderAmountsIfNeeded(OrderItemResponse response, PermissionRequestContext context) {
+        if (response != null && shouldMaskAmounts(context)) {
+            response.setAmount(null);
+            response.setDeposit(null);
+        }
+    }
+
+    private boolean shouldMaskAmounts(PermissionRequestContext context) {
+        return context != null
+                && context.getRoleCode() != null
+                && STORE_AMOUNT_RESTRICTED_ROLES.contains(context.getRoleCode().trim().toUpperCase());
     }
 
     @GetMapping("/customers/{customerId}")

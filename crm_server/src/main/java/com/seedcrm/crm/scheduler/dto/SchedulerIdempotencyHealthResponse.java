@@ -36,9 +36,24 @@ public class SchedulerIdempotencyHealthResponse {
         private long duplicateCount;
         private Long firstLogId;
         private Long latestLogId;
+        private Long retainLogId;
+        private List<Long> reviewLogIds;
+        private List<DuplicateLogSample> logSamples;
         private LocalDateTime firstReceivedAt;
         private LocalDateTime latestReceivedAt;
         private List<String> sampleTraceIds;
+        private String cleanupStrategy;
         private String recommendedAction;
+    }
+
+    @Data
+    public static class DuplicateLogSample {
+        private Long id;
+        private String traceId;
+        private String processStatus;
+        private String idempotencyStatus;
+        private String bodyHash;
+        private Long relatedOrderId;
+        private String receivedAt;
     }
 }

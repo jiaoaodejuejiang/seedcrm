@@ -69,4 +69,10 @@ public class OrderResponse {
         response.setUpdateTime(order.getUpdateTime());
         return response;
     }
+
+    public OrderResponse maskAmounts() {
+        this.amount = null;
+        this.deposit = null;
+        return this;
+    }
 }

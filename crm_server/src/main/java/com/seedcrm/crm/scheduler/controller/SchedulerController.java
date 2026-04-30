@@ -215,7 +215,9 @@ public class SchedulerController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkView(context);
         rejectPartnerScopedHealthView(context);
-        return ApiResponse.success(schedulerIdempotencyHealthService.inspect(providerCode));
+        return ApiResponse.success(schedulerSensitiveDataMasker.maskIdempotencyHealth(
+                schedulerIdempotencyHealthService.inspect(providerCode),
+                context));
     }
 
     @GetMapping("/monitor/summary")

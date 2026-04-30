@@ -1,40 +1,25 @@
 <template>
   <div class="stack-page clue-management-page">
-    <section class="metrics-row">
-      <article class="metric-card">
-        <span>客资总数</span>
-        <strong>{{ mergedClues.length }}</strong>
-        <small>自动拉取的线索会统一进入客资列表，由客服继续跟进与整理。</small>
-      </article>
-      <article class="metric-card">
-        <span>已付款客资</span>
-        <strong>{{ paidClueCount }}</strong>
-        <small>已进入付款链路的客资，可直接进入顾客排档安排门店档期。</small>
-      </article>
-      <article class="metric-card">
-        <span>待再次沟通</span>
-        <strong>{{ callbackCount }}</strong>
-        <small>客服可直接在列表中补充跟进记录、调整线索阶段和补打标签。</small>
-      </article>
-    </section>
-
     <section class="panel">
       <div class="toolbar">
         <div class="toolbar-tabs">
           <el-radio-group v-model="productSourceFilter" @change="applyFilters">
-            <el-radio-button value="ALL">全部产品</el-radio-button>
-            <el-radio-button value="GROUP_BUY">团购</el-radio-button>
-            <el-radio-button value="FORM">表单</el-radio-button>
+            <el-radio-button value="ALL">{{ sourceFilterLabel('ALL') }}</el-radio-button>
+            <el-radio-button value="GROUP_BUY">{{ sourceFilterLabel('GROUP_BUY') }}</el-radio-button>
+            <el-radio-button value="FORM">{{ sourceFilterLabel('FORM') }}</el-radio-button>
           </el-radio-group>
+        </div>
+        <div class="toolbar__filters">
+          <el-button plain @click="columnDrawerVisible = true">可选列</el-button>
         </div>
       </div>
 
       <div class="toolbar toolbar--compact">
         <div class="toolbar-tabs">
           <el-radio-group v-model="filters.queueStatus" @change="applyFilters">
-            <el-radio-button value="ALL">全部</el-radio-button>
-            <el-radio-button value="WAIT_ASSIGN">待分配</el-radio-button>
-            <el-radio-button value="WAIT_FOLLOW_UP">待跟进</el-radio-button>
+            <el-radio-button value="ALL">{{ queueFilterLabel('ALL') }}</el-radio-button>
+            <el-radio-button value="WAIT_ASSIGN">{{ queueFilterLabel('WAIT_ASSIGN') }}</el-radio-button>
+            <el-radio-button value="WAIT_FOLLOW_UP">{{ queueFilterLabel('WAIT_FOLLOW_UP') }}</el-radio-button>
           </el-radio-group>
         </div>
 
@@ -133,9 +118,24 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="通话状态" width="136">
+        <el-table-column
+          v-for="column in visibleTableColumns"
+          :key="column.key"
+          :label="column.label"
+          :width="column.width"
+        >
           <template #default="{ row }">
-            <div class="editable-cell">
+            <template v-if="column.key === 'orderType'">
+              <el-tag effect="plain">{{ formatClueOrderType(row.orderType) }}</el-tag>
+            </template>
+
+            <template v-else-if="column.key === 'paymentStatus'">
+              <el-tag :type="row.leadStage === 'DEPOSIT_PAID' ? 'success' : 'info'" effect="light">
+                {{ row.paymentStatusLabel }}
+              </el-tag>
+            </template>
+
+            <div v-else-if="column.key === 'callStatus'" class="editable-cell">
               <span class="editable-cell__text">{{ formatCallStatus(row.callStatus) }}</span>
               <el-popover placement="bottom-start" :width="240" trigger="click" @show="prepareCellDraft(row.id, 'callStatus', row.callStatus)">
                 <template #reference>
@@ -161,12 +161,8 @@
                 </div>
               </el-popover>
             </div>
-          </template>
-        </el-table-column>
 
-        <el-table-column label="线索阶段" width="144">
-          <template #default="{ row }">
-            <div class="editable-cell">
+            <div v-else-if="column.key === 'leadStage'" class="editable-cell">
               <span class="editable-cell__text">{{ formatLeadStage(row.leadStage) }}</span>
               <el-popover placement="bottom-start" :width="260" trigger="click" @show="prepareCellDraft(row.id, 'leadStage', row.leadStage)">
                 <template #reference>
@@ -192,12 +188,8 @@
                 </div>
               </el-popover>
             </div>
-          </template>
-        </el-table-column>
 
-        <el-table-column label="跟进记录" width="220">
-          <template #default="{ row }">
-            <div class="editable-cell editable-cell--stack">
+            <div v-else-if="column.key === 'followRecords'" class="editable-cell editable-cell--stack">
               <div class="table-primary">
                 <strong>{{ latestFollowRecord(row) }}</strong>
                 <span>{{ row.followRecords.length ? `共 ${row.followRecords.length} 条` : '暂无跟进记录' }}</span>
@@ -246,12 +238,8 @@
                 </div>
               </el-popover>
             </div>
-          </template>
-        </el-table-column>
 
-        <el-table-column label="线索标签" width="180">
-          <template #default="{ row }">
-            <div class="editable-cell">
+            <div v-else-if="column.key === 'leadTags'" class="editable-cell">
               <span class="editable-cell__text">{{ previewLeadTags(row.leadTags) }}</span>
               <el-popover placement="bottom-start" :width="320" trigger="click" @show="prepareCellDraft(row.id, 'leadTags', row.leadTags)">
                 <template #reference>
@@ -285,12 +273,8 @@
                 </div>
               </el-popover>
             </div>
-          </template>
-        </el-table-column>
 
-        <el-table-column label="意向门店" width="160">
-          <template #default="{ row }">
-            <div class="editable-cell">
+            <div v-else-if="column.key === 'intendedStoreName'" class="editable-cell">
               <span class="editable-cell__text">{{ row.intendedStoreName || '--' }}</span>
               <el-popover placement="bottom-start" :width="260" trigger="click" @show="prepareCellDraft(row.id, 'intendedStoreName', row.intendedStoreName)">
                 <template #reference>
@@ -317,18 +301,14 @@
                 </div>
               </el-popover>
             </div>
-          </template>
-        </el-table-column>
 
-        <el-table-column label="分配时间" width="180">
-          <template #default="{ row }">
-            {{ formatDateTime(row.assignedAt) }}
-          </template>
-        </el-table-column>
+            <template v-else-if="column.key === 'assignedAt'">
+              {{ formatDateTime(row.assignedAt) }}
+            </template>
 
-        <el-table-column label="创建时间" width="180">
-          <template #default="{ row }">
-            {{ formatDateTime(row.createdAt) }}
+            <template v-else-if="column.key === 'createdAt'">
+              {{ formatDateTime(row.createdAt) }}
+            </template>
           </template>
         </el-table-column>
 
@@ -343,7 +323,7 @@
                 size="small"
                 @click="goToScheduling(row)"
               >
-                {{ row.schedulingActionLabel }}
+                约档
               </el-button>
               <el-dropdown v-if="canShowMoreActions(row)">
                 <el-button size="small" plain>更多操作</el-button>
@@ -379,6 +359,38 @@
       </div>
     </section>
 
+    <el-drawer v-model="columnDrawerVisible" title="可选列" size="360px">
+      <div class="stack-page">
+        <section class="panel compact-panel">
+          <div class="panel-heading compact">
+            <div>
+              <h3>列表字段</h3>
+              <p class="panel-heading__meta">选择显示字段，并用上移/下移调整顺序。</p>
+            </div>
+          </div>
+          <div class="column-config-list">
+            <article v-for="(column, index) in configurableColumns" :key="column.key" class="column-config-item">
+              <el-checkbox
+                :model-value="column.visible"
+                :disabled="column.required"
+                @change="setColumnVisible(column.key, $event)"
+              >
+                {{ column.label }}
+              </el-checkbox>
+              <div class="action-group action-group--compact">
+                <el-button size="small" plain :disabled="index === 0" @click="moveColumn(index, -1)">上移</el-button>
+                <el-button size="small" plain :disabled="index === configurableColumns.length - 1" @click="moveColumn(index, 1)">下移</el-button>
+              </div>
+            </article>
+          </div>
+        </section>
+        <div class="action-group flex-end">
+          <el-button plain @click="resetColumnPreferences">恢复默认</el-button>
+          <el-button type="primary" @click="columnDrawerVisible = false">完成</el-button>
+        </div>
+      </div>
+    </el-drawer>
+
     <el-drawer v-model="detailDrawerVisible" title="线索详情" size="560px">
       <template v-if="detailRow">
         <div class="stack-page">
@@ -390,6 +402,8 @@
                 <p>姓名：{{ displayName(detailRow) }}</p>
                 <p>电话：{{ detailRow.editPhone || '--' }}</p>
                 <p>来源形式：{{ formatProductSourceType(detailRow.productSourceType) }}</p>
+                <p>订单类型：{{ formatClueOrderType(detailRow.orderType) }}</p>
+                <p>付款状态：{{ detailRow.paymentStatusLabel }}</p>
               </article>
               <article class="detail-card">
                 <h3>跟进状态</h3>
@@ -416,23 +430,19 @@
           <section class="panel">
                 <div class="panel-heading compact">
                   <div>
-                    <h3>跟进记录</h3>
+                    <h3>客资记录</h3>
                   </div>
                 </div>
-            <div v-if="detailRow.followRecords.length" class="follow-record-list">
-              <article v-for="record in detailRow.followRecords" :key="record.id" class="follow-record-item">
+            <div v-if="detailRow.leadRecordItems.length" class="follow-record-list">
+              <article v-for="record in detailRow.leadRecordItems" :key="record.id" class="follow-record-item">
                 <div class="follow-record-item__header">
-                  <strong>{{ formatDateTime(record.createdAt) }}</strong>
+                  <strong>{{ record.title }}</strong>
+                  <span>{{ formatDateTime(record.createdAt) }}</span>
                 </div>
                 <p>{{ record.content }}</p>
               </article>
             </div>
-            <p v-else class="text-secondary">暂无跟进记录</p>
-
-            <div class="table-note">
-              最近订单状态：{{ detailRow.latestOrderId ? detailRow.latestOrderStageLabel : '暂无订单' }}
-              <span v-if="detailRow.paidOrderAppointmentTime">；预约时间：{{ formatDateTime(detailRow.paidOrderAppointmentTime) }}</span>
-            </div>
+            <p v-else class="text-secondary">暂无客资记录</p>
           </section>
         </div>
       </template>
@@ -485,6 +495,7 @@ const paidOrders = ref([])
 const dutyStaff = ref([])
 const assignDialogVisible = ref(false)
 const detailDrawerVisible = ref(false)
+const columnDrawerVisible = ref(false)
 const assignTarget = ref(null)
 const detailRowId = ref(null)
 const productSourceFilter = ref('ALL')
@@ -498,6 +509,21 @@ let refreshTimer = null
 let tableScrollWrap = null
 let scrollSyncing = false
 let tableResizeObserver = null
+
+const COLUMN_PREFERENCE_KEY = 'seedcrm:clue-list-columns'
+const defaultColumnConfig = [
+  { key: 'orderType', label: '订单类型', width: 120, visible: true, required: false },
+  { key: 'paymentStatus', label: '付款状态', width: 126, visible: true, required: false },
+  { key: 'callStatus', label: '通话状态', width: 136, visible: true, required: false },
+  { key: 'leadStage', label: '线索阶段', width: 144, visible: true, required: true },
+  { key: 'followRecords', label: '跟进记录', width: 220, visible: true, required: false },
+  { key: 'leadTags', label: '线索标签', width: 180, visible: true, required: false },
+  { key: 'intendedStoreName', label: '意向门店', width: 160, visible: true, required: false },
+  { key: 'assignedAt', label: '分配时间', width: 180, visible: true, required: false },
+  { key: 'createdAt', label: '创建时间', width: 180, visible: true, required: false }
+]
+const configurableColumns = ref(loadColumnPreferences())
+const visibleTableColumns = computed(() => configurableColumns.value.filter((item) => item.visible !== false))
 
 const filters = reactive({
   phone: '',
@@ -541,9 +567,20 @@ const latestPaidOrderByClueId = computed(() => {
 const assignableStaff = computed(() => dutyStaff.value.filter((item) => item.onLeave !== 1))
 const canAssignClue = computed(() => ['ADMIN', 'CLUE_MANAGER'].includes(currentUser.value?.roleCode || ''))
 const canRecycleClue = computed(() => ['ADMIN', 'CLUE_MANAGER'].includes(currentUser.value?.roleCode || ''))
-const paidClueCount = computed(() => mergedClues.value.filter((item) => item.isPaidCustomer).length)
-const callbackCount = computed(() => mergedClues.value.filter((item) => item.leadStage === 'CALLBACK_PENDING').length)
 const detailRow = computed(() => mergedClues.value.find((item) => item.id === detailRowId.value) || null)
+const sourceFilterCounts = computed(() => ({
+  ALL: mergedClues.value.length,
+  GROUP_BUY: mergedClues.value.filter((item) => normalize(item.productSourceType) === 'GROUP_BUY').length,
+  FORM: mergedClues.value.filter((item) => normalize(item.productSourceType) === 'FORM').length
+}))
+const queueFilterCounts = computed(() => {
+  const sourceMatchedRows = mergedClues.value.filter((item) => matchesProductSource(item) && matchesPhone(item) && matchesCreatedRange(item))
+  return {
+    ALL: sourceMatchedRows.length,
+    WAIT_ASSIGN: sourceMatchedRows.filter((item) => resolveQueueStatus(item) === 'WAIT_ASSIGN').length,
+    WAIT_FOLLOW_UP: sourceMatchedRows.filter((item) => resolveQueueStatus(item) === 'WAIT_FOLLOW_UP').length
+  }
+})
 
 const callStatusOptions = [
   { label: '未通话', value: 'NOT_CALLED' },
@@ -565,6 +602,82 @@ const leadStageOptions = [
 ]
 
 const tagOptions = ['高意向', '团购', '表单', '已付款', '已加微信', '待再次沟通', '待到店', '复诊']
+
+function loadColumnPreferences() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(COLUMN_PREFERENCE_KEY) || '[]')
+    if (Array.isArray(saved) && saved.length) {
+      const known = new Map(defaultColumnConfig.map((item) => [item.key, item]))
+      const merged = saved
+        .filter((item) => known.has(item?.key))
+        .map((item) => ({
+          ...known.get(item.key),
+          visible: known.get(item.key).required ? true : item.visible !== false
+        }))
+      for (const item of defaultColumnConfig) {
+        if (!merged.some((column) => column.key === item.key)) {
+          merged.push({ ...item })
+        }
+      }
+      return merged
+    }
+  } catch {
+    // Ignore invalid local preferences and fall back to defaults.
+  }
+  return defaultColumnConfig.map((item) => ({ ...item }))
+}
+
+function persistColumnPreferences() {
+  window.localStorage.setItem(COLUMN_PREFERENCE_KEY, JSON.stringify(configurableColumns.value))
+  void updateFloatingTableScrollbar()
+}
+
+function isColumnVisible(key) {
+  const column = configurableColumns.value.find((item) => item.key === key)
+  return column ? column.visible !== false : true
+}
+
+function setColumnVisible(key, visible) {
+  configurableColumns.value = configurableColumns.value.map((item) =>
+    item.key === key ? { ...item, visible: item.required ? true : Boolean(visible) } : item
+  )
+  persistColumnPreferences()
+}
+
+function moveColumn(index, direction) {
+  const nextIndex = index + direction
+  if (nextIndex < 0 || nextIndex >= configurableColumns.value.length) {
+    return
+  }
+  const nextColumns = [...configurableColumns.value]
+  const [item] = nextColumns.splice(index, 1)
+  nextColumns.splice(nextIndex, 0, item)
+  configurableColumns.value = nextColumns
+  persistColumnPreferences()
+}
+
+function resetColumnPreferences() {
+  configurableColumns.value = defaultColumnConfig.map((item) => ({ ...item }))
+  persistColumnPreferences()
+}
+
+function sourceFilterLabel(value) {
+  const labels = {
+    ALL: '全部产品',
+    GROUP_BUY: '团购',
+    FORM: '表单'
+  }
+  return `${labels[value] || value} ${sourceFilterCounts.value[value] ?? 0}`
+}
+
+function queueFilterLabel(value) {
+  const labels = {
+    ALL: '全部',
+    WAIT_ASSIGN: '待分配',
+    WAIT_FOLLOW_UP: '待跟进'
+  }
+  return `${labels[value] || value} ${queueFilterCounts.value[value] ?? 0}`
+}
 
 function parseDateValue(value) {
   const date = new Date(value)
@@ -625,6 +738,11 @@ function resolveLatestOrderId(row) {
   return paidOrder?.id || row.latestOrderId || null
 }
 
+function resolveLatestOrderType(row) {
+  const paidOrder = resolvePaidOrder(row)
+  return paidOrder?.type || row.latestOrderType || null
+}
+
 function buildSyntheticClueFromOrder(order) {
   const profile = findClueProfile(order.clueId)
   return {
@@ -643,6 +761,7 @@ function buildSyntheticClueFromOrder(order) {
     customerId: order.customerId,
     latestOrderId: order.id,
     latestOrderStatus: order.statusCategory || order.status,
+    latestOrderType: order.type,
     orderCount: 1,
     createdAt: order.createTime
   }
@@ -708,6 +827,56 @@ function defaultLeadTags(row) {
   return [...new Set(values.filter(Boolean))]
 }
 
+function formatClueOrderType(value) {
+  const normalized = normalize(value)
+  if (normalized === 'DEPOSIT') {
+    return '定金'
+  }
+  if (normalized === 'COUPON') {
+    return '团购'
+  }
+  return '未关联'
+}
+
+function paymentStatusLabel(row) {
+  if (normalize(row.leadStage) === 'DEPOSIT_PAID') {
+    return '已付定金'
+  }
+  if (isPaidCustomer(row.latestOrderStatus)) {
+    return '已付款'
+  }
+  return '未付款'
+}
+
+function buildLeadRecordItems(row, paidOrder) {
+  const records = []
+  if (paidOrder?.id || row.latestOrderId) {
+    records.push({
+      id: `order-${paidOrder?.id || row.latestOrderId}`,
+      title: '订单同步',
+      content: `${formatClueOrderType(paidOrder?.type || row.latestOrderType)} / ${formatOrderStage(paidOrder?.statusCategory || paidOrder?.status || row.latestOrderStatus)}`,
+      createdAt: paidOrder?.createTime || row.createdAt
+    })
+  }
+  if (paidOrder?.appointmentTime) {
+    records.push({
+      id: `appointment-${paidOrder.id}`,
+      title: '预约排档',
+      content: `预约时间：${formatDateTime(paidOrder.appointmentTime)}`,
+      createdAt: paidOrder.appointmentTime
+    })
+  }
+  for (const item of row.followRecords || []) {
+    records.push({
+      id: `follow-${item.id}`,
+      title: '跟进记录',
+      content: item.content,
+      createdAt: item.createdAt
+    })
+  }
+  return records.sort((left, right) => parseDateValue(right.createdAt) - parseDateValue(left.createdAt))
+}
+
 function findClueProfile(clueId) {
   return (consoleState.clueConsoleProfiles || []).find((item) => item.clueId === clueId) || null
 }
@@ -737,6 +906,7 @@ function buildClueRow(row) {
   const profile = ensureClueProfile(row)
   const latestOrderId = resolveLatestOrderId(row)
   const latestOrderStatus = resolveLatestOrderStatus(row)
+  const latestOrderType = resolveLatestOrderType(row)
   const normalizedOrderStatus = normalize(latestOrderStatus)
   const paidOrderAppointmentTime = paidOrder?.appointmentTime || ''
   const canViewScheduling = isPaidCustomer(latestOrderStatus)
@@ -753,6 +923,8 @@ function buildClueRow(row) {
     ...row,
     latestOrderId,
     latestOrderStatus,
+    latestOrderType,
+    orderType: latestOrderType,
     editName: profile.displayName || row.name || '',
     editPhone: profile.phone || row.phone || '',
     callStatus: profile.callStatus,
@@ -762,6 +934,8 @@ function buildClueRow(row) {
     intendedStoreName: profile.intendedStoreName || row.storeName || '',
     assignedAt: row.currentOwnerId ? profile.assignedAt || row.createdAt : '',
     latestOrderStageLabel: orderStageLabel,
+    paymentStatusLabel: paymentStatusLabel({ ...profile, latestOrderStatus }),
+    leadRecordItems: buildLeadRecordItems({ ...profile, ...row, latestOrderId, latestOrderStatus, latestOrderType }, paidOrder),
     isPaidCustomer: canViewScheduling,
     paidOrderId: canViewScheduling ? latestOrderId : null,
     paidOrderAppointmentTime,

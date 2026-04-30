@@ -159,22 +159,57 @@
             v-loading="healthLoading"
             :data="idempotencyHealth.duplicateGroups || []"
             stripe
-            empty-text="当前未发现重复幂等记录"
+            empty-text="当前未发现重复接收记录"
           >
+            <el-table-column type="expand" width="44">
+              <template #default="{ row }">
+                <div class="payload-panel">
+                  <div class="detail-grid compact-detail">
+                    <article>
+                      <span>首条记录</span>
+                      <strong>{{ row.firstLogId || '--' }}</strong>
+                    </article>
+                    <article>
+                      <span>最新记录</span>
+                      <strong>{{ row.latestLogId || '--' }}</strong>
+                    </article>
+                    <article>
+                      <span>最新接收时间</span>
+                      <strong>{{ formatDateTime(row.latestReceivedAt) }}</strong>
+                    </article>
+                    <article>
+                      <span>追踪编号样例</span>
+                      <strong>{{ (row.sampleTraceIds || []).join(' / ') || '--' }}</strong>
+                    </article>
+                  </div>
+                  <h4>重复接收日志样例</h4>
+                  <el-table :data="row.logSamples || []" size="small" border empty-text="暂无样例明细">
+                    <el-table-column label="接收记录" width="90" prop="id" />
+                    <el-table-column label="追踪编号" min-width="190" prop="traceId" show-overflow-tooltip />
+                    <el-table-column label="处理状态" width="120">
+                      <template #default="{ row: sample }">{{ formatSchedulerRunStatus(sample.processStatus) }}</template>
+                    </el-table-column>
+                    <el-table-column label="防重复状态" width="130">
+                      <template #default="{ row: sample }">{{ formatIdempotencyStatus(sample.idempotencyStatus) }}</template>
+                    </el-table-column>
+                    <el-table-column label="内容指纹" min-width="180" prop="bodyHash" show-overflow-tooltip />
+                    <el-table-column label="关联订单" width="110" prop="relatedOrderId" />
+                    <el-table-column label="接收时间" min-width="170" prop="receivedAt" />
+                  </el-table>
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column label="重复类型" width="140">
               <template #default="{ row }">{{ formatDuplicateType(row.duplicateType) }}</template>
             </el-table-column>
             <el-table-column label="渠道" width="130" prop="providerCode" />
-            <el-table-column label="重复键" min-width="260" prop="duplicateKey" show-overflow-tooltip />
+            <el-table-column label="重复依据" min-width="260" prop="duplicateKey" show-overflow-tooltip />
             <el-table-column label="重复数量" width="100" prop="duplicateCount" />
-            <el-table-column label="首条记录" width="110" prop="firstLogId" />
-            <el-table-column label="最新记录" width="110" prop="latestLogId" />
-            <el-table-column label="最新接收时间" min-width="170">
-              <template #default="{ row }">{{ formatDateTime(row.latestReceivedAt) }}</template>
+            <el-table-column label="建议保留" width="110" prop="retainLogId" />
+            <el-table-column label="需核对记录" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ (row.reviewLogIds || []).join(' / ') || '--' }}</template>
             </el-table-column>
-            <el-table-column label="追踪编号样例" min-width="220" show-overflow-tooltip>
-              <template #default="{ row }">{{ (row.sampleTraceIds || []).join(' / ') || '--' }}</template>
-            </el-table-column>
+            <el-table-column label="治理口径" min-width="300" prop="cleanupStrategy" show-overflow-tooltip />
             <el-table-column label="处理建议" min-width="280" prop="recommendedAction" show-overflow-tooltip />
             <el-table-column label="操作" width="130" fixed="right">
               <template #default="{ row }">
@@ -596,6 +631,62 @@
           </el-table>
         </el-tab-pane>
 
+        <el-tab-pane label="验收样本" name="acceptance">
+          <el-alert
+            class="queue-alert"
+            type="info"
+            show-icon
+            :closable="false"
+            :title="`方案 B 验收样本已就绪 ${acceptanceReadyCount}/${acceptanceSamples.length || 5} 项；本页只读展示，不会修改历史数据。`"
+          />
+          <div class="queue-toolbar">
+            <el-button :loading="acceptanceLoading" type="primary" @click="loadAcceptanceSamples">刷新样本</el-button>
+          </div>
+          <div v-loading="acceptanceLoading" class="acceptance-grid">
+            <article
+              v-for="sample in acceptanceSamples"
+              :key="sample.sampleType"
+              class="acceptance-card"
+              :class="{ 'is-ready': sample.ready, 'is-missing': !sample.ready }"
+            >
+              <div class="acceptance-card__head">
+                <strong>{{ sample.title }}</strong>
+                <div class="tag-row">
+                  <el-tag :type="acceptanceTypeTag(sample)" effect="light">
+                    {{ formatAcceptanceSampleType(sample) }}
+                  </el-tag>
+                  <el-tag :type="sample.ready ? 'success' : 'warning'" effect="light">
+                    {{ sample.ready ? '已有样本' : '待生成' }}
+                  </el-tag>
+                </div>
+              </div>
+              <p>{{ sample.description }}</p>
+              <div class="acceptance-meta">
+                <span>状态</span>
+                <strong>{{ formatAcceptanceStatus(sample) }}</strong>
+                <span>验收位置</span>
+                <strong>{{ formatAcceptanceTarget(sample) }}</strong>
+                <span>外部订单号</span>
+                <strong>{{ sample.externalOrderId || '--' }}</strong>
+                <span>记录编号</span>
+                <strong>{{ sample.recordId || '--' }}</strong>
+                <span>追踪编号</span>
+                <strong>{{ sample.traceId || '--' }}</strong>
+                <span>发生时间</span>
+                <strong>{{ formatDateTime(sample.occurredAt) }}</strong>
+              </div>
+              <div class="process-hint">
+                <strong>验收动作</strong>
+                <span>{{ sample.recommendedAction }}</span>
+              </div>
+              <div class="action-group">
+                <el-button v-if="sample.ready" size="small" type="primary" plain @click="openAcceptanceSample(sample)">查看样本</el-button>
+                <el-button v-if="sample.traceId" size="small" plain @click="copyText(sample.traceId, '追踪编号')">复制追踪编号</el-button>
+              </div>
+            </article>
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="字段规范（技术）" name="fields">
           <el-table :data="config.fields" stripe>
             <el-table-column label="字段名" min-width="180" prop="fieldName" />
@@ -623,6 +714,7 @@ import {
   fetchIntegrationProviders,
   fetchSchedulerIdempotencyHealth,
   fetchSchedulerLogs,
+  fetchSchedulerMonitorSummary,
   fetchSchedulerOutboxEvents,
   markDistributionExceptionHandled,
   processDistributionExceptionRetries,
@@ -666,8 +758,10 @@ const reconciliationJobFilter = ref('')
 const reconciliationResultFilter = ref('')
 const reconciliationKeyword = ref('')
 const healthLoading = ref(false)
+const acceptanceLoading = ref(false)
 const exceptionSourceContext = ref(null)
 const idempotencyHealth = ref({})
+const monitorSummary = ref({})
 const state = reactive(loadSystemConsoleState())
 const config = reactive({
   enabled: state.distributionApi?.enabled ?? 1,
@@ -714,6 +808,8 @@ const idempotencyHealthTitle = computed(() => {
   }
   return '发现防重复约束未完全生效或存在历史重复数据，请按处理建议完成数据治理。'
 })
+const acceptanceSamples = computed(() => monitorSummary.value?.acceptanceSamples || [])
+const acceptanceReadyCount = computed(() => acceptanceSamples.value.filter((sample) => sample.ready).length)
 const reconciliationSummary = computed(() => {
   const rows = activeReconciliationItems.value || []
   return rows.reduce(
@@ -852,7 +948,7 @@ const exceptionEmptyText = computed(() => {
 
 function resolveInitialTab() {
   const tab = String(route.query.tab || '').trim()
-  return ['config', 'fields', 'health', 'outbox', 'exceptions', 'reconcile'].includes(tab) ? tab : 'config'
+  return ['config', 'fields', 'health', 'outbox', 'exceptions', 'reconcile', 'acceptance'].includes(tab) ? tab : 'config'
 }
 
 onMounted(() => {
@@ -873,6 +969,9 @@ watch(activeTab, (tab) => {
   }
   if (tab === 'reconcile' && reconciliationHistory.value.length === 0) {
     loadReconciliationHistory()
+  }
+  if (tab === 'acceptance' && !monitorSummary.value?.generatedAt) {
+    loadAcceptanceSamples()
   }
 })
 
@@ -914,6 +1013,9 @@ function loadActiveQueue() {
   }
   if (activeTab.value === 'reconcile') {
     return loadReconciliationHistory()
+  }
+  if (activeTab.value === 'acceptance') {
+    return loadAcceptanceSamples()
   }
   return Promise.resolve()
 }
@@ -1122,6 +1224,15 @@ async function loadIdempotencyHealth() {
     idempotencyHealth.value = await fetchSchedulerIdempotencyHealth('DISTRIBUTION')
   } finally {
     healthLoading.value = false
+  }
+}
+
+async function loadAcceptanceSamples() {
+  acceptanceLoading.value = true
+  try {
+    monitorSummary.value = await fetchSchedulerMonitorSummary('DISTRIBUTION')
+  } finally {
+    acceptanceLoading.value = false
   }
 }
 
@@ -1421,6 +1532,30 @@ function returnToExceptionSource() {
   }
 }
 
+function openAcceptanceSample(sample) {
+  const tab = sample?.targetTab || 'acceptance'
+  if (tab === 'outbox') {
+    outboxStatus.value = sample.targetStatus || ''
+    outboxKeyword.value = sample.externalOrderId || sample.traceId || ''
+    activeTab.value = 'outbox'
+    loadOutboxEvents()
+    return
+  }
+  if (tab === 'exceptions') {
+    exceptionStatus.value = sample.targetStatus || 'OPEN'
+    exceptionKeyword.value = sample.externalOrderId || sample.traceId || ''
+    activeTab.value = 'exceptions'
+    loadDistributionExceptions()
+    return
+  }
+  if (tab === 'reconcile') {
+    reconciliationResultFilter.value = 'FAILED'
+    reconciliationKeyword.value = sample.traceId || ''
+    activeTab.value = 'reconcile'
+    loadReconciliationHistory()
+  }
+}
+
 function reconciliationFailureAdvice(row) {
   if (row?.externalOrderId) {
     return '进入异常队列核对该外部订单，修正外部数据或接口配置后重新入队。'
@@ -1492,9 +1627,65 @@ function formatQueueStatus(value) {
       PROCESSING: '推送中',
       SUCCESS: '成功',
       FAILED: '失败',
-      DEAD_LETTER: '死信'
+      DEAD_LETTER: '死信（需管理员处理）'
     }[String(value || '').toUpperCase()] || (value ? '未知状态' : '--')
   )
+}
+
+function formatAcceptanceStatus(sample) {
+  if (!sample?.status) {
+    return '--'
+  }
+  if (sample.targetTab === 'outbox') {
+    return formatQueueStatus(sample.status)
+  }
+  if (sample.targetTab === 'exceptions') {
+    return formatExceptionStatus(sample.status)
+  }
+  if (sample.targetTab === 'reconcile') {
+    return formatSchedulerRunStatus(sample.status)
+  }
+  return sample.status
+}
+
+function formatAcceptanceSampleType(sample) {
+  const type = String(sample?.sampleType || '').toUpperCase()
+  return (
+    {
+      OUTBOX_SUCCESS: '成功样本',
+      OUTBOX_FAILED: '失败样本',
+      OUTBOX_DEAD_LETTER: '死信样本',
+      EXCEPTION_OPEN: '异常样本',
+      RECONCILE_FAILED: '对账失败样本'
+    }[type] || '验收样本'
+  )
+}
+
+function acceptanceTypeTag(sample) {
+  const type = String(sample?.sampleType || '').toUpperCase()
+  if (type === 'OUTBOX_SUCCESS') {
+    return 'success'
+  }
+  if (type === 'OUTBOX_FAILED' || type === 'OUTBOX_DEAD_LETTER' || type === 'RECONCILE_FAILED') {
+    return 'danger'
+  }
+  if (type === 'EXCEPTION_OPEN') {
+    return 'warning'
+  }
+  return 'info'
+}
+
+function formatAcceptanceTarget(sample) {
+  const tab = String(sample?.targetTab || '').toLowerCase()
+  const status = sample?.targetStatus ? ` / ${formatAcceptanceStatus(sample)}` : ''
+  return (
+    {
+      outbox: '履约回推队列',
+      exceptions: '异常队列',
+      reconcile: '回查对账结果',
+      health: '幂等健康'
+    }[tab] || '当前页面'
+  ) + status
 }
 
 function normalizeKeyword(value) {
@@ -1541,9 +1732,20 @@ function formatIndexStatus(value) {
 function formatDuplicateType(value) {
   return (
     {
-      IDEMPOTENCY_KEY: '幂等键',
+      IDEMPOTENCY_KEY: '防重复编号',
       EVENT_ID: '事件ID'
     }[String(value || '').toUpperCase()] || value || '--'
+  )
+}
+
+function formatIdempotencyStatus(value) {
+  return (
+    {
+      NEW: '首次接收',
+      DUPLICATE: '重复接收',
+      CONFLICT: '重复冲突',
+      MISSING: '编号缺失'
+    }[String(value || '').toUpperCase()] || (value ? '待确认' : '--')
   )
 }
 
@@ -2096,6 +2298,77 @@ function reconciliationActionTag(value) {
   line-height: 1.5;
 }
 
+.acceptance-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.acceptance-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.acceptance-card.is-ready {
+  border-color: #bbdec8;
+  background: #f8fcf9;
+}
+
+.acceptance-card.is-missing {
+  border-color: #f5d59a;
+  background: #fffbf0;
+}
+
+.acceptance-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.acceptance-card__head strong {
+  color: #173b33;
+  font-size: 16px;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.acceptance-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.acceptance-meta {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 8px 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.acceptance-meta span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.acceptance-meta strong {
+  color: #0f172a;
+  font-size: 13px;
+  word-break: break-all;
+}
+
 .reconcile-history {
   margin-bottom: 16px;
   padding: 14px;
@@ -2189,6 +2462,10 @@ function reconciliationActionTag(value) {
   gap: 12px;
 }
 
+.compact-detail {
+  margin-bottom: 14px;
+}
+
 .detail-grid article {
   display: grid;
   gap: 5px;
@@ -2256,6 +2533,10 @@ function reconciliationActionTag(value) {
 
   .health-summary,
   .reconcile-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .acceptance-grid {
     grid-template-columns: 1fr;
   }
 

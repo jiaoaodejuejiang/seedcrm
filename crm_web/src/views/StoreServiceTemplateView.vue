@@ -265,7 +265,7 @@
         </label>
         <label class="template-form__wide">
           <span>模板配置 JSON</span>
-          <el-input v-model="templateForm.configJson" type="textarea" :rows="5" placeholder='{"sections":["基础信息","服务确认","客户签名"]}' />
+          <el-input v-model="templateForm.configJson" type="textarea" :rows="5" placeholder='{"sections":["基础信息","服务确认","纸质签名留位"]}' />
         </label>
       </div>
       <template #footer>
@@ -319,7 +319,7 @@ const publishedTemplates = computed(() => templates.value.filter((item) => item.
 const previewTemplate = computed(() => previewResult.value?.template || null)
 const previewMessage = computed(() => previewResult.value?.message || '预览模式')
 const previewSections = computed(() => parsePreviewSections(previewTemplate.value?.configJson))
-const corePreviewFields = ['客户信息', '服务项目', '确认金额', '客户签名']
+const corePreviewFields = ['客户信息', '服务项目', '确认金额', '纸质签名留位']
 
 const templateForm = reactive(createTemplateForm())
 const bindingForm = reactive(createBindingForm())
@@ -336,7 +336,7 @@ function createTemplateForm(payload = {}) {
     title: payload.title || '',
     industry: payload.industry || '',
     layoutMode: payload.layoutMode || 'classic',
-    configJson: payload.configJson || '{"sections":["基础信息","服务确认","偏好与补充","客户签名"]}',
+  configJson: payload.configJson || '{"sections":["基础信息","服务确认","偏好与补充","纸质签名留位"]}',
     description: payload.description || '',
     recommended: payload.recommended ?? 0
   }
@@ -533,7 +533,7 @@ function parsePreviewSections(configJson) {
   } catch {
     // Invalid custom config should not break preview.
   }
-  return ['基础信息', '服务确认', '偏好与补充', '客户签名']
+  return ['基础信息', '服务确认', '偏好与补充', '纸质签名留位']
 }
 
 function isJsonLike(value) {

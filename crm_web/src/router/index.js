@@ -118,15 +118,7 @@ const routes = [
       },
       {
         path: 'clue-management/store-schedules',
-        name: 'store-schedules',
-        component: StoreScheduleManagementView,
-        meta: {
-          title: '门店档期',
-          sectionTitle: '客资中心 / 客资管理',
-          moduleCode: 'CLUE',
-          roleCodes: ['CLUE_MANAGER', 'ADMIN'],
-          navKey: 'store-schedules'
-        }
+        redirect: '/store-service/schedules'
       },
       {
         path: 'store-service/orders',
@@ -150,6 +142,18 @@ const routes = [
           moduleCode: 'PLANORDER',
           roleCodes: ['STORE_MANAGER', 'ADMIN'],
           navKey: 'store-service-design'
+        }
+      },
+      {
+        path: 'store-service/schedules',
+        name: 'store-schedules',
+        component: StoreScheduleManagementView,
+        meta: {
+          title: '门店档期',
+          sectionTitle: '门店服务',
+          moduleCode: 'PLANORDER',
+          roleCodes: ['STORE_MANAGER', 'ADMIN'],
+          navKey: 'store-schedules'
         }
       },
       {

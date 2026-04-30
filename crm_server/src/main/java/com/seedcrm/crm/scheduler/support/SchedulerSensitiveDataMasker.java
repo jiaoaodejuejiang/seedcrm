@@ -3,6 +3,9 @@ package com.seedcrm.crm.scheduler.support;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
+import com.seedcrm.crm.scheduler.dto.SchedulerIdempotencyHealthResponse;
+import com.seedcrm.crm.scheduler.dto.SchedulerIdempotencyHealthResponse.DuplicateGroup;
+import com.seedcrm.crm.scheduler.dto.SchedulerIdempotencyHealthResponse.DuplicateLogSample;
 import com.seedcrm.crm.scheduler.entity.DistributionExceptionRecord;
 import com.seedcrm.crm.scheduler.entity.IntegrationCallbackEventLog;
 import com.seedcrm.crm.scheduler.entity.SchedulerJobAuditLog;
@@ -145,6 +148,17 @@ public class SchedulerSensitiveDataMasker {
         return logs.stream().map(this::maskAuditLog).toList();
     }
 
+    public SchedulerIdempotencyHealthResponse maskIdempotencyHealth(SchedulerIdempotencyHealthResponse response,
+                                                                    PermissionRequestContext context) {
+        if (response == null || canViewFullData(context)) {
+            return response;
+        }
+        SchedulerIdempotencyHealthResponse target = new SchedulerIdempotencyHealthResponse();
+        BeanUtils.copyProperties(response, target);
+        target.setDuplicateGroups(maskDuplicateGroups(response.getDuplicateGroups()));
+        return target;
+    }
+
     public SchedulerOutboxEvent maskOutboxEvent(SchedulerOutboxEvent event,
                                                 PermissionRequestContext context) {
         if (event == null || canViewFullData(context)) {
@@ -221,6 +235,50 @@ public class SchedulerSensitiveDataMasker {
         target.setSummary(redactText(source.getSummary()));
         target.setDetail(redactText(source.getDetail()));
         return target;
+    }
+
+    private List<DuplicateGroup> maskDuplicateGroups(List<DuplicateGroup> source) {
+        if (source == null) {
+            return null;
+        }
+        return source.stream().map(this::maskDuplicateGroup).toList();
+    }
+
+    private DuplicateGroup maskDuplicateGroup(DuplicateGroup source) {
+        if (source == null) {
+            return null;
+        }
+        DuplicateGroup target = new DuplicateGroup();
+        BeanUtils.copyProperties(source, target);
+        target.setDuplicateKey(maskValue(source.getDuplicateKey()));
+        target.setSampleTraceIds(maskValues(source.getSampleTraceIds()));
+        target.setLogSamples(maskDuplicateLogSamples(source.getLogSamples()));
+        return target;
+    }
+
+    private List<DuplicateLogSample> maskDuplicateLogSamples(List<DuplicateLogSample> source) {
+        if (source == null) {
+            return null;
+        }
+        return source.stream().map(this::maskDuplicateLogSample).toList();
+    }
+
+    private DuplicateLogSample maskDuplicateLogSample(DuplicateLogSample source) {
+        if (source == null) {
+            return null;
+        }
+        DuplicateLogSample target = new DuplicateLogSample();
+        BeanUtils.copyProperties(source, target);
+        target.setTraceId(maskValue(source.getTraceId()));
+        target.setBodyHash(maskValue(source.getBodyHash()));
+        return target;
+    }
+
+    private List<String> maskValues(List<String> values) {
+        if (values == null) {
+            return null;
+        }
+        return values.stream().map(this::maskValue).toList();
     }
 
     private boolean canViewFullData(PermissionRequestContext context) {

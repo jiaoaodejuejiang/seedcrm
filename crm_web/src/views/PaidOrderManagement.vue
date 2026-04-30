@@ -90,12 +90,6 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="金额" width="120">
-            <template #default="{ row }">
-              {{ formatMoney(row.amount) }}
-            </template>
-          </el-table-column>
-
           <el-table-column label="付款时间" width="160">
             <template #default="{ row }">
               {{ formatDateTime(row.createTime) }}
@@ -242,11 +236,6 @@
                     </div>
                   </template>
                 </el-table-column>
-                <el-table-column label="金额" width="110">
-                  <template #default="{ row }">
-                    {{ formatMoney(row.amount) }}
-                  </template>
-                </el-table-column>
                 <el-table-column label="付款时间" width="160">
                   <template #default="{ row }">
                     {{ formatDateTime(row.createTime) }}
@@ -356,7 +345,7 @@
                 @click="storeBookingForm.orderId = order.id"
               >
                 <strong>{{ order.customerName || order.orderNo }}</strong>
-                <span>{{ order.customerPhone || '--' }} · {{ formatMoney(order.amount) }}</span>
+                <span>{{ order.customerPhone || '--' }}</span>
                 <small>付款时间：{{ formatDateTime(order.createTime) }}</small>
               </button>
             </div>
@@ -405,7 +394,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { appointOrder, cancelOrderAppointment } from '../api/order'
 import { fetchOrders } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
-import { formatDateTime, formatMoney, normalize } from '../utils/format'
+import { formatDateTime, normalize } from '../utils/format'
 import { calculateStoreCapacity, loadSystemConsoleState, nextSystemId, saveSystemConsoleState } from '../utils/systemConsoleStore'
 
 const FALLBACK_STORE_LOCATIONS = {

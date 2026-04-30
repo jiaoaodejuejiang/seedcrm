@@ -211,14 +211,6 @@ const navGroups = [
             icon: icon(User),
             moduleCode: 'CLUE',
             roleCodes: ['CLUE_MANAGER', 'ADMIN']
-          },
-          {
-            key: 'store-schedules',
-            to: '/clue-management/store-schedules',
-            label: '门店档期',
-            icon: icon(Calendar),
-            moduleCode: 'CLUE',
-            roleCodes: ['CLUE_MANAGER', 'ADMIN']
           }
         ]
       }
@@ -243,6 +235,14 @@ const navGroups = [
         to: '/store-service/service-design',
         label: '服务单设计',
         icon: icon(Picture),
+        moduleCode: 'PLANORDER',
+        roleCodes: ['STORE_MANAGER', 'ADMIN']
+      },
+      {
+        key: 'store-schedules',
+        to: '/store-service/schedules',
+        label: '门店档期',
+        icon: icon(Calendar),
         moduleCode: 'PLANORDER',
         roleCodes: ['STORE_MANAGER', 'ADMIN']
       },

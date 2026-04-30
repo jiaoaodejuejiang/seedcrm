@@ -210,12 +210,31 @@ class SchedulerControllerPartnerScopeTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         SchedulerIdempotencyHealthResponse health = new SchedulerIdempotencyHealthResponse();
         health.setProviderCode("DISTRIBUTION");
-        when(permissionRequestContextResolver.resolve(request)).thenReturn(adminContext());
+        PermissionRequestContext context = adminContext();
+        when(permissionRequestContextResolver.resolve(request)).thenReturn(context);
         when(schedulerIdempotencyHealthService.inspect("DISTRIBUTION")).thenReturn(health);
+        when(schedulerSensitiveDataMasker.maskIdempotencyHealth(health, context)).thenReturn(health);
 
         var response = controller.inspectIdempotencyHealth("DISTRIBUTION", request);
 
         assertThat(response.getData().getProviderCode()).isEqualTo("DISTRIBUTION");
+    }
+
+    @Test
+    void shouldMaskIdempotencyHealthForIntegrationOperator() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        PermissionRequestContext context = operatorContext();
+        SchedulerIdempotencyHealthResponse raw = new SchedulerIdempotencyHealthResponse();
+        raw.setProviderCode("DISTRIBUTION");
+        SchedulerIdempotencyHealthResponse masked = new SchedulerIdempotencyHealthResponse();
+        masked.setProviderCode("DISTRIBUTION");
+        when(permissionRequestContextResolver.resolve(request)).thenReturn(context);
+        when(schedulerIdempotencyHealthService.inspect("DISTRIBUTION")).thenReturn(raw);
+        when(schedulerSensitiveDataMasker.maskIdempotencyHealth(raw, context)).thenReturn(masked);
+
+        var response = controller.inspectIdempotencyHealth("DISTRIBUTION", request);
+
+        assertThat(response.getData()).isSameAs(masked);
     }
 
     @Test

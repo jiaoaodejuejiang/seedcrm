@@ -2,6 +2,7 @@ package com.seedcrm.crm.scheduler.service.impl;
 
 import com.seedcrm.crm.scheduler.dto.SchedulerIdempotencyHealthResponse;
 import com.seedcrm.crm.scheduler.dto.SchedulerIdempotencyHealthResponse.DuplicateGroup;
+import com.seedcrm.crm.scheduler.dto.SchedulerIdempotencyHealthResponse.DuplicateLogSample;
 import com.seedcrm.crm.scheduler.dto.SchedulerIdempotencyHealthResponse.IndexHealth;
 import com.seedcrm.crm.scheduler.service.SchedulerIdempotencyHealthService;
 import java.sql.ResultSet;
@@ -117,9 +118,10 @@ public class SchedulerIdempotencyHealthServiceImpl implements SchedulerIdempoten
         }
         List<String> actions = new ArrayList<>();
         if (response.getDuplicateGroupCount() > 0) {
-            actions.add("先按下方重复分组清理历史接口接收日志，建议保留业务处理成功或最新一条记录。");
-            actions.add("清理后重启服务，让初始化器自动创建唯一索引；或由 DBA 手工创建唯一索引。");
-            actions.add("清理前不要删除相关业务 Customer / Order / PlanOrder 数据，避免破坏方案 B 主链路。");
+            actions.add("存在历史重复接口接收日志，唯一索引暂未生效；上线前需完成数据治理或确认风险接受。");
+            actions.add("先按下方重复分组治理历史接口接收日志，建议保留业务处理成功或最新一条记录。");
+            actions.add("治理后重启服务，让初始化器自动创建唯一索引；或由 DBA 手工创建唯一索引。");
+            actions.add("禁止直接删除相关业务 Customer / Order / PlanOrder 数据，避免破坏方案 B 主链路。");
         }
         boolean missingIndex = response.getIndexes().stream().anyMatch(index -> !index.isExists());
         if (missingIndex && response.getDuplicateGroupCount() == 0) {
@@ -138,6 +140,16 @@ public class SchedulerIdempotencyHealthServiceImpl implements SchedulerIdempoten
                        MAX(id) AS latest_log_id,
                        MIN(received_at) AS first_received_at,
                        MAX(received_at) AS latest_received_at,
+                       GROUP_CONCAT(id ORDER BY id DESC SEPARATOR ',') AS sample_log_ids,
+                       GROUP_CONCAT(CONCAT_WS('|',
+                           id,
+                           COALESCE(trace_id, ''),
+                           COALESCE(process_status, ''),
+                           COALESCE(idempotency_status, ''),
+                           COALESCE(body_hash, ''),
+                           COALESCE(related_order_id, ''),
+                           COALESCE(DATE_FORMAT(received_at, '%%Y-%%m-%%d %%H:%%i:%%s'), '')
+                       ) ORDER BY id DESC SEPARATOR '\n') AS sample_log_rows,
                        GROUP_CONCAT(trace_id ORDER BY id DESC SEPARATOR ',') AS sample_trace_ids
                 FROM %s
                 WHERE %s IS NOT NULL AND %s <> ''
@@ -158,10 +170,15 @@ public class SchedulerIdempotencyHealthServiceImpl implements SchedulerIdempoten
         item.setDuplicateCount(rs.getLong("duplicate_count"));
         item.setFirstLogId(rs.getObject("first_log_id", Long.class));
         item.setLatestLogId(rs.getObject("latest_log_id", Long.class));
+        item.setRetainLogId(item.getLatestLogId());
+        item.setReviewLogIds(reviewLogIds(rs.getString("sample_log_ids"), item.getRetainLogId()));
+        item.setLogSamples(duplicateLogSamples(rs.getString("sample_log_rows")));
         item.setFirstReceivedAt(toLocalDateTime(rs.getTimestamp("first_received_at")));
         item.setLatestReceivedAt(toLocalDateTime(rs.getTimestamp("latest_received_at")));
         item.setSampleTraceIds(sampleTraceIds(rs.getString("sample_trace_ids")));
-        item.setRecommendedAction("保留最新或业务成功记录，清理其他重复接口接收日志后重建唯一索引。");
+        item.setCleanupStrategy("建议先人工核对重复记录，默认保留最新接收记录；确认业务处理结果一致后，再治理其余历史重复接收日志。");
+        item.setRecommendedAction("保留建议记录 " + item.getRetainLogId()
+                + "，核对其余重复接收记录；治理完成后重启服务或由 DBA 重建唯一索引。");
         return item;
     }
 
@@ -238,6 +255,58 @@ public class SchedulerIdempotencyHealthServiceImpl implements SchedulerIdempoten
                 .distinct()
                 .limit(5)
                 .toList();
+    }
+
+    private List<Long> reviewLogIds(String value, Long retainLogId) {
+        if (!StringUtils.hasText(value)) {
+            return List.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .map(this::parseLong)
+                .filter(id -> id != null && !id.equals(retainLogId))
+                .distinct()
+                .limit(10)
+                .toList();
+    }
+
+    private List<DuplicateLogSample> duplicateLogSamples(String value) {
+        if (!StringUtils.hasText(value)) {
+            return List.of();
+        }
+        return Arrays.stream(value.split("\\R"))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .map(this::duplicateLogSample)
+                .filter(sample -> sample.getId() != null)
+                .limit(10)
+                .toList();
+    }
+
+    private DuplicateLogSample duplicateLogSample(String row) {
+        String[] parts = row.split("\\|", -1);
+        DuplicateLogSample sample = new DuplicateLogSample();
+        sample.setId(parts.length > 0 ? parseLong(parts[0]) : null);
+        sample.setTraceId(parts.length > 1 ? emptyToNull(parts[1]) : null);
+        sample.setProcessStatus(parts.length > 2 ? emptyToNull(parts[2]) : null);
+        sample.setIdempotencyStatus(parts.length > 3 ? emptyToNull(parts[3]) : null);
+        sample.setBodyHash(parts.length > 4 ? emptyToNull(parts[4]) : null);
+        sample.setRelatedOrderId(parts.length > 5 ? parseLong(parts[5]) : null);
+        sample.setReceivedAt(parts.length > 6 ? emptyToNull(parts[6]) : null);
+        return sample;
+    }
+
+    private Long parseLong(String value) {
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private String emptyToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     private LocalDateTime toLocalDateTime(Timestamp timestamp) {

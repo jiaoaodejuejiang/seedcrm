@@ -304,7 +304,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (!currentStatus.isPaidStage()) {
             throw new BusinessException("only paid orders can be verified");
         }
-        String verificationCode = normalizeVerificationCode(orderVoucherVerifyDTO.getVerificationCode(), order.getId());
+        String verificationMethod = normalizeVerificationMethod(orderVoucherVerifyDTO.getVerificationMethod());
+        if (isDirectDepositVerification(verificationMethod)
+                && (order.getType() == null || order.getType() != OrderType.DEPOSIT.getCode())) {
+            throw new BusinessException("only deposit orders can use direct deposit verification");
+        }
+        String verificationCode = normalizeVerificationCode(
+                orderVoucherVerifyDTO.getVerificationCode(), order.getId(), verificationMethod);
         if (StringUtils.hasText(order.getVerificationStatus()) && "VERIFIED".equalsIgnoreCase(order.getVerificationStatus())) {
             if (!verificationCode.equals(order.getVerificationCode())) {
                 throw new BusinessException("order already verified with a different code");
@@ -313,7 +319,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
 
         order.setVerificationStatus("VERIFIED");
-        order.setVerificationMethod(normalizeVerificationMethod(orderVoucherVerifyDTO.getVerificationMethod()));
+        order.setVerificationMethod(verificationMethod);
         order.setVerificationCode(verificationCode);
         order.setVerificationTime(LocalDateTime.now());
         order.setVerificationOperatorId(operatorUserId);
@@ -321,7 +327,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (orderMapper.updateById(order) <= 0) {
             throw new BusinessException("failed to verify order");
         }
-        recordOrderAction(order.getId(), "VOUCHER_VERIFY", currentStatus.name(), currentStatus.name(),
+        recordOrderAction(order.getId(),
+                isDirectDepositVerification(verificationMethod) ? "DIRECT_DEPOSIT_VERIFY" : "VOUCHER_VERIFY",
+                currentStatus.name(), currentStatus.name(),
                 operatorUserId, verificationCode);
         refreshCustomerLifecycle(order.getCustomerId());
         return order;
@@ -625,7 +633,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
     }
 
-    private String normalizeVerificationCode(String verificationCode, Long orderId) {
+    private String normalizeVerificationCode(String verificationCode, Long orderId, String verificationMethod) {
+        if (isDirectDepositVerification(verificationMethod)) {
+            return "DIRECT-DEPOSIT-" + orderId;
+        }
         String normalized = StringUtils.hasText(verificationCode)
                 ? verificationCode.trim()
                 : "MOCK-" + orderId;
@@ -638,9 +649,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private String normalizeVerificationMethod(String verificationMethod) {
         String normalized = StringUtils.hasText(verificationMethod) ? verificationMethod.trim().toUpperCase() : "MANUAL";
         return switch (normalized) {
-            case "SCAN", "SCAN_CAMERA", "CODE", "MANUAL", "EXTERNAL_PROVIDER" -> normalized;
+            case "SCAN", "SCAN_CAMERA", "CODE", "MANUAL", "EXTERNAL_PROVIDER", "DIRECT_DEPOSIT" -> normalized;
             default -> "MANUAL";
         };
+    }
+
+    private boolean isDirectDepositVerification(String verificationMethod) {
+        return "DIRECT_DEPOSIT".equalsIgnoreCase(verificationMethod);
     }
 
     private void inheritSource(Order order, Clue clue, Customer customer) {

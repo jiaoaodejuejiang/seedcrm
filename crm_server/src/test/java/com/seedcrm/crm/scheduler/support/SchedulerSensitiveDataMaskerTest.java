@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
+import com.seedcrm.crm.scheduler.dto.SchedulerIdempotencyHealthResponse;
+import com.seedcrm.crm.scheduler.dto.SchedulerIdempotencyHealthResponse.DuplicateGroup;
+import com.seedcrm.crm.scheduler.dto.SchedulerIdempotencyHealthResponse.DuplicateLogSample;
 import com.seedcrm.crm.scheduler.entity.DistributionExceptionRecord;
 import com.seedcrm.crm.scheduler.entity.IntegrationCallbackEventLog;
 import com.seedcrm.crm.scheduler.entity.SchedulerJobAuditLog;
@@ -153,6 +156,49 @@ class SchedulerSensitiveDataMaskerTest {
 
         assertThat(masked).isSameAs(result);
         assertThat(masked.toString()).contains("13800000000", "member-001", "trade-001", "299.00");
+    }
+
+    @Test
+    void shouldMaskIdempotencyHealthDiagnosticsForOperator() {
+        DuplicateLogSample sample = new DuplicateLogSample();
+        sample.setId(91L);
+        sample.setTraceId("trace-secret-001");
+        sample.setBodyHash("abcdef1234567890");
+        sample.setRelatedOrderId(25L);
+        DuplicateGroup group = new DuplicateGroup();
+        group.setDuplicateType("IDEMPOTENCY_KEY");
+        group.setDuplicateKey("idem-secret-001");
+        group.setSampleTraceIds(List.of("trace-secret-001"));
+        group.setLogSamples(List.of(sample));
+        group.setRetainLogId(91L);
+        SchedulerIdempotencyHealthResponse response = new SchedulerIdempotencyHealthResponse();
+        response.setProviderCode("DISTRIBUTION");
+        response.setDuplicateGroups(List.of(group));
+
+        SchedulerIdempotencyHealthResponse masked = masker.maskIdempotencyHealth(response, context("integration_operator"));
+
+        DuplicateGroup maskedGroup = masked.getDuplicateGroups().get(0);
+        assertThat(masked).isNotSameAs(response);
+        assertThat(maskedGroup.getDuplicateKey()).contains("****").doesNotContain("secret");
+        assertThat(maskedGroup.getSampleTraceIds().get(0)).contains("****").doesNotContain("secret");
+        assertThat(maskedGroup.getLogSamples().get(0).getTraceId()).contains("****").doesNotContain("secret");
+        assertThat(maskedGroup.getLogSamples().get(0).getBodyHash()).contains("****").doesNotContain("abcdef1234567890");
+        assertThat(maskedGroup.getRetainLogId()).isEqualTo(91L);
+        assertThat(group.getDuplicateKey()).isEqualTo("idem-secret-001");
+        assertThat(sample.getBodyHash()).isEqualTo("abcdef1234567890");
+    }
+
+    @Test
+    void shouldKeepIdempotencyHealthDiagnosticsForIntegrationAdmin() {
+        DuplicateGroup group = new DuplicateGroup();
+        group.setDuplicateKey("idem-secret-001");
+        SchedulerIdempotencyHealthResponse response = new SchedulerIdempotencyHealthResponse();
+        response.setDuplicateGroups(List.of(group));
+
+        SchedulerIdempotencyHealthResponse masked = masker.maskIdempotencyHealth(response, context("integration_admin"));
+
+        assertThat(masked).isSameAs(response);
+        assertThat(masked.getDuplicateGroups().get(0).getDuplicateKey()).isEqualTo("idem-secret-001");
     }
 
     @Test

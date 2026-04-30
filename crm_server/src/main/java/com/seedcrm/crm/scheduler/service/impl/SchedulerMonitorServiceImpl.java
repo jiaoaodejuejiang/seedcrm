@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.scheduler.dto.SchedulerIdempotencyHealthResponse;
 import com.seedcrm.crm.scheduler.dto.SchedulerMonitorSummaryResponse;
+import com.seedcrm.crm.scheduler.dto.SchedulerMonitorSummaryResponse.AcceptanceSample;
 import com.seedcrm.crm.scheduler.dto.SchedulerMonitorSummaryResponse.ExceptionSummary;
 import com.seedcrm.crm.scheduler.dto.SchedulerMonitorSummaryResponse.IdempotencySummary;
 import com.seedcrm.crm.scheduler.dto.SchedulerMonitorSummaryResponse.JobBatchSummary;
@@ -64,6 +65,7 @@ public class SchedulerMonitorServiceImpl implements SchedulerMonitorService {
         response.setIdempotency(idempotencySummary(normalizedProviderCode));
         response.setJobs(jobSummary());
         response.setRecentBatches(recentBatches());
+        response.setAcceptanceSamples(acceptanceSamples(normalizedProviderCode));
         response.setRecommendedActions(recommendations(response));
         response.setOverallStatus(overallStatus(response));
         return response;
@@ -187,6 +189,132 @@ public class SchedulerMonitorServiceImpl implements SchedulerMonitorService {
                 .stream()
                 .map(this::batchSummary)
                 .toList();
+    }
+
+    private List<AcceptanceSample> acceptanceSamples(String providerCode) {
+        return List.of(
+                outboxSample("OUTBOX_SUCCESS", "成功回推样本", providerCode, "SUCCESS",
+                        "用于验收 PlanOrder 完成后已成功回推外部分销系统。",
+                        "无需处理，可复制追踪编号核对外部系统接收记录。"),
+                outboxSample("OUTBOX_FAILED", "失败回推样本", providerCode, "FAILED",
+                        "用于验收外部回推失败时不会丢失履约事件。",
+                        "检查回推地址、签名密钥和外部接口响应后重新入队。"),
+                outboxSample("OUTBOX_DEAD_LETTER", "死信回推样本", providerCode, "DEAD_LETTER",
+                        "用于验收多次失败后进入死信，避免无限重试。",
+                        "由管理员排查配置或外部接口后再重新入队。"),
+                exceptionSample(providerCode),
+                failedReconcileSample());
+    }
+
+    private AcceptanceSample outboxSample(String sampleType,
+                                          String title,
+                                          String providerCode,
+                                          String status,
+                                          String description,
+                                          String recommendedAction) {
+        SchedulerOutboxEvent event = latestOutboxByStatus(providerCode, status);
+        AcceptanceSample sample = baseSample(sampleType, title, event != null, status, "outbox", status);
+        sample.setDescription(description);
+        sample.setRecommendedAction(event == null ? "暂无样本；可通过门店履约完成、切换 MOCK/LIVE 配置或模拟外部失败生成。" : recommendedAction);
+        if (event == null) {
+            return sample;
+        }
+        sample.setRecordId(event.getId());
+        sample.setExternalOrderId(event.getExternalOrderId());
+        sample.setRelatedOrderId(event.getRelatedOrderId());
+        sample.setTraceId(outboxTraceId(event));
+        sample.setOccurredAt(firstNonNull(event.getUpdatedAt(), event.getCreatedAt()));
+        return sample;
+    }
+
+    private SchedulerOutboxEvent latestOutboxByStatus(String providerCode, String status) {
+        return schedulerOutboxEventMapper.selectList(Wrappers.<SchedulerOutboxEvent>lambdaQuery()
+                        .eq(StringUtils.hasText(providerCode), SchedulerOutboxEvent::getProviderCode, providerCode)
+                        .eq(SchedulerOutboxEvent::getStatus, status)
+                        .orderByDesc(SchedulerOutboxEvent::getUpdatedAt)
+                        .orderByDesc(SchedulerOutboxEvent::getCreatedAt)
+                        .orderByDesc(SchedulerOutboxEvent::getId)
+                        .last("LIMIT 1"))
+                .stream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    private AcceptanceSample exceptionSample(String partnerCode) {
+        DistributionExceptionRecord record = distributionExceptionRecordMapper.selectList(Wrappers.<DistributionExceptionRecord>lambdaQuery()
+                        .eq(StringUtils.hasText(partnerCode), DistributionExceptionRecord::getPartnerCode, partnerCode)
+                        .eq(DistributionExceptionRecord::getHandlingStatus, "OPEN")
+                        .orderByDesc(DistributionExceptionRecord::getUpdatedAt)
+                        .orderByDesc(DistributionExceptionRecord::getCreatedAt)
+                        .orderByDesc(DistributionExceptionRecord::getId)
+                        .last("LIMIT 1"))
+                .stream()
+                .findFirst()
+                .orElse(null);
+        AcceptanceSample sample = baseSample("EXCEPTION_OPEN", "异常队列待处理样本", record != null,
+                "OPEN", "exceptions", "OPEN");
+        sample.setDescription("用于验收入站失败或数据冲突时进入异常队列，而不是绕过主链路写核心数据。");
+        sample.setRecommendedAction(record == null ? "暂无样本；可用接口调试或重复订单冲突样例生成。" : "按异常说明核对冲突字段，修正后由管理员重新入队或标记处理。");
+        if (record == null) {
+            return sample;
+        }
+        sample.setRecordId(record.getId());
+        sample.setExternalOrderId(record.getExternalOrderId());
+        sample.setRelatedOrderId(record.getRelatedOrderId());
+        sample.setTraceId(record.getCallbackLogTraceId());
+        sample.setOccurredAt(firstNonNull(record.getUpdatedAt(), record.getCreatedAt()));
+        return sample;
+    }
+
+    private AcceptanceSample failedReconcileSample() {
+        SchedulerJobLog log = schedulerJobLogMapper.selectList(Wrappers.<SchedulerJobLog>lambdaQuery()
+                        .in(SchedulerJobLog::getJobCode, List.of("DISTRIBUTION_STATUS_CHECK", "DISTRIBUTION_RECONCILE_PULL"))
+                        .eq(SchedulerJobLog::getStatus, "FAILED")
+                        .orderByDesc(SchedulerJobLog::getFinishedAt)
+                        .orderByDesc(SchedulerJobLog::getCreatedAt)
+                        .orderByDesc(SchedulerJobLog::getId)
+                        .last("LIMIT 1"))
+                .stream()
+                .findFirst()
+                .orElse(null);
+        AcceptanceSample sample = baseSample("RECONCILE_FAILED", "回查/对账失败样本", log != null,
+                "FAILED", "reconcile", "FAILED");
+        sample.setDescription("用于验收外部分销状态回查或对账失败时可追踪、可跳转处理。");
+        sample.setRecommendedAction(log == null ? "暂无样本；可在 LIVE 缺配置或外部接口不可用时生成。" : "查看失败原因，修正接口配置或外部数据后重新执行。");
+        if (log == null) {
+            return sample;
+        }
+        sample.setRecordId(log.getId());
+        sample.setTraceId(traceIdFromPayload(log.getPayload()));
+        sample.setOccurredAt(firstNonNull(log.getFinishedAt(), log.getCreatedAt()));
+        return sample;
+    }
+
+    private AcceptanceSample baseSample(String sampleType,
+                                        String title,
+                                        boolean ready,
+                                        String status,
+                                        String targetTab,
+                                        String targetStatus) {
+        AcceptanceSample sample = new AcceptanceSample();
+        sample.setSampleType(sampleType);
+        sample.setTitle(title);
+        sample.setReady(ready);
+        sample.setStatus(status);
+        sample.setTargetTab(targetTab);
+        sample.setTargetStatus(targetStatus);
+        return sample;
+    }
+
+    private String outboxTraceId(SchedulerOutboxEvent event) {
+        String traceId = traceIdFromPayload(event.getLastResponse());
+        return StringUtils.hasText(traceId) ? traceId : event.getId() == null ? event.getEventKey() : "outbox-" + event.getId();
+    }
+
+    private String traceIdFromPayload(String payload) {
+        JsonNode node = parsePayload(payload);
+        JsonNode traceId = node == null ? null : node.get("traceId");
+        return traceId == null || traceId.isNull() ? null : traceId.asText();
     }
 
     private JobBatchSummary batchSummary(SchedulerJobLog log) {

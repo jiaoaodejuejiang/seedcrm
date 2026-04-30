@@ -39,12 +39,12 @@
           </template>
         </el-table-column>
         <el-table-column label="门店" min-width="140" prop="storeName" />
-        <el-table-column label="核销金额" width="120">
+        <el-table-column v-if="canViewAmounts" label="核销金额" width="120">
           <template #default="{ row }">
             {{ formatMoney(resolveVerificationAmount(row)) }}
           </template>
         </el-table-column>
-        <el-table-column label="确认单金额" width="130">
+        <el-table-column v-if="canViewAmounts" label="确认单金额" width="130">
           <template #default="{ row }">
             {{ formatServiceConfirmAmount(row) }}
           </template>
@@ -87,11 +87,8 @@
               <el-button type="primary" size="small" :disabled="!canOpenServiceForm(row)" @click="openServiceForm(row)">
                 {{ serviceButtonLabel(row) }}
               </el-button>
-              <el-button v-if="canRefundOrder(row)" type="danger" size="small" plain @click="handleRefund(row)">退款</el-button>
+              <el-button v-if="canViewAmounts && canRefundOrder(row)" type="danger" size="small" plain @click="handleRefund(row)">退款</el-button>
               <el-button size="small" plain @click="openWecomDialog(row)">企微活码</el-button>
-              <el-button v-if="row.planOrderId && workflowStatus(row) === 'pending-service'" size="small" plain @click="openQrDialog(row)">
-                客户扫码签单
-              </el-button>
               <el-button v-if="row.customerId" link @click="router.push(`/customers/${row.customerId}`)">客户详情</el-button>
             </div>
           </template>
@@ -111,22 +108,6 @@
         />
       </div>
     </section>
-
-    <el-dialog v-model="qrDialogVisible" title="客户扫码签单" width="420px">
-      <div v-if="qrPreview.orderNo" class="stack-page">
-        <section class="panel compact-panel qr-panel">
-          <div class="qr-panel__code">
-            <img v-if="qrPreview.image" :src="qrPreview.image" alt="客户扫码签单二维码" />
-          </div>
-          <div class="qr-panel__meta">
-            <strong>{{ qrPreview.customerName || '未绑定客户' }}</strong>
-            <span>{{ qrPreview.customerPhone || '--' }} / {{ qrPreview.storeName || '--' }}</span>
-            <small>订单号：{{ qrPreview.orderNo || '--' }}</small>
-            <el-button text type="primary" @click="copyQrLink">复制签单页链接</el-button>
-          </div>
-        </section>
-      </div>
-    </el-dialog>
 
     <el-dialog v-model="wecomDialogVisible" title="请客户扫码添加接待企微" width="440px">
       <div v-loading="wecomLoading" class="wecom-dialog">
@@ -225,6 +206,7 @@ import { createPlanOrder } from '../api/actions'
 import { refundOrder } from '../api/order'
 import { fetchOrderWecomLiveCode, fetchOrders } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
+import { currentUser } from '../utils/auth'
 import { buildSystemUrl, loadSystemConsoleState } from '../utils/systemConsoleStore'
 import { formatDateTime, formatMoney, formatOrderStatus, formatVerificationStatus, normalize, statusTagType } from '../utils/format'
 
@@ -234,23 +216,15 @@ const orders = ref([])
 const statusFilter = ref('pending-verification')
 const customerNameKeyword = ref('')
 const customerPhoneKeyword = ref('')
-const qrDialogVisible = ref(false)
 const wecomDialogVisible = ref(false)
 const refundDialogVisible = ref(false)
 const refundSubmitting = ref(false)
+const canViewAmounts = computed(() => ['ADMIN', 'FINANCE'].includes(normalize(currentUser.value?.roleCode || '')))
 const wecomLoading = ref(false)
 const activeOrderForWecom = ref(null)
 const wecomPreview = ref(null)
 const wecomQrImage = ref('')
 const systemState = loadSystemConsoleState()
-const qrPreview = ref({
-  orderNo: '',
-  customerName: '',
-  customerPhone: '',
-  storeName: '',
-  url: '',
-  image: ''
-})
 const refundForm = reactive({
   order: null,
   serviceRefundAmount: null,
@@ -414,23 +388,6 @@ async function openServiceForm(row) {
   await router.push(`/plan-orders/${planOrderId}`)
 }
 
-async function openQrDialog(row) {
-  if (!row.planOrderId) {
-    ElMessage.warning('请先创建服务单，再生成客户扫码签单页')
-    return
-  }
-  const url = buildSystemUrl(systemState, 'scan', `/service-scan/${row.planOrderId}`)
-  qrPreview.value = {
-    orderNo: row.orderNo,
-    customerName: row.customerName,
-    customerPhone: row.customerPhone,
-    storeName: row.storeName,
-    url,
-    image: await QRCode.toDataURL(url, { margin: 1, width: 240 })
-  }
-  qrDialogVisible.value = true
-}
-
 async function openWecomDialog(row) {
   activeOrderForWecom.value = row
   wecomPreview.value = null
@@ -454,7 +411,7 @@ function serviceButtonLabel(row) {
     return '去核销'
   }
   if (currentWorkflow === 'pending-service') {
-    return row.serviceDetailJson ? '继续签确认单' : '签确认单'
+    return row.serviceDetailJson ? '继续确认单' : '填确认单'
   }
   if (currentWorkflow === 'serving') {
     return '完成服务'
@@ -630,18 +587,6 @@ function formatServiceConfirmAmount(row) {
     return formatMoney(amount)
   }
   return workflowStatus(row) === 'completed' ? '暂无记录' : '待填写'
-}
-
-async function copyQrLink() {
-  if (!qrPreview.value.url) {
-    return
-  }
-  try {
-    await navigator.clipboard.writeText(qrPreview.value.url)
-    ElMessage.success('链接已复制')
-  } catch {
-    ElMessage.warning('当前环境不支持自动复制')
-  }
 }
 
 async function copyWecomLink() {

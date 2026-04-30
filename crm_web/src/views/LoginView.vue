@@ -23,7 +23,7 @@
         <article>
           <span>02</span>
           <strong>门店服务</strong>
-          <small>核销、签单、履约</small>
+        <small>核销、确认单、履约</small>
         </article>
         <article>
           <span>03</span>

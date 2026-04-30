@@ -16,6 +16,7 @@ public class SchedulerMonitorSummaryResponse {
     private IdempotencySummary idempotency;
     private JobSummary jobs;
     private List<JobBatchSummary> recentBatches;
+    private List<AcceptanceSample> acceptanceSamples;
     private List<String> recommendedActions;
 
     @Data
@@ -79,5 +80,23 @@ public class SchedulerMonitorSummaryResponse {
         private LocalDateTime finishedAt;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime createdAt;
+    }
+
+    @Data
+    public static class AcceptanceSample {
+        private String sampleType;
+        private String title;
+        private boolean ready;
+        private String status;
+        private Long recordId;
+        private String externalOrderId;
+        private Long relatedOrderId;
+        private String traceId;
+        private String targetTab;
+        private String targetStatus;
+        private String description;
+        private String recommendedAction;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime occurredAt;
     }
 }

@@ -10,8 +10,8 @@
               <span>{{ customerDisplayPhone }}</span>
               <span>{{ storeDisplayName }}</span>
               <span>预约：{{ appointmentLabel }}</span>
-              <span>核销金额：{{ formatMoney(verificationAmount) }}</span>
-              <span>确认单金额：{{ serviceConfirmAmountLabel }}</span>
+              <span v-if="canViewAmounts">核销金额：{{ formatMoney(verificationAmount) }}</span>
+              <span v-if="canViewAmounts">确认单金额：{{ serviceConfirmAmountLabel }}</span>
               <span v-if="serviceTemplateDisplay">模板：{{ serviceTemplateDisplay }}</span>
               <span>表单状态：{{ serviceFormStatusLabel }}</span>
               <span>核销：{{ formatVerificationStatus(detail.order?.verificationStatus || 'UNVERIFIED') }}</span>
@@ -52,11 +52,20 @@
 
               <template v-else-if="!readOnlyMode">
                 <div class="verify-panel__actions">
-                  <button type="button" class="verify-hero verify-hero--primary" @click="openCameraScanner">
+                  <button
+                    v-if="isDepositOrder"
+                    type="button"
+                    class="verify-hero verify-hero--primary"
+                    @click="handleDirectDepositVerify"
+                  >
+                    <strong>直接核销</strong>
+                    <span>定金订单不用扫码或输码，直接进入后续流程</span>
+                  </button>
+                  <button v-else type="button" class="verify-hero verify-hero--primary" @click="openCameraScanner">
                     <strong>扫码核销</strong>
                     <span>优先使用摄像头快速核销</span>
                   </button>
-                  <div class="verify-hero verify-hero--manual">
+                  <div v-if="!isDepositOrder" class="verify-hero verify-hero--manual">
                     <strong>输码核销</strong>
                     <div class="verify-panel__manual">
                       <el-input ref="verificationInputRef" v-model="verificationCode" placeholder="请输入核销码" />
@@ -144,7 +153,7 @@
                 </el-checkbox-group>
               </div>
 
-              <div class="service-field">
+              <div v-if="canViewAmounts" class="service-field">
                 <label>服务确认单金额</label>
                 <template v-if="readOnlyMode">
                   <div class="service-field__display">{{ serviceConfirmAmountLabel }}</div>
@@ -228,30 +237,10 @@
                 />
               </div>
 
-              <div class="service-field service-field--full signature-field">
-                <label>客户手写签名</label>
-                <template v-if="readOnlyMode">
-                  <div class="signature-preview">
-                    <img v-if="serviceForm.customerSignature" :src="serviceForm.customerSignature" alt="客户手写签名" />
-                    <span v-else>未签名</span>
-                  </div>
-                </template>
-                <div v-else class="signature-pad" :class="{ 'is-disabled': !canEditForm }">
-                  <canvas
-                    ref="signatureCanvasRef"
-                    class="signature-pad__canvas"
-                    @pointerdown="startSignatureDrawing"
-                    @pointermove="drawSignature"
-                    @pointerup="finishSignatureDrawing"
-                    @pointercancel="finishSignatureDrawing"
-                    @pointerleave="finishSignatureDrawing"
-                  ></canvas>
-                  <div class="signature-pad__tools">
-                    <span>{{ serviceForm.customerSignature ? '客户已签名，可清除后重签' : '请客户在此处手写确认' }}</span>
-                    <el-button size="small" plain :disabled="!canEditForm || !serviceForm.customerSignature" @click="clearSignature">
-                      清除重签
-                    </el-button>
-                  </div>
+              <div class="service-field service-field--full">
+                <label>纸质签名位置</label>
+                <div class="table-note">
+                  确认单打印后由客户线下手写签名，系统不采集电子签名。
                 </div>
               </div>
 
@@ -416,7 +405,6 @@ const detail = ref(null)
 const staffOptions = ref([])
 const verificationCode = ref('')
 const verificationInputRef = ref(null)
-const signatureCanvasRef = ref(null)
 const scannerDialogVisible = ref(false)
 const scannerAutoOpened = ref(false)
 const scannerVideoRef = ref(null)
@@ -437,6 +425,7 @@ const serviceItemOptions = ['服装造型', '精修底片', '拍摄服务', '加
 const scanMode = computed(() => route.meta?.scanMode === true || String(route.query.scan || '') === '1')
 const readOnlyMode = computed(() => String(route.query.mode || '') === 'view')
 const isVerified = computed(() => normalize(detail.value?.order?.verificationStatus || 'UNVERIFIED') === 'VERIFIED')
+const isDepositOrder = computed(() => normalize(detail.value?.order?.type || '') === 'DEPOSIT')
 const isFinishedOrder = computed(
   () =>
     Boolean(detail.value?.summary?.finishTime) ||
@@ -444,19 +433,20 @@ const isFinishedOrder = computed(
 )
 const hasSavedServiceDetail = computed(() => Boolean(String(detail.value?.order?.serviceDetailJson || '').trim()))
 const compatibilityBackfillMode = computed(() => false)
-const hasCustomerSignature = computed(() => Boolean(String(serviceForm.customerSignature || '').trim()))
+const hasConfirmedServiceForm = computed(() => hasSavedServiceDetail.value)
 const canManageRoles = computed(() => ROLE_ASSIGNMENT_MANAGER_CODES.includes(normalize(currentUser.value?.roleCode || '')))
+const canViewAmounts = computed(() => ['ADMIN', 'FINANCE'].includes(normalize(currentUser.value?.roleCode || '')))
 const canEditForm = computed(() => !readOnlyMode.value && isVerified.value && (!isFinishedOrder.value || compatibilityBackfillMode.value))
 const canSwitchToEditMode = computed(() => readOnlyMode.value && !isFinishedOrder.value)
 const canSendToCustomer = computed(
-  () => Boolean(detail.value?.order?.customerId) && detail.value?.customer?.wecomBound === true && canEditForm.value && hasCustomerSignature.value
+  () => Boolean(detail.value?.order?.customerId) && detail.value?.customer?.wecomBound === true && canEditForm.value && hasConfirmedServiceForm.value
 )
 const sendToCustomerDisabledReason = computed(() => {
   if (canSendToCustomer.value) {
     return ''
   }
-  if (!hasCustomerSignature.value) {
-    return '客户尚未完成手写签名，暂不能发送'
+  if (!hasConfirmedServiceForm.value) {
+    return '确认单尚未保存，暂不能发送'
   }
   return '客户尚未绑定企业微信，暂不能发送'
 })
@@ -493,8 +483,8 @@ const serviceFormStatusLabel = computed(() => {
   if (readOnlyMode.value || serviceStage.value.key === 'finish') {
     return '已完成'
   }
-  if (hasCustomerSignature.value) {
-    return '已签字'
+  if (hasConfirmedServiceForm.value) {
+    return '已确认'
   }
   return hasSavedServiceDetail.value ? '已保存' : '待填写'
 })
@@ -508,8 +498,8 @@ const serviceStage = computed(() => {
   if (!isVerified.value) {
     return { label: '待核销', key: 'verify' }
   }
-  if (!hasCustomerSignature.value) {
-    return { label: '待客户签单', key: 'sign' }
+  if (!hasConfirmedServiceForm.value) {
+    return { label: '待确认单', key: 'confirm' }
   }
   return { label: '待开始服务', key: 'start' }
 })
@@ -526,7 +516,7 @@ const confirmActionLabel = computed(() => {
   if (detail.value?.summary?.startTime) {
     return '完成服务'
   }
-  return '签字并开始服务'
+  return '确认单已确认并开始服务'
 })
 const canConfirmAction = computed(() => {
   if (!detail.value || !isVerified.value) {
@@ -539,7 +529,7 @@ const canConfirmAction = computed(() => {
     return false
   }
   if (!detail.value.summary?.startTime) {
-    return hasCustomerSignature.value
+    return hasConfirmedServiceForm.value
   }
   return true
 })
@@ -556,10 +546,10 @@ const serviceActionHint = computed(() => {
   if (detail.value?.summary?.startTime) {
     return '服务进行中，完成后点击完成服务'
   }
-  if (!hasCustomerSignature.value) {
-    return '请先让客户完成手写签名'
+  if (!hasConfirmedServiceForm.value) {
+    return '请先保存并确认服务确认单'
   }
-  return '签名已保存，可开始服务'
+  return '确认单已确认，可开始服务'
 })
 const roleCards = computed(() => {
   const currentRoleMap = new Map(currentRoles.value.map((item) => [normalize(item.roleCode), item]))
@@ -568,18 +558,20 @@ const roleCards = computed(() => {
     current: currentRoleMap.get(normalize(role.roleCode))
   }))
 })
-const orderSummaryItems = computed(() => [
-  { label: '订单号', value: detail.value?.order?.orderNo || '--' },
-  { label: '订单状态', value: formatOrderStatus(detail.value?.order?.status) },
-  { label: '核销金额', value: formatMoney(verificationAmount.value) },
-  { label: '确认单金额', value: serviceConfirmAmountLabel.value },
-  { label: '服务模板', value: serviceTemplateDisplay.value || '--' },
-  { label: '来源渠道', value: formatChannel(detail.value?.order?.sourceChannel) },
-  { label: '最近更新', value: formatDateTime(detail.value?.order?.updateTime || detail.value?.order?.createTime) || '--' }
-])
+const orderSummaryItems = computed(() =>
+  [
+    { label: '订单号', value: detail.value?.order?.orderNo || '--' },
+    { label: '订单状态', value: formatOrderStatus(detail.value?.order?.status) },
+    canViewAmounts.value ? { label: '核销金额', value: formatMoney(verificationAmount.value) } : null,
+    canViewAmounts.value ? { label: '确认单金额', value: serviceConfirmAmountLabel.value } : null,
+    { label: '服务模板', value: serviceTemplateDisplay.value || '--' },
+    { label: '来源渠道', value: formatChannel(detail.value?.order?.sourceChannel) },
+    { label: '最近更新', value: formatDateTime(detail.value?.order?.updateTime || detail.value?.order?.createTime) || '--' }
+  ].filter(Boolean)
+)
 const timelineItems = computed(() => [
   { label: '核销时间', value: formatDateTime(detail.value?.order?.verificationTime) || '--' },
-  { label: '签单时间', value: formatDateTime(serviceForm.customerSignatureSignedAt) || '--' },
+  { label: '确认单', value: hasConfirmedServiceForm.value ? '已确认' : '待确认' },
   { label: '开始服务', value: formatDateTime(detail.value?.summary?.startTime) || '--' },
   { label: '完成服务', value: formatDateTime(detail.value?.summary?.finishTime) || '--' }
 ])
@@ -589,7 +581,6 @@ let scannerStream = null
 let scannerFrameId = 0
 let barcodeDetector = null
 let suppressDirtyWatch = false
-let signatureDrawing = false
 
 function createServiceForm(payload = {}) {
   return {
@@ -605,8 +596,6 @@ function createServiceForm(payload = {}) {
     addOnCount: Number.isFinite(Number(payload.addOnCount)) ? Number(payload.addOnCount) : 0,
     addOnContent: String(payload.addOnContent || ''),
     signature: String(payload.signature || ''),
-    customerSignature: String(payload.customerSignature || ''),
-    customerSignatureSignedAt: String(payload.customerSignatureSignedAt || ''),
     internalRemark: String(payload.internalRemark || ''),
     serviceTemplate: normalizeServiceTemplate(payload.serviceTemplate)
   }
@@ -619,104 +608,6 @@ function applyServiceForm(payload) {
   queueMicrotask(() => {
     suppressDirtyWatch = false
   })
-  void nextTick(redrawSignatureCanvas)
-}
-
-function prepareSignatureCanvas() {
-  const canvas = signatureCanvasRef.value
-  if (!canvas) {
-    return null
-  }
-  const rect = canvas.getBoundingClientRect()
-  const width = Math.max(1, rect.width)
-  const height = Math.max(1, rect.height)
-  const ratio = window.devicePixelRatio || 1
-  const nextWidth = Math.floor(width * ratio)
-  const nextHeight = Math.floor(height * ratio)
-  if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
-    canvas.width = nextWidth
-    canvas.height = nextHeight
-  }
-  const context = canvas.getContext('2d')
-  context.setTransform(ratio, 0, 0, ratio, 0, 0)
-  context.lineCap = 'round'
-  context.lineJoin = 'round'
-  context.lineWidth = 3
-  context.strokeStyle = '#0f172a'
-  return { canvas, context, width, height }
-}
-
-function redrawSignatureCanvas() {
-  const prepared = prepareSignatureCanvas()
-  if (!prepared) {
-    return
-  }
-  const { context, width, height } = prepared
-  context.clearRect(0, 0, width, height)
-  if (!serviceForm.customerSignature) {
-    return
-  }
-  const image = new Image()
-  image.onload = () => {
-    context.clearRect(0, 0, width, height)
-    context.drawImage(image, 0, 0, width, height)
-  }
-  image.src = serviceForm.customerSignature
-}
-
-function signaturePoint(event) {
-  const canvas = signatureCanvasRef.value
-  const rect = canvas.getBoundingClientRect()
-  return {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top
-  }
-}
-
-function startSignatureDrawing(event) {
-  if (!canEditForm.value) {
-    return
-  }
-  const prepared = prepareSignatureCanvas()
-  if (!prepared) {
-    return
-  }
-  event.preventDefault()
-  signatureDrawing = true
-  const point = signaturePoint(event)
-  prepared.canvas.setPointerCapture?.(event.pointerId)
-  prepared.context.beginPath()
-  prepared.context.moveTo(point.x, point.y)
-}
-
-function drawSignature(event) {
-  if (!signatureDrawing || !canEditForm.value) {
-    return
-  }
-  const prepared = prepareSignatureCanvas()
-  if (!prepared) {
-    return
-  }
-  event.preventDefault()
-  const point = signaturePoint(event)
-  prepared.context.lineTo(point.x, point.y)
-  prepared.context.stroke()
-}
-
-function finishSignatureDrawing(event) {
-  if (!signatureDrawing) {
-    return
-  }
-  signatureDrawing = false
-  signatureCanvasRef.value?.releasePointerCapture?.(event.pointerId)
-  serviceForm.customerSignature = signatureCanvasRef.value?.toDataURL('image/png') || ''
-  serviceForm.customerSignatureSignedAt = new Date().toISOString()
-}
-
-function clearSignature() {
-  serviceForm.customerSignature = ''
-  serviceForm.customerSignatureSignedAt = ''
-  redrawSignatureCanvas()
 }
 
 function normalizeArray(value) {
@@ -845,9 +736,8 @@ async function handlePlanAction(action, options = {}) {
 
 async function handleConfirmAndAdvance() {
   if (!canEditForm.value || !canConfirmAction.value) {
-    if (isVerified.value && !detail.value?.summary?.startTime && !hasCustomerSignature.value) {
-      ElMessage.warning('请先让客户完成手写签名')
-      await scrollToSignaturePad()
+    if (isVerified.value && !detail.value?.summary?.startTime && !hasConfirmedServiceForm.value) {
+      ElMessage.warning('请先保存并确认服务确认单')
     }
     return
   }
@@ -1156,6 +1046,10 @@ async function handleCodeVerify() {
   await verifyCurrentOrder(String(verificationCode.value || '').trim(), 'CODE')
 }
 
+async function handleDirectDepositVerify() {
+  await verifyCurrentOrder(`DIRECT-DEPOSIT-${detail.value?.order?.id || route.params.id}`, 'DIRECT_DEPOSIT')
+}
+
 async function verifyCurrentOrder(code, method) {
   if (!detail.value?.order?.id) {
     return
@@ -1183,14 +1077,6 @@ async function scrollToFormStart() {
   target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   const firstEditable = document.querySelector('.service-main input, .service-main textarea')
   firstEditable?.focus?.()
-}
-
-async function scrollToSignaturePad() {
-  await nextTick()
-  if (typeof window === 'undefined') {
-    return
-  }
-  document.querySelector('.signature-field')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 async function focusVerificationInput() {
@@ -1299,13 +1185,6 @@ watch(
 )
 
 watch(
-  () => canEditForm.value,
-  () => {
-    void nextTick(redrawSignatureCanvas)
-  }
-)
-
-watch(
   () => JSON.stringify(createServiceForm(serviceForm)),
   (next, prev) => {
     if (!detail.value || next === prev || suppressDirtyWatch) {
@@ -1318,7 +1197,6 @@ watch(
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
   window.addEventListener('pagehide', handlePageHide)
-  window.addEventListener('resize', redrawSignatureCanvas)
 })
 
 onBeforeUnmount(() => {
@@ -1326,7 +1204,6 @@ onBeforeUnmount(() => {
   clearAutosaveTimer()
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('pagehide', handlePageHide)
-  window.removeEventListener('resize', redrawSignatureCanvas)
 })
 </script>
 
@@ -1591,53 +1468,6 @@ onBeforeUnmount(() => {
   white-space: pre-wrap;
 }
 
-.signature-pad,
-.signature-preview {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px dashed #cbd5e1;
-  border-radius: 18px;
-  background: #f8fafc;
-}
-
-.signature-pad.is-disabled {
-  opacity: 0.68;
-}
-
-.signature-pad__canvas {
-  width: 100%;
-  height: 180px;
-  border-radius: 14px;
-  background:
-    linear-gradient(transparent 31px, rgba(148, 163, 184, 0.12) 32px),
-    #ffffff;
-  border: 1px solid #e2e8f0;
-  touch-action: none;
-}
-
-.signature-pad__tools {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: #64748b;
-  font-size: 13px;
-}
-
-.signature-preview {
-  min-height: 160px;
-  place-items: center;
-  color: #94a3b8;
-}
-
-.signature-preview img {
-  display: block;
-  max-width: 100%;
-  max-height: 180px;
-  object-fit: contain;
-}
-
 .side-list {
   display: grid;
   gap: 12px;
@@ -1775,9 +1605,5 @@ onBeforeUnmount(() => {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .signature-pad__tools {
-    align-items: flex-start;
-    flex-direction: column;
-  }
 }
 </style>

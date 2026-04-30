@@ -60,8 +60,11 @@ class SchedulerIdempotencyHealthServiceImplTest {
                 .extracting(SchedulerIdempotencyHealthResponse.IndexHealth::getStatus)
                 .containsExactly("BLOCKED_BY_DUPLICATES", "READY_TO_CREATE");
         assertThat(response.getRecommendedActions())
-                .anyMatch(action -> action.contains("清理历史接口接收日志"))
-                .anyMatch(action -> action.contains("不要删除相关业务 Customer / Order / PlanOrder 数据"));
+                .anyMatch(action -> action.contains("唯一索引暂未生效"))
+                .anyMatch(action -> action.contains("治理历史接口接收日志"))
+                .anyMatch(action -> action.contains("禁止直接删除相关业务 Customer / Order / PlanOrder 数据"));
+        assertThat(jdbcTemplate.sqls)
+                .allMatch(sql -> sql.trim().toUpperCase().startsWith("SELECT"));
     }
 
     @Test

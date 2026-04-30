@@ -11,8 +11,11 @@ import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
+import com.seedcrm.crm.planorder.entity.PlanOrder;
+import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.wecom.entity.CustomerWecomRelation;
 import com.seedcrm.crm.wecom.mapper.CustomerWecomRelationMapper;
+import com.seedcrm.crm.workbench.service.StaffDirectoryService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -33,14 +36,20 @@ public class MemberServiceImpl implements MemberService {
 
     private final CustomerMapper customerMapper;
     private final OrderMapper orderMapper;
+    private final PlanOrderMapper planOrderMapper;
     private final CustomerWecomRelationMapper customerWecomRelationMapper;
+    private final StaffDirectoryService staffDirectoryService;
 
     public MemberServiceImpl(CustomerMapper customerMapper,
                              OrderMapper orderMapper,
-                             CustomerWecomRelationMapper customerWecomRelationMapper) {
+                             PlanOrderMapper planOrderMapper,
+                             CustomerWecomRelationMapper customerWecomRelationMapper,
+                             StaffDirectoryService staffDirectoryService) {
         this.customerMapper = customerMapper;
         this.orderMapper = orderMapper;
+        this.planOrderMapper = planOrderMapper;
         this.customerWecomRelationMapper = customerWecomRelationMapper;
+        this.staffDirectoryService = staffDirectoryService;
     }
 
     @Override
@@ -75,19 +84,22 @@ public class MemberServiceImpl implements MemberService {
                 .toList();
 
         Map<Long, List<Order>> ordersByCustomerId = loadOrdersByCustomer(filteredCustomers);
+        Map<Long, CustomerWecomRelation> allWecomMap = loadWecomMap(filteredCustomers);
         List<Customer> paidMembers = filteredCustomers.stream()
                 .filter(customer -> !ordersByCustomerId.getOrDefault(customer.getId(), List.of()).isEmpty())
+                .filter(customer -> canViewMember(customer, allWecomMap.get(customer.getId()), context))
                 .toList();
         long total = paidMembers.size();
         List<Customer> pageRows = paidMembers.stream()
                 .skip((long) (currentPage - 1) * currentPageSize)
                 .limit(currentPageSize)
                 .toList();
-        Map<Long, CustomerWecomRelation> wecomMap = loadWecomMap(pageRows);
+        Map<Long, PlanOrder> planOrdersByOrderId = loadPlanOrdersByOrder(pageRows, ordersByCustomerId);
         List<MemberListItemResponse> records = pageRows.stream()
                 .map(customer -> buildItem(customer,
                         ordersByCustomerId.getOrDefault(customer.getId(), List.of()),
-                        wecomMap.get(customer.getId())))
+                        allWecomMap.get(customer.getId()),
+                        planOrdersByOrderId))
                 .toList();
         return new MemberListResponse(records, total, currentPage, currentPageSize);
     }
@@ -97,6 +109,29 @@ public class MemberServiceImpl implements MemberService {
         if (!MEMBER_ROLES.contains(roleCode)) {
             throw new BusinessException("member view denied: role not allowed");
         }
+    }
+
+    private boolean canViewMember(Customer customer,
+                                  CustomerWecomRelation wecomRelation,
+                                  PermissionRequestContext context) {
+        String roleCode = normalizeUpper(context == null ? null : context.getRoleCode());
+        if ("ADMIN".equals(roleCode)) {
+            return true;
+        }
+        if (!"PRIVATE_DOMAIN_SERVICE".equals(roleCode)) {
+            return false;
+        }
+        if (wecomRelation == null || !StringUtils.hasText(wecomRelation.getExternalUserid())) {
+            return false;
+        }
+        Long currentUserId = context.getCurrentUserId();
+        if (currentUserId == null) {
+            return false;
+        }
+        String wecomUserId = normalize(wecomRelation.getWecomUserId());
+        String numericUserId = normalize(String.valueOf(currentUserId));
+        String wecomAccount = normalize(staffDirectoryService.getWecomAccount(currentUserId));
+        return numericUserId.equals(wecomUserId) || wecomAccount.equals(wecomUserId);
     }
 
     private Map<Long, List<Order>> loadOrdersByCustomer(List<Customer> customers) {
@@ -133,13 +168,32 @@ public class MemberServiceImpl implements MemberService {
                 .collect(Collectors.toMap(CustomerWecomRelation::getCustomerId, Function.identity(), (left, right) -> left));
     }
 
+    private Map<Long, PlanOrder> loadPlanOrdersByOrder(List<Customer> customers,
+                                                       Map<Long, List<Order>> ordersByCustomerId) {
+        List<Long> orderIds = customers.stream()
+                .flatMap(customer -> ordersByCustomerId.getOrDefault(customer.getId(), List.of()).stream())
+                .map(Order::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        return planOrderMapper.selectList(Wrappers.<PlanOrder>lambdaQuery()
+                        .in(PlanOrder::getOrderId, orderIds)
+                        .orderByDesc(PlanOrder::getCreateTime)
+                        .orderByDesc(PlanOrder::getId))
+                .stream()
+                .filter(planOrder -> planOrder.getOrderId() != null)
+                .collect(Collectors.toMap(PlanOrder::getOrderId, Function.identity(), (left, right) -> left));
+    }
+
     private MemberListItemResponse buildItem(Customer customer,
                                              List<Order> orders,
-                                             CustomerWecomRelation wecomRelation) {
-        Order latestOrder = orders.stream()
-                .max(Comparator.comparing(Order::getCreateTime, Comparator.nullsLast(LocalDateTime::compareTo))
-                        .thenComparing(Order::getId, Comparator.nullsLast(Long::compareTo)))
-                .orElse(null);
+                                             CustomerWecomRelation wecomRelation,
+                                             Map<Long, PlanOrder> planOrdersByOrderId) {
+        Order latestOrder = latestOrder(orders);
+        PlanOrder latestPlanOrder = latestOrder == null ? null : planOrdersByOrderId.get(latestOrder.getId());
         BigDecimal totalAmount = orders.stream()
                 .map(Order::getAmount)
                 .filter(Objects::nonNull)
@@ -155,16 +209,47 @@ public class MemberServiceImpl implements MemberService {
                 customer.getExternalMemberId(),
                 displayMemberRole(customer.getExternalMemberRole()),
                 wecomRelation != null && StringUtils.hasText(wecomRelation.getExternalUserid()),
+                privateDomainOwner(wecomRelation),
                 customer.getTag(),
                 latestOrder == null ? null : latestOrder.getId(),
                 latestOrder == null ? null : latestOrder.getOrderNo(),
                 latestOrder == null ? null : OrderStatus.toApiValue(latestOrder.getStatus()),
                 latestOrder == null ? null : latestOrder.getAmount(),
                 latestOrder == null ? null : latestOrder.getCreateTime(),
+                latestPlanOrder == null ? null : latestPlanOrder.getId(),
+                latestPlanOrder == null ? null : latestPlanOrder.getStatus(),
+                latestPlanOrder == null ? null : planOrderTime(latestPlanOrder),
                 (long) orders.size(),
                 totalAmount,
                 customer.getUpdateTime(),
                 customer.getCreateTime());
+    }
+
+    private Order latestOrder(List<Order> orders) {
+        return orders.stream()
+                .max(Comparator.comparing(Order::getCreateTime, Comparator.nullsLast(LocalDateTime::compareTo))
+                        .thenComparing(Order::getId, Comparator.nullsLast(Long::compareTo)))
+                .orElse(null);
+    }
+
+    private String privateDomainOwner(CustomerWecomRelation wecomRelation) {
+        if (wecomRelation == null || !StringUtils.hasText(wecomRelation.getWecomUserId())) {
+            return null;
+        }
+        return wecomRelation.getWecomUserId().trim();
+    }
+
+    private LocalDateTime planOrderTime(PlanOrder planOrder) {
+        if (planOrder.getFinishTime() != null) {
+            return planOrder.getFinishTime();
+        }
+        if (planOrder.getStartTime() != null) {
+            return planOrder.getStartTime();
+        }
+        if (planOrder.getArriveTime() != null) {
+            return planOrder.getArriveTime();
+        }
+        return planOrder.getCreateTime();
     }
 
     private boolean matchesSourceTab(Customer customer, String normalizedTab) {

@@ -124,4 +124,24 @@ class DistributorIncomeServiceImplTest {
         verify(financeService, never()).recordDistributorIncome(existing);
         verify(distributorIncomeDetailMapper, never()).insert(any(DistributorIncomeDetail.class));
     }
+
+    @Test
+    void calculateShouldSkipExternalDistributionOrderEvenWhenSourceIdExists() {
+        Order order = new Order();
+        order.setId(13L);
+        order.setSourceChannel(SourceChannel.DISTRIBUTOR.name());
+        order.setSourceId(8L);
+        order.setExternalPartnerCode("DISTRIBUTION");
+        order.setExternalOrderId("dist_order_001");
+        order.setStatus(OrderStatus.COMPLETED.name());
+        order.setAmount(new BigDecimal("1000.00"));
+        when(dbLockService.lockOrder(13L)).thenReturn(order);
+
+        DistributorIncomeDetail detail = distributorIncomeService.calculate(13L);
+
+        assertThat(detail).isNull();
+        verify(distributorIncomeDetailMapper, never()).selectByOrderAndDistributor(13L, 8L);
+        verify(distributorService, never()).getByIdOrThrow(8L);
+        verify(financeService, never()).recordDistributorIncome(any());
+    }
 }

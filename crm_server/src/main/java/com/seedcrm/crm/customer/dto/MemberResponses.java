@@ -37,6 +37,7 @@ public final class MemberResponses {
         private String externalMemberId;
         private String externalMemberRole;
         private Boolean wecomBound;
+        private String privateDomainOwner;
         private String primaryTag;
         private Long latestOrderId;
         private String latestOrderNo;
@@ -44,6 +45,10 @@ public final class MemberResponses {
         private BigDecimal latestOrderAmount;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime latestOrderTime;
+        private Long latestPlanOrderId;
+        private String latestPlanOrderStatus;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime latestPlanOrderTime;
         private Long orderCount;
         private BigDecimal totalOrderAmount;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

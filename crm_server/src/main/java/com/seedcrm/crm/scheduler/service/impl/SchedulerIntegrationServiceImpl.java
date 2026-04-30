@@ -617,6 +617,12 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         target.setPullWindowMinutes(source.getPullWindowMinutes() == null || source.getPullWindowMinutes() <= 0 ? 60 : source.getPullWindowMinutes());
         target.setOverlapMinutes(source.getOverlapMinutes() == null || source.getOverlapMinutes() < 0 ? 10 : source.getOverlapMinutes());
         target.setRequestTimeoutMs(source.getRequestTimeoutMs() == null || source.getRequestTimeoutMs() <= 0 ? 10000 : source.getRequestTimeoutMs());
+        target.setRateLimitPerMinute(source.getRateLimitPerMinute() == null || source.getRateLimitPerMinute() <= 0
+                ? existing == null || existing.getRateLimitPerMinute() == null || existing.getRateLimitPerMinute() <= 0 ? 60 : existing.getRateLimitPerMinute()
+                : source.getRateLimitPerMinute());
+        target.setCacheTtlSeconds(source.getCacheTtlSeconds() == null || source.getCacheTtlSeconds() < 0
+                ? existing == null || existing.getCacheTtlSeconds() == null || existing.getCacheTtlSeconds() < 0 ? 30 : existing.getCacheTtlSeconds()
+                : source.getCacheTtlSeconds());
         target.setCallbackUrl(trimToNull(source.getCallbackUrl()));
         target.setEnabled(source.getEnabled() == null ? 1 : source.getEnabled());
         target.setRemark(trimToNull(source.getRemark()));

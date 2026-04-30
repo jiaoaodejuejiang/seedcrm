@@ -32,28 +32,28 @@ public class AuthServiceImpl implements AuthService {
             Map.entry("admin", new DemoAccount("admin", "123456", new AuthenticatedUser(
                     "admin", "系统管理员", "ADMIN", "管理员", "ALL", 1L, 10L, "总部",
                     List.of(1001L, 1002L, 2001L, 2002L, 3001L, 3002L), null,
-                    List.of("CLUE", "ORDER", "PLANORDER", "SALARY", "FINANCE", "SYSTEM", "SETTING", "WECOM")))),
+                    List.of("CLUE", "CUSTOMER", "ORDER", "PLANORDER", "SALARY", "FINANCE", "SYSTEM", "SETTING", "WECOM")))),
             Map.entry("clue_manager", new DemoAccount("clue_manager", "123456", new AuthenticatedUser(
                     "clue_manager", "客资主管", "CLUE_MANAGER", "客资主管", "ALL", 5001L, 10L, "总部",
-                    List.of(5001L, 1001L, 1002L), null, List.of("CLUE", "ORDER", "SYSTEM", "SALARY")))),
+                    List.of(5001L, 1001L, 1002L), null, List.of("CLUE", "CUSTOMER", "ORDER", "SYSTEM", "SALARY")))),
             Map.entry("online_cs", new DemoAccount("online_cs", "123456", new AuthenticatedUser(
                     "online_cs", "在线客服", "ONLINE_CUSTOMER_SERVICE", "在线客服", "TEAM", 1001L, 10L, "总部",
-                    List.of(1001L, 1002L), null, List.of("CLUE", "ORDER", "SALARY")))),
+                    List.of(1001L, 1002L), null, List.of("CLUE", "CUSTOMER", "ORDER", "SALARY")))),
             Map.entry("store_service", new DemoAccount("store_service", "123456", new AuthenticatedUser(
                     "store_service", "门店服务A", "STORE_SERVICE", "门店服务", "STORE", 5101L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY")))),
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("CUSTOMER", "ORDER", "PLANORDER", "SALARY")))),
             Map.entry("store_manager", new DemoAccount("store_manager", "123456", new AuthenticatedUser(
                     "store_manager", "静安店长", "STORE_MANAGER", "店长", "STORE", 5002L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SYSTEM", "SALARY")))),
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("CUSTOMER", "ORDER", "PLANORDER", "SYSTEM", "SALARY")))),
             Map.entry("photo_a", new DemoAccount("photo_a", "123456", new AuthenticatedUser(
                     "photo_a", "摄影A", "PHOTOGRAPHER", "摄影", "STORE", 2001L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY")))),
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("CUSTOMER", "ORDER", "PLANORDER", "SALARY")))),
             Map.entry("makeup_a", new DemoAccount("makeup_a", "123456", new AuthenticatedUser(
                     "makeup_a", "化妆师A", "MAKEUP_ARTIST", "化妆师", "STORE", 3001L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY")))),
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("CUSTOMER", "ORDER", "PLANORDER", "SALARY")))),
             Map.entry("selector_a", new DemoAccount("selector_a", "123456", new AuthenticatedUser(
                     "selector_a", "选片负责人A", "PHOTO_SELECTOR", "选片负责人", "STORE", 4001L, 10L, "静安门店",
-                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("ORDER", "PLANORDER", "SALARY")))),
+                    List.of(5101L, 5002L, 2001L, 2002L, 3001L, 3002L, 4001L, 4002L), null, List.of("CUSTOMER", "ORDER", "PLANORDER", "SALARY")))),
             Map.entry("finance", new DemoAccount("finance", "123456", new AuthenticatedUser(
                     "finance", "财务", "FINANCE", "财务", "ALL", 91001L, 10L, "总部",
                     List.of(91001L), null, List.of("ORDER", "SALARY", "FINANCE")))),
@@ -63,9 +63,10 @@ public class AuthServiceImpl implements AuthService {
             Map.entry("integration_operator", new DemoAccount("integration_operator", "123456", new AuthenticatedUser(
                     "integration_operator", "集成操作员", "INTEGRATION_OPERATOR", "集成操作员", "ALL", 92002L, 10L, "总部",
                     List.of(92002L), null, List.of("SETTING", "SCHEDULER")))),
+            Map.entry("partner_app", new DemoAccount("partner_app", "123456", partnerAppUser())),
             Map.entry("private_domain", new DemoAccount("private_domain", "123456", new AuthenticatedUser(
                     "private_domain", "私域客服", "PRIVATE_DOMAIN_SERVICE", "私域客服", "SELF", 1101L, 10L, "总部",
-                    List.of(1101L), 1101L, List.of("WECOM", "SALARY")))));
+                    List.of(1101L), 1101L, List.of("CUSTOMER", "WECOM", "SALARY")))));
 
     private final Map<String, AuthenticatedUser> sessions = new ConcurrentHashMap<>();
     private final AuthAccessProvider authAccessProvider;
@@ -195,6 +196,7 @@ public class AuthServiceImpl implements AuthService {
                 source.getTeamMemberIds() == null ? List.of() : List.copyOf(source.getTeamMemberIds()),
                 source.getBoundCustomerUserId(),
                 source.getAllowedModules() == null ? List.of() : List.copyOf(source.getAllowedModules()));
+        target.setPartnerCode(source.getPartnerCode());
         target.setMenuRoutes(source.getMenuRoutes() == null ? List.of() : List.copyOf(source.getMenuRoutes()));
         target.setMenuTree(source.getMenuTree() == null ? List.of() : List.copyOf(source.getMenuTree()));
         target.setPermissions(source.getPermissions() == null ? List.of() : List.copyOf(source.getPermissions()));
@@ -204,6 +206,23 @@ public class AuthServiceImpl implements AuthService {
 
     private AuthenticatedUser enrichAccess(AuthenticatedUser user) {
         return authAccessProvider == null ? AuthAccessCatalog.enrich(user) : authAccessProvider.enrich(user);
+    }
+
+    private static AuthenticatedUser partnerAppUser() {
+        AuthenticatedUser user = new AuthenticatedUser(
+                "partner_app",
+                "外部伙伴应用",
+                "PARTNER_APP",
+                "外部伙伴应用",
+                "PARTNER",
+                93001L,
+                null,
+                null,
+                List.of(),
+                null,
+                List.of("SCHEDULER"));
+        user.setPartnerCode("DISTRIBUTION");
+        return user;
     }
 
     private record DemoAccount(String username, String password, AuthenticatedUser user) {

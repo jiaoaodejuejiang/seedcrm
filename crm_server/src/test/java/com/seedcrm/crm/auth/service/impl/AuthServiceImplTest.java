@@ -94,6 +94,21 @@ class AuthServiceImplTest {
     }
 
     @Test
+    void partnerAppLoginShouldCarryPartnerScopeWithoutBackendMenus() {
+        String token = authService.login("partner_app", "123456", null, null);
+
+        var user = authService.getUserOrThrow(token);
+
+        assertThat(user.getRoleCode()).isEqualTo("PARTNER_APP");
+        assertThat(user.getDataScope()).isEqualTo("PARTNER");
+        assertThat(user.getPartnerCode()).isEqualTo("DISTRIBUTION");
+        assertThat(user.getAllowedModules()).contains("SCHEDULER");
+        assertThat(user.getPermissions()).contains("scheduler:view");
+        assertThat(user.getMenuRoutes()).isEmpty();
+        assertThat(user.getDefaultRoute()).isNull();
+    }
+
+    @Test
     void storeStaffShouldStartFromStoreOrderWorkspace() {
         String token = authService.login("store_service", "123456", 10L, "静安门店");
 

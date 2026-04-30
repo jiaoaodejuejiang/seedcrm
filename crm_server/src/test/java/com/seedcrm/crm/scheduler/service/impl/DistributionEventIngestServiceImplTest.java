@@ -117,6 +117,7 @@ class DistributionEventIngestServiceImplTest {
         when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
         IntegrationCallbackEventLog duplicate = new IntegrationCallbackEventLog();
         duplicate.setProcessStatus("SUCCESS");
+        duplicate.setBodyHash(sha256Hex(readPayload().toString()));
         duplicate.setRelatedCustomerId(101L);
         duplicate.setRelatedOrderId(202L);
         when(eventLogMapper.selectOne(any())).thenReturn(duplicate);
@@ -133,6 +134,43 @@ class DistributionEventIngestServiceImplTest {
         verify(eventLogWriter).write(logCaptor.capture());
         assertThat(logCaptor.getValue().getIdempotencyStatus()).isEqualTo("DUPLICATE");
         assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("SUCCESS");
+    }
+
+    @Test
+    void shouldQueueExceptionWhenDuplicateSuccessfulEventHasDifferentPayloadBodyHash() throws Exception {
+        when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
+        IntegrationCallbackEventLog duplicate = new IntegrationCallbackEventLog();
+        duplicate.setProcessStatus("SUCCESS");
+        duplicate.setIdempotencyStatus("CREATED");
+        duplicate.setBodyHash("old-body-hash");
+        duplicate.setRelatedCustomerId(101L);
+        duplicate.setRelatedOrderId(202L);
+        when(eventLogMapper.selectOne(any())).thenReturn(duplicate);
+
+        DistributionEventResponse response = service.ingest(readConflictingPaidPayload(), request("idem-001"));
+
+        assertThat(response.getIdempotencyResult()).isEqualTo("EXCEPTION_QUEUED");
+        assertThat(response.getCustomerId()).isEqualTo(101L);
+        assertThat(response.getOrderId()).isEqualTo(202L);
+        verify(customerMapper, never()).insert(any(Customer.class));
+        verify(orderMapper, never()).insert(any(Order.class));
+        verify(distributionExceptionService).recordFailure(
+                org.mockito.ArgumentMatchers.eq("DISTRIBUTION"),
+                any(),
+                any(),
+                any(),
+                org.mockito.ArgumentMatchers.eq("idem-001"),
+                org.mockito.ArgumentMatchers.eq("DUPLICATE_PAYLOAD_CONFLICT"),
+                org.mockito.ArgumentMatchers.contains("body hash"),
+                org.mockito.ArgumentMatchers.eq(202L),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.contains("\"field\":\"bodyHash\""));
+
+        ArgumentCaptor<IntegrationCallbackEventLog> logCaptor = ArgumentCaptor.forClass(IntegrationCallbackEventLog.class);
+        verify(eventLogWriter).write(logCaptor.capture());
+        assertThat(logCaptor.getValue().getIdempotencyStatus()).isEqualTo("EXCEPTION_QUEUED");
+        assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("SUCCESS");
+        assertThat(logCaptor.getValue().getErrorCode()).isEqualTo("DUPLICATE_PAYLOAD_CONFLICT");
     }
 
     @Test
@@ -237,7 +275,7 @@ class DistributionEventIngestServiceImplTest {
         verify(orderMapper, never()).insert(any(Order.class));
 
         ArgumentCaptor<IntegrationCallbackEventLog> logCaptor = ArgumentCaptor.forClass(IntegrationCallbackEventLog.class);
-        verify(eventLogWriter).write(logCaptor.capture());
+        verify(eventLogWriter).writeRequiresNew(logCaptor.capture());
         assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("FAILED");
         assertThat(logCaptor.getValue().getIdempotencyStatus()).isEqualTo("FAILED");
         assertThat(logCaptor.getValue().getErrorCode()).isEqualTo("INGEST_FAILED");
@@ -306,7 +344,7 @@ class DistributionEventIngestServiceImplTest {
         verify(orderMapper, never()).insert(any(Order.class));
 
         ArgumentCaptor<IntegrationCallbackEventLog> logCaptor = ArgumentCaptor.forClass(IntegrationCallbackEventLog.class);
-        verify(eventLogWriter).write(logCaptor.capture());
+        verify(eventLogWriter).writeRequiresNew(logCaptor.capture());
         assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("FAILED");
         assertThat(logCaptor.getValue().getErrorCode()).isEqualTo("PROVIDER_INVALID");
         assertThat(logCaptor.getValue().getSignatureStatus()).isEqualTo("UNKNOWN");
@@ -333,7 +371,7 @@ class DistributionEventIngestServiceImplTest {
         verify(orderMapper, never()).insert(any(Order.class));
 
         ArgumentCaptor<IntegrationCallbackEventLog> logCaptor = ArgumentCaptor.forClass(IntegrationCallbackEventLog.class);
-        verify(eventLogWriter).write(logCaptor.capture());
+        verify(eventLogWriter).writeRequiresNew(logCaptor.capture());
         assertThat(logCaptor.getValue().getErrorCode()).isEqualTo("PARTNER_MISMATCH");
     }
 
@@ -355,7 +393,7 @@ class DistributionEventIngestServiceImplTest {
         verify(orderMapper, never()).insert(any(Order.class));
 
         ArgumentCaptor<IntegrationCallbackEventLog> logCaptor = ArgumentCaptor.forClass(IntegrationCallbackEventLog.class);
-        verify(eventLogWriter).write(logCaptor.capture());
+        verify(eventLogWriter).writeRequiresNew(logCaptor.capture());
         assertThat(logCaptor.getValue().getErrorCode()).isEqualTo("NONCE_REPLAYED");
         assertThat(logCaptor.getValue().getSignatureStatus()).isEqualTo("REPLAYED");
     }
@@ -549,6 +587,20 @@ class DistributionEventIngestServiceImplTest {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
             byte[] bytes = mac.doFinal(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder(bytes.length * 2);
+            for (byte item : bytes) {
+                builder.append(String.format("%02x", item));
+            }
+            return builder.toString();
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    private String sha256Hex(String value) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(String.valueOf(value).getBytes(StandardCharsets.UTF_8));
             StringBuilder builder = new StringBuilder(bytes.length * 2);
             for (byte item : bytes) {
                 builder.append(String.format("%02x", item));

@@ -21,5 +21,9 @@ public class PermissionRequestContext {
 
     private Long boundCustomerUserId;
 
+    private String currentPartnerCode;
+
+    private String resourcePartnerCode;
+
     private List<Long> teamMemberIds = new ArrayList<>();
 }

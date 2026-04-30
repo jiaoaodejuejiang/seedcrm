@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.order.entity.Order;
+import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
@@ -11,8 +12,8 @@ import com.seedcrm.crm.scheduler.entity.SchedulerOutboxEvent;
 import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
 import com.seedcrm.crm.scheduler.mapper.SchedulerOutboxEventMapper;
 import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
+import com.seedcrm.crm.scheduler.support.SchedulerRestClientFactory;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -24,6 +25,7 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.MediaType;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,20 +40,29 @@ public class SchedulerOutboxServiceImpl implements SchedulerOutboxService {
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
     private static final String STATUS_DEAD_LETTER = "DEAD_LETTER";
+    private static final String EVENT_TYPE_ORDER_USED = "crm.order.used";
     private static final int MAX_RETRY = 5;
 
     private final SchedulerOutboxEventMapper outboxEventMapper;
     private final IntegrationProviderConfigMapper providerConfigMapper;
     private final ObjectMapper objectMapper;
-    private final RestClient restClient;
+    private final RestClient restClientOverride;
 
+    @Autowired
     public SchedulerOutboxServiceImpl(SchedulerOutboxEventMapper outboxEventMapper,
                                       IntegrationProviderConfigMapper providerConfigMapper,
                                       ObjectMapper objectMapper) {
+        this(outboxEventMapper, providerConfigMapper, objectMapper, null);
+    }
+
+    SchedulerOutboxServiceImpl(SchedulerOutboxEventMapper outboxEventMapper,
+                               IntegrationProviderConfigMapper providerConfigMapper,
+                               ObjectMapper objectMapper,
+                               RestClient restClient) {
         this.outboxEventMapper = outboxEventMapper;
         this.providerConfigMapper = providerConfigMapper;
         this.objectMapper = objectMapper;
-        this.restClient = RestClient.create();
+        this.restClientOverride = restClient;
     }
 
     @Override
@@ -105,6 +116,7 @@ public class SchedulerOutboxServiceImpl implements SchedulerOutboxService {
     @Transactional
     public SchedulerOutboxEvent retry(Long id, PermissionRequestContext context) {
         SchedulerOutboxEvent event = getOrThrow(id);
+        assertPartnerAccess(event, context);
         if (STATUS_SUCCESS.equals(normalize(event.getStatus()))) {
             throw new BusinessException("successful outbox event cannot be retried");
         }
@@ -184,7 +196,7 @@ public class SchedulerOutboxServiceImpl implements SchedulerOutboxService {
             throw new BusinessException("distribution provider is disabled");
         }
         if (!"LIVE".equalsIgnoreCase(provider.getExecutionMode())) {
-            return "{\"mode\":\"MOCK\",\"message\":\"outbox event simulated\"}";
+            return outboxResponse(buildTraceId(event), "MOCK", "outbox event simulated", null);
         }
         String destinationUrl = firstNonBlank(event.getDestinationUrl(), resolveDestinationUrl(provider));
         if (!StringUtils.hasText(destinationUrl)) {
@@ -196,19 +208,27 @@ public class SchedulerOutboxServiceImpl implements SchedulerOutboxService {
         String timestamp = OffsetDateTime.now(ZoneOffset.UTC).toString();
         String nonce = UUID.randomUUID().toString();
         String idempotencyKey = event.getEventKey();
+        String traceId = buildTraceId(event);
         String signature = hmacSha256(provider.getClientSecret(),
                 timestamp + "|" + nonce + "|" + idempotencyKey + "|" + event.getPayload());
-        return restClient.post()
+        String partnerResponse = restClient(provider).post()
                 .uri(destinationUrl)
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("X-Partner-Code", event.getProviderCode())
                 .header("X-Idempotency-Key", idempotencyKey)
+                .header("X-Trace-Id", traceId)
+                .header("X-Event-Type", event.getEventType())
                 .header("X-Timestamp", timestamp)
                 .header("X-Nonce", nonce)
                 .header("X-Signature", signature)
                 .body(event.getPayload())
                 .retrieve()
                 .body(String.class);
+        return outboxResponse(traceId, "LIVE", "outbox event pushed", partnerResponse);
+    }
+
+    private RestClient restClient(IntegrationProviderConfig provider) {
+        return restClientOverride == null ? SchedulerRestClientFactory.build(provider) : restClientOverride;
     }
 
     private IntegrationProviderConfig findProvider(String providerCode) {
@@ -231,6 +251,29 @@ public class SchedulerOutboxServiceImpl implements SchedulerOutboxService {
         return event;
     }
 
+    private void assertPartnerAccess(SchedulerOutboxEvent event, PermissionRequestContext context) {
+        if (!isPartnerScoped(context) || event == null) {
+            return;
+        }
+        String partnerCode = context.getCurrentPartnerCode();
+        if (!samePartner(partnerCode, event.getProviderCode())
+                && !samePartner(partnerCode, event.getExternalPartnerCode())) {
+            throw new BusinessException("outbox event does not belong to current partner");
+        }
+    }
+
+    private boolean isPartnerScoped(PermissionRequestContext context) {
+        return context != null
+                && "PARTNER".equalsIgnoreCase(context.getDataScope())
+                && StringUtils.hasText(context.getCurrentPartnerCode());
+    }
+
+    private boolean samePartner(String expected, String actual) {
+        return StringUtils.hasText(expected)
+                && StringUtils.hasText(actual)
+                && expected.trim().equalsIgnoreCase(actual.trim());
+    }
+
     private String buildPayload(Order order, PlanOrder planOrder, String eventType) {
         try {
             Map<String, Object> payload = new LinkedHashMap<>();
@@ -241,7 +284,8 @@ public class SchedulerOutboxServiceImpl implements SchedulerOutboxService {
             payload.put("order", Map.of(
                     "externalOrderId", order.getExternalOrderId(),
                     "internalOrderId", order.getId(),
-                    "orderStatus", "COMPLETED",
+                    "orderStatus", firstNonBlank(OrderStatus.toApiValue(order.getStatus()), "used"),
+                    "localOrderStatus", firstNonBlank(order.getStatus(), "COMPLETED"),
                     "usedAt", order.getCompleteTime() == null ? LocalDateTime.now().toString() : order.getCompleteTime().toString()));
             payload.put("planOrder", Map.of(
                     "planOrderId", planOrder.getId(),
@@ -276,7 +320,39 @@ public class SchedulerOutboxServiceImpl implements SchedulerOutboxService {
     }
 
     private String normalizeEventType(String eventType) {
-        return StringUtils.hasText(eventType) ? eventType.trim().toLowerCase(Locale.ROOT) : "crm.order.used";
+        String normalized = StringUtils.hasText(eventType)
+                ? eventType.trim().toLowerCase(Locale.ROOT)
+                : EVENT_TYPE_ORDER_USED;
+        if (!EVENT_TYPE_ORDER_USED.equals(normalized)) {
+            throw new BusinessException("V1 outbox event type must be crm.order.used");
+        }
+        return normalized;
+    }
+
+    private String buildTraceId(SchedulerOutboxEvent event) {
+        if (event != null && event.getId() != null) {
+            return "outbox-" + event.getId();
+        }
+        String seed = event == null ? null : firstNonBlank(event.getEventKey(), event.getExternalOrderId());
+        if (!StringUtils.hasText(seed)) {
+            seed = UUID.randomUUID().toString();
+        }
+        return "outbox-" + UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String outboxResponse(String traceId, String mode, String message, String partnerResponse) {
+        try {
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("traceId", traceId);
+            response.put("mode", mode);
+            response.put("message", message);
+            if (StringUtils.hasText(partnerResponse)) {
+                response.put("partnerResponse", partnerResponse.trim());
+            }
+            return objectMapper.writeValueAsString(response);
+        } catch (Exception exception) {
+            return "{\"traceId\":\"" + traceId + "\",\"mode\":\"" + mode + "\",\"message\":\"" + message + "\"}";
+        }
     }
 
     private String normalize(String value) {

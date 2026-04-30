@@ -65,6 +65,10 @@
                 <el-option v-for="item in moduleOptions" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </label>
+            <label>
+              <span>接口权限</span>
+              <el-input v-model="menuForm.permissionCode" placeholder="如 setting:menu:update，留空自动生成" />
+            </label>
             <label class="full-span">
               <span>可见角色</span>
               <el-select v-model="menuForm.roleCodes" multiple placeholder="请选择角色">
@@ -95,6 +99,11 @@
         <el-table-column label="模块" width="120">
           <template #default="{ row }">
             {{ formatModuleCode(row.moduleCode) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="权限" min-width="190">
+          <template #default="{ row }">
+            {{ row.permissionCode || '--' }}
           </template>
         </el-table-column>
         <el-table-column label="角色" min-width="220">

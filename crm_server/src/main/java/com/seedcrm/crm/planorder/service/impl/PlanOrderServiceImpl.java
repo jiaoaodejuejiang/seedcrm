@@ -21,6 +21,7 @@ import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.planorder.service.OrderRoleRecordService;
 import com.seedcrm.crm.planorder.service.PlanOrderService;
 import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.scheduler.entity.SchedulerOutboxEvent;
 import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
 import com.seedcrm.crm.wecom.entity.WecomTouchLog;
 import com.seedcrm.crm.wecom.service.WecomTouchService;
@@ -204,7 +205,10 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         recordOrderAction(order.getId(), "SERVICE_FINISH", fromStatus, OrderStatus.COMPLETED.name(),
                 operatorUserId, "服务完成");
         orderSettlementService.settleCompletedOrder(order.getId());
-        schedulerOutboxService.enqueueFulfillmentEvent(order, planOrder, "crm.order.used");
+        SchedulerOutboxEvent outboxEvent = schedulerOutboxService.enqueueFulfillmentEvent(order, planOrder, "crm.order.used");
+        if (requiresDistributionOutbox(order) && outboxEvent == null) {
+            throw new BusinessException("distribution fulfillment outbox event is required");
+        }
         return planOrder;
     }
 
@@ -374,6 +378,13 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         } catch (IllegalArgumentException exception) {
             throw new BusinessException("invalid order status: " + status);
         }
+    }
+
+    private boolean requiresDistributionOutbox(Order order) {
+        return order != null
+                && ("distribution".equalsIgnoreCase(order.getSource())
+                || StringUtils.hasText(order.getExternalPartnerCode())
+                || StringUtils.hasText(order.getExternalOrderId()));
     }
 
     private void validateOrderId(Long orderId) {

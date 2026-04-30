@@ -14,6 +14,7 @@ import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
 import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
 import com.seedcrm.crm.scheduler.service.DistributionEventIngestService;
 import com.seedcrm.crm.scheduler.service.DistributionReconciliationService;
+import com.seedcrm.crm.scheduler.support.SchedulerRestClientFactory;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -28,6 +29,7 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.MediaType;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
@@ -46,17 +48,26 @@ public class DistributionReconciliationServiceImpl implements DistributionReconc
     private final OrderMapper orderMapper;
     private final DistributionEventIngestService distributionEventIngestService;
     private final ObjectMapper objectMapper;
-    private final RestClient restClient;
+    private final RestClient restClientOverride;
 
+    @Autowired
     public DistributionReconciliationServiceImpl(IntegrationProviderConfigMapper providerConfigMapper,
                                                  OrderMapper orderMapper,
                                                  DistributionEventIngestService distributionEventIngestService,
                                                  ObjectMapper objectMapper) {
+        this(providerConfigMapper, orderMapper, distributionEventIngestService, objectMapper, null);
+    }
+
+    DistributionReconciliationServiceImpl(IntegrationProviderConfigMapper providerConfigMapper,
+                                          OrderMapper orderMapper,
+                                          DistributionEventIngestService distributionEventIngestService,
+                                          ObjectMapper objectMapper,
+                                          RestClient restClient) {
         this.providerConfigMapper = providerConfigMapper;
         this.orderMapper = orderMapper;
         this.distributionEventIngestService = distributionEventIngestService;
         this.objectMapper = objectMapper;
-        this.restClient = RestClient.create();
+        this.restClientOverride = restClient;
     }
 
     @Override
@@ -284,18 +295,20 @@ public class DistributionReconciliationServiceImpl implements DistributionReconc
         String url = joinUrl(provider.getBaseUrl(), path);
         String timestamp = OffsetDateTime.now(ZoneOffset.UTC).toString();
         String nonce = UUID.randomUUID().toString();
+        String traceId = "distribution-live-query-" + nonce;
         String idempotencyKey = normalizeUpper(provider.getProviderCode()) + ":LIVE_QUERY:"
                 + normalizeLower(path).replace("/", "_") + ":" + nonce;
         String requestBody = serializeJson(payload);
         String signature = hmacSha256(provider.getClientSecret(),
                 timestamp + "|" + nonce + "|" + idempotencyKey + "|" + requestBody);
         try {
-            String response = restClient.post()
+            String response = restClient(provider).post()
                     .uri(url)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-Partner-Code", provider.getProviderCode())
                     .header("X-App-Id", firstNonBlank(provider.getAppId(), provider.getClientKey(), ""))
                     .header("X-Idempotency-Key", idempotencyKey)
+                    .header("X-Trace-Id", traceId)
                     .header("X-Timestamp", timestamp)
                     .header("X-Nonce", nonce)
                     .header("X-Signature", signature)
@@ -306,6 +319,10 @@ public class DistributionReconciliationServiceImpl implements DistributionReconc
         } catch (RuntimeException exception) {
             throw new BusinessException("distribution live reconciliation call failed: " + exception.getMessage());
         }
+    }
+
+    private RestClient restClient(IntegrationProviderConfig provider) {
+        return restClientOverride == null ? SchedulerRestClientFactory.build(provider) : restClientOverride;
     }
 
     private IntegrationProviderConfig requireDistributionProvider() {

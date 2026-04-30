@@ -36,6 +36,8 @@ import SystemOrganizationView from '../views/SystemOrganizationView.vue'
 import SystemSettingView from '../views/SystemSettingView.vue'
 
 const storeRoleCodes = ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR', 'ADMIN']
+const integrationViewRoleCodes = ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR']
+const integrationConfigRoleCodes = ['ADMIN', 'INTEGRATION_ADMIN']
 
 const routes = [
   {
@@ -198,7 +200,7 @@ const routes = [
         meta: {
           title: '客户详情',
           sectionTitle: '门店服务',
-          moduleCode: 'ORDER',
+          moduleCode: 'CUSTOMER',
           roleCodes: [...storeRoleCodes, 'PRIVATE_DOMAIN_SERVICE'],
           navKey: 'store-service-orders'
         }
@@ -450,7 +452,7 @@ const routes = [
           title: '抖音接口',
           sectionTitle: '系统设置 / 调度中心',
           moduleCode: 'SETTING',
-          roleCodes: ['ADMIN'],
+          roleCodes: integrationConfigRoleCodes,
           navKey: 'settings-third-party'
         }
       },
@@ -462,7 +464,7 @@ const routes = [
           title: '回调接口',
           sectionTitle: '系统设置 / 调度中心',
           moduleCode: 'SETTING',
-          roleCodes: ['ADMIN'],
+          roleCodes: integrationViewRoleCodes,
           navKey: 'settings-callback',
           runtimeTab: 'wecom'
         }
@@ -475,7 +477,7 @@ const routes = [
           title: '任务调度',
           sectionTitle: '系统设置 / 调度中心',
           moduleCode: 'SETTING',
-          roleCodes: ['ADMIN'],
+          roleCodes: integrationViewRoleCodes,
           navKey: 'settings-jobs'
         }
       },
@@ -487,7 +489,7 @@ const routes = [
           title: '接口调试',
           sectionTitle: '系统设置 / 调度中心',
           moduleCode: 'SETTING',
-          roleCodes: ['ADMIN'],
+          roleCodes: integrationViewRoleCodes,
           navKey: 'settings-interface-debug'
         }
       },
@@ -499,7 +501,7 @@ const routes = [
           title: '分销接口',
           sectionTitle: '系统设置 / 调度中心',
           moduleCode: 'SETTING',
-          roleCodes: ['ADMIN'],
+          roleCodes: integrationViewRoleCodes,
           navKey: 'settings-distribution-api'
         }
       },

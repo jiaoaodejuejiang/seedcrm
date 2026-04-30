@@ -23,6 +23,7 @@ import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.scheduler.entity.SchedulerOutboxEvent;
 import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
 import com.seedcrm.crm.wecom.service.WecomTouchService;
 import org.junit.jupiter.api.BeforeEach;
@@ -224,6 +225,8 @@ class PlanOrderServiceImplTest {
         order.setServiceDetailJson("{\"serviceRequirement\":\"已确认到店需求\",\"customerSignature\":\"data:image/png;base64,test\"}");
         when(dbLockService.lockOrder(30L)).thenReturn(order);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+        when(schedulerOutboxService.enqueueFulfillmentEvent(order, planOrder, "crm.order.used"))
+                .thenReturn(new SchedulerOutboxEvent());
 
         PlanOrderActionDTO dto = new PlanOrderActionDTO();
         dto.setPlanOrderId(3L);
@@ -236,6 +239,70 @@ class PlanOrderServiceImplTest {
         assertThat(order.getCompleteTime()).isNotNull();
         verify(orderActionRecordMapper).insert(any(OrderActionRecord.class));
         verify(orderSettlementService).settleCompletedOrder(30L);
+        verify(schedulerOutboxService).enqueueFulfillmentEvent(order, planOrder, "crm.order.used");
+    }
+
+    @Test
+    void finishShouldFailWhenDistributionOutboxCannotBeEnqueued() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(33L);
+        planOrder.setOrderId(330L);
+        planOrder.setStatus(PlanOrderStatus.SERVICING.name());
+        planOrder.setArriveTime(java.time.LocalDateTime.now().minusHours(1));
+        planOrder.setStartTime(java.time.LocalDateTime.now().minusMinutes(30));
+        when(planOrderMapper.selectById(33L)).thenReturn(planOrder);
+        when(planOrderMapper.updateById(any(PlanOrder.class))).thenReturn(1);
+
+        Order order = new Order();
+        order.setId(330L);
+        order.setStatus(OrderStatus.SERVING.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setExternalPartnerCode("DISTRIBUTION");
+        order.setExternalOrderId("dist_order_330");
+        order.setServiceDetailJson("{\"serviceRequirement\":\"已确认到店需求\",\"customerSignature\":\"data:image/png;base64,test\"}");
+        when(dbLockService.lockOrder(330L)).thenReturn(order);
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+        when(schedulerOutboxService.enqueueFulfillmentEvent(order, planOrder, "crm.order.used"))
+                .thenThrow(new BusinessException("failed to enqueue outbox event"));
+
+        PlanOrderActionDTO dto = new PlanOrderActionDTO();
+        dto.setPlanOrderId(33L);
+
+        assertThatThrownBy(() -> planOrderService.finish(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("failed to enqueue outbox event");
+        verify(orderSettlementService).settleCompletedOrder(330L);
+        verify(schedulerOutboxService).enqueueFulfillmentEvent(order, planOrder, "crm.order.used");
+    }
+
+    @Test
+    void finishShouldFailWhenDistributionOutboxReturnsNull() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(34L);
+        planOrder.setOrderId(340L);
+        planOrder.setStatus(PlanOrderStatus.SERVICING.name());
+        planOrder.setArriveTime(java.time.LocalDateTime.now().minusHours(1));
+        planOrder.setStartTime(java.time.LocalDateTime.now().minusMinutes(30));
+        when(planOrderMapper.selectById(34L)).thenReturn(planOrder);
+        when(planOrderMapper.updateById(any(PlanOrder.class))).thenReturn(1);
+
+        Order order = new Order();
+        order.setId(340L);
+        order.setStatus(OrderStatus.SERVING.name());
+        order.setSource("distribution");
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson("{\"serviceRequirement\":\"已确认到店需求\",\"customerSignature\":\"data:image/png;base64,test\"}");
+        when(dbLockService.lockOrder(340L)).thenReturn(order);
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+        when(schedulerOutboxService.enqueueFulfillmentEvent(order, planOrder, "crm.order.used")).thenReturn(null);
+
+        PlanOrderActionDTO dto = new PlanOrderActionDTO();
+        dto.setPlanOrderId(34L);
+
+        assertThatThrownBy(() -> planOrderService.finish(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("distribution fulfillment outbox event is required");
+        verify(orderSettlementService).settleCompletedOrder(340L);
         verify(schedulerOutboxService).enqueueFulfillmentEvent(order, planOrder, "crm.order.used");
     }
 

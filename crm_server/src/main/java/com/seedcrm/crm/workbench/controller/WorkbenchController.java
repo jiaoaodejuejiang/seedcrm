@@ -2,6 +2,7 @@ package com.seedcrm.crm.workbench.controller;
 
 import com.seedcrm.crm.common.api.ApiResponse;
 import com.seedcrm.crm.permission.support.CluePermissionGuard;
+import com.seedcrm.crm.permission.support.CustomerPermissionGuard;
 import com.seedcrm.crm.permission.support.OrderPermissionGuard;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
@@ -32,17 +33,20 @@ public class WorkbenchController {
     private final WorkbenchService workbenchService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
     private final CluePermissionGuard cluePermissionGuard;
+    private final CustomerPermissionGuard customerPermissionGuard;
     private final OrderPermissionGuard orderPermissionGuard;
     private final PlanOrderPermissionGuard planOrderPermissionGuard;
 
     public WorkbenchController(WorkbenchService workbenchService,
                                PermissionRequestContextResolver permissionRequestContextResolver,
                                CluePermissionGuard cluePermissionGuard,
+                               CustomerPermissionGuard customerPermissionGuard,
                                OrderPermissionGuard orderPermissionGuard,
                                PlanOrderPermissionGuard planOrderPermissionGuard) {
         this.workbenchService = workbenchService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
         this.cluePermissionGuard = cluePermissionGuard;
+        this.customerPermissionGuard = customerPermissionGuard;
         this.orderPermissionGuard = orderPermissionGuard;
         this.planOrderPermissionGuard = planOrderPermissionGuard;
     }
@@ -109,7 +113,10 @@ public class WorkbenchController {
     }
 
     @GetMapping("/customers/{customerId}")
-    public ApiResponse<CustomerProfileResponse> customerDetail(@PathVariable Long customerId) {
+    public ApiResponse<CustomerProfileResponse> customerDetail(@PathVariable Long customerId,
+                                                               HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        customerPermissionGuard.checkView(context, customerId);
         return ApiResponse.success(workbenchService.getCustomerProfile(customerId));
     }
 

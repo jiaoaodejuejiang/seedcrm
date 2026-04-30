@@ -281,6 +281,8 @@ class SchedulerIntegrationServiceImplTest {
         existing.setVoucherCancelPath("/goodlife/v1/fulfilment/certificate/cancel/");
         existing.setPoiId("poi-001");
         existing.setVerifyCodeField("encrypted_codes");
+        existing.setRateLimitPerMinute(80);
+        existing.setCacheTtlSeconds(45);
 
         IntegrationProviderConfig request = new IntegrationProviderConfig();
         request.setProviderCode("DOUYIN_LAIKE");
@@ -303,12 +305,46 @@ class SchedulerIntegrationServiceImplTest {
         assertThat(persisted.getVoucherCancelPath()).isEqualTo(existing.getVoucherCancelPath());
         assertThat(persisted.getPoiId()).isEqualTo(existing.getPoiId());
         assertThat(persisted.getVerifyCodeField()).isEqualTo(existing.getVerifyCodeField());
+        assertThat(persisted.getRateLimitPerMinute()).isEqualTo(80);
+        assertThat(persisted.getCacheTtlSeconds()).isEqualTo(45);
 
         assertThat(result.getVoucherPreparePath()).isEqualTo(existing.getVoucherPreparePath());
         assertThat(result.getVoucherVerifyPath()).isEqualTo(existing.getVoucherVerifyPath());
         assertThat(result.getVoucherCancelPath()).isEqualTo(existing.getVoucherCancelPath());
         assertThat(result.getPoiId()).isEqualTo(existing.getPoiId());
         assertThat(result.getVerifyCodeField()).isEqualTo(existing.getVerifyCodeField());
+        assertThat(result.getRateLimitPerMinute()).isEqualTo(80);
+        assertThat(result.getCacheTtlSeconds()).isEqualTo(45);
+    }
+
+    @Test
+    void shouldSaveDistributionRateLimitAndCacheConfig() {
+        IntegrationProviderConfig existing = new IntegrationProviderConfig();
+        existing.setId(12L);
+        existing.setProviderCode("DISTRIBUTION");
+        existing.setProviderName("外部分销系统");
+        existing.setModuleCode("SCHEDULER");
+        existing.setExecutionMode("MOCK");
+
+        IntegrationProviderConfig request = new IntegrationProviderConfig();
+        request.setProviderCode("DISTRIBUTION");
+        request.setProviderName("外部分销系统");
+        request.setModuleCode("SCHEDULER");
+        request.setExecutionMode("LIVE");
+        request.setRateLimitPerMinute(120);
+        request.setCacheTtlSeconds(90);
+
+        when(providerConfigMapper.selectOne(any())).thenReturn(existing);
+        when(providerConfigMapper.updateById(any(IntegrationProviderConfig.class))).thenReturn(1);
+
+        IntegrationProviderConfig result = schedulerIntegrationService.saveProvider(request);
+
+        ArgumentCaptor<IntegrationProviderConfig> providerCaptor = ArgumentCaptor.forClass(IntegrationProviderConfig.class);
+        verify(providerConfigMapper).updateById(providerCaptor.capture());
+        assertThat(providerCaptor.getValue().getRateLimitPerMinute()).isEqualTo(120);
+        assertThat(providerCaptor.getValue().getCacheTtlSeconds()).isEqualTo(90);
+        assertThat(result.getRateLimitPerMinute()).isEqualTo(120);
+        assertThat(result.getCacheTtlSeconds()).isEqualTo(90);
     }
 
     private String hmacSha256(String secret, String value) throws Exception {

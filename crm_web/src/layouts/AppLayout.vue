@@ -166,6 +166,8 @@ const systemConsoleVersion = ref(0)
 
 const icon = (component) => markRaw(component)
 const storeRoleCodes = ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR', 'ADMIN']
+const integrationViewRoleCodes = ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR']
+const integrationConfigRoleCodes = ['ADMIN', 'INTEGRATION_ADMIN']
 
 const navGroups = [
   {
@@ -471,12 +473,47 @@ const navGroups = [
         label: '调度中心',
         icon: icon(Timer),
         items: [
-          { key: 'settings-third-party', to: '/settings/integration/third-party', label: '抖音接口', icon: icon(Link), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-          { key: 'settings-callback', to: '/settings/integration/callback', label: '回调接口', icon: icon(Bell), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-          { key: 'settings-jobs', to: '/settings/integration/jobs', label: '任务调度', icon: icon(Timer), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-          { key: 'settings-interface-debug', to: '/settings/integration/debug', label: '接口调试', icon: icon(Operation), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+          {
+            key: 'settings-third-party',
+            to: '/settings/integration/third-party',
+            label: '抖音接口',
+            icon: icon(Link),
+            moduleCode: 'SETTING',
+            roleCodes: integrationConfigRoleCodes
+          },
+          {
+            key: 'settings-callback',
+            to: '/settings/integration/callback',
+            label: '回调接口',
+            icon: icon(Bell),
+            moduleCode: 'SETTING',
+            roleCodes: integrationViewRoleCodes
+          },
+          {
+            key: 'settings-jobs',
+            to: '/settings/integration/jobs',
+            label: '任务调度',
+            icon: icon(Timer),
+            moduleCode: 'SETTING',
+            roleCodes: integrationViewRoleCodes
+          },
+          {
+            key: 'settings-interface-debug',
+            to: '/settings/integration/debug',
+            label: '接口调试',
+            icon: icon(Operation),
+            moduleCode: 'SETTING',
+            roleCodes: integrationViewRoleCodes
+          },
           { key: 'settings-public-api', to: '/settings/integration/public-api', label: '对外接口', icon: icon(Connection), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-          { key: 'settings-distribution-api', to: '/settings/integration/distribution-api', label: '分销接口', icon: icon(Promotion), moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
+          {
+            key: 'settings-distribution-api',
+            to: '/settings/integration/distribution-api',
+            label: '分销接口',
+            icon: icon(Promotion),
+            moduleCode: 'SETTING',
+            roleCodes: integrationViewRoleCodes
+          }
         ]
       },
       {

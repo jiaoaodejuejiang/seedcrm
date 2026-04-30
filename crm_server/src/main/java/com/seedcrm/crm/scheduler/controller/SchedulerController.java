@@ -1,15 +1,18 @@
 package com.seedcrm.crm.scheduler.controller;
 
 import com.seedcrm.crm.common.api.ApiResponse;
+import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
 import com.seedcrm.crm.permission.support.SchedulerModuleGuard;
 import com.seedcrm.crm.scheduler.dto.SchedulerJobUpsertRequest;
 import com.seedcrm.crm.scheduler.dto.DistributionReconciliationDtos.DistributionReconciliationResult;
 import com.seedcrm.crm.scheduler.dto.SchedulerCallbackDebugRequest;
+import com.seedcrm.crm.scheduler.dto.SchedulerIdempotencyHealthResponse;
 import com.seedcrm.crm.scheduler.dto.SchedulerInterfaceDebugRequest;
 import com.seedcrm.crm.scheduler.dto.SchedulerQueueActionRequest;
 import com.seedcrm.crm.scheduler.dto.SchedulerTriggerRequest;
+import com.seedcrm.crm.scheduler.dto.SchedulerMonitorSummaryResponse;
 import com.seedcrm.crm.scheduler.entity.DistributionExceptionRecord;
 import com.seedcrm.crm.scheduler.entity.IntegrationCallbackConfig;
 import com.seedcrm.crm.scheduler.entity.IntegrationCallbackEventLog;
@@ -21,7 +24,9 @@ import com.seedcrm.crm.scheduler.entity.SchedulerOutboxEvent;
 import com.seedcrm.crm.scheduler.service.DistributionExceptionService;
 import com.seedcrm.crm.scheduler.service.DistributionExceptionRetryService;
 import com.seedcrm.crm.scheduler.service.DistributionReconciliationService;
+import com.seedcrm.crm.scheduler.service.SchedulerIdempotencyHealthService;
 import com.seedcrm.crm.scheduler.service.SchedulerIntegrationService;
+import com.seedcrm.crm.scheduler.service.SchedulerMonitorService;
 import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
 import com.seedcrm.crm.scheduler.service.SchedulerService;
 import com.seedcrm.crm.scheduler.service.impl.DistributionEventDryRunService;
@@ -29,7 +34,9 @@ import com.seedcrm.crm.scheduler.support.SchedulerSensitiveDataMasker;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -42,6 +49,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/scheduler")
 public class SchedulerController {
 
+    private static final Set<String> GLOBAL_DISTRIBUTION_PROCESS_ROLES = Set.of("ADMIN", "INTEGRATION_ADMIN");
+
     private final SchedulerService schedulerService;
     private final SchedulerIntegrationService schedulerIntegrationService;
     private final DistributionEventDryRunService distributionEventDryRunService;
@@ -49,6 +58,8 @@ public class SchedulerController {
     private final DistributionExceptionService distributionExceptionService;
     private final DistributionExceptionRetryService distributionExceptionRetryService;
     private final DistributionReconciliationService distributionReconciliationService;
+    private final SchedulerIdempotencyHealthService schedulerIdempotencyHealthService;
+    private final SchedulerMonitorService schedulerMonitorService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
     private final SchedulerModuleGuard schedulerModuleGuard;
     private final SchedulerSensitiveDataMasker schedulerSensitiveDataMasker;
@@ -60,6 +71,8 @@ public class SchedulerController {
                                DistributionExceptionService distributionExceptionService,
                                DistributionExceptionRetryService distributionExceptionRetryService,
                                DistributionReconciliationService distributionReconciliationService,
+                               SchedulerIdempotencyHealthService schedulerIdempotencyHealthService,
+                               SchedulerMonitorService schedulerMonitorService,
                                PermissionRequestContextResolver permissionRequestContextResolver,
                                SchedulerModuleGuard schedulerModuleGuard,
                                SchedulerSensitiveDataMasker schedulerSensitiveDataMasker) {
@@ -70,6 +83,8 @@ public class SchedulerController {
         this.distributionExceptionService = distributionExceptionService;
         this.distributionExceptionRetryService = distributionExceptionRetryService;
         this.distributionReconciliationService = distributionReconciliationService;
+        this.schedulerIdempotencyHealthService = schedulerIdempotencyHealthService;
+        this.schedulerMonitorService = schedulerMonitorService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
         this.schedulerModuleGuard = schedulerModuleGuard;
         this.schedulerSensitiveDataMasker = schedulerSensitiveDataMasker;
@@ -79,6 +94,7 @@ public class SchedulerController {
     public ApiResponse<List<SchedulerJob>> listJobs(HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkView(context);
+        rejectPartnerScopedGlobalView(context);
         return ApiResponse.success(schedulerService.listJobs());
     }
 
@@ -87,7 +103,10 @@ public class SchedulerController {
                                                        HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkView(context);
-        return ApiResponse.success(schedulerService.listLogs(jobCode));
+        rejectPartnerScopedGlobalView(context);
+        return ApiResponse.success(schedulerSensitiveDataMasker.maskJobLogs(
+                schedulerService.listLogs(jobCode),
+                context));
     }
 
     @GetMapping("/audit-logs")
@@ -95,7 +114,10 @@ public class SchedulerController {
                                                                  HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkView(context);
-        return ApiResponse.success(schedulerService.listAuditLogs(jobCode));
+        rejectPartnerScopedGlobalView(context);
+        return ApiResponse.success(schedulerSensitiveDataMasker.maskAuditLogs(
+                schedulerService.listAuditLogs(jobCode),
+                context));
     }
 
     @GetMapping("/outbox/events")
@@ -103,7 +125,9 @@ public class SchedulerController {
                                                                     HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkView(context);
-        return ApiResponse.success(schedulerOutboxService.list(status));
+        return ApiResponse.success(schedulerSensitiveDataMasker.maskOutboxEvents(
+                filterPartnerOutboxEvents(schedulerOutboxService.list(status), context),
+                context));
     }
 
     @PostMapping("/outbox/retry")
@@ -111,15 +135,21 @@ public class SchedulerController {
                                                               HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
         schedulerModuleGuard.checkTrigger(context);
-        return ApiResponse.success(schedulerOutboxService.retry(actionId(request), context));
+        return ApiResponse.success(schedulerSensitiveDataMasker.maskOutboxEvent(
+                schedulerOutboxService.retry(actionId(request), context),
+                context));
     }
 
     @PostMapping("/outbox/process")
     public ApiResponse<List<SchedulerOutboxEvent>> processOutboxEvents(@RequestParam(required = false) Integer limit,
-                                                                       HttpServletRequest request) {
+                                                                        HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkTrigger(context);
-        return ApiResponse.success(schedulerOutboxService.processDue(limit == null ? 20 : limit));
+        rejectPartnerScopedGlobalMutation(context);
+        rejectNonAdminGlobalDistributionProcess(context);
+        return ApiResponse.success(schedulerSensitiveDataMasker.maskOutboxEvents(
+                schedulerOutboxService.processDue(limit == null ? 20 : limit),
+                context));
     }
 
     @GetMapping("/distribution/exceptions")
@@ -128,7 +158,7 @@ public class SchedulerController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkView(context);
         return ApiResponse.success(schedulerSensitiveDataMasker.maskDistributionExceptions(
-                distributionExceptionService.list(status),
+                filterPartnerDistributionExceptions(distributionExceptionService.list(status), context),
                 context));
     }
 
@@ -137,6 +167,7 @@ public class SchedulerController {
                                                                               HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
         schedulerModuleGuard.checkTrigger(context);
+        rejectNonAdminCoreReplay(context);
         return ApiResponse.success(distributionExceptionService.retry(actionId(request), context, actionRemark(request)));
     }
 
@@ -150,33 +181,57 @@ public class SchedulerController {
 
     @PostMapping("/distribution/exceptions/process")
     public ApiResponse<List<DistributionExceptionRecord>> processDistributionExceptionRetries(@RequestParam(required = false) Integer limit,
-                                                                                             HttpServletRequest request) {
+                                                                                              HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkTrigger(context);
+        rejectPartnerScopedGlobalMutation(context);
+        rejectNonAdminGlobalDistributionProcess(context);
         return ApiResponse.success(distributionExceptionRetryService.processRetryQueue(limit == null ? 10 : limit));
     }
 
     @PostMapping("/distribution/status-check/process")
     public ApiResponse<List<DistributionReconciliationResult>> processDistributionStatusCheck(@RequestParam(required = false) Integer limit,
-                                                                                              HttpServletRequest request) {
+                                                                                               HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkTrigger(context);
+        rejectPartnerScopedGlobalMutation(context);
+        rejectNonAdminGlobalDistributionProcess(context);
         return ApiResponse.success(distributionReconciliationService.checkOrderStatus(limit == null ? 20 : limit));
     }
 
     @PostMapping("/distribution/reconcile/process")
     public ApiResponse<List<DistributionReconciliationResult>> processDistributionReconciliation(@RequestParam(required = false) Integer limit,
-                                                                                                HttpServletRequest request) {
+                                                                                                 HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkTrigger(context);
+        rejectPartnerScopedGlobalMutation(context);
+        rejectNonAdminGlobalDistributionProcess(context);
         return ApiResponse.success(distributionReconciliationService.pullReconciliation(limit == null ? 20 : limit));
+    }
+
+    @GetMapping("/idempotency-health")
+    public ApiResponse<SchedulerIdempotencyHealthResponse> inspectIdempotencyHealth(@RequestParam(required = false) String providerCode,
+                                                                                    HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        schedulerModuleGuard.checkView(context);
+        rejectPartnerScopedHealthView(context);
+        return ApiResponse.success(schedulerIdempotencyHealthService.inspect(providerCode));
+    }
+
+    @GetMapping("/monitor/summary")
+    public ApiResponse<SchedulerMonitorSummaryResponse> inspectMonitorSummary(@RequestParam(required = false) String providerCode,
+                                                                              HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        schedulerModuleGuard.checkView(context);
+        rejectPartnerScopedHealthView(context);
+        return ApiResponse.success(schedulerMonitorService.summarize(providerCode));
     }
 
     @GetMapping("/providers")
     public ApiResponse<List<IntegrationProviderConfig>> listProviders(HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkView(context);
-        return ApiResponse.success(schedulerIntegrationService.listProviders());
+        return ApiResponse.success(filterPartnerProviders(schedulerIntegrationService.listProviders(), context));
     }
 
     @PostMapping("/provider/save")
@@ -184,6 +239,7 @@ public class SchedulerController {
                                                                HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
         schedulerModuleGuard.checkUpdate(context);
+        rejectPartnerScopedGlobalMutation(context);
         return ApiResponse.success(schedulerIntegrationService.saveProvider(request));
     }
 
@@ -192,6 +248,7 @@ public class SchedulerController {
                                                                HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
         schedulerModuleGuard.checkDebug(context);
+        rejectPartnerScopedProviderMismatch(request == null ? null : request.getProviderCode(), context);
         return ApiResponse.success(schedulerIntegrationService.testProvider(request));
     }
 
@@ -199,7 +256,7 @@ public class SchedulerController {
     public ApiResponse<List<IntegrationCallbackConfig>> listCallbacks(HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkView(context);
-        return ApiResponse.success(schedulerIntegrationService.listCallbacks());
+        return ApiResponse.success(filterPartnerCallbacks(schedulerIntegrationService.listCallbacks(), context));
     }
 
     @GetMapping("/callback/logs")
@@ -207,8 +264,9 @@ public class SchedulerController {
                                                                            HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkView(context);
+        String scopedProviderCode = isPartnerScoped(context) ? context.getCurrentPartnerCode() : providerCode;
         return ApiResponse.success(schedulerSensitiveDataMasker.maskCallbackLogs(
-                schedulerIntegrationService.listCallbackLogs(providerCode),
+                filterPartnerCallbackLogs(schedulerIntegrationService.listCallbackLogs(scopedProviderCode), context),
                 context));
     }
 
@@ -217,6 +275,7 @@ public class SchedulerController {
                                                                HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
         schedulerModuleGuard.checkUpdate(context);
+        rejectPartnerScopedGlobalMutation(context);
         return ApiResponse.success(schedulerIntegrationService.saveCallback(request));
     }
 
@@ -228,6 +287,7 @@ public class SchedulerController {
         String providerCode = request == null || request.getProviderCode() == null
                 ? "DOUYIN_LAIKE"
                 : request.getProviderCode();
+        rejectPartnerScopedProviderMismatch(providerCode, context);
         String callbackName = request == null || request.getCallbackName() == null
                 ? "回调联调"
                 : request.getCallbackName();
@@ -252,24 +312,28 @@ public class SchedulerController {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
         response.put("message", "回调联调已完成，已写入回调记录");
-        response.put("provider", provider);
-        response.put("latestLog", logs.isEmpty() ? null : logs.get(0));
+        response.put("provider", safeProviderPreview(provider));
+        response.put("latestLog", logs.isEmpty() ? null : schedulerSensitiveDataMasker.maskCallbackLogs(
+                List.of(logs.get(0)),
+                context).get(0));
         return ApiResponse.success(response);
     }
 
     @PostMapping("/job/save")
     public ApiResponse<SchedulerJob> saveJob(@RequestBody SchedulerJobUpsertRequest request,
-                                             HttpServletRequest httpServletRequest) {
+                                              HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
         schedulerModuleGuard.checkUpdate(context);
+        rejectPartnerScopedGlobalMutation(context);
         return ApiResponse.success(schedulerService.saveJob(request, context));
     }
 
     @PostMapping("/trigger")
     public ApiResponse<SchedulerJobLog> trigger(@RequestBody SchedulerTriggerRequest request,
-                                                HttpServletRequest httpServletRequest) {
+                                                 HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
         schedulerModuleGuard.checkTrigger(context);
+        rejectPartnerScopedGlobalMutation(context);
         return ApiResponse.success(schedulerService.trigger(request, context));
     }
 
@@ -278,14 +342,16 @@ public class SchedulerController {
                                                     HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkTrigger(context);
+        rejectPartnerScopedGlobalMutation(context);
         return ApiResponse.success(schedulerService.retryFailed(jobCode, context));
     }
 
     @PostMapping("/retry-log")
     public ApiResponse<SchedulerJobLog> retryLog(@RequestParam Long logId,
-                                                 HttpServletRequest request) {
+                                                  HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkTrigger(context);
+        rejectPartnerScopedGlobalMutation(context);
         return ApiResponse.success(schedulerService.retryLog(logId, context));
     }
 
@@ -298,11 +364,14 @@ public class SchedulerController {
         String providerCode = request == null || request.getProviderCode() == null
                 ? "DOUYIN_LAIKE"
                 : request.getProviderCode().trim().toUpperCase();
+        rejectPartnerScopedProviderMismatch(providerCode, context);
         String interfaceCode = request == null || request.getInterfaceCode() == null
                 ? "DOUYIN_CLUE_PULL"
                 : request.getInterfaceCode().trim().toUpperCase();
         if ("DISTRIBUTION".equals(providerCode) || interfaceCode.startsWith("DISTRIBUTION_")) {
-            return ApiResponse.success(distributionEventDryRunService.dryRun(request));
+            return ApiResponse.success(schedulerSensitiveDataMasker.maskDryRunResult(
+                    distributionEventDryRunService.dryRun(request),
+                    context));
         }
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("mode", mode);
@@ -321,8 +390,8 @@ public class SchedulerController {
             response.put("message", provider == null
                     ? "未找到对应接口配置，请先在抖音接口或分销接口中保存配置"
                     : "真实模式已完成配置校验；实际业务调用仍由调度任务或业务动作触发");
-            response.put("provider", provider);
-            return ApiResponse.success(response);
+            response.put("provider", safeProviderPreview(provider));
+            return ApiResponse.success(schedulerSensitiveDataMasker.maskDryRunResult(response, context));
         }
         response.put("success", true);
         response.put("message", "模拟接口调试成功，未调用外部平台");
@@ -330,7 +399,7 @@ public class SchedulerController {
                 "traceId", java.util.UUID.randomUUID().toString(),
                 "received", true,
                 "nextAction", "可在任务调度中触发同步，或切换真实模式校验配置"));
-        return ApiResponse.success(response);
+        return ApiResponse.success(schedulerSensitiveDataMasker.maskDryRunResult(response, context));
     }
 
     @GetMapping(value = "/oauth/douyin/callback", produces = MediaType.TEXT_PLAIN_VALUE)
@@ -438,5 +507,127 @@ public class SchedulerController {
             }
         }
         return null;
+    }
+
+    private void rejectPartnerScopedGlobalView(PermissionRequestContext context) {
+        if (isPartnerScoped(context)) {
+            throw new BusinessException("partner app cannot access global scheduler data");
+        }
+    }
+
+    private void rejectPartnerScopedGlobalMutation(PermissionRequestContext context) {
+        if (isPartnerScoped(context)) {
+            throw new BusinessException("partner app cannot trigger global scheduler operations");
+        }
+    }
+
+    private void rejectNonAdminGlobalDistributionProcess(PermissionRequestContext context) {
+        String roleCode = context == null ? null : context.getRoleCode();
+        if (roleCode == null || !GLOBAL_DISTRIBUTION_PROCESS_ROLES.contains(roleCode.trim().toUpperCase(Locale.ROOT))) {
+            throw new BusinessException("current role cannot trigger global distribution queue processing");
+        }
+    }
+
+    private void rejectNonAdminCoreReplay(PermissionRequestContext context) {
+        String roleCode = context == null ? null : context.getRoleCode();
+        if (roleCode == null || !GLOBAL_DISTRIBUTION_PROCESS_ROLES.contains(roleCode.trim().toUpperCase(Locale.ROOT))) {
+            throw new BusinessException("current role cannot replay distribution exceptions");
+        }
+    }
+
+    private void rejectPartnerScopedHealthView(PermissionRequestContext context) {
+        if (isPartnerScoped(context)) {
+            throw new BusinessException("partner app cannot inspect scheduler idempotency health");
+        }
+    }
+
+    private void rejectPartnerScopedProviderMismatch(String providerCode,
+                                                     PermissionRequestContext context) {
+        if (isPartnerScoped(context) && !samePartner(context.getCurrentPartnerCode(), providerCode)) {
+            throw new BusinessException("partner app cannot access another partner scheduler data");
+        }
+    }
+
+    private Map<String, Object> safeProviderPreview(IntegrationProviderConfig provider) {
+        if (provider == null) {
+            return null;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("providerCode", provider.getProviderCode());
+        result.put("providerName", provider.getProviderName());
+        result.put("enabled", provider.getEnabled());
+        result.put("executionMode", provider.getExecutionMode());
+        result.put("endpointPath", provider.getEndpointPath());
+        result.put("statusQueryPath", provider.getStatusQueryPath());
+        result.put("reconciliationPullPath", provider.getReconciliationPullPath());
+        result.put("secretConfigured", provider.getClientSecret() != null && !provider.getClientSecret().isBlank());
+        return result;
+    }
+
+    private boolean isPartnerScoped(PermissionRequestContext context) {
+        return context != null
+                && "PARTNER".equalsIgnoreCase(context.getDataScope())
+                && context.getCurrentPartnerCode() != null
+                && !context.getCurrentPartnerCode().isBlank();
+    }
+
+    private List<SchedulerOutboxEvent> filterPartnerOutboxEvents(List<SchedulerOutboxEvent> events,
+                                                                 PermissionRequestContext context) {
+        if (!isPartnerScoped(context) || events == null) {
+            return events;
+        }
+        String partnerCode = context.getCurrentPartnerCode();
+        return events.stream()
+                .filter(event -> samePartner(partnerCode, event.getProviderCode())
+                        || samePartner(partnerCode, event.getExternalPartnerCode()))
+                .toList();
+    }
+
+    private List<DistributionExceptionRecord> filterPartnerDistributionExceptions(List<DistributionExceptionRecord> records,
+                                                                                 PermissionRequestContext context) {
+        if (!isPartnerScoped(context) || records == null) {
+            return records;
+        }
+        String partnerCode = context.getCurrentPartnerCode();
+        return records.stream()
+                .filter(record -> samePartner(partnerCode, record.getPartnerCode()))
+                .toList();
+    }
+
+    private List<IntegrationProviderConfig> filterPartnerProviders(List<IntegrationProviderConfig> providers,
+                                                                  PermissionRequestContext context) {
+        if (!isPartnerScoped(context) || providers == null) {
+            return providers;
+        }
+        String partnerCode = context.getCurrentPartnerCode();
+        return providers.stream()
+                .filter(provider -> samePartner(partnerCode, provider.getProviderCode()))
+                .toList();
+    }
+
+    private List<IntegrationCallbackConfig> filterPartnerCallbacks(List<IntegrationCallbackConfig> callbacks,
+                                                                   PermissionRequestContext context) {
+        if (!isPartnerScoped(context) || callbacks == null) {
+            return callbacks;
+        }
+        String partnerCode = context.getCurrentPartnerCode();
+        return callbacks.stream()
+                .filter(callback -> samePartner(partnerCode, callback.getProviderCode()))
+                .toList();
+    }
+
+    private List<IntegrationCallbackEventLog> filterPartnerCallbackLogs(List<IntegrationCallbackEventLog> logs,
+                                                                        PermissionRequestContext context) {
+        if (!isPartnerScoped(context) || logs == null) {
+            return logs;
+        }
+        String partnerCode = context.getCurrentPartnerCode();
+        return logs.stream()
+                .filter(log -> samePartner(partnerCode, log.getProviderCode()))
+                .toList();
+    }
+
+    private boolean samePartner(String expected, String actual) {
+        return expected != null && actual != null && expected.trim().equalsIgnoreCase(actual.trim());
     }
 }

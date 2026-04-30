@@ -1,6 +1,7 @@
 package com.seedcrm.crm.scheduler.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -92,6 +93,31 @@ class DistributionExceptionServiceImplTest {
         assertThat(handled.getHandledAt()).isNotNull();
     }
 
+    @Test
+    void shouldRequireReasonWhenMarkingExceptionHandled() {
+        DistributionExceptionRecord record = new DistributionExceptionRecord();
+        record.setId(6L);
+        record.setHandlingStatus("OPEN");
+        when(exceptionRecordMapper.selectById(6L)).thenReturn(record);
+
+        assertThatThrownBy(() -> service.markHandled(6L, context(), " "))
+                .isInstanceOf(com.seedcrm.crm.common.exception.BusinessException.class)
+                .hasMessageContaining("remark is required");
+    }
+
+    @Test
+    void shouldRejectPartnerScopedRetryForOtherPartnerException() {
+        DistributionExceptionRecord record = new DistributionExceptionRecord();
+        record.setId(7L);
+        record.setPartnerCode("OTHER_PARTNER");
+        record.setHandlingStatus("OPEN");
+        when(exceptionRecordMapper.selectById(7L)).thenReturn(record);
+
+        assertThatThrownBy(() -> service.retry(7L, partnerContext(), "retry"))
+                .isInstanceOf(com.seedcrm.crm.common.exception.BusinessException.class)
+                .hasMessageContaining("current partner");
+    }
+
     private DistributionEventRequest event() {
         DistributionMemberPayload member = new DistributionMemberPayload();
         member.setExternalMemberId("m_10001");
@@ -111,6 +137,15 @@ class DistributionExceptionServiceImplTest {
         PermissionRequestContext context = new PermissionRequestContext();
         context.setCurrentUserId(9001L);
         context.setRoleCode("integration_operator");
+        return context;
+    }
+
+    private PermissionRequestContext partnerContext() {
+        PermissionRequestContext context = new PermissionRequestContext();
+        context.setCurrentUserId(9901L);
+        context.setRoleCode("partner_app");
+        context.setDataScope("PARTNER");
+        context.setCurrentPartnerCode("DISTRIBUTION");
         return context;
     }
 }

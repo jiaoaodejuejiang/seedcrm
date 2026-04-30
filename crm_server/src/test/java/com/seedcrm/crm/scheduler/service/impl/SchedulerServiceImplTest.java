@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.seedcrm.crm.clue.service.DouyinClueSyncService;
 import com.seedcrm.crm.scheduler.dto.SchedulerJobUpsertRequest;
 import com.seedcrm.crm.scheduler.dto.SchedulerTriggerRequest;
+import com.seedcrm.crm.scheduler.dto.DistributionReconciliationDtos.DistributionReconciliationResult;
 import com.seedcrm.crm.scheduler.entity.SchedulerJob;
 import com.seedcrm.crm.scheduler.entity.SchedulerJobLog;
 import com.seedcrm.crm.scheduler.mapper.SchedulerJobAuditLogMapper;
@@ -308,6 +309,7 @@ class SchedulerServiceImplTest {
 
         assertThat(queuedLog.getStatus()).isEqualTo("SUCCESS");
         assertThat(queuedLog.getImportedCount()).isEqualTo(1);
+        assertThat(queuedLog.getPayload()).contains("\"processedCount\":1");
         verify(schedulerOutboxService).processDue(20);
         verify(schedulerJobLogMapper).updateById(queuedLog);
     }
@@ -336,6 +338,7 @@ class SchedulerServiceImplTest {
 
         assertThat(queuedLog.getStatus()).isEqualTo("SUCCESS");
         assertThat(queuedLog.getImportedCount()).isEqualTo(1);
+        assertThat(queuedLog.getPayload()).contains("\"processedCount\":1");
         verify(distributionExceptionRetryService).processRetryQueue(10);
         verify(schedulerJobLogMapper).updateById(queuedLog);
     }
@@ -358,12 +361,18 @@ class SchedulerServiceImplTest {
         when(schedulerJobMapper.selectOne(any())).thenReturn(job);
         when(schedulerJobLogMapper.update(any(), any())).thenReturn(1);
         when(distributionReconciliationService.checkOrderStatus(20))
-                .thenReturn(List.of(new com.seedcrm.crm.scheduler.dto.DistributionReconciliationDtos.DistributionReconciliationResult()));
+                .thenReturn(List.of(reconciliationResult("dist_order_001", "REPLAYED", "SUCCESS")));
 
         schedulerService.processQueuedLogs();
 
         assertThat(queuedLog.getStatus()).isEqualTo("SUCCESS");
         assertThat(queuedLog.getImportedCount()).isEqualTo(1);
+        assertThat(queuedLog.getPayload()).contains(
+                "\"replayed\":1",
+                "\"orderId\":\"901\"",
+                "\"externalOrderId\":\"dist_order_001\"",
+                "\"partnerCode\":\"DISTRIBUTION\"",
+                "\"processStatus\":\"SUCCESS\"");
         verify(distributionReconciliationService).checkOrderStatus(20);
         verify(schedulerJobLogMapper).updateById(queuedLog);
     }
@@ -386,13 +395,34 @@ class SchedulerServiceImplTest {
         when(schedulerJobMapper.selectOne(any())).thenReturn(job);
         when(schedulerJobLogMapper.update(any(), any())).thenReturn(1);
         when(distributionReconciliationService.pullReconciliation(20))
-                .thenReturn(List.of(new com.seedcrm.crm.scheduler.dto.DistributionReconciliationDtos.DistributionReconciliationResult()));
+                .thenReturn(List.of(
+                        reconciliationResult("dist_order_001", "NO_CHANGE", "SUCCESS"),
+                        reconciliationResult("dist_order_002", "FAILED", "FAILED")));
 
         schedulerService.processQueuedLogs();
 
         assertThat(queuedLog.getStatus()).isEqualTo("SUCCESS");
-        assertThat(queuedLog.getImportedCount()).isEqualTo(1);
+        assertThat(queuedLog.getImportedCount()).isEqualTo(2);
+        assertThat(queuedLog.getPayload()).contains(
+                "\"noChange\":1",
+                "\"failed\":1",
+                "\"orderId\":\"901\"",
+                "\"externalOrderId\":\"dist_order_002\"");
         verify(distributionReconciliationService).pullReconciliation(20);
         verify(schedulerJobLogMapper).updateById(queuedLog);
+    }
+
+    private DistributionReconciliationResult reconciliationResult(String externalOrderId, String action, String status) {
+        DistributionReconciliationResult result = new DistributionReconciliationResult();
+        result.setOrderId(901L);
+        result.setExternalOrderId(externalOrderId);
+        result.setPartnerCode("DISTRIBUTION");
+        result.setAction(action);
+        result.setStatus(status);
+        result.setProcessStatus(status);
+        result.setEventType("distribution.order.refunded");
+        result.setIdempotencyKey("DISTRIBUTION:STATUS_CHECK:distribution.order.refunded:" + externalOrderId);
+        result.setMessage("processed " + externalOrderId);
+        return result;
     }
 }

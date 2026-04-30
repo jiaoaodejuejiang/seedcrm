@@ -47,6 +47,14 @@ public class SchedulerIntegrationSchemaInitializer {
         ensureTable("integration_callback_event_log", createCallbackEventLogSql(), callbackEventLogColumns());
         ensureIndex("integration_callback_event_log", "idx_callback_idempotency_key",
                 "CREATE INDEX idx_callback_idempotency_key ON integration_callback_event_log (idempotency_key)");
+        ensureUniqueIndexIfClean("integration_callback_event_log", "uk_callback_provider_idempotency",
+                "provider_code, idempotency_key",
+                "idempotency_key IS NOT NULL AND idempotency_key <> ''",
+                "CREATE UNIQUE INDEX uk_callback_provider_idempotency ON integration_callback_event_log (provider_code, idempotency_key)");
+        ensureUniqueIndexIfClean("integration_callback_event_log", "uk_callback_provider_event",
+                "provider_code, event_id",
+                "event_id IS NOT NULL AND event_id <> ''",
+                "CREATE UNIQUE INDEX uk_callback_provider_event ON integration_callback_event_log (provider_code, event_id)");
         ensureSchedulerJobProviderColumn();
         seedDefaultProvider();
         seedDefaultDistributionProvider();
@@ -94,6 +102,33 @@ public class SchedulerIntegrationSchemaInitializer {
         }
         jdbcTemplate.execute(createSql);
         log.info("created index {}.{}", tableName, indexName);
+    }
+
+    private void ensureUniqueIndexIfClean(String tableName,
+                                          String indexName,
+                                          String columns,
+                                          String whereClause,
+                                          String createSql) {
+        if (!tableExists(tableName) || indexExists(tableName, indexName)) {
+            return;
+        }
+        Integer duplicateCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM (
+                    SELECT %s, COUNT(1) AS duplicate_count
+                    FROM %s
+                    WHERE %s
+                    GROUP BY %s
+                    HAVING COUNT(1) > 1
+                    LIMIT 1
+                ) duplicate_rows
+                """.formatted(columns, tableName, whereClause, columns), Integer.class);
+        if (duplicateCount != null && duplicateCount > 0) {
+            log.warn("skip creating unique index {}.{} because duplicate callback logs already exist", tableName, indexName);
+            return;
+        }
+        jdbcTemplate.execute(createSql);
+        log.info("created unique index {}.{}", tableName, indexName);
     }
 
     private boolean indexExists(String tableName, String indexName) {
@@ -162,6 +197,8 @@ public class SchedulerIntegrationSchemaInitializer {
                     pull_window_minutes INT DEFAULT 60,
                     overlap_minutes INT DEFAULT 10,
                     request_timeout_ms INT DEFAULT 10000,
+                    rate_limit_per_minute INT DEFAULT 60,
+                    cache_ttl_seconds INT DEFAULT 30,
                     callback_url VARCHAR(255),
                     enabled TINYINT DEFAULT 1,
                     remark VARCHAR(255),
@@ -309,6 +346,8 @@ public class SchedulerIntegrationSchemaInitializer {
         columns.put("pull_window_minutes", "pull_window_minutes INT DEFAULT 60");
         columns.put("overlap_minutes", "overlap_minutes INT DEFAULT 10");
         columns.put("request_timeout_ms", "request_timeout_ms INT DEFAULT 10000");
+        columns.put("rate_limit_per_minute", "rate_limit_per_minute INT DEFAULT 60");
+        columns.put("cache_ttl_seconds", "cache_ttl_seconds INT DEFAULT 30");
         columns.put("callback_url", "callback_url VARCHAR(255)");
         columns.put("enabled", "enabled TINYINT DEFAULT 1");
         columns.put("remark", "remark VARCHAR(255)");
@@ -497,6 +536,8 @@ public class SchedulerIntegrationSchemaInitializer {
                         status_query_path = COALESCE(status_query_path, ?),
                         reconciliation_pull_path = COALESCE(reconciliation_pull_path, ?),
                         status_mapping = COALESCE(status_mapping, 'paid=distribution.order.paid,cancelled=distribution.order.cancelled,refund_pending=distribution.order.refund_pending,refunded=distribution.order.refunded'),
+                        rate_limit_per_minute = COALESCE(rate_limit_per_minute, 60),
+                        cache_ttl_seconds = COALESCE(cache_ttl_seconds, 30),
                         enabled = COALESCE(enabled, 1),
                         remark = ?,
                         updated_at = ?
@@ -516,9 +557,10 @@ public class SchedulerIntegrationSchemaInitializer {
                     provider_code, provider_name, module_code, execution_mode, auth_type,
                     endpoint_path, status_query_path, reconciliation_pull_path, status_mapping,
                     page_size, pull_window_minutes, overlap_minutes, request_timeout_ms,
+                    rate_limit_per_minute, cache_ttl_seconds,
                     enabled, remark, auth_status, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 DISTRIBUTION_PROVIDER_CODE,
                 DISTRIBUTION_PROVIDER_NAME,
@@ -533,6 +575,8 @@ public class SchedulerIntegrationSchemaInitializer {
                 60,
                 10,
                 10000,
+                60,
+                30,
                 1,
                 "SeedCRM 方案B：只承接外部分销已支付订单，资金流由外部系统处理",
                 "MOCK",

@@ -121,6 +121,7 @@ public class DistributionExceptionServiceImpl implements DistributionExceptionSe
     @Transactional
     public DistributionExceptionRecord retry(Long id, PermissionRequestContext context, String remark) {
         DistributionExceptionRecord record = getOrThrow(id);
+        assertPartnerAccess(record, context);
         record.setHandlingStatus(STATUS_RETRY_QUEUED);
         record.setRetryCount(record.getRetryCount() == null ? 1 : record.getRetryCount() + 1);
         record.setNextRetryTime(null);
@@ -133,6 +134,10 @@ public class DistributionExceptionServiceImpl implements DistributionExceptionSe
     @Transactional
     public DistributionExceptionRecord markHandled(Long id, PermissionRequestContext context, String remark) {
         DistributionExceptionRecord record = getOrThrow(id);
+        assertPartnerAccess(record, context);
+        if (!StringUtils.hasText(remark)) {
+            throw new BusinessException("distribution exception handle remark is required");
+        }
         record.setHandlingStatus(STATUS_HANDLED);
         record.setHandledAt(LocalDateTime.now());
         applyHandler(record, context, remark);
@@ -174,6 +179,27 @@ public class DistributionExceptionServiceImpl implements DistributionExceptionSe
             throw new BusinessException("distribution exception not found");
         }
         return record;
+    }
+
+    private void assertPartnerAccess(DistributionExceptionRecord record, PermissionRequestContext context) {
+        if (!isPartnerScoped(context) || record == null) {
+            return;
+        }
+        if (!samePartner(context.getCurrentPartnerCode(), record.getPartnerCode())) {
+            throw new BusinessException("distribution exception does not belong to current partner");
+        }
+    }
+
+    private boolean isPartnerScoped(PermissionRequestContext context) {
+        return context != null
+                && "PARTNER".equalsIgnoreCase(context.getDataScope())
+                && StringUtils.hasText(context.getCurrentPartnerCode());
+    }
+
+    private boolean samePartner(String expected, String actual) {
+        return StringUtils.hasText(expected)
+                && StringUtils.hasText(actual)
+                && expected.trim().equalsIgnoreCase(actual.trim());
     }
 
     private String resolveExternalOrderId(DistributionEventRequest event, String rawPayload) {

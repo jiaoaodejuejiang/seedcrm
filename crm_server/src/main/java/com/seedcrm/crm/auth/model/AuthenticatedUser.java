@@ -19,6 +19,7 @@ public class AuthenticatedUser {
     private String storeName;
     private List<Long> teamMemberIds;
     private Long boundCustomerUserId;
+    private String partnerCode;
     private List<String> allowedModules;
     private List<AuthMenuNode> menuTree = new ArrayList<>();
     private List<String> menuRoutes = new ArrayList<>();

@@ -115,12 +115,33 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
 
             IntegrationCallbackEventLog duplicateLog = findDuplicateLog(partnerCode, event.getEventId(), idempotencyKey);
             if (isCompletedDuplicateLog(duplicateLog)) {
+                if (hasDuplicatePayloadConflict(duplicateLog, rawPayload)) {
+                    String incomingBodyHash = sha256Hex(rawPayload);
+                    String message = "duplicate idempotency key or event id has different payload body hash";
+                    String conflictDetailJson = toConflictDetailJson(List.of(new ConflictDetail(
+                            "bodyHash",
+                            "报文指纹",
+                            duplicateLog.getBodyHash(),
+                            incomingBodyHash,
+                            "bodyHash existing=" + duplicateLog.getBodyHash() + " incoming=" + incomingBodyHash)));
+                    distributionExceptionService.recordFailure(partnerCode, event, rawPayload, traceId, idempotencyKey,
+                            "DUPLICATE_PAYLOAD_CONFLICT", message,
+                            duplicateLog.getRelatedOrderId(), null, conflictDetailJson);
+                    DistributionEventResponse response = response(traceId, "EXCEPTION_QUEUED",
+                            duplicateLog.getRelatedCustomerId(), duplicateLog.getRelatedOrderId(),
+                            "SUCCESS", "duplicate payload conflict queued for manual handling");
+                    insertLog(provider, partnerCode, event, request, rawPayload, traceId, idempotencyKey,
+                            "EXCEPTION_QUEUED", "SUCCESS", response.getMessage(),
+                            duplicateLog.getRelatedCustomerId(), duplicateLog.getRelatedOrderId(),
+                            "DUPLICATE_PAYLOAD_CONFLICT", message, null, false);
+                    return response;
+                }
                 DistributionEventResponse response = response(traceId, "DUPLICATE",
                         duplicateLog.getRelatedCustomerId(), duplicateLog.getRelatedOrderId(),
                         "SUCCESS", "duplicate event ignored");
                 insertLog(provider, partnerCode, event, request, rawPayload, traceId, idempotencyKey,
                         "DUPLICATE", "SUCCESS", "duplicate event ignored",
-                        duplicateLog.getRelatedCustomerId(), duplicateLog.getRelatedOrderId(), null, null, null);
+                        duplicateLog.getRelatedCustomerId(), duplicateLog.getRelatedOrderId(), null, null, null, false);
                 return response;
             }
 
@@ -137,7 +158,7 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
 
             insertLog(provider, partnerCode, event, request, rawPayload, traceId, idempotencyKey,
                     response.getIdempotencyResult(), response.getProcessStatus(), response.getMessage(),
-                    response.getCustomerId(), response.getOrderId(), null, null, null);
+                    response.getCustomerId(), response.getOrderId(), null, null, null, false);
             return response;
         } catch (RuntimeException exception) {
             insertFailureLog(provider, partnerCode, event, request, rawPayload, traceId, idempotencyKey, exception);
@@ -446,6 +467,12 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         return !"EXCEPTION_QUEUED".equalsIgnoreCase(duplicateLog.getIdempotencyStatus());
     }
 
+    private boolean hasDuplicatePayloadConflict(IntegrationCallbackEventLog duplicateLog, String rawPayload) {
+        return duplicateLog != null
+                && StringUtils.hasText(duplicateLog.getBodyHash())
+                && !duplicateLog.getBodyHash().equalsIgnoreCase(sha256Hex(rawPayload));
+    }
+
     private void insertFailureLog(IntegrationProviderConfig provider,
                                   String partnerCode,
                                   DistributionEventRequest event,
@@ -464,7 +491,8 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
                     null,
                     meta.errorCode(),
                     safeMessage(exception),
-                    meta.signatureStatus());
+                    meta.signatureStatus(),
+                    true);
         } catch (RuntimeException ignored) {
             // Preserve the original business exception. The current transaction must still roll back.
         }
@@ -490,7 +518,8 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
                            Long orderId,
                            String errorCode,
                            String errorMessage,
-                           String signatureStatusOverride) {
+                           String signatureStatusOverride,
+                           boolean requiresNewTransaction) {
         IntegrationCallbackEventLog log = new IntegrationCallbackEventLog();
         log.setProviderCode(partnerCode);
         log.setProviderId(provider == null ? null : provider.getId());
@@ -527,7 +556,11 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         log.setReceivedAt(now);
         log.setProcessedAt(now);
         log.setCreatedAt(now);
-        eventLogWriter.write(log);
+        if (requiresNewTransaction) {
+            eventLogWriter.writeRequiresNew(log);
+        } else {
+            eventLogWriter.write(log);
+        }
     }
 
     private void validateEnvelope(DistributionEventRequest event, String eventType, String idempotencyKey) {

@@ -24,6 +24,22 @@ export function fetchIntegrationCallbackLogs(providerCode) {
   })
 }
 
+export function fetchSchedulerIdempotencyHealth(providerCode) {
+  return http.get('/scheduler/idempotency-health', {
+    params: {
+      providerCode: providerCode || undefined
+    }
+  })
+}
+
+export function fetchSchedulerMonitorSummary(providerCode) {
+  return http.get('/scheduler/monitor/summary', {
+    params: {
+      providerCode: providerCode || undefined
+    }
+  })
+}
+
 export function saveIntegrationCallback(payload) {
   return http.post('/scheduler/callback/save', payload)
 }

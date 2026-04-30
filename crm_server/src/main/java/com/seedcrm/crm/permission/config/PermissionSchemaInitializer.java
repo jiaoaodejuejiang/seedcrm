@@ -140,6 +140,16 @@ public class PermissionSchemaInitializer {
         seedPolicy("ORDER", "UPDATE", "PHOTO_SELECTOR", "STORE", null);
         seedPolicy("ORDER", "REFUND_STORE", "PHOTO_SELECTOR", "STORE", "offline service refund only");
 
+        seedPolicy("CUSTOMER", "VIEW", "ADMIN", "ALL", "customer detail admin scope");
+        seedPolicy("CUSTOMER", "VIEW", "ONLINE_CUSTOMER_SERVICE", "TEAM", "customer detail from assigned orders");
+        seedPolicy("CUSTOMER", "VIEW", "CLUE_MANAGER", "ALL", "customer detail for appointment management");
+        seedPolicy("CUSTOMER", "VIEW", "STORE_SERVICE", "STORE", "customer detail from store orders");
+        seedPolicy("CUSTOMER", "VIEW", "STORE_MANAGER", "STORE", "customer detail from store orders");
+        seedPolicy("CUSTOMER", "VIEW", "PHOTOGRAPHER", "STORE", "customer detail from store orders");
+        seedPolicy("CUSTOMER", "VIEW", "MAKEUP_ARTIST", "STORE", "customer detail from store orders");
+        seedPolicy("CUSTOMER", "VIEW", "PHOTO_SELECTOR", "STORE", "customer detail from store orders");
+        seedPolicy("CUSTOMER", "VIEW", "PRIVATE_DOMAIN_SERVICE", "SELF", "bound private-domain customer");
+
         seedPolicy("PLANORDER", "CREATE", "STORE_SERVICE", "STORE", null);
         seedPolicy("PLANORDER", "VIEW", "STORE_SERVICE", "STORE", null);
         seedPolicy("PLANORDER", "UPDATE", "STORE_SERVICE", "STORE", null);

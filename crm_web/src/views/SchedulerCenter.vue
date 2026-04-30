@@ -4,8 +4,8 @@
       <div class="toolbar toolbar--compact">
         <div class="toolbar-tabs">
           <el-radio-group v-model="activeTab">
-            <el-radio-button value="config">任务配置</el-radio-button>
             <el-radio-button value="monitor">执行监控</el-radio-button>
+            <el-radio-button value="config">任务配置</el-radio-button>
             <el-radio-button value="audit">审计记录</el-radio-button>
           </el-radio-group>
         </div>
@@ -152,8 +152,53 @@
           <h3>执行监控</h3>
         </div>
         <el-select v-model="selectedJobCode" clearable placeholder="按任务筛选" style="width: 260px" @change="loadLogs">
-          <el-option v-for="job in jobs" :key="job.jobCode" :label="job.jobCode" :value="job.jobCode" />
+          <el-option v-for="job in jobs" :key="job.jobCode" :label="formatJobName(job.jobCode)" :value="job.jobCode" />
         </el-select>
+      </div>
+
+      <div v-loading="monitorSummaryLoading" class="monitor-cards">
+        <button
+          v-for="card in monitorCards"
+          :key="card.key"
+          class="monitor-card"
+          :class="`monitor-card--${card.tone}`"
+          type="button"
+          @click="openMonitorCard(card)"
+        >
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <em>{{ card.hint }}</em>
+        </button>
+      </div>
+
+      <div v-if="monitorSummary.recommendedActions?.length" class="monitor-actions">
+        <span v-for="item in monitorSummary.recommendedActions" :key="item">{{ item }}</span>
+      </div>
+
+      <div v-if="monitorSummary.recentBatches?.length" class="recent-batches">
+        <div class="recent-batches__heading">
+          <strong>最近分销批次</strong>
+        </div>
+        <el-table :data="monitorSummary.recentBatches" size="small" stripe>
+          <el-table-column label="批次" width="90" prop="logId" />
+          <el-table-column label="任务" min-width="150" prop="jobName" />
+          <el-table-column label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag :type="statusTagType(row.status)">{{ formatSchedulerStatus(row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="处理" width="90" prop="processedCount" />
+          <el-table-column label="重放/无变化/失败" min-width="150">
+            <template #default="{ row }">
+              {{ row.replayedCount ?? 0 }} / {{ row.noChangeCount ?? 0 }} / {{ row.failedCount ?? 0 }}
+            </template>
+          </el-table-column>
+          <el-table-column label="结果" min-width="260" prop="resultSummary" show-overflow-tooltip />
+          <el-table-column label="建议动作" min-width="240" prop="recommendedAction" show-overflow-tooltip />
+          <el-table-column label="完成时间" min-width="170">
+            <template #default="{ row }">{{ formatDateTime(row.finishedAt || row.createdAt) }}</template>
+          </el-table-column>
+        </el-table>
       </div>
 
       <el-table v-loading="loading" :data="logPagination.rows" stripe>
@@ -162,7 +207,9 @@
             {{ formatDateTime(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="任务编码" min-width="220" prop="jobCode" />
+        <el-table-column label="任务名称" min-width="180">
+          <template #default="{ row }">{{ formatJobName(row.jobCode) }}</template>
+        </el-table-column>
         <el-table-column label="队列" min-width="150" prop="queueName" />
         <el-table-column label="来源" width="110">
           <template #default="{ row }">
@@ -195,17 +242,29 @@
             {{ formatLogResult(row) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column label="失败原因 / 建议动作" min-width="260" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-button
-              v-if="row.status === 'FAILED'"
-              size="small"
-              plain
-              :loading="retryingJob === row.jobCode"
-              @click="handleRetryLog(row)"
-            >
-              重新入队
-            </el-button>
+            {{ formatFailureAdvice(row) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="250" fixed="right">
+          <template #default="{ row }">
+            <div class="action-group">
+              <el-button
+                v-if="row.status === 'FAILED'"
+                size="small"
+                type="primary"
+                plain
+                :loading="retryingJob === row.jobCode"
+                @click="handleRetryLog(row)"
+              >
+                重新入队
+              </el-button>
+              <el-button v-if="isDistributionJob(row.jobCode)" size="small" plain @click="openDistributionQueue(row)">
+                查看队列
+              </el-button>
+              <el-button v-if="extractTraceId(row)" size="small" plain @click="copyTraceId(row)">复制追踪编号</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -230,7 +289,7 @@
           <h3>审计记录</h3>
         </div>
         <el-select v-model="selectedJobCode" clearable placeholder="按任务筛选" style="width: 260px" @change="loadAuditLogs">
-          <el-option v-for="job in jobs" :key="job.jobCode" :label="job.jobCode" :value="job.jobCode" />
+          <el-option v-for="job in jobs" :key="job.jobCode" :label="formatJobName(job.jobCode)" :value="job.jobCode" />
         </el-select>
       </div>
 
@@ -240,7 +299,9 @@
             {{ formatDateTime(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="任务编码" min-width="220" prop="jobCode" />
+        <el-table-column label="任务名称" min-width="180">
+          <template #default="{ row }">{{ formatJobName(row.jobCode) }}</template>
+        </el-table-column>
         <el-table-column label="动作" width="140">
           <template #default="{ row }">
             {{ formatAuditAction(row.actionType) }}
@@ -279,10 +340,12 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 import {
   fetchSchedulerAuditLogs,
   fetchSchedulerJobs,
   fetchSchedulerLogs,
+  fetchSchedulerMonitorSummary,
   retrySchedulerJob,
   retrySchedulerLog,
   saveSchedulerJob,
@@ -344,8 +407,10 @@ const presets = {
   }
 }
 
-const activeTab = ref('config')
+const activeTab = ref('monitor')
+const router = useRouter()
 const loading = ref(false)
+const monitorSummaryLoading = ref(false)
 const savingJob = ref(false)
 const triggeringJob = ref('')
 const retryingJob = ref('')
@@ -354,6 +419,7 @@ const jobPreset = ref('DOUYIN_CLUE_INCREMENTAL')
 const jobs = ref([])
 const logs = ref([])
 const auditLogs = ref([])
+const monitorSummary = ref({})
 const jobPagination = useTablePagination(jobs)
 const logPagination = useTablePagination(logs)
 const auditPagination = useTablePagination(auditLogs)
@@ -369,6 +435,48 @@ const currentJobDescription = computed(() => {
     return '分销调度任务只能处理队列、重试或补偿，不能直接写 Customer / Order / PlanOrder。'
   }
   return '客资调度任务只进入 Clue 入口。'
+})
+
+const monitorCards = computed(() => {
+  const summary = monitorSummary.value || {}
+  const outbox = summary.outbox || {}
+  const exceptions = summary.exceptions || {}
+  const jobs = summary.jobs || {}
+  const idempotency = summary.idempotency || {}
+  return [
+    {
+      key: 'outbox',
+      label: '履约回推待处理',
+      value: Number(outbox.totalAttention || 0),
+      hint: `${Number(outbox.failed || 0)} 条失败，${Number(outbox.deadLetter || 0)} 条死信`,
+      tone: Number(outbox.failed || 0) + Number(outbox.deadLetter || 0) > 0 ? 'danger' : Number(outbox.pending || 0) > 0 ? 'warning' : 'success',
+      route: { path: '/settings/integration/distribution-api', query: { tab: 'outbox', status: Number(outbox.failed || 0) > 0 ? 'FAILED' : undefined } }
+    },
+    {
+      key: 'exceptions',
+      label: '异常队列待处理',
+      value: Number(exceptions.totalAttention || 0),
+      hint: `${Number(exceptions.open || 0)} 条待处理，${Number(exceptions.retryQueued || 0)} 条已入队`,
+      tone: Number(exceptions.open || 0) > 0 ? 'danger' : Number(exceptions.retryQueued || 0) > 0 ? 'warning' : 'success',
+      route: { path: '/settings/integration/distribution-api', query: { tab: 'exceptions', status: Number(exceptions.open || 0) > 0 ? 'OPEN' : undefined } }
+    },
+    {
+      key: 'idempotency',
+      label: '接口防重复',
+      value: formatHealthStatus(idempotency.status),
+      hint: `${Number(idempotency.duplicateGroupCount || 0)} 组重复，${Number(idempotency.affectedLogCount || 0)} 条记录`,
+      tone: idempotency.healthy ? 'success' : 'warning',
+      route: { path: '/settings/integration/distribution-api', query: { tab: 'health' } }
+    },
+    {
+      key: 'jobs',
+      label: '近 24 小时成功率',
+      value: jobs.successRate24h === null || jobs.successRate24h === undefined ? '--' : `${jobs.successRate24h}%`,
+      hint: `${Number(jobs.failed24h || 0)} 次失败，${Number(jobs.total24h || 0)} 次执行`,
+      tone: Number(jobs.failed24h || 0) > 0 ? 'danger' : 'success',
+      route: { tab: 'monitor', jobCode: Number(jobs.failed24h || 0) > 0 ? '' : selectedJobCode.value }
+    }
+  ]
 })
 
 onMounted(loadData)
@@ -391,7 +499,7 @@ function applyPreset(value) {
 async function loadData() {
   loading.value = true
   try {
-    await Promise.all([loadJobs(), loadLogs(), loadAuditLogs()])
+    await Promise.all([loadJobs(), loadLogs(), loadAuditLogs(), loadMonitorSummary()])
   } finally {
     loading.value = false
   }
@@ -410,6 +518,15 @@ async function loadLogs() {
 async function loadAuditLogs() {
   auditLogs.value = await fetchSchedulerAuditLogs(selectedJobCode.value || undefined)
   auditPagination.reset()
+}
+
+async function loadMonitorSummary() {
+  monitorSummaryLoading.value = true
+  try {
+    monitorSummary.value = await fetchSchedulerMonitorSummary('DISTRIBUTION')
+  } finally {
+    monitorSummaryLoading.value = false
+  }
 }
 
 function resetJobForm() {
@@ -497,6 +614,18 @@ function formatTriggerType(value) {
   )
 }
 
+function formatJobName(value) {
+  return (
+    {
+      DOUYIN_CLUE_INCREMENTAL: '抖音客资增量拉取',
+      DISTRIBUTION_OUTBOX_PROCESS: '分销履约回推',
+      DISTRIBUTION_EXCEPTION_RETRY: '分销异常重试',
+      DISTRIBUTION_STATUS_CHECK: '分销状态回查',
+      DISTRIBUTION_RECONCILE_PULL: '分销对账拉取'
+    }[String(value || '').toUpperCase()] || value || '--'
+  )
+}
+
 function formatDuration(value) {
   if (value === null || value === undefined || value === '') {
     return '--'
@@ -515,10 +644,114 @@ function formatLogResult(row) {
   if (row.errorMessage) {
     return row.errorMessage
   }
+  const payload = parseLogPayload(row.payload)
+  if (payload?.actionCounts) {
+    const counts = payload.actionCounts
+    return `执行完成，处理 ${payload.processedCount ?? row.importedCount ?? 0} 条：重放 ${counts.replayed ?? 0}，无变化 ${counts.noChange ?? 0}，失败 ${counts.failed ?? 0}`
+  }
   if (row.importedCount !== null && row.importedCount !== undefined) {
     return `执行完成，处理 ${row.importedCount} 条记录`
   }
   return row.payload || '--'
+}
+
+function formatFailureAdvice(row) {
+  if (!row) {
+    return '--'
+  }
+  if (String(row.status || '').toUpperCase() === 'FAILED') {
+    const message = row.errorMessage || parseLogPayload(row.payload)?.message || '任务执行失败'
+    return `${message}；建议查看对应队列或重新入队。`
+  }
+  const payload = parseLogPayload(row.payload)
+  const failed = Number(payload?.actionCounts?.failed || 0)
+  if (failed > 0) {
+    return `本次有 ${failed} 条失败记录，建议进入分销接口页查看异常队列。`
+  }
+  if (String(row.status || '').toUpperCase() === 'SUCCESS') {
+    return '执行正常，无需处理。'
+  }
+  return '等待调度执行或查看审计记录。'
+}
+
+function isDistributionJob(jobCode) {
+  return String(jobCode || '').toUpperCase().startsWith('DISTRIBUTION_')
+}
+
+function openDistributionQueue(row) {
+  const jobCode = String(row?.jobCode || '').toUpperCase()
+  const tab = jobCode === 'DISTRIBUTION_OUTBOX_PROCESS' ? 'outbox' : jobCode === 'DISTRIBUTION_EXCEPTION_RETRY' ? 'exceptions' : 'reconcile'
+  const query = { tab }
+  if (String(row?.status || '').toUpperCase() === 'FAILED') {
+    if (tab === 'outbox') {
+      query.status = 'FAILED'
+    }
+    if (tab === 'exceptions') {
+      query.status = 'OPEN'
+    }
+  }
+  const traceId = extractTraceId(row)
+  if (traceId) {
+    query.keyword = traceId
+  }
+  query.source = 'scheduler-monitor'
+  query.sourceLabel = `来自任务调度：${formatJobName(row?.jobCode)}`
+  query.returnPath = '/settings/integration/jobs'
+  query.returnTab = 'monitor'
+  router.push({ path: '/settings/integration/distribution-api', query })
+}
+
+function openMonitorCard(card) {
+  if (card?.route?.path) {
+    router.push(card.route)
+    return
+  }
+  activeTab.value = 'monitor'
+  if (card?.route?.jobCode) {
+    selectedJobCode.value = card.route.jobCode
+    loadLogs()
+  }
+}
+
+function extractTraceId(row) {
+  const payload = parseLogPayload(row?.payload)
+  return payload?.traceId || payload?.latestTraceId || payload?.samples?.find?.((item) => item?.traceId)?.traceId || ''
+}
+
+async function copyTraceId(row) {
+  const traceId = extractTraceId(row)
+  if (!traceId) {
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(traceId)
+    ElMessage.success('追踪编号已复制')
+  } catch (error) {
+    ElMessage.warning(`追踪编号：${traceId}`)
+  }
+}
+
+function parseLogPayload(value) {
+  if (!value) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+  } catch (error) {
+    return null
+  }
+}
+
+function formatHealthStatus(value) {
+  return (
+    {
+      HEALTHY: '健康',
+      DUPLICATE_DATA: '有重复数据',
+      INDEX_NOT_READY: '待生效',
+      MISSING_TABLE: '缺少日志表'
+    }[String(value || '').toUpperCase()] || (value ? '待检查' : '--')
+  )
 }
 
 function formatAuditAction(value) {
@@ -557,6 +790,104 @@ function formatAuditActor(row) {
   margin-bottom: 0;
 }
 
+.monitor-cards {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.monitor-card {
+  border: 1px solid rgba(46, 64, 87, 0.1);
+  border-radius: 18px;
+  background: #fbfaf6;
+  box-shadow: 0 10px 24px rgba(30, 41, 59, 0.06);
+  color: #1f2937;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  min-height: 116px;
+  padding: 18px;
+  text-align: left;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.monitor-card:hover {
+  box-shadow: 0 16px 30px rgba(30, 41, 59, 0.1);
+  transform: translateY(-2px);
+}
+
+.monitor-card span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.monitor-card strong {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.monitor-card em {
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.monitor-card--success {
+  border-color: rgba(22, 163, 74, 0.2);
+}
+
+.monitor-card--warning {
+  border-color: rgba(217, 119, 6, 0.26);
+  background: #fff8ec;
+}
+
+.monitor-card--danger {
+  border-color: rgba(220, 38, 38, 0.24);
+  background: #fff3f2;
+}
+
+.monitor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.monitor-actions span {
+  border-radius: 999px;
+  background: #edf4ef;
+  color: #315b46;
+  font-size: 12px;
+  padding: 7px 11px;
+}
+
+.recent-batches {
+  border: 1px solid rgba(46, 64, 87, 0.08);
+  border-radius: 16px;
+  background: #fff;
+  margin-bottom: 14px;
+  padding: 14px;
+}
+
+.recent-batches__heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.recent-batches__heading strong {
+  color: #173b33;
+}
+
+.recent-batches__heading span {
+  color: #64748b;
+  font-size: 12px;
+}
+
 .readonly-value {
   display: inline-flex;
   min-height: 34px;
@@ -566,5 +897,22 @@ function formatAuditActor(row) {
   background: #f8fafc;
   color: #475569;
   line-height: 1.5;
+}
+
+@media (max-width: 1180px) {
+  .monitor-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .monitor-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .recent-batches__heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

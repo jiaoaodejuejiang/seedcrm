@@ -6,6 +6,7 @@ import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.scheduler.dto.SchedulerJobUpsertRequest;
 import com.seedcrm.crm.scheduler.dto.SchedulerTriggerRequest;
+import com.seedcrm.crm.scheduler.dto.DistributionReconciliationDtos.DistributionReconciliationResult;
 import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
 import com.seedcrm.crm.scheduler.entity.SchedulerJob;
 import com.seedcrm.crm.scheduler.entity.SchedulerJobAuditLog;
@@ -23,6 +24,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -304,13 +306,13 @@ public class SchedulerServiceImpl implements SchedulerService {
         log.setDurationMs(null);
         audit(job.getJobCode(), log.getId(), "JOB_EXECUTE_START", null, "RUNNING", "开始执行客资同步任务", null);
         try {
-            int importedCount = executeSupportedJob(job, provider);
+            SchedulerExecutionResult result = executeSupportedJob(job, provider);
             log.setStatus("SUCCESS");
-            log.setPayload("{\"source\":\"sync\",\"importedCount\":" + importedCount + "}");
-            log.setImportedCount(importedCount);
+            log.setPayload(result.payload());
+            log.setImportedCount(result.processedCount());
             log.setNextRetryTime(null);
-            schedulerIntegrationService.markSyncResult(job.getProviderId(), true, "同步成功，导入 " + importedCount + " 条客资");
-            audit(job.getJobCode(), log.getId(), "JOB_EXECUTE_SUCCESS", null, "SUCCESS", "客资同步执行成功", "importedCount=" + importedCount);
+            schedulerIntegrationService.markSyncResult(job.getProviderId(), true, "调度执行成功，处理 " + result.processedCount() + " 条记录");
+            audit(job.getJobCode(), log.getId(), "JOB_EXECUTE_SUCCESS", null, "SUCCESS", "调度任务执行成功", result.auditDetail());
         } catch (Exception exception) {
             log.setStatus("FAILED");
             log.setErrorMessage(exception.getMessage());
@@ -368,12 +370,12 @@ public class SchedulerServiceImpl implements SchedulerService {
                 .set("duration_ms", null)) > 0;
     }
 
-    private int executeSupportedJob(SchedulerJob job, IntegrationProviderConfig provider) {
+    private SchedulerExecutionResult executeSupportedJob(SchedulerJob job, IntegrationProviderConfig provider) {
         if (provider != null && "DOUYIN_LAIKE".equalsIgnoreCase(provider.getProviderCode())) {
-            return douyinClueSyncService.syncIncremental(provider);
+            return simpleResult(job.getJobCode(), douyinClueSyncService.syncIncremental(provider), "importedCount");
         }
         if ("DOUYIN_CLUE_INCREMENTAL".equals(job.getJobCode())) {
-            return douyinClueSyncService.syncIncremental();
+            return simpleResult(job.getJobCode(), douyinClueSyncService.syncIncremental(), "importedCount");
         }
         String moduleCode = normalize(job.getModuleCode());
         String jobCode = normalize(job.getJobCode());
@@ -383,20 +385,90 @@ public class SchedulerServiceImpl implements SchedulerService {
         throw new BusinessException("unsupported scheduler job");
     }
 
-    private int executeDistributionJob(String jobCode) {
+    private SchedulerExecutionResult executeDistributionJob(String jobCode) {
         if (JOB_DISTRIBUTION_OUTBOX_PROCESS.equals(jobCode)) {
-            return schedulerOutboxService.processDue(20).size();
+            return simpleResult(jobCode, schedulerOutboxService.processDue(20).size(), "processedCount");
         }
         if (JOB_DISTRIBUTION_EXCEPTION_RETRY.equals(jobCode)) {
-            return distributionExceptionRetryService.processRetryQueue(10).size();
+            return simpleResult(jobCode, distributionExceptionRetryService.processRetryQueue(10).size(), "processedCount");
         }
         if (JOB_DISTRIBUTION_STATUS_CHECK.equals(jobCode)) {
-            return distributionReconciliationService.checkOrderStatus(20).size();
+            return reconciliationResult(jobCode, distributionReconciliationService.checkOrderStatus(20));
         }
         if (JOB_DISTRIBUTION_RECONCILE_PULL.equals(jobCode)) {
-            return distributionReconciliationService.pullReconciliation(20).size();
+            return reconciliationResult(jobCode, distributionReconciliationService.pullReconciliation(20));
         }
         throw new BusinessException("unsupported distribution scheduler job");
+    }
+
+    private SchedulerExecutionResult simpleResult(String jobCode, int processedCount, String countField) {
+        String payload = "{\"source\":\"sync\",\"jobCode\":\"" + json(jobCode) + "\",\""
+                + countField + "\":" + processedCount + "}";
+        return new SchedulerExecutionResult(processedCount, payload, countField + "=" + processedCount);
+    }
+
+    private SchedulerExecutionResult reconciliationResult(String jobCode, List<DistributionReconciliationResult> results) {
+        List<DistributionReconciliationResult> safeResults = results == null ? List.of() : results;
+        long replayed = countAction(safeResults, "REPLAYED");
+        long noChange = countAction(safeResults, "NO_CHANGE");
+        long failed = countAction(safeResults, "FAILED");
+        String sample = safeResults.stream()
+                .limit(10)
+                .map(this::reconciliationItemJson)
+                .collect(Collectors.joining(","));
+        String payload = "{\"source\":\"sync\",\"jobCode\":\"" + json(jobCode) + "\",\"processedCount\":"
+                + safeResults.size()
+                + ",\"actionCounts\":{\"replayed\":" + replayed
+                + ",\"noChange\":" + noChange
+                + ",\"failed\":" + failed
+                + "},\"items\":[" + sample + "]}";
+        String auditDetail = "processedCount=" + safeResults.size()
+                + ",replayed=" + replayed
+                + ",noChange=" + noChange
+                + ",failed=" + failed;
+        return new SchedulerExecutionResult(safeResults.size(), payload, auditDetail);
+    }
+
+    private long countAction(List<DistributionReconciliationResult> results, String action) {
+        return results.stream()
+                .filter(item -> action.equals(normalize(item == null ? null : item.getAction())))
+                .count();
+    }
+
+    private String reconciliationItemJson(DistributionReconciliationResult item) {
+        if (item == null) {
+            return "{}";
+        }
+        return "{\"orderId\":\"" + json(item.getOrderId() == null ? null : String.valueOf(item.getOrderId()))
+                + "\",\"externalOrderId\":\"" + json(item.getExternalOrderId())
+                + "\",\"partnerCode\":\"" + json(item.getPartnerCode())
+                + "\",\"action\":\"" + json(item.getAction())
+                + "\",\"status\":\"" + json(item.getStatus())
+                + "\",\"eventType\":\"" + json(item.getEventType())
+                + "\",\"idempotencyKey\":\"" + json(item.getIdempotencyKey())
+                + "\",\"processStatus\":\"" + json(item.getProcessStatus())
+                + "\",\"checkedAt\":\"" + json(item.getCheckedAt() == null ? null : item.getCheckedAt().toString())
+                + "\",\"message\":\"" + json(item.getMessage())
+                + "\"}";
+    }
+
+    private String json(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder(value.length());
+        for (int index = 0; index < value.length(); index++) {
+            char ch = value.charAt(index);
+            switch (ch) {
+                case '"' -> builder.append("\\\"");
+                case '\\' -> builder.append("\\\\");
+                case '\n' -> builder.append("\\n");
+                case '\r' -> builder.append("\\r");
+                case '\t' -> builder.append("\\t");
+                default -> builder.append(ch);
+            }
+        }
+        return builder.toString();
     }
 
     private boolean hasPendingLog(String jobCode) {
@@ -520,5 +592,8 @@ public class SchedulerServiceImpl implements SchedulerService {
             case "INACTIVE", "DISABLED" -> "DISABLED";
             default -> normalized;
         };
+    }
+
+    private record SchedulerExecutionResult(int processedCount, String payload, String auditDetail) {
     }
 }

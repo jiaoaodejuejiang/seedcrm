@@ -18,7 +18,9 @@ import com.seedcrm.crm.salary.entity.SalaryDetail;
 import com.seedcrm.crm.salary.service.SalaryService;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -71,7 +73,9 @@ public class OrderSettlementServiceImpl implements OrderSettlementService {
 
         try {
             List<SalaryDetail> salaryDetails = salaryService.calculateForPlanOrder(planOrder.getId());
-            DistributorIncomeDetail distributorIncomeDetail = distributorIncomeService.calculate(orderId);
+            DistributorIncomeDetail distributorIncomeDetail = isExternalDistributionOrder(order)
+                    ? null
+                    : distributorIncomeService.calculate(orderId);
             riskControlService.validateSplitTotalNotExceedOrderAmount(order.getAmount(),
                     sumSalaryAmount(salaryDetails),
                     distributorIncomeDetail == null ? BigDecimal.ZERO : distributorIncomeDetail.getIncomeAmount());
@@ -94,5 +98,18 @@ public class OrderSettlementServiceImpl implements OrderSettlementService {
         return salaryDetails.stream()
                 .map(SalaryDetail::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private boolean isExternalDistributionOrder(Order order) {
+        if (order == null) {
+            return false;
+        }
+        return "distribution".equals(normalize(order.getSource()))
+                || StringUtils.hasText(order.getExternalPartnerCode())
+                || StringUtils.hasText(order.getExternalOrderId());
+    }
+
+    private String normalize(String value) {
+        return StringUtils.hasText(value) ? value.trim().toLowerCase(Locale.ROOT) : "";
     }
 }

@@ -15,8 +15,13 @@ public class DistributionEventLogWriter {
         this.eventLogMapper = eventLogMapper;
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.MANDATORY)
     public void write(IntegrationCallbackEventLog log) {
+        eventLogMapper.insert(log);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void writeRequiresNew(IntegrationCallbackEventLog log) {
         eventLogMapper.insert(log);
     }
 }

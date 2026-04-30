@@ -43,6 +43,7 @@ class DistributionExceptionRetryServiceImplTest {
         DistributionExceptionRecord record = retryRecord();
         DistributionEventResponse response = new DistributionEventResponse();
         response.setTraceId("trace-replay-001");
+        response.setProcessStatus("SUCCESS");
         response.setIdempotencyResult("CREATED");
         when(exceptionRecordMapper.selectList(any())).thenReturn(List.of(record));
         when(exceptionRecordMapper.update(any(), any())).thenReturn(1);
@@ -76,6 +77,29 @@ class DistributionExceptionRetryServiceImplTest {
         verify(exceptionRecordMapper).updateById(captor.capture());
         assertThat(captor.getValue().getHandlingStatus()).isEqualTo("OPEN");
         assertThat(captor.getValue().getErrorMessage()).contains("external order does not exist");
+        assertThat(captor.getValue().getHandleRemark()).contains("manual review");
+    }
+
+    @Test
+    void shouldReturnToOpenWhenReplayStillQueuesException() {
+        DistributionExceptionRecord record = retryRecord();
+        DistributionEventResponse response = new DistributionEventResponse();
+        response.setTraceId("trace-replay-conflict");
+        response.setProcessStatus("SUCCESS");
+        response.setIdempotencyResult("EXCEPTION_QUEUED");
+        response.setMessage("duplicate external order conflict queued for manual handling");
+        when(exceptionRecordMapper.selectList(any())).thenReturn(List.of(record));
+        when(exceptionRecordMapper.update(any(), any())).thenReturn(1);
+        when(exceptionRecordMapper.selectById(7L)).thenReturn(record, record, record);
+        when(distributionEventIngestService.replayFromScheduler(any(JsonNode.class), any(), any())).thenReturn(response);
+
+        List<DistributionExceptionRecord> processed = service.processRetryQueue(10);
+
+        assertThat(processed).hasSize(1);
+        ArgumentCaptor<DistributionExceptionRecord> captor = ArgumentCaptor.forClass(DistributionExceptionRecord.class);
+        verify(exceptionRecordMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getHandlingStatus()).isEqualTo("OPEN");
+        assertThat(captor.getValue().getErrorMessage()).contains("duplicate external order conflict");
         assertThat(captor.getValue().getHandleRemark()).contains("manual review");
     }
 

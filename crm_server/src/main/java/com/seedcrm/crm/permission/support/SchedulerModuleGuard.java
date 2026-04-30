@@ -42,6 +42,10 @@ public class SchedulerModuleGuard {
         request.setResourceStoreId(context.getCurrentStoreId());
         request.setTeamMemberIds(context.getTeamMemberIds());
         request.setBoundCustomerUserId(context.getBoundCustomerUserId());
+        request.setCurrentPartnerCode(context.getCurrentPartnerCode());
+        request.setResourcePartnerCode(context.getResourcePartnerCode() == null
+                ? context.getCurrentPartnerCode()
+                : context.getResourcePartnerCode());
         return permissionService.check(request);
     }
 

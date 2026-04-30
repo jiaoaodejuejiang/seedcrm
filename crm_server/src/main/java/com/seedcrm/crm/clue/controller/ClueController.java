@@ -50,22 +50,13 @@ public class ClueController {
     @PostMapping("/distributor/add")
     public Clue addDistributorClue(@RequestBody(required = false) DistributorClueCreateRequest request,
                                    HttpServletRequest httpServletRequest) {
-        return addDistributionClue(request, httpServletRequest);
+        throw legacyDistributionClueEndpointDisabled();
     }
 
     @PostMapping("/distribution/add")
     public Clue addDistributionClue(@RequestBody(required = false) DistributorClueCreateRequest request,
                                     HttpServletRequest httpServletRequest) {
-        try {
-            PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
-            cluePermissionGuard.checkCreate(context);
-            return clueService.createDistributorClue(
-                    request == null ? null : request.getDistributorId(),
-                    request == null ? null : request.getPhone(),
-                    request == null ? null : request.getName());
-        } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
-        }
+        throw legacyDistributionClueEndpointDisabled();
     }
 
     @GetMapping("/list")
@@ -130,5 +121,10 @@ public class ClueController {
     @GetMapping("/test")
     public String test() {
         return "clue module ok";
+    }
+
+    private ResponseStatusException legacyDistributionClueEndpointDisabled() {
+        return new ResponseStatusException(HttpStatus.GONE,
+                "分销成交已切换为方案B：已支付订单只能通过 /open/distribution/events 入站并直接进入 Customer + Order，不再创建 Clue。");
     }
 }

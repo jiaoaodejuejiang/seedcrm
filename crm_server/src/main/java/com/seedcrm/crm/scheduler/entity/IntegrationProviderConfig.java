@@ -176,6 +176,12 @@ public class IntegrationProviderConfig {
     @TableField("request_timeout_ms")
     private Integer requestTimeoutMs;
 
+    @TableField("rate_limit_per_minute")
+    private Integer rateLimitPerMinute;
+
+    @TableField("cache_ttl_seconds")
+    private Integer cacheTtlSeconds;
+
     @TableField("callback_url")
     private String callbackUrl;
 

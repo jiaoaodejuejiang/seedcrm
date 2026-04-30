@@ -23,6 +23,7 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 public class DistributorIncomeServiceImpl implements DistributorIncomeService {
@@ -63,6 +64,9 @@ public class DistributorIncomeServiceImpl implements DistributorIncomeService {
         Order order = dbLockService.lockOrder(orderId);
         if (order == null) {
             throw new BusinessException("order not found");
+        }
+        if (isExternalDistributionOrder(order)) {
+            return null;
         }
         if (!SourceChannel.DISTRIBUTOR.name().equals(order.getSourceChannel()) || order.getSourceId() == null) {
             return null;
@@ -134,5 +138,11 @@ public class DistributorIncomeServiceImpl implements DistributorIncomeService {
 
     private BigDecimal scaleMoney(BigDecimal value) {
         return value.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private boolean isExternalDistributionOrder(Order order) {
+        return order != null
+                && (StringUtils.hasText(order.getExternalPartnerCode())
+                || StringUtils.hasText(order.getExternalOrderId()));
     }
 }

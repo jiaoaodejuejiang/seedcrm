@@ -71,6 +71,7 @@ public class DistributionExceptionRetryServiceImpl implements DistributionExcept
                     payload,
                     current.getPartnerCode(),
                     current.getIdempotencyKey());
+            validateReplayResponse(response);
             markSuccess(current, response);
         } catch (Exception exception) {
             markFailed(record.getId(), exception);
@@ -103,6 +104,22 @@ public class DistributionExceptionRetryServiceImpl implements DistributionExcept
         }
     }
 
+    private void validateReplayResponse(DistributionEventResponse response) {
+        if (response == null) {
+            throw new BusinessException("distribution exception retry returned empty response");
+        }
+        if (!"SUCCESS".equalsIgnoreCase(response.getProcessStatus())) {
+            throw new BusinessException(firstNonBlank(
+                    response.getMessage(),
+                    "distribution exception retry did not succeed"));
+        }
+        if ("EXCEPTION_QUEUED".equalsIgnoreCase(response.getIdempotencyResult())) {
+            throw new BusinessException(firstNonBlank(
+                    response.getMessage(),
+                    "distribution exception still requires manual handling"));
+        }
+    }
+
     @Transactional
     protected void markSuccess(DistributionExceptionRecord record, DistributionEventResponse response) {
         record.setHandlingStatus(STATUS_HANDLED);
@@ -128,6 +145,18 @@ public class DistributionExceptionRetryServiceImpl implements DistributionExcept
         record.setHandleRemark("retry failed, waiting for manual review");
         record.setUpdatedAt(LocalDateTime.now());
         exceptionRecordMapper.updateById(record);
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     private String trim(String value, int maxLength) {

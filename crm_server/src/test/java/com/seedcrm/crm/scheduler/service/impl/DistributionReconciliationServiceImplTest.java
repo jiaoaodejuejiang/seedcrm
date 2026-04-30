@@ -6,6 +6,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,9 +26,13 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
 
 @ExtendWith(MockitoExtension.class)
 class DistributionReconciliationServiceImplTest {
@@ -124,6 +133,66 @@ class DistributionReconciliationServiceImplTest {
         assertThat(results.get(0).getAction()).isEqualTo("FAILED");
         assertThat(results.get(0).getMessage()).contains("secret is required");
         verify(distributionEventIngestService, never()).replayFromScheduler(any(), any(), any());
+    }
+
+    @Test
+    void shouldCallLiveStatusQueryAndReplayReturnedEvent() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        service = new DistributionReconciliationServiceImpl(
+                providerConfigMapper,
+                orderMapper,
+                distributionEventIngestService,
+                new ObjectMapper(),
+                builder.build());
+
+        IntegrationProviderConfig provider = distributionProvider();
+        provider.setExecutionMode("LIVE");
+        provider.setBaseUrl("https://distribution.example.test");
+        provider.setStatusQueryPath("/open/distribution/orders/status");
+        provider.setClientSecret("live-secret");
+        provider.setAppId("app-distribution");
+        provider.setRequestTimeoutMs(1500);
+        when(providerConfigMapper.selectOne(any())).thenReturn(provider);
+        when(orderMapper.selectList(any())).thenReturn(List.of(distributionOrder("paid")));
+        DistributionEventResponse response = new DistributionEventResponse();
+        response.setProcessStatus("SUCCESS");
+        response.setMessage("external order status updated");
+        when(distributionEventIngestService.replayFromScheduler(any(JsonNode.class), eq("DISTRIBUTION"), any()))
+                .thenReturn(response);
+
+        server.expect(requestTo("https://distribution.example.test/open/distribution/orders/status"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-Partner-Code", "DISTRIBUTION"))
+                .andExpect(header("X-App-Id", "app-distribution"))
+                .andExpect(request -> assertThat(request.getHeaders().getFirst("X-Trace-Id"))
+                        .startsWith("distribution-live-query-"))
+                .andExpect(content().json("""
+                        {
+                          "externalOrderId": "dist_order_001",
+                          "externalTradeNo": "pay_001",
+                          "partnerCode": "DISTRIBUTION"
+                        }
+                        """))
+                .andRespond(withSuccess("""
+                        {
+                          "data": {
+                            "eventType": "distribution.order.refunded",
+                            "order": {
+                              "externalOrderId": "dist_order_001"
+                            }
+                          }
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        List<DistributionReconciliationResult> results = service.checkOrderStatus(20);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getAction()).isEqualTo("REPLAYED");
+        assertThat(results.get(0).getEventType()).isEqualTo("distribution.order.refunded");
+        verify(distributionEventIngestService).replayFromScheduler(any(JsonNode.class), eq("DISTRIBUTION"),
+                eq("DISTRIBUTION:STATUS_CHECK:distribution.order.refunded:dist_order_001"));
+        server.verify();
     }
 
     private IntegrationProviderConfig distributionProvider() {

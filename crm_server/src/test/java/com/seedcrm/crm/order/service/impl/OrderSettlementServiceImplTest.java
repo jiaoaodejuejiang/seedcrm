@@ -91,6 +91,40 @@ class OrderSettlementServiceImplTest {
     }
 
     @Test
+    void settleExternalDistributionOrderShouldSkipInternalDistributorIncome() {
+        Order order = new Order();
+        order.setId(32L);
+        order.setCustomerId(9L);
+        order.setSource("distribution");
+        order.setExternalPartnerCode("DISTRIBUTION");
+        order.setExternalOrderId("dist_order_001");
+        order.setAmount(new BigDecimal("1000.00"));
+        order.setStatus(OrderStatus.COMPLETED.name());
+        when(dbLockService.lockOrder(32L)).thenReturn(order);
+
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(13L);
+        planOrder.setStatus(PlanOrderStatus.FINISHED.name());
+        when(dbLockService.lockPlanOrderByOrderId(32L)).thenReturn(planOrder);
+        when(idempotentService.tryStart("ORDER_32", com.seedcrm.crm.risk.enums.IdempotentBizType.ORDER))
+                .thenReturn(true);
+
+        SalaryDetail salaryDetail = new SalaryDetail();
+        salaryDetail.setAmount(new BigDecimal("200.00"));
+        when(salaryService.calculateForPlanOrder(13L)).thenReturn(List.of(salaryDetail));
+
+        Order settledOrder = orderSettlementService.settleCompletedOrder(32L);
+
+        assertThat(settledOrder.getId()).isEqualTo(32L);
+        verify(distributorIncomeService, never()).calculate(32L);
+        verify(riskControlService).validateSplitTotalNotExceedOrderAmount(
+                order.getAmount(), new BigDecimal("200.00"), BigDecimal.ZERO);
+        verify(financeService).recordOrderIncome(order);
+        verify(customerTagService).updateTag(9L);
+        verify(idempotentService).markSuccess("ORDER_32");
+    }
+
+    @Test
     void settleCompletedOrderShouldReturnWhenDuplicateSubmissionArrives() {
         Order order = new Order();
         order.setId(31L);

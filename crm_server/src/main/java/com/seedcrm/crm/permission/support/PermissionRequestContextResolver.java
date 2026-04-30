@@ -34,6 +34,8 @@ public class PermissionRequestContextResolver {
             context.setCurrentStoreName(authenticatedUser.getStoreName());
             context.setResourceStoreId(authenticatedUser.getStoreId());
             context.setBoundCustomerUserId(authenticatedUser.getBoundCustomerUserId());
+            context.setCurrentPartnerCode(normalize(authenticatedUser.getPartnerCode()));
+            context.setResourcePartnerCode(normalize(authenticatedUser.getPartnerCode()));
             context.setTeamMemberIds(authenticatedUser.getTeamMemberIds() == null ? List.of() : authenticatedUser.getTeamMemberIds());
             return context;
         }
@@ -48,6 +50,8 @@ public class PermissionRequestContextResolver {
         context.setCurrentStoreName(stringHeader(request, "X-Store-Name", "storeName", null));
         context.setResourceStoreId(longHeader(request, "X-Resource-Store-Id", "resourceStoreId"));
         context.setBoundCustomerUserId(longHeader(request, "X-Bound-Customer-User-Id", "boundCustomerUserId"));
+        context.setCurrentPartnerCode(normalize(stringHeader(request, "X-Partner-Code", "partnerCode", null)));
+        context.setResourcePartnerCode(normalize(stringHeader(request, "X-Resource-Partner-Code", "resourcePartnerCode", context.getCurrentPartnerCode())));
         context.setTeamMemberIds(parseLongList(stringHeader(request, "X-Team-Member-Ids", "teamMemberIds", null)));
         return context;
     }

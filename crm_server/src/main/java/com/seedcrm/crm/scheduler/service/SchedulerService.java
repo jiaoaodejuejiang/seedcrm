@@ -20,6 +20,8 @@ public interface SchedulerService {
 
     SchedulerJobLog trigger(SchedulerTriggerRequest request, PermissionRequestContext context);
 
+    SchedulerJobLog dryRun(SchedulerTriggerRequest request, PermissionRequestContext context);
+
     List<SchedulerJobLog> retryFailed(String jobCode, PermissionRequestContext context);
 
     SchedulerJobLog retryLog(Long logId, PermissionRequestContext context);

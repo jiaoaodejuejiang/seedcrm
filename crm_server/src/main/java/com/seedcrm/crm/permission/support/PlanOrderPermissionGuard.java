@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class PlanOrderPermissionGuard {
 
+    private static final String FINANCE_ROLE_CODE = "FINANCE";
+
     private final PermissionService permissionService;
     private final AuthService authService;
     private final OrderPermissionResourceResolver resourceResolver;
@@ -23,12 +25,14 @@ public class PlanOrderPermissionGuard {
     }
 
     public void checkCreate(PermissionRequestContext context, Long orderId) {
+        rejectFinanceBusinessMutation(context, "plan order create denied");
         PermissionCheckRequest request = buildCheckRequest(context, "PLANORDER", "CREATE",
                 resolveOrderResourceOwnerId(context, orderId));
         assertAllowed(permissionService.check(request), "plan order create denied");
     }
 
     public void checkUpdate(PermissionRequestContext context, Long planOrderId) {
+        rejectFinanceBusinessMutation(context, "plan order update denied");
         PermissionCheckRequest request = buildCheckRequest(context, "PLANORDER", "UPDATE",
                 resolvePlanOrderResourceOwnerId(context, planOrderId));
         assertAllowed(permissionService.check(request), "plan order update denied");
@@ -39,6 +43,7 @@ public class PlanOrderPermissionGuard {
     }
 
     public void checkAssignRole(PermissionRequestContext context, Long planOrderId) {
+        rejectFinanceBusinessMutation(context, "plan order assign role denied");
         PermissionCheckRequest request = buildCheckRequest(context, "PLANORDER", "ASSIGN_ROLE",
                 resolvePlanOrderResourceOwnerId(context, planOrderId));
         assertAllowed(permissionService.check(request), "plan order assign role denied");
@@ -76,6 +81,14 @@ public class PlanOrderPermissionGuard {
         PermissionCheckRequest request = buildCheckRequest(context, "PLANORDER", "VIEW",
                 resolvePlanOrderResourceOwnerId(context, planOrderId));
         return permissionService.check(request);
+    }
+
+    private void rejectFinanceBusinessMutation(PermissionRequestContext context, String messagePrefix) {
+        if (context != null
+                && context.getRoleCode() != null
+                && FINANCE_ROLE_CODE.equalsIgnoreCase(context.getRoleCode().trim())) {
+            throw new BusinessException(messagePrefix + ": finance role is ledger-only and cannot mutate service flow");
+        }
     }
 
     private Long resolveOrderResourceOwnerId(PermissionRequestContext context, Long orderId) {

@@ -76,6 +76,45 @@ class SystemConfigControllerTest {
         verify(schedulerModuleGuard, never()).checkView(context);
     }
 
+    @Test
+    void shouldAllowIntegrationAdminToReadDistributionMappingConfigThroughSchedulerViewPermission() {
+        PermissionRequestContext context = context("INTEGRATION_ADMIN");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.list("distribution.order.type.", request);
+
+        verify(schedulerModuleGuard).checkView(context);
+        verify(settingModuleGuard, never()).checkView(context);
+    }
+
+    @Test
+    void shouldAllowIntegrationAdminToSaveDistributionMappingConfigThroughSchedulerUpdatePermission() {
+        PermissionRequestContext context = context("INTEGRATION_ADMIN");
+        SystemConfigDtos.SaveConfigRequest body = new SystemConfigDtos.SaveConfigRequest();
+        body.setConfigKey("distribution.order.type.mapping");
+        body.setConfigValue("{}");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.save(body, request);
+
+        verify(schedulerModuleGuard).checkUpdate(context);
+        verify(settingModuleGuard, never()).checkUpdate(context);
+    }
+
+    @Test
+    void shouldKeepIntegrationOperatorDistributionMappingWriteDeniedBySettingUpdatePermission() {
+        PermissionRequestContext context = context("INTEGRATION_OPERATOR");
+        SystemConfigDtos.SaveConfigRequest body = new SystemConfigDtos.SaveConfigRequest();
+        body.setConfigKey("distribution.order.type.mapping");
+        body.setConfigValue("{}");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.save(body, request);
+
+        verify(settingModuleGuard).checkUpdate(context);
+        verify(schedulerModuleGuard, never()).checkUpdate(context);
+    }
+
     private PermissionRequestContext context(String roleCode) {
         PermissionRequestContext context = new PermissionRequestContext();
         context.setRoleCode(roleCode);

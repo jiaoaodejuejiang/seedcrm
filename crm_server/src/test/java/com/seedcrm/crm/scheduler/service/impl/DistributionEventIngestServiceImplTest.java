@@ -13,16 +13,21 @@ import com.seedcrm.crm.customer.entity.Customer;
 import com.seedcrm.crm.customer.mapper.CustomerMapper;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.mapper.OrderMapper;
+import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.scheduler.dto.DistributionEventDtos.DistributionEventResponse;
 import com.seedcrm.crm.scheduler.entity.IntegrationCallbackEventLog;
 import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
 import com.seedcrm.crm.scheduler.mapper.IntegrationCallbackEventLogMapper;
 import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
 import com.seedcrm.crm.scheduler.service.DistributionExceptionService;
+import com.seedcrm.crm.scheduler.support.DistributionOrderTypeMappingResolver;
+import com.seedcrm.crm.systemconfig.dto.SystemConfigDtos;
+import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,7 +71,8 @@ class DistributionEventIngestServiceImplTest {
                 distributionExceptionService,
                 customerMapper,
                 orderMapper,
-                objectMapper);
+                objectMapper,
+                new DistributionOrderTypeMappingResolver(objectMapper, null));
     }
 
     @Test
@@ -110,6 +116,84 @@ class DistributionEventIngestServiceImplTest {
         assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("SUCCESS");
         assertThat(logCaptor.getValue().getIdempotencyStatus()).isEqualTo("CREATED");
         assertThat(logCaptor.getValue().getSignatureStatus()).isEqualTo("MOCK_SKIPPED");
+    }
+
+    @Test
+    void shouldMapConfiguredSkuToDepositOrderType() throws Exception {
+        useOrderTypeMapping("""
+                {
+                  "default": "coupon",
+                  "aliases": {
+                    "coupon": "coupon",
+                    "deposit": "deposit"
+                  },
+                  "rules": [
+                    {
+                      "ruleId": "sku-deposit",
+                      "providerCode": "DISTRIBUTION",
+                      "externalSkuId": "sku_deposit_001",
+                      "internalOrderType": "deposit",
+                      "priority": 10
+                    }
+                  ]
+                }
+                """);
+        when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
+        when(eventLogMapper.selectOne(any())).thenReturn(null);
+        when(customerMapper.selectOne(any())).thenReturn(null);
+        when(customerMapper.insert(any(Customer.class))).thenAnswer(invocation -> {
+            Customer customer = invocation.getArgument(0);
+            customer.setId(101L);
+            return 1;
+        });
+        when(orderMapper.selectOne(any())).thenReturn(null);
+        when(orderMapper.insert(any(Order.class))).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            order.setId(202L);
+            return 1;
+        });
+
+        DistributionEventResponse response = service.ingest(readSkuOnlyPayload(), request("idem-sku-deposit-001"));
+
+        assertThat(response.getIdempotencyResult()).isEqualTo("CREATED");
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderMapper).insert(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getType()).isEqualTo(1);
+        assertThat(orderCaptor.getValue().getDeposit()).isEqualByComparingTo("199.00");
+    }
+
+    @Test
+    void shouldRejectStrictUnmappedProductAndKeepFailureLog() throws Exception {
+        useOrderTypeMapping("""
+                {
+                  "default": "coupon",
+                  "strictProductMapping": true,
+                  "aliases": {
+                    "coupon": "coupon"
+                  },
+                  "rules": []
+                }
+                """);
+        when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
+        when(eventLogMapper.selectOne(any())).thenReturn(null);
+
+        assertThatThrownBy(() -> service.ingest(readSkuOnlyPayload(), request("idem-strict-missing-001")))
+                .isInstanceOf(com.seedcrm.crm.common.exception.BusinessException.class)
+                .hasMessageContaining("product/SKU is not mapped");
+
+        verify(customerMapper, never()).insert(any(Customer.class));
+        verify(orderMapper, never()).insert(any(Order.class));
+        ArgumentCaptor<IntegrationCallbackEventLog> logCaptor = ArgumentCaptor.forClass(IntegrationCallbackEventLog.class);
+        verify(eventLogWriter).writeRequiresNew(logCaptor.capture());
+        assertThat(logCaptor.getValue().getErrorCode()).isEqualTo("PRODUCT_MAPPING_MISSING");
+        verify(distributionExceptionService).recordFailure(
+                org.mockito.ArgumentMatchers.eq("DISTRIBUTION"),
+                any(),
+                any(),
+                any(),
+                org.mockito.ArgumentMatchers.eq("idem-strict-missing-001"),
+                org.mockito.ArgumentMatchers.eq("PRODUCT_MAPPING_MISSING"),
+                org.mockito.ArgumentMatchers.contains("product/SKU is not mapped"));
     }
 
     @Test
@@ -232,6 +316,46 @@ class DistributionEventIngestServiceImplTest {
         assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("SUCCESS");
         assertThat(logCaptor.getValue().getIdempotencyStatus()).isEqualTo("EXCEPTION_QUEUED");
         assertThat(logCaptor.getValue().getRelatedOrderId()).isEqualTo(202L);
+    }
+
+    @Test
+    void shouldDetectTypeConflictWhenSkuMapsTypeWithoutIncomingType() throws Exception {
+        useOrderTypeMapping("""
+                {
+                  "default": "coupon",
+                  "aliases": {
+                    "coupon": "coupon"
+                  },
+                  "rules": [
+                    {
+                      "ruleId": "sku-deposit",
+                      "externalSkuId": "sku_deposit_001",
+                      "internalOrderType": "deposit",
+                      "priority": 10
+                    }
+                  ]
+                }
+                """);
+        when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
+        when(eventLogMapper.selectOne(any())).thenReturn(null);
+        Order existingOrder = existingDistributionOrder();
+        when(orderMapper.selectOne(any())).thenReturn(existingOrder);
+
+        DistributionEventResponse response = service.ingest(readSkuOnlyPayload(), request("idem-sku-conflict-001"));
+
+        assertThat(response.getIdempotencyResult()).isEqualTo("EXCEPTION_QUEUED");
+        verify(orderMapper, never()).updateById(any(Order.class));
+        verify(distributionExceptionService).recordFailure(
+                org.mockito.ArgumentMatchers.eq("DISTRIBUTION"),
+                any(),
+                any(),
+                any(),
+                org.mockito.ArgumentMatchers.eq("idem-sku-conflict-001"),
+                org.mockito.ArgumentMatchers.eq("EXTERNAL_ORDER_CONFLICT"),
+                org.mockito.ArgumentMatchers.contains("type"),
+                org.mockito.ArgumentMatchers.eq(202L),
+                org.mockito.ArgumentMatchers.eq("ORD-DIST-202"),
+                org.mockito.ArgumentMatchers.contains("\"field\":\"type\""));
     }
 
     @Test
@@ -459,6 +583,38 @@ class DistributionEventIngestServiceImplTest {
                 """);
     }
 
+    private JsonNode readSkuOnlyPayload() throws Exception {
+        return objectMapper.readTree("""
+                {
+                  "eventType": "distribution.order.paid",
+                  "eventId": "evt_sku_001",
+                  "partnerCode": "DISTRIBUTION",
+                  "occurredAt": "2026-04-29T10:00:00+08:00",
+                  "member": {
+                    "externalMemberId": "m_10001",
+                    "name": "Zhang San",
+                    "phone": "13800000000",
+                    "role": "member"
+                  },
+                  "promoter": {
+                    "externalPromoterId": "p_90001",
+                    "role": "leader"
+                  },
+                  "order": {
+                    "externalOrderId": "o_20001",
+                    "externalTradeNo": "pay_30001",
+                    "externalSkuId": "sku_deposit_001",
+                    "productName": "Deposit package",
+                    "amount": 19900,
+                    "paidAt": "2026-04-29T09:58:00+08:00",
+                    "storeCode": "store_001",
+                    "status": "paid"
+                  },
+                  "rawData": {}
+                }
+                """);
+    }
+
     private JsonNode readConflictingPaidPayload() throws Exception {
         return objectMapper.readTree("""
                 {
@@ -562,6 +718,18 @@ class DistributionEventIngestServiceImplTest {
         return provider;
     }
 
+    private void useOrderTypeMapping(String mappingJson) {
+        service = new DistributionEventIngestServiceImpl(
+                providerConfigMapper,
+                eventLogMapper,
+                eventLogWriter,
+                distributionExceptionService,
+                customerMapper,
+                orderMapper,
+                objectMapper,
+                new DistributionOrderTypeMappingResolver(objectMapper, new StaticSystemConfigService(mappingJson)));
+    }
+
     private MockHttpServletRequest request(String idempotencyKey) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("X-Partner-Code", "DISTRIBUTION");
@@ -612,5 +780,40 @@ class DistributionEventIngestServiceImplTest {
     }
 
     private static class MockHttpServletRequest extends org.springframework.mock.web.MockHttpServletRequest {
+    }
+
+    private record StaticSystemConfigService(String value) implements SystemConfigService {
+
+        @Override
+        public List<SystemConfigDtos.ConfigResponse> listConfigs(String prefix) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public SystemConfigDtos.ConfigResponse saveConfig(SystemConfigDtos.SaveConfigRequest request,
+                                                          PermissionRequestContext context) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public SystemConfigDtos.DomainSettingsResponse getDomainSettings() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public SystemConfigDtos.DomainSettingsResponse saveDomainSettings(SystemConfigDtos.SaveDomainSettingsRequest request,
+                                                                          PermissionRequestContext context) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean getBoolean(String configKey, boolean defaultValue) {
+            return defaultValue;
+        }
+
+        @Override
+        public String getString(String configKey, String defaultValue) {
+            return value;
+        }
     }
 }

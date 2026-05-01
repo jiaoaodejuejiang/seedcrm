@@ -1,0 +1,10 @@
+springdoc:
+  api-docs:
+    enabled: ${SEEDCRM_OPENAPI_ENABLED:false}
+  swagger-ui:
+    enabled: ${SEEDCRM_OPENAPI_ENABLED:false}
+
+seedcrm:
+  openapi:
+    enabled: ${SEEDCRM_OPENAPI_ENABLED:false}
+    allow-local-without-token: ${SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN:false}

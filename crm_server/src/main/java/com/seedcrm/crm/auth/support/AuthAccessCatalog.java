@@ -47,7 +47,7 @@ public final class AuthAccessCatalog {
             menu(28, "系统设置 / 调度中心", "抖音接口", "/settings/integration/third-party", "SETTING", "setting:douyin:update", "ADMIN", "INTEGRATION_ADMIN"),
             menu(29, "系统设置 / 调度中心", "回调接口", "/settings/integration/callback", "SETTING", "setting:callback:update", "ADMIN", "INTEGRATION_ADMIN", "INTEGRATION_OPERATOR"),
             menu(30, "系统设置 / 调度中心", "任务调度", "/settings/integration/jobs", "SETTING", "setting:scheduler:update", "ADMIN", "INTEGRATION_ADMIN", "INTEGRATION_OPERATOR"),
-            menu(31, "系统设置 / 调度中心", "接口调试", "/settings/integration/debug", "SETTING", "setting:debug:update", "ADMIN", "INTEGRATION_ADMIN", "INTEGRATION_OPERATOR"),
+            menu(31, "系统设置 / 调度中心", "联调工作台", "/settings/integration/debug", "SETTING", "setting:debug:update", "ADMIN", "INTEGRATION_ADMIN", "INTEGRATION_OPERATOR"),
             menu(32, "系统设置 / 调度中心", "对外接口", "/settings/integration/public-api", "SETTING", "setting:public-api:update", "ADMIN", "INTEGRATION_ADMIN"),
             menu(33, "系统设置 / 调度中心", "分销接口", "/settings/integration/distribution-api", "SETTING", "setting:distribution-api:update", "ADMIN", "INTEGRATION_ADMIN", "INTEGRATION_OPERATOR"),
             menu(34, "系统设置 / 基础配置", "字典管理", "/settings/dictionaries", "SETTING", "setting:dictionary:update", "ADMIN"),
@@ -55,7 +55,8 @@ public final class AuthAccessCatalog {
             menu(36, "系统设置 / 基础配置", "支付设置", "/settings/payment", "SETTING", "setting:payment:update", "ADMIN"),
             menu(37, "财务管理 / 薪酬结算", "提现处理", "/finance/salary/withdrawals", "SALARY", "salary:update", "ADMIN", "FINANCE"),
             menu(38, "财务管理 / 薪酬结算", "退款冲正", "/finance/salary/refund-adjustments", "SALARY", "salary:update", "ADMIN", "FINANCE"),
-            menu(39, "系统设置 / 流程配置", "系统流程", "/settings/system-flow", "SETTING", "setting:system-flow:view", "ADMIN")
+            menu(39, "系统设置 / 流程配置", "系统流程", "/settings/system-flow", "SETTING", "setting:system-flow:view", "ADMIN"),
+            menu(40, "系统设置 / 基础配置", "上线工具", "/settings/base/go-live", "SETTING", "setting:go-live:update", "ADMIN")
     );
 
     private AuthAccessCatalog() {

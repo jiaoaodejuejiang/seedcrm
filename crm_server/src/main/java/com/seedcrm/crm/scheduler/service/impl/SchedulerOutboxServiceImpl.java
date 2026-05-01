@@ -26,7 +26,6 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.MediaType;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -145,11 +144,6 @@ public class SchedulerOutboxServiceImpl implements SchedulerOutboxService {
             processOne(event);
         }
         return events.stream().map(item -> outboxEventMapper.selectById(item.getId())).toList();
-    }
-
-    @Scheduled(fixedDelay = 10000, initialDelay = 15000)
-    public void processDueOutboxEvents() {
-        processDue(20);
     }
 
     private void processOne(SchedulerOutboxEvent event) {

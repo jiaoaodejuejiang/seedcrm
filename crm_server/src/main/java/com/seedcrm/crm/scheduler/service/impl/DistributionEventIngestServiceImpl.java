@@ -22,6 +22,8 @@ import com.seedcrm.crm.scheduler.mapper.IntegrationCallbackEventLogMapper;
 import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
 import com.seedcrm.crm.scheduler.service.DistributionEventIngestService;
 import com.seedcrm.crm.scheduler.service.DistributionExceptionService;
+import com.seedcrm.crm.scheduler.support.DistributionOrderTypeMappingResolver;
+import com.seedcrm.crm.scheduler.support.DistributionOrderTypeMappingResolver.ResolvedOrderType;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -66,6 +68,7 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
     private final CustomerMapper customerMapper;
     private final OrderMapper orderMapper;
     private final ObjectMapper objectMapper;
+    private final DistributionOrderTypeMappingResolver orderTypeMappingResolver;
 
     public DistributionEventIngestServiceImpl(IntegrationProviderConfigMapper providerConfigMapper,
                                               IntegrationCallbackEventLogMapper eventLogMapper,
@@ -73,7 +76,8 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
                                               DistributionExceptionService distributionExceptionService,
                                               CustomerMapper customerMapper,
                                               OrderMapper orderMapper,
-                                              ObjectMapper objectMapper) {
+                                              ObjectMapper objectMapper,
+                                              DistributionOrderTypeMappingResolver orderTypeMappingResolver) {
         this.providerConfigMapper = providerConfigMapper;
         this.eventLogMapper = eventLogMapper;
         this.eventLogWriter = eventLogWriter;
@@ -81,6 +85,9 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         this.customerMapper = customerMapper;
         this.orderMapper = orderMapper;
         this.objectMapper = objectMapper;
+        this.orderTypeMappingResolver = orderTypeMappingResolver == null
+                ? new DistributionOrderTypeMappingResolver(objectMapper, null)
+                : orderTypeMappingResolver;
     }
 
     @Override
@@ -176,10 +183,11 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         String externalOrderId = requireText(orderPayload.getExternalOrderId(), "externalOrderId is required");
         String externalMemberId = requireText(member.getExternalMemberId(), "externalMemberId is required");
         String phone = requireText(member.getPhone(), "member.phone is required");
+        ResolvedOrderType mappedOrderType = resolveMappedOrderType(partnerCode, orderPayload);
 
         Order existingOrder = findOrder(partnerCode, externalOrderId);
         if (existingOrder != null) {
-            List<ConflictDetail> conflicts = detectExistingOrderConflicts(existingOrder, event);
+            List<ConflictDetail> conflicts = detectExistingOrderConflicts(existingOrder, event, mappedOrderType);
             if (!conflicts.isEmpty()) {
                 String message = "duplicate external order conflict: "
                         + String.join("; ", conflicts.stream().map(ConflictDetail::detail).toList());
@@ -269,7 +277,7 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         order.setExternalStatus(firstNonBlank(orderPayload.getStatus(), "paid"));
         order.setRefundStatus(trimToNull(orderPayload.getRefundStatus()));
         order.setRawData(rawPayload);
-        order.setType(resolveOrderType(orderPayload.getType()));
+        order.setType(mappedOrderType.code());
         order.setAmount(scaleMoneyFromCent(orderPayload.getAmount()));
         order.setDeposit(resolveDeposit(order));
         order.setStatus(OrderStatus.PAID_DEPOSIT.name());
@@ -283,7 +291,9 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
                 "distribution paid order created");
     }
 
-    private List<ConflictDetail> detectExistingOrderConflicts(Order existingOrder, DistributionEventRequest event) {
+    private List<ConflictDetail> detectExistingOrderConflicts(Order existingOrder,
+                                                              DistributionEventRequest event,
+                                                              ResolvedOrderType mappedOrderType) {
         List<ConflictDetail> conflicts = new ArrayList<>();
         if (existingOrder == null || event == null) {
             return conflicts;
@@ -293,12 +303,13 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
 
         addTextConflict(conflicts, "externalTradeNo", existingOrder.getExternalTradeNo(), orderPayload.getExternalTradeNo());
         addTextConflict(conflicts, "externalMemberId", existingOrder.getExternalMemberId(), member.getExternalMemberId());
-        if (StringUtils.hasText(orderPayload.getType())
+        boolean shouldCompareType = StringUtils.hasText(orderPayload.getType()) || mappedOrderType.productIdentityPresent();
+        if (shouldCompareType
                 && existingOrder.getType() != null
-                && existingOrder.getType() != resolveOrderType(orderPayload.getType())) {
+                && existingOrder.getType() != mappedOrderType.code()) {
             addConflict(conflicts, "type", "订单类型",
                     OrderType.toApiValue(existingOrder.getType()),
-                    normalizeLower(orderPayload.getType()));
+                    mappedOrderType.apiValue());
         }
         if (orderPayload.getAmount() != null && existingOrder.getAmount() != null) {
             BigDecimal incomingAmount = scaleMoneyFromCent(orderPayload.getAmount());
@@ -692,12 +703,12 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         return value.trim();
     }
 
-    private int resolveOrderType(String type) {
-        String normalized = normalizeLower(type);
-        if ("deposit".equals(normalized)) {
-            return OrderType.DEPOSIT.getCode();
+    private ResolvedOrderType resolveMappedOrderType(String partnerCode, DistributionOrderPayload orderPayload) {
+        ResolvedOrderType resolved = orderTypeMappingResolver.resolve(partnerCode, SOURCE_CHANNEL_DISTRIBUTOR, orderPayload);
+        if (resolved.missingProductRule()) {
+            throw new BusinessException("distribution product/SKU is not mapped to order type");
         }
-        return OrderType.COUPON.getCode();
+        return resolved;
     }
 
     private BigDecimal resolveDeposit(Order order) {
@@ -832,6 +843,9 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         }
         if (message.contains("provider is not configured") || message.contains("provider is disabled")) {
             return new FailureLogMeta("PROVIDER_INVALID", null);
+        }
+        if (message.contains("product/sku is not mapped")) {
+            return new FailureLogMeta("PRODUCT_MAPPING_MISSING", null);
         }
         if (message.contains("partner code mismatch")) {
             return new FailureLogMeta("PARTNER_MISMATCH", null);

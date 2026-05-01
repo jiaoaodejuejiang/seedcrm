@@ -46,6 +46,21 @@ class OpenApiDocsAccessFilterTest {
     }
 
     @Test
+    void shouldBlockIntegrationOperatorFromAdminOpenApiGroups() throws Exception {
+        AuthService authService = mock(AuthService.class);
+        OpenApiDocsAccessFilter filter = filter(authService, false);
+        MockHttpServletRequest request = request("/v3/api-docs/scheduler-admin", "203.0.113.10");
+        request.addHeader("X-Auth-Token", "operator-token");
+        when(authService.resolve("operator-token")).thenReturn(Optional.of(user("INTEGRATION_OPERATOR")));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentAsString()).contains("分销 OpenAPI");
+    }
+
+    @Test
     void shouldAllowIntegrationAdminForRemoteSwaggerDocs() throws Exception {
         AuthService authService = mock(AuthService.class);
         OpenApiDocsAccessFilter filter = filter(authService, false);

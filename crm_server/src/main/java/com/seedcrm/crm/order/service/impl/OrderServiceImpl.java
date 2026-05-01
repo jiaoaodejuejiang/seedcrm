@@ -29,6 +29,8 @@ import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.order.mapper.OrderRefundRecordMapper;
 import com.seedcrm.crm.order.service.OrderSettlementService;
 import com.seedcrm.crm.order.service.OrderService;
+import com.seedcrm.crm.order.support.OrderAmountMaskingSupport;
+import com.seedcrm.crm.order.support.ServiceFormVersionSupport;
 import com.seedcrm.crm.order.util.OrderNoGenerator;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
@@ -43,8 +45,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -57,6 +64,15 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     private static final String REFUND_SCENE_STORE_SERVICE = "STORE_SERVICE";
     private static final String REFUND_SCENE_FINANCE_PAYMENT = "FINANCE_VERIFIED_PAYMENT";
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter ACTION_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final Set<String> ACTIVE_APPOINTMENT_ACTIONS = Set.of(
+            "APPOINTMENT_CREATE",
+            "APPOINTMENT_CHANGE");
+    private static final Set<String> ACTIVE_APPOINTMENT_ORDER_STATUSES = Set.of(
+            OrderStatus.APPOINTMENT.name(),
+            OrderStatus.ARRIVED.name(),
+            OrderStatus.SERVING.name());
     private static final Set<String> STORE_PERFORMANCE_ROLES = Set.of(
             "STORE_SERVICE",
             "STORE_MANAGER",
@@ -69,6 +85,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             "CONSULTANT",
             "DISTRIBUTOR",
             "DISTRIBUTION");
+
+    private record AppointmentActionSnapshot(List<LocalDateTime> slots, Integer headcount) {
+    }
 
     private final OrderMapper orderMapper;
     private final ClueMapper clueMapper;
@@ -178,24 +197,31 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Transactional
     public Order appointment(OrderAppointmentDTO orderAppointmentDTO, Long operatorUserId, String operatorRoleCode) {
         validateOrderId(orderAppointmentDTO == null ? null : orderAppointmentDTO.getOrderId());
-        if (orderAppointmentDTO.getAppointmentTime() == null) {
-            throw new BusinessException("appointmentTime is required");
-        }
+        List<LocalDateTime> nextAppointmentSlots = normalizeAppointmentSlots(orderAppointmentDTO);
+        LocalDateTime nextAppointmentTime = nextAppointmentSlots.get(0);
+        Integer nextHeadcount = resolveAppointmentHeadcount(
+                orderAppointmentDTO == null ? null : orderAppointmentDTO.getHeadcount(),
+                nextAppointmentSlots.size());
 
         Order order = dbLockService.lockOrder(orderAppointmentDTO.getOrderId());
         ensureOrderCustomerBound(order);
         OrderStatus currentStatus = getCurrentStatus(order);
-        LocalDateTime previousAppointmentTime = order.getAppointmentTime();
+        AppointmentActionSnapshot previousSnapshot = currentStatus == OrderStatus.APPOINTMENT
+                ? resolveCurrentAppointmentSnapshot(order)
+                : new AppointmentActionSnapshot(List.of(), 0);
+        LocalDateTime previousAppointmentTime = previousSnapshot.slots().isEmpty()
+                ? order.getAppointmentTime()
+                : previousSnapshot.slots().get(0);
         String previousStoreName = firstText(order.getAppointmentStoreName(), orderAppointmentDTO.getPreviousStoreName());
         String nextStoreName = firstText(orderAppointmentDTO.getStoreName(), previousStoreName);
         if (!StringUtils.hasText(nextStoreName)) {
             throw new BusinessException("appointment storeName is required");
         }
-        assertAppointmentSlotAvailable(order.getId(), nextStoreName, orderAppointmentDTO.getAppointmentTime());
+        assertAppointmentSlotsAvailable(order.getId(), nextStoreName, nextAppointmentSlots);
         if (currentStatus != OrderStatus.APPOINTMENT) {
             assertNextStatus(order, OrderStatus.APPOINTMENT);
         }
-        order.setAppointmentTime(orderAppointmentDTO.getAppointmentTime());
+        order.setAppointmentTime(nextAppointmentTime);
         order.setAppointmentStoreName(nextStoreName);
         updateRemark(order, orderAppointmentDTO.getRemark());
         Order updated = updateOrderStatus(order, OrderStatus.APPOINTMENT);
@@ -208,10 +234,16 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 reschedule ? "更改预约档期" : "预约排档",
                 buildAppointmentActionExtra(
                         previousAppointmentTime,
-                        orderAppointmentDTO.getAppointmentTime(),
+                        nextAppointmentTime,
+                        previousSnapshot.slots(),
+                        nextAppointmentSlots,
+                        previousSnapshot.headcount(),
+                        nextHeadcount,
                         previousStoreName,
                         nextStoreName,
-                        orderAppointmentDTO.getRemark()));
+                        orderAppointmentDTO.getRemark(),
+                        operatorRoleCode,
+                        resolveAppointmentSourceSurface(orderAppointmentDTO.getSourceSurface())));
         systemFlowRuntimeBridge.recordOrderAction(updated, "ORDER_PAID", "ORDER_APPOINTMENT",
                 operatorUserId, operatorRoleCode, reschedule ? "更改预约档期" : "预约门店档期");
         return updated;
@@ -232,7 +264,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (getCurrentStatus(order) != OrderStatus.APPOINTMENT) {
             throw new BusinessException("only appointment order can cancel appointment");
         }
-        LocalDateTime previousAppointmentTime = order.getAppointmentTime();
+        AppointmentActionSnapshot previousSnapshot = resolveCurrentAppointmentSnapshot(order);
+        LocalDateTime previousAppointmentTime = previousSnapshot.slots().isEmpty()
+                ? order.getAppointmentTime()
+                : previousSnapshot.slots().get(0);
         String previousStoreName = order.getAppointmentStoreName();
         order.setAppointmentTime(null);
         order.setAppointmentStoreName(null);
@@ -244,8 +279,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 OrderStatus.PAID_DEPOSIT.name(),
                 operatorUserId,
                 "取消预约排档",
-                buildAppointmentActionExtra(previousAppointmentTime, null, previousStoreName, null,
-                        orderActionDTO == null ? null : orderActionDTO.getRemark()));
+                buildAppointmentActionExtra(
+                        previousAppointmentTime,
+                        null,
+                        previousSnapshot.slots(),
+                        List.of(),
+                        previousSnapshot.headcount(),
+                        0,
+                        previousStoreName,
+                        null,
+                        orderActionDTO == null ? null : orderActionDTO.getRemark(),
+                        operatorRoleCode,
+                        resolveAppointmentSourceSurface(orderActionDTO == null ? null : orderActionDTO.getSourceSurface())));
         systemFlowRuntimeBridge.recordOrderAction(updated, "APPOINTMENT", "ORDER_APPOINTMENT_CANCEL",
                 operatorUserId, operatorRoleCode, "取消预约排档");
         return updated;
@@ -410,7 +455,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setRemark(StringUtils.hasText(orderServiceDetailDTO.getServiceRequirement())
                 ? orderServiceDetailDTO.getServiceRequirement().trim()
                 : null);
-        order.setServiceDetailJson(normalizeServiceDetailJson(orderServiceDetailDTO));
+        order.setServiceDetailJson(normalizeServiceDetailJson(orderServiceDetailDTO, order.getServiceDetailJson()));
         order.setUpdateTime(LocalDateTime.now());
         if (orderMapper.updateById(order) <= 0) {
             throw new BusinessException("failed to update order service detail");
@@ -419,12 +464,14 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         return order;
     }
 
-    private String normalizeServiceDetailJson(OrderServiceDetailDTO orderServiceDetailDTO) {
+    private String normalizeServiceDetailJson(OrderServiceDetailDTO orderServiceDetailDTO, String originalServiceDetailJson) {
         ObjectNode root = createServiceDetailRoot(orderServiceDetailDTO == null ? null : orderServiceDetailDTO.getServiceDetailJson());
+        OrderAmountMaskingSupport.restoreMaskedAmountFields(root, originalServiceDetailJson, objectMapper);
         ObjectNode templateSnapshot = buildServiceTemplateSnapshot(orderServiceDetailDTO);
         if (templateSnapshot != null && !templateSnapshot.isEmpty()) {
             root.set("serviceTemplate", templateSnapshot);
         }
+        ServiceFormVersionSupport.reconcileStateAfterSave(root, originalServiceDetailJson, objectMapper);
         if (root.isEmpty()) {
             return null;
         }
@@ -652,18 +699,191 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
     }
 
-    private void assertAppointmentSlotAvailable(Long orderId, String storeName, LocalDateTime appointmentTime) {
-        if (!StringUtils.hasText(storeName) || appointmentTime == null) {
+    private List<LocalDateTime> normalizeAppointmentSlots(OrderAppointmentDTO orderAppointmentDTO) {
+        if (orderAppointmentDTO == null) {
+            throw new BusinessException("appointment request is required");
+        }
+        LinkedHashSet<LocalDateTime> slots = new LinkedHashSet<>();
+        if (orderAppointmentDTO.getAppointmentTime() != null) {
+            slots.add(orderAppointmentDTO.getAppointmentTime());
+        }
+        if (orderAppointmentDTO.getAppointmentSlots() != null) {
+            for (LocalDateTime slot : orderAppointmentDTO.getAppointmentSlots()) {
+                if (slot != null) {
+                    slots.add(slot);
+                }
+            }
+        }
+        if (slots.isEmpty()) {
+            throw new BusinessException("appointmentTime is required");
+        }
+        if (slots.size() > 20) {
+            throw new BusinessException("appointment slots cannot exceed 20");
+        }
+        return new ArrayList<>(slots);
+    }
+
+    private Integer resolveAppointmentHeadcount(Integer headcount, int slotCount) {
+        int normalizedHeadcount = headcount == null ? slotCount : headcount;
+        if (normalizedHeadcount <= 0) {
+            throw new BusinessException("headcount must be greater than 0");
+        }
+        if (normalizedHeadcount != slotCount) {
+            throw new BusinessException("appointment slots must match headcount");
+        }
+        return normalizedHeadcount;
+    }
+
+    private void assertAppointmentSlotsAvailable(Long orderId, String storeName, List<LocalDateTime> appointmentSlots) {
+        if (!StringUtils.hasText(storeName) || appointmentSlots == null || appointmentSlots.isEmpty()) {
             return;
         }
         Long conflictCount = orderMapper.selectCount(new LambdaQueryWrapper<Order>()
                 .ne(orderId != null, Order::getId, orderId)
-                .eq(Order::getStatus, OrderStatus.APPOINTMENT.name())
+                .in(Order::getStatus, ACTIVE_APPOINTMENT_ORDER_STATUSES)
                 .eq(Order::getAppointmentStoreName, storeName.trim())
-                .eq(Order::getAppointmentTime, appointmentTime));
+                .in(Order::getAppointmentTime, appointmentSlots));
         if (conflictCount != null && conflictCount > 0) {
             throw new BusinessException("appointment slot already occupied");
         }
+
+        List<Order> activeOrders = orderMapper.selectList(new LambdaQueryWrapper<Order>()
+                .ne(orderId != null, Order::getId, orderId)
+                .in(Order::getStatus, ACTIVE_APPOINTMENT_ORDER_STATUSES)
+                .eq(Order::getAppointmentStoreName, storeName.trim()));
+        if (activeOrders == null || activeOrders.isEmpty()) {
+            return;
+        }
+
+        Set<LocalDateTime> requestedSlots = new LinkedHashSet<>(appointmentSlots);
+        List<Long> activeOrderIds = activeOrders.stream()
+                .map(Order::getId)
+                .filter(id -> id != null && id > 0)
+                .toList();
+        Map<Long, AppointmentActionSnapshot> snapshots = loadLatestAppointmentSnapshots(activeOrderIds);
+        for (Order activeOrder : activeOrders) {
+            AppointmentActionSnapshot snapshot = snapshots.get(activeOrder.getId());
+            List<LocalDateTime> occupiedSlots = snapshot == null || snapshot.slots().isEmpty()
+                    ? fallbackAppointmentSlots(activeOrder)
+                    : snapshot.slots();
+            for (LocalDateTime occupiedSlot : occupiedSlots) {
+                if (requestedSlots.contains(occupiedSlot)) {
+                    throw new BusinessException("appointment slot already occupied");
+                }
+            }
+        }
+    }
+
+    private AppointmentActionSnapshot resolveCurrentAppointmentSnapshot(Order order) {
+        if (order == null || order.getId() == null) {
+            return new AppointmentActionSnapshot(List.of(), 0);
+        }
+        AppointmentActionSnapshot snapshot = loadLatestAppointmentSnapshots(List.of(order.getId())).get(order.getId());
+        List<LocalDateTime> slots = snapshot == null || snapshot.slots().isEmpty()
+                ? fallbackAppointmentSlots(order)
+                : snapshot.slots();
+        Integer headcount = snapshot == null || snapshot.headcount() == null || snapshot.headcount() <= 0
+                ? slots.size()
+                : snapshot.headcount();
+        return new AppointmentActionSnapshot(slots, headcount);
+    }
+
+    private List<LocalDateTime> fallbackAppointmentSlots(Order order) {
+        if (order == null || order.getAppointmentTime() == null) {
+            return List.of();
+        }
+        return List.of(order.getAppointmentTime());
+    }
+
+    private Map<Long, AppointmentActionSnapshot> loadLatestAppointmentSnapshots(List<Long> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return Map.of();
+        }
+        List<OrderActionRecord> records = orderActionRecordMapper.selectList(new LambdaQueryWrapper<OrderActionRecord>()
+                .in(OrderActionRecord::getOrderId, orderIds)
+                .in(OrderActionRecord::getActionType, ACTIVE_APPOINTMENT_ACTIONS)
+                .orderByDesc(OrderActionRecord::getCreateTime)
+                .orderByDesc(OrderActionRecord::getId));
+        Map<Long, AppointmentActionSnapshot> snapshots = new LinkedHashMap<>();
+        if (records == null || records.isEmpty()) {
+            return snapshots;
+        }
+        for (OrderActionRecord record : records) {
+            if (record.getOrderId() == null || snapshots.containsKey(record.getOrderId())) {
+                continue;
+            }
+            snapshots.put(record.getOrderId(), buildAppointmentSnapshot(record));
+        }
+        return snapshots;
+    }
+
+    private AppointmentActionSnapshot buildAppointmentSnapshot(OrderActionRecord record) {
+        if (record == null || !StringUtils.hasText(record.getExtraJson())) {
+            return new AppointmentActionSnapshot(List.of(), 0);
+        }
+        try {
+            JsonNode root = objectMapper.readTree(record.getExtraJson());
+            List<LocalDateTime> slots = parseAppointmentSlots(root.path("appointmentSlotsAfter"));
+            if (slots.isEmpty()) {
+                LocalDateTime slot = parseAppointmentDateTime(root.path("appointmentTimeAfter").asText(null));
+                slots = slot == null ? List.of() : List.of(slot);
+            }
+            Integer headcount = positiveInteger(root.path("headcountAfter"));
+            if (headcount == null) {
+                headcount = positiveInteger(root.path("slotCountAfter"));
+            }
+            return new AppointmentActionSnapshot(slots, headcount == null ? slots.size() : headcount);
+        } catch (Exception exception) {
+            return new AppointmentActionSnapshot(List.of(), 0);
+        }
+    }
+
+    private List<LocalDateTime> parseAppointmentSlots(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return List.of();
+        }
+        List<LocalDateTime> slots = new ArrayList<>();
+        if (node.isArray()) {
+            for (JsonNode item : node) {
+                LocalDateTime parsed = parseAppointmentDateTime(item.asText(null));
+                if (parsed != null) {
+                    slots.add(parsed);
+                }
+            }
+            return slots;
+        }
+        LocalDateTime parsed = parseAppointmentDateTime(node.asText(null));
+        return parsed == null ? List.of() : List.of(parsed);
+    }
+
+    private LocalDateTime parseAppointmentDateTime(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim().replace('T', ' ');
+        if (normalized.length() == 16) {
+            normalized = normalized + ":00";
+        }
+        if (normalized.length() > 19) {
+            normalized = normalized.substring(0, 19);
+        }
+        try {
+            return LocalDateTime.parse(normalized, DATE_TIME_FORMATTER);
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    private Integer positiveInteger(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        int value = node.isNumber() ? node.asInt() : Integer.parseInt(node.asText("0"));
+        return value > 0 ? value : null;
+    }
+
+    private String resolveAppointmentSourceSurface(String sourceSurface) {
+        return StringUtils.hasText(sourceSurface) ? sourceSurface.trim() : "CUSTOMER_SCHEDULE";
     }
 
     private void ensurePlanOrderFinished(Long orderId) {
@@ -714,9 +934,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (isDirectDepositVerification(verificationMethod)) {
             return "DIRECT-DEPOSIT-" + orderId;
         }
-        String normalized = StringUtils.hasText(verificationCode)
-                ? verificationCode.trim()
-                : "MOCK-" + orderId;
+        if (!StringUtils.hasText(verificationCode)) {
+            throw new BusinessException("verification code is required");
+        }
+        String normalized = verificationCode.trim();
         if (normalized.length() < 4) {
             throw new BusinessException("verification code is invalid");
         }
@@ -814,20 +1035,43 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     private String buildAppointmentActionExtra(LocalDateTime previousAppointmentTime,
                                                LocalDateTime nextAppointmentTime,
+                                               List<LocalDateTime> previousAppointmentSlots,
+                                               List<LocalDateTime> nextAppointmentSlots,
+                                               Integer previousHeadcount,
+                                               Integer nextHeadcount,
                                                String previousStoreName,
                                                String storeName,
-                                               String remark) {
+                                               String remark,
+                                               String operatorRoleCode,
+                                               String sourceSurface) {
         return "{"
                 + "\"appointmentTimeBefore\":" + jsonString(formatDateTime(previousAppointmentTime))
                 + ",\"appointmentTimeAfter\":" + jsonString(formatDateTime(nextAppointmentTime))
+                + ",\"appointmentSlotsBefore\":" + jsonStringArray(formatDateTimes(previousAppointmentSlots))
+                + ",\"appointmentSlotsAfter\":" + jsonStringArray(formatDateTimes(nextAppointmentSlots))
+                + ",\"headcountBefore\":" + jsonNumber(previousHeadcount)
+                + ",\"headcountAfter\":" + jsonNumber(nextHeadcount)
+                + ",\"slotCountBefore\":" + jsonNumber(previousAppointmentSlots == null ? 0 : previousAppointmentSlots.size())
+                + ",\"slotCountAfter\":" + jsonNumber(nextAppointmentSlots == null ? 0 : nextAppointmentSlots.size())
                 + ",\"storeNameBefore\":" + jsonString(previousStoreName)
                 + ",\"storeNameAfter\":" + jsonString(storeName)
+                + ",\"operatorRoleCode\":" + jsonString(operatorRoleCode)
+                + ",\"sourceSurface\":" + jsonString(sourceSurface)
                 + ",\"remark\":" + jsonString(remark)
                 + "}";
     }
 
     private String formatDateTime(LocalDateTime value) {
-        return value == null ? null : value.toString().replace('T', ' ');
+        return value == null ? null : value.format(ACTION_TIME_FORMATTER);
+    }
+
+    private List<String> formatDateTimes(List<LocalDateTime> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .map(value -> value == null ? null : value.format(DATE_TIME_FORMATTER))
+                .toList();
     }
 
     private void validateRefundRequest(Order order, OrderActionDTO orderActionDTO) {
@@ -1129,6 +1373,24 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     private String jsonNumber(BigDecimal value) {
         return value == null ? "null" : value.stripTrailingZeros().toPlainString();
+    }
+
+    private String jsonNumber(Integer value) {
+        return value == null ? "null" : String.valueOf(value);
+    }
+
+    private String jsonStringArray(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return "[]";
+        }
+        StringBuilder builder = new StringBuilder("[");
+        for (int index = 0; index < values.size(); index += 1) {
+            if (index > 0) {
+                builder.append(',');
+            }
+            builder.append(jsonString(values.get(index)));
+        }
+        return builder.append(']').toString();
     }
 
     private String jsonString(String value) {

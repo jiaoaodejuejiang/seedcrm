@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class OrderPermissionGuard {
 
+    private static final String FINANCE_ROLE_CODE = "FINANCE";
+
     private final PermissionService permissionService;
     private final AuthService authService;
     private final OrderPermissionResourceResolver resourceResolver;
@@ -24,12 +26,14 @@ public class OrderPermissionGuard {
     }
 
     public void checkCreate(PermissionRequestContext context, OrderCreateDTO request) {
+        rejectFinanceBusinessMutation(context, "order create denied");
         Long clueOwnerId = resourceResolver.resolveClueOwnerId(request == null ? null : request.getClueId());
         PermissionCheckRequest checkRequest = buildCheckRequest(context, "ORDER", "UPDATE", clueOwnerId);
         assertAllowed(permissionService.check(checkRequest), "order create denied");
     }
 
     public void checkUpdate(PermissionRequestContext context, Long orderId) {
+        rejectFinanceBusinessMutation(context, "order update denied");
         PermissionCheckRequest checkRequest = buildCheckRequest(context, "ORDER", "UPDATE",
                 resolveResourceOwnerId(context, orderId));
         assertAllowed(permissionService.check(checkRequest), "order update denied");
@@ -50,6 +54,7 @@ public class OrderPermissionGuard {
     }
 
     public void checkFinish(PermissionRequestContext context, Long orderId) {
+        rejectFinanceBusinessMutation(context, "order finish denied");
         PermissionCheckRequest checkRequest = buildCheckRequest(context, "ORDER", "FINISH",
                 resolveResourceOwnerId(context, orderId));
         assertAllowed(permissionService.check(checkRequest), "order finish denied");
@@ -88,6 +93,14 @@ public class OrderPermissionGuard {
     private String resolveRefundActionCode(String refundScene) {
         String normalizedScene = refundScene == null ? "" : refundScene.trim().toUpperCase();
         return "FINANCE_VERIFIED_PAYMENT".equals(normalizedScene) ? "REFUND_PAYMENT" : "REFUND_STORE";
+    }
+
+    private void rejectFinanceBusinessMutation(PermissionRequestContext context, String messagePrefix) {
+        if (context != null
+                && context.getRoleCode() != null
+                && FINANCE_ROLE_CODE.equalsIgnoreCase(context.getRoleCode().trim())) {
+            throw new BusinessException(messagePrefix + ": finance role is ledger-only and cannot mutate service flow");
+        }
     }
 
     private Long resolveResourceOwnerId(PermissionRequestContext context, Long orderId) {

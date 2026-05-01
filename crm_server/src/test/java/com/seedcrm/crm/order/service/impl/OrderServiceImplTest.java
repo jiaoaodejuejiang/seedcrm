@@ -30,6 +30,7 @@ import com.seedcrm.crm.order.mapper.OrderActionRecordMapper;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.order.mapper.OrderRefundRecordMapper;
 import com.seedcrm.crm.order.service.OrderSettlementService;
+import com.seedcrm.crm.order.support.ServiceFormVersionSupport;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
@@ -38,6 +39,7 @@ import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
 import com.seedcrm.crm.systemflow.support.SystemFlowRuntimeBridge;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -138,7 +140,7 @@ class OrderServiceImplTest {
     }
 
     @Test
-    void createOrderShouldNormalizeCouponTypeAndDefaultFullDeposit() {
+    void createOrderShouldKeepDistributionProductTypeWithoutDefaultDeposit() {
         Customer customer = new Customer();
         customer.setId(301L);
         when(customerService.getByIdOrThrow(301L)).thenReturn(customer);
@@ -155,9 +157,9 @@ class OrderServiceImplTest {
 
         Order order = orderService.createOrder(dto);
 
-        assertThat(order.getType()).isEqualTo(2);
-        assertThat(order.getDeposit()).isEqualByComparingTo("1280.00");
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID_DEPOSIT.name());
+        assertThat(order.getType()).isEqualTo(3);
+        assertThat(order.getDeposit()).isEqualByComparingTo("0");
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CREATED.name());
     }
 
     @Test
@@ -216,6 +218,45 @@ class OrderServiceImplTest {
         assertThat(updated.getCustomerId()).isEqualTo(201L);
         assertThat(updated.getStatus()).isEqualTo(OrderStatus.PAID_DEPOSIT.name());
         verify(customerService).refreshCustomerLifecycle(201L);
+    }
+
+    @Test
+    void appointmentShouldRecordHeadcountSlotsAndSourceSurface() throws Exception {
+        Order order = new Order();
+        order.setId(55L);
+        order.setOrderNo("ORD202604211234567955");
+        order.setCustomerId(255L);
+        order.setStatus(OrderStatus.PAID_DEPOSIT.name());
+        when(dbLockService.lockOrder(55L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(255L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderAppointmentDTO dto = new OrderAppointmentDTO();
+        dto.setOrderId(55L);
+        dto.setAppointmentTime(LocalDateTime.of(2026, 4, 26, 10, 0));
+        dto.setAppointmentSlots(List.of(
+                LocalDateTime.of(2026, 4, 26, 10, 0),
+                LocalDateTime.of(2026, 4, 26, 11, 0)));
+        dto.setHeadcount(2);
+        dto.setStoreName("Store B");
+        dto.setSourceSurface("CUSTOMER_SCHEDULE");
+        dto.setRemark("two customers");
+
+        Order updated = orderService.appointment(dto, 9001L, "CLUE_MANAGER");
+
+        assertThat(updated.getStatus()).isEqualTo(OrderStatus.APPOINTMENT.name());
+        assertThat(updated.getAppointmentTime()).isEqualTo(LocalDateTime.of(2026, 4, 26, 10, 0));
+        ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
+        verify(orderActionRecordMapper).insert(recordCaptor.capture());
+        assertThat(recordCaptor.getValue().getActionType()).isEqualTo("APPOINTMENT_CREATE");
+        JsonNode extra = new ObjectMapper().readTree(recordCaptor.getValue().getExtraJson());
+        assertThat(extra.path("headcountBefore").asInt()).isZero();
+        assertThat(extra.path("headcountAfter").asInt()).isEqualTo(2);
+        assertThat(extra.path("slotCountAfter").asInt()).isEqualTo(2);
+        assertThat(extra.path("appointmentSlotsAfter").get(0).asText()).isEqualTo("2026-04-26 10:00:00");
+        assertThat(extra.path("appointmentSlotsAfter").get(1).asText()).isEqualTo("2026-04-26 11:00:00");
+        assertThat(extra.path("operatorRoleCode").asText()).isEqualTo("CLUE_MANAGER");
+        assertThat(extra.path("sourceSurface").asText()).isEqualTo("CUSTOMER_SCHEDULE");
     }
 
     @Test
@@ -525,6 +566,86 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void updateServiceDetailShouldRestoreMaskedAmountsWhenRestrictedRoleSaves() throws Exception {
+        Order order = new Order();
+        order.setId(66L);
+        order.setCustomerId(266L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson("{\"serviceRequirement\":\"old\",\"serviceConfirmAmount\":1288.00,\"serviceTemplate\":{\"config\":{\"price\":99}}}");
+        when(orderMapper.selectById(66L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(266L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderServiceDetailDTO dto = new OrderServiceDetailDTO();
+        dto.setOrderId(66L);
+        dto.setServiceRequirement("updated");
+        dto.setServiceDetailJson("{\"_amountsMasked\":true,\"serviceRequirement\":\"updated\",\"serviceConfirmAmount\":null,\"serviceTemplate\":{\"config\":{\"price\":null}}}");
+
+        Order updated = orderService.updateServiceDetail(dto);
+
+        JsonNode root = new ObjectMapper().readTree(updated.getServiceDetailJson());
+        assertThat(root.has("_amountsMasked")).isFalse();
+        assertThat(root.path("serviceRequirement").asText()).isEqualTo("updated");
+        assertThat(root.path("serviceConfirmAmount").decimalValue()).isEqualByComparingTo("1288.00");
+        assertThat(root.path("serviceTemplate").path("config").path("price").asInt()).isEqualTo(99);
+    }
+
+    @Test
+    void updateServiceDetailShouldPreservePrintAuditWhenPrintableContentUnchanged() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        String originalDetail = printedServiceDetail(mapper, "same content", true);
+        Order order = new Order();
+        order.setId(67L);
+        order.setCustomerId(267L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson(originalDetail);
+        when(orderMapper.selectById(67L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(267L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderServiceDetailDTO dto = new OrderServiceDetailDTO();
+        dto.setOrderId(67L);
+        dto.setServiceRequirement("same content");
+        dto.setServiceDetailJson("{\"serviceRequirement\":\"same content\"}");
+
+        Order updated = orderService.updateServiceDetail(dto);
+
+        JsonNode root = mapper.readTree(updated.getServiceDetailJson());
+        assertThat(root.path("printAudit").path("status").asText()).isEqualTo("PRINTED");
+        assertThat(root.path("confirmation").path("status").asText()).isEqualTo("PRINT_CONFIRMED");
+        assertThat(root.path("serviceFormStatus").asText()).isEqualTo("PRINT_CONFIRMED");
+    }
+
+    @Test
+    void updateServiceDetailShouldExpirePrintAuditWhenPrintableContentChanged() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        String originalDetail = printedServiceDetail(mapper, "old content", true);
+        Order order = new Order();
+        order.setId(68L);
+        order.setCustomerId(268L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson(originalDetail);
+        when(orderMapper.selectById(68L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(268L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderServiceDetailDTO dto = new OrderServiceDetailDTO();
+        dto.setOrderId(68L);
+        dto.setServiceRequirement("new content");
+        dto.setServiceDetailJson("{\"serviceRequirement\":\"new content\"}");
+
+        Order updated = orderService.updateServiceDetail(dto);
+
+        JsonNode root = mapper.readTree(updated.getServiceDetailJson());
+        assertThat(root.path("printAudit").path("status").asText()).isEqualTo("STALE");
+        assertThat(root.has("confirmation")).isFalse();
+        assertThat(root.has("serviceFormStatus")).isFalse();
+    }
+
+    @Test
     void updateServiceDetailShouldPersistServiceTemplateSnapshot() throws Exception {
         Order order = new Order();
         order.setId(16L);
@@ -574,6 +695,72 @@ class OrderServiceImplTest {
         assertThatThrownBy(() -> orderService.verifyVoucher(dto, 9001L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("only paid orders can be verified");
+    }
+
+    @Test
+    void verifyVoucherShouldRequireCodeForCouponOrder() {
+        Order order = new Order();
+        order.setId(81L);
+        order.setCustomerId(281L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setType(2);
+        when(dbLockService.lockOrder(81L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(281L)).thenReturn(new Customer());
+
+        OrderVoucherVerifyDTO dto = new OrderVoucherVerifyDTO();
+        dto.setOrderId(81L);
+        dto.setVerificationMethod("CODE");
+
+        assertThatThrownBy(() -> orderService.verifyVoucher(dto, 9001L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("verification code is required");
+        verify(orderMapper, never()).updateById(any(Order.class));
+    }
+
+    @Test
+    void verifyVoucherShouldAllowDirectDepositWithoutSubmittedCode() {
+        Order order = new Order();
+        order.setId(82L);
+        order.setCustomerId(282L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setType(1);
+        when(dbLockService.lockOrder(82L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(282L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderVoucherVerifyDTO dto = new OrderVoucherVerifyDTO();
+        dto.setOrderId(82L);
+        dto.setVerificationMethod("DIRECT_DEPOSIT");
+
+        Order updated = orderService.verifyVoucher(dto, 9001L);
+
+        assertThat(updated.getVerificationStatus()).isEqualTo("VERIFIED");
+        assertThat(updated.getVerificationCode()).isEqualTo("DIRECT-DEPOSIT-82");
+    }
+
+    private String printedServiceDetail(ObjectMapper mapper, String serviceRequirement, boolean confirmed) {
+        ObjectNode root = mapper.createObjectNode();
+        root.put("serviceRequirement", serviceRequirement);
+        String hash = ServiceFormVersionSupport.printableHash(root, mapper);
+        ObjectNode printAudit = mapper.createObjectNode();
+        printAudit.put("status", ServiceFormVersionSupport.PRINT_STATUS_PRINTED);
+        printAudit.put("serviceDetailHash", hash);
+        printAudit.put("projectionVersion", ServiceFormVersionSupport.PROJECTION_VERSION);
+        printAudit.put("printCount", 1);
+        root.set("printAudit", printAudit);
+        if (confirmed) {
+            ObjectNode confirmation = mapper.createObjectNode();
+            confirmation.put("status", ServiceFormVersionSupport.CONFIRM_STATUS);
+            confirmation.put("serviceDetailHash", hash);
+            confirmation.put("projectionVersion", ServiceFormVersionSupport.PROJECTION_VERSION);
+            root.set("confirmation", confirmation);
+            root.put("serviceFormStatus", ServiceFormVersionSupport.CONFIRM_STATUS);
+        }
+        try {
+            return mapper.writeValueAsString(root);
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 }
 

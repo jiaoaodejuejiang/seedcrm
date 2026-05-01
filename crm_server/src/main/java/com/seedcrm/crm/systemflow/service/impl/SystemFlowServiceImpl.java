@@ -28,7 +28,7 @@ public class SystemFlowServiceImpl implements SystemFlowService {
     private static final Set<String> ALLOWED_ORDER_MAIN_DOMAINS = Set.of("CLUE", "CUSTOMER", "ORDER", "PLANORDER");
     private static final Map<String, Set<String>> CORE_DOMAIN_STATES = Map.of(
             "ORDER", Set.of("paid", "used"),
-            "PLANORDER", Set.of("arrived", "servicing", "finished"));
+            "PLANORDER", Set.of("arrived", "service_form_confirmed", "servicing", "finished"));
     private static final Set<String> SAFE_TRIGGER_TARGET_CODES = Set.of(
             "DOUYIN_CLUE_INCREMENTAL",
             "DOUYIN_VOUCHER_VERIFY",
@@ -302,7 +302,7 @@ public class SystemFlowServiceImpl implements SystemFlowService {
                 "不要新增核心订单状态；预约、核销属于 paid -> used 之间的受控动作");
         boolean planOrderStatesValid = collectStates(detail.getNodes(), "PLANORDER").containsAll(CORE_DOMAIN_STATES.get("PLANORDER"));
         addValidationItem(items, "PLANORDER", "PLANORDER_CORE_STATES", planOrderStatesValid,
-                planOrderStatesValid ? "PlanOrder 已包含 arrived、servicing、finished 状态" : "PlanOrder 缺少 arrived、servicing 或 finished 状态",
+                planOrderStatesValid ? "PlanOrder 已包含 arrived、service_form_confirmed、servicing、finished 状态" : "PlanOrder 缺少 arrived、service_form_confirmed、servicing 或 finished 状态",
                 "PlanOrder 必须 1:1 绑定 Order，且不能独立存在");
 
         addGuardedValidation(items, "FLOW", "DOMAIN_ORDER",
@@ -1503,7 +1503,7 @@ public class SystemFlowServiceImpl implements SystemFlowService {
             throw new BusinessException("ORDER_MAIN_FLOW must include Order states: paid, used");
         }
         if (!planOrderStates.containsAll(CORE_DOMAIN_STATES.get("PLANORDER"))) {
-            throw new BusinessException("ORDER_MAIN_FLOW must include PlanOrder states: arrived, servicing, finished");
+            throw new BusinessException("ORDER_MAIN_FLOW must include PlanOrder states: arrived, service_form_confirmed, servicing, finished");
         }
     }
 

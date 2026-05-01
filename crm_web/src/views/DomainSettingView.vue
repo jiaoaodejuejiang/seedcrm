@@ -85,7 +85,7 @@ async function saveDomains() {
     syncDerivedLocalUrls()
     Object.assign(state, loadSystemConsoleState())
     Object.assign(form, getDomainSettings(state))
-    ElMessage.success('域名配置已保存，相关回调地址已重新生成')
+    ElMessage.success('域名配置已保存，分销接口页联调地址已同步更新')
   } finally {
     saving.value = false
   }

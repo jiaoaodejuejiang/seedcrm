@@ -19,3 +19,15 @@ export function fetchDomainSettings() {
 export function saveDomainSettings(payload) {
   return http.post('/system-config/domain-settings', payload)
 }
+
+export function fetchGoLiveSummary() {
+  return http.get('/system-config/go-live/summary')
+}
+
+export function initializeGoLive(payload) {
+  return http.post('/system-config/go-live/initialize', payload)
+}
+
+export function clearGoLiveTestData(payload) {
+  return http.post('/system-config/go-live/clear-test-data', payload)
+}

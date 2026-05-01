@@ -1,0 +1,59 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: seedcrm-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${SEEDCRM_MYSQL_DATABASE:-seedcrm}
+      MYSQL_USER: ${SEEDCRM_MYSQL_USERNAME:-seedcrm}
+      MYSQL_PASSWORD: ${SEEDCRM_MYSQL_PASSWORD:-change_me_seedcrm}
+      MYSQL_ROOT_PASSWORD: ${SEEDCRM_MYSQL_ROOT_PASSWORD:-change_me_root}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --default-time-zone=+08:00
+    ports:
+      - "3306:3306"
+    volumes:
+      - seedcrm-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ./crm_server
+    container_name: seedcrm-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SEEDCRM_DATASOURCE_URL: jdbc:mysql://mysql:3306/${SEEDCRM_MYSQL_DATABASE:-seedcrm}?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai
+      SEEDCRM_DATASOURCE_USERNAME: ${SEEDCRM_MYSQL_USERNAME:-seedcrm}
+      SEEDCRM_DATASOURCE_PASSWORD: ${SEEDCRM_MYSQL_PASSWORD:-change_me_seedcrm}
+      SEEDCRM_SERVER_PORT: 8004
+      SEEDCRM_SYSTEM_BASE_URL: ${SEEDCRM_SYSTEM_BASE_URL:-https://crm.example.com}
+      SEEDCRM_API_BASE_URL: ${SEEDCRM_API_BASE_URL:-https://api.example.com}
+      SEEDCRM_OPENAPI_ENABLED: ${SEEDCRM_OPENAPI_ENABLED:-false}
+      SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN: ${SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN:-false}
+      TZ: Asia/Shanghai
+    ports:
+      - "${SEEDCRM_BACKEND_PORT:-8004}:8004"
+
+  frontend:
+    build:
+      context: ./crm_web
+    container_name: seedcrm-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${SEEDCRM_FRONTEND_PORT:-8003}:80"
+
+volumes:
+  seedcrm-mysql-data:

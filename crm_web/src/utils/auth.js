@@ -32,6 +32,7 @@ const accessibleRoutes = [
   { path: '/system/departments', moduleCode: 'SYSTEM', roleCodes: ['ADMIN'] },
   { path: '/system/employees', moduleCode: 'SYSTEM', roleCodes: ['ADMIN', 'CLUE_MANAGER'] },
   { path: '/settings/base/domain', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+  { path: '/settings/base/go-live', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
   { path: '/settings/base/wecom', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
   { path: '/settings/menu', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
   { path: '/settings/payment', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },

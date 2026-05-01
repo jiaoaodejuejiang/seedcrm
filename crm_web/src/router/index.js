@@ -8,6 +8,7 @@ import DistributionApiView from '../views/DistributionApiView.vue'
 import DutyCustomerServiceView from '../views/DutyCustomerServiceView.vue'
 import DomainSettingView from '../views/DomainSettingView.vue'
 import FinanceOverview from '../views/FinanceOverview.vue'
+import GoLiveOpsView from '../views/GoLiveOpsView.vue'
 import InterfaceDebugView from '../views/InterfaceDebugView.vue'
 import LoginView from '../views/LoginView.vue'
 import MemberInfoView from '../views/MemberInfoView.vue'
@@ -487,12 +488,12 @@ const routes = [
       },
       {
         path: 'settings/integration/debug',
-        name: 'settings-interface-debug',
-        component: InterfaceDebugView,
-        meta: {
-          title: '接口调试',
-          sectionTitle: '系统设置 / 调度中心',
-          moduleCode: 'SETTING',
+          name: 'settings-interface-debug',
+          component: InterfaceDebugView,
+          meta: {
+            title: '联调工作台',
+            sectionTitle: '系统设置 / 调度中心',
+            moduleCode: 'SETTING',
           roleCodes: integrationViewRoleCodes,
           navKey: 'settings-interface-debug'
         }
@@ -531,6 +532,18 @@ const routes = [
           moduleCode: 'SETTING',
           roleCodes: ['ADMIN'],
           navKey: 'settings-domain'
+        }
+      },
+      {
+        path: 'settings/base/go-live',
+        name: 'settings-go-live',
+        component: GoLiveOpsView,
+        meta: {
+          title: '上线工具',
+          sectionTitle: '系统设置 / 基础配置',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-go-live'
         }
       },
       {

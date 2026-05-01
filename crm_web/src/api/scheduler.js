@@ -40,6 +40,14 @@ export function fetchSchedulerMonitorSummary(providerCode) {
   })
 }
 
+export function fetchSchedulerGoLiveReadiness(providerCode) {
+  return http.get('/scheduler/go-live/readiness', {
+    params: {
+      providerCode: providerCode || undefined
+    }
+  })
+}
+
 export function saveIntegrationCallback(payload) {
   return http.post('/scheduler/callback/save', payload)
 }
@@ -70,6 +78,10 @@ export function saveSchedulerJob(payload) {
 
 export function triggerSchedulerJob(payload) {
   return http.post('/scheduler/trigger', payload)
+}
+
+export function dryRunSchedulerJob(payload) {
+  return http.post('/scheduler/trigger/dry-run', payload)
 }
 
 export function retrySchedulerJob(jobCode) {
@@ -157,8 +169,24 @@ export function processDistributionStatusCheck(limit = 20) {
   })
 }
 
+export function dryRunDistributionStatusCheck(limit = 20) {
+  return http.post('/scheduler/distribution/status-check/dry-run', null, {
+    params: {
+      limit
+    }
+  })
+}
+
 export function processDistributionReconciliation(limit = 20) {
   return http.post('/scheduler/distribution/reconcile/process', null, {
+    params: {
+      limit
+    }
+  })
+}
+
+export function dryRunDistributionReconciliation(limit = 20) {
+  return http.post('/scheduler/distribution/reconcile/dry-run', null, {
     params: {
       limit
     }

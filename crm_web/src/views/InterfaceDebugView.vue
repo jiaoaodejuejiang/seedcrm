@@ -3,11 +3,12 @@
     <section class="panel interface-debug-panel">
       <div class="panel-heading compact-heading">
         <div>
-          <h3>接口调试</h3>
+          <h3>联调工作台</h3>
+          <el-tag effect="plain" type="info">仅做联调预检，不写客户、订单、服务单等核心业务表</el-tag>
         </div>
         <div class="action-group">
-          <el-button plain @click="openSwagger">Swagger UI</el-button>
-          <el-button type="primary" :loading="testing" @click="handleTest">发送测试</el-button>
+          <el-button plain @click="openSwagger">查看接口定义</el-button>
+          <el-button type="primary" :loading="testing" @click="handleTest">发送预检请求</el-button>
         </div>
       </div>
 
@@ -56,10 +57,16 @@
 
         <div class="debug-result">
           <div class="result-title">
-            <h4>返回结果</h4>
+            <h4>预检结果</h4>
             <el-tag v-if="result" :type="result.success === false ? 'danger' : 'success'" effect="dark">
-              {{ result.success === false ? '预检异常' : '预检完成' }}
+              {{ result.success === false ? '预检异常' : '预检通过' }}
             </el-tag>
+          </div>
+          <div v-if="result" class="result-summary">
+            <article v-for="item in resultSummary" :key="item.label">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </article>
           </div>
           <pre>{{ resultText }}</pre>
         </div>
@@ -223,11 +230,37 @@ const form = reactive({
   payload: ''
 })
 
-const resultText = computed(() => (result.value ? JSON.stringify(result.value, null, 2) : '暂无调试结果'))
+const resultText = computed(() => (result.value ? JSON.stringify(result.value, null, 2) : '暂无预检结果'))
+const resultTraceId = computed(() => resolveTraceId(result.value) || '--')
+const resultFailureReason = computed(() => {
+  if (!result.value) {
+    return '--'
+  }
+  const message = firstNonBlank(result.value.errorMessage, result.value.message, result.value.reason)
+  if (result.value.success === false) {
+    return message || '请求未通过预检'
+  }
+  return message || '无异常'
+})
+const resultNextAction = computed(() => {
+  if (!result.value) {
+    return '--'
+  }
+  if (result.value.success === false) {
+    return resultTraceId.value === '--' ? '查看失败原因，修正配置或报文后重试' : '复制追踪编号，去异常队列或回调记录继续处理'
+  }
+  return form.mode === 'LIVE' ? '本次只完成真实配置预检；实际入站、回推、日志仍由正式接口或调度任务触发' : '核对字段映射无误后，再切换真实模式预检'
+})
+const resultSummary = computed(() => [
+  { label: '结果状态', value: result.value?.success === false ? '预检异常' : '预检通过' },
+  { label: '失败原因', value: resultFailureReason.value },
+  { label: '追踪编号', value: resultTraceId.value },
+  { label: '下一步操作', value: resultNextAction.value }
+])
 const requestTargetLabel = computed(() =>
   form.mode === 'LIVE'
-    ? `真实模式：校验 ${form.providerCode || '--'} ${form.requestMethod || 'POST'} ${form.path || '--'}，不会直接改写业务数据`
-    : `模拟模式：仅在系统内预检 ${form.providerCode || '--'} ${form.interfaceCode || '--'}，不落核心业务表`
+    ? `真实模式：只校验 ${form.providerCode || '--'} ${form.requestMethod || 'POST'} ${form.path || '--'} 的配置和报文，不写核心业务表`
+    : `模拟模式：仅在系统内预检 ${form.providerCode || '--'} ${form.interfaceCode || '--'}，不落业务数据`
 )
 const swaggerUiUrl = computed(() => buildSystemUrl(systemState, 'api', '/swagger-ui.html'))
 
@@ -286,8 +319,8 @@ async function handleTest() {
   if (form.mode === 'LIVE') {
     try {
       await ElMessageBox.confirm(
-        '真实模式会按当前接口配置做联调校验。接口调试不会直接写入 Customer、Order 或 PlanOrder，但请确认密钥、请求头和参数无误。',
-        '确认真实接口调试',
+        '真实模式只做配置和报文预检，不写客户、订单、服务单等核心业务表；请确认密钥、请求头和参数无误。',
+        '确认真实预检',
         {
           confirmButtonText: '确认发送',
           cancelButtonText: '取消',
@@ -309,7 +342,7 @@ async function handleTest() {
       parameters,
       payload: form.payload
     })
-    ElMessage.success('接口调试完成')
+    ElMessage.success('联调预检已完成')
   } finally {
     testing.value = false
   }
@@ -317,6 +350,26 @@ async function handleTest() {
 
 function openSwagger() {
   window.open(swaggerUiUrl.value, '_blank', 'noopener,noreferrer')
+}
+
+function firstNonBlank(...values) {
+  return values.find((value) => String(value || '').trim()) || ''
+}
+
+function resolveTraceId(data) {
+  if (!data || typeof data !== 'object') {
+    return ''
+  }
+  return firstNonBlank(
+    data.traceId,
+    data.requestTraceId,
+    data.callbackLogTraceId,
+    data.mockData?.traceId,
+    data.latestLog?.traceId,
+    data.latestLog?.requestId,
+    data.fieldMapping?.traceId,
+    data.orderIdempotency?.traceId
+  )
 }
 </script>
 
@@ -376,6 +429,34 @@ function openSwagger() {
   line-height: 1.65;
 }
 
+.result-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.result-summary article {
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid rgba(191, 219, 254, 0.22);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.result-summary span {
+  color: #93c5fd;
+  font-size: 12px;
+}
+
+.result-summary strong {
+  color: #f8fafc;
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
 .readonly-prefix {
   display: inline-flex;
   min-height: 34px;
@@ -389,6 +470,10 @@ function openSwagger() {
 
 @media (max-width: 1100px) {
   .debug-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .result-summary {
     grid-template-columns: 1fr;
   }
 }

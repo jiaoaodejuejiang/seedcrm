@@ -254,7 +254,7 @@ public class SchedulerMonitorServiceImpl implements SchedulerMonitorService {
         AcceptanceSample sample = baseSample("EXCEPTION_OPEN", "异常队列待处理样本", record != null,
                 "OPEN", "exceptions", "OPEN");
         sample.setDescription("用于验收入站失败或数据冲突时进入异常队列，而不是绕过主链路写核心数据。");
-        sample.setRecommendedAction(record == null ? "暂无样本；可用接口调试或重复订单冲突样例生成。" : "按异常说明核对冲突字段，修正后由管理员重新入队或标记处理。");
+        sample.setRecommendedAction(record == null ? "暂无样本；可用联调工作台或重复订单冲突样例生成。" : "按异常说明核对冲突字段，修正后由管理员重新入队或标记处理。");
         if (record == null) {
             return sample;
         }

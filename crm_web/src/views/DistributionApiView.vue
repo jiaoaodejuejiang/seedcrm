@@ -8,9 +8,9 @@
         <div class="action-group">
           <el-button @click="loadActiveQueue">刷新当前页</el-button>
           <el-button v-if="canUpdateConfig && activeTab === 'config'" type="primary" @click="saveConfig">保存配置</el-button>
-          <el-button v-if="canUpdateConfig && activeTab === 'config'" :loading="testing" @click="testConfig">测试入站映射</el-button>
-          <el-button v-if="canProcessQueues && activeTab === 'reconcile'" :loading="processingStatusCheck" @click="handleStatusCheck">检查外部订单状态</el-button>
-          <el-button v-if="canProcessQueues && activeTab === 'reconcile'" :loading="processingReconcile" @click="handleReconcilePull">拉取外部对账结果</el-button>
+          <el-button v-if="canUpdateConfig && activeTab === 'config'" :loading="testing" @click="testConfig">dry-run 测试入站映射（不入库）</el-button>
+          <el-button v-if="canProcessQueues && activeTab === 'reconcile'" :loading="processingStatusCheck" type="warning" plain @click="handleStatusCheck">执行真实状态回查</el-button>
+          <el-button v-if="canProcessQueues && activeTab === 'reconcile'" :loading="processingReconcile" type="warning" plain @click="handleReconcilePull">执行真实对账拉取</el-button>
         </div>
       </div>
 
@@ -28,12 +28,13 @@
             <div class="go-live-overview__head">
               <div>
                 <strong>生产联调信息</strong>
-                <span>地址来自【系统设置 / 基础配置 / 域名配置】；Swagger 看接口定义，接口调试做 dry-run 验证。</span>
+                <span>地址来自【系统设置 / 基础配置 / 域名配置】；Swagger 看接口定义，联调工作台做 dry-run 验证。</span>
               </div>
               <div class="action-group">
                 <el-button plain @click="copyText(eventIngestUrl, '分销入站地址')">复制入站地址</el-button>
                 <el-button plain @click="openExternal(userGuideUrl)">使用说明</el-button>
                 <el-button plain @click="openExternal(integrationGuideUrl)">联调说明</el-button>
+                <el-button plain @click="openExternal(deploymentGuideUrl)">上线手册</el-button>
                 <el-button plain @click="openExternal(swaggerUiUrl)">查看接口定义</el-button>
                 <el-button plain @click="router.push('/settings/integration/debug')">进入联调工作台</el-button>
               </div>
@@ -47,26 +48,32 @@
               <article>
                 <span>API 域名</span>
                 <strong>{{ apiBaseUrl }}</strong>
+                <el-button class="copy-mini" link type="primary" @click="copyText(apiBaseUrl, 'API 域名')">复制</el-button>
               </article>
               <article>
                 <span>已支付订单入站</span>
                 <strong>{{ eventIngestUrl }}</strong>
+                <el-button class="copy-mini" link type="primary" @click="copyText(eventIngestUrl, '已支付订单入站地址')">复制</el-button>
               </article>
               <article>
                 <span>履约回推目标</span>
                 <strong>{{ config.fulfillmentCallbackUrl || '待配置外部分销系统回调地址' }}</strong>
+                <el-button class="copy-mini" link type="primary" @click="copyText(config.fulfillmentCallbackUrl, '履约回推目标')">复制</el-button>
               </article>
               <article>
                 <span>状态回查地址</span>
                 <strong>{{ statusQueryUrl }}</strong>
+                <el-button class="copy-mini" link type="primary" @click="copyText(statusQueryUrl, '状态回查地址')">复制</el-button>
               </article>
               <article>
                 <span>对账拉取地址</span>
                 <strong>{{ reconcilePullUrl }}</strong>
+                <el-button class="copy-mini" link type="primary" @click="copyText(reconcilePullUrl, '对账拉取地址')">复制</el-button>
               </article>
               <article>
                 <span>OpenAPI JSON</span>
                 <strong>{{ openApiDocsUrl }}</strong>
+                <el-button class="copy-mini" link type="primary" @click="copyText(openApiDocsUrl, 'OpenAPI JSON 地址')">复制</el-button>
               </article>
               <article>
                 <span>上线检查</span>
@@ -115,7 +122,7 @@
             <label>
               <span>认证方式</span>
               <el-select v-model="config.authMode" :disabled="!canUpdateConfig">
-                <el-option label="签名 + 幂等键" value="SIGN_TOKEN" />
+                <el-option label="签名 + 防重复编号" value="SIGN_TOKEN" />
                 <el-option label="AppId + Secret" value="APP_SECRET" />
               </el-select>
             </label>
@@ -138,6 +145,19 @@
                 :disabled="!canUpdateConfig"
                 placeholder="paid=distribution.order.paid,cancelled=distribution.order.cancelled,refund_pending=distribution.order.refund_pending,refunded=distribution.order.refunded"
               />
+            </label>
+            <label class="full-span order-type-mapping-field">
+              <span>订单类型 / SKU 映射</span>
+              <el-input
+                v-model="config.orderTypeMapping"
+                :disabled="!canUpdateConfig"
+                type="textarea"
+                :rows="11"
+                placeholder="配置外部 type、商品 ID、SKU 到内部团购 / 定金的映射"
+              />
+              <small>
+                只映射到内部订单类型：coupon=团购，deposit=定金。strictProductMapping 打开后，带商品或 SKU 的订单必须命中 rules，否则正式入站会进入异常队列。
+              </small>
             </label>
             <label>
               <span>限流策略</span>
@@ -169,7 +189,7 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="幂等健康" name="health">
+        <el-tab-pane label="防重复健康" name="health">
           <el-alert
             class="queue-alert"
             :type="idempotencyHealth.healthy ? 'success' : 'warning'"
@@ -419,7 +439,7 @@
                       <strong>{{ exceptionRecommendation(row) }}</strong>
                     </article>
                     <article>
-                      <span>幂等键</span>
+                      <span>防重复编号</span>
                       <strong>{{ row.idempotencyKey || '--' }}</strong>
                     </article>
                     <article>
@@ -522,8 +542,10 @@
 
         <el-tab-pane label="回查对账结果" name="reconcile">
           <div class="queue-toolbar">
-            <el-button v-if="canProcessQueues" :loading="processingStatusCheck" type="primary" @click="handleStatusCheck">检查外部订单状态</el-button>
-            <el-button v-if="canProcessQueues" :loading="processingReconcile" @click="handleReconcilePull">拉取外部对账结果</el-button>
+            <el-button :loading="dryRunningStatusCheck" plain @click="handleStatusCheckDryRun">状态回查预检（不入库）</el-button>
+            <el-button :loading="dryRunningReconcile" plain @click="handleReconcileDryRun">对账拉取预检（不入库）</el-button>
+            <el-button v-if="canProcessQueues" :loading="processingStatusCheck" type="warning" plain @click="handleStatusCheck">执行真实状态回查</el-button>
+            <el-button v-if="canProcessQueues" :loading="processingReconcile" type="warning" plain @click="handleReconcilePull">执行真实对账拉取</el-button>
             <el-select v-model="reconciliationJobFilter" clearable placeholder="按任务类型筛选" style="width: 180px">
               <el-option label="状态回查" value="DISTRIBUTION_STATUS_CHECK" />
               <el-option label="对账拉取" value="DISTRIBUTION_RECONCILE_PULL" />
@@ -626,11 +648,11 @@
               <el-table-column label="处理建议" min-width="280">
                 <template #default="{ row }">{{ reconciliationFailureAdvice(row) }}</template>
               </el-table-column>
-              <el-table-column label="幂等键" min-width="190" prop="idempotencyKey" show-overflow-tooltip />
+              <el-table-column label="防重复编号" min-width="190" prop="idempotencyKey" show-overflow-tooltip />
               <el-table-column label="操作" width="190" fixed="right">
                 <template #default="{ row }">
                   <div class="action-group">
-                    <el-button link type="primary" @click="copyText(row.idempotencyKey || row.externalOrderId, '幂等键')">复制</el-button>
+                    <el-button link type="primary" @click="copyText(row.idempotencyKey || row.externalOrderId, '防重复编号')">复制</el-button>
                     <el-button link type="primary" @click="openExceptionFromReconcile(row)">去异常队列处理</el-button>
                   </div>
                 </template>
@@ -767,6 +789,7 @@ import {
   fetchDistributionExceptions,
   fetchIntegrationProviders,
   fetchSchedulerIdempotencyHealth,
+  fetchSchedulerGoLiveReadiness,
   fetchSchedulerLogs,
   fetchSchedulerMonitorSummary,
   fetchSchedulerOutboxEvents,
@@ -774,6 +797,8 @@ import {
   processDistributionExceptionRetries,
   processDistributionReconciliation,
   processDistributionStatusCheck,
+  dryRunDistributionReconciliation,
+  dryRunDistributionStatusCheck,
   processSchedulerOutbox,
   retryDistributionException,
   retrySchedulerOutboxEvent,
@@ -783,9 +808,42 @@ import { formatDateTime } from '../utils/format'
 import { currentUser } from '../utils/auth'
 import { syncDomainSettingsFromBackend } from '../utils/domainSettings'
 import { buildSystemUrl, loadSystemConsoleState, saveSystemConsoleState } from '../utils/systemConsoleStore'
+import { fetchSystemConfigs, saveSystemConfig } from '../api/systemConfig'
 
 const route = useRoute()
 const router = useRouter()
+const ORDER_TYPE_MAPPING_CONFIG_KEY = 'distribution.order.type.mapping'
+const DEFAULT_ORDER_TYPE_MAPPING = JSON.stringify(
+  {
+    default: 'coupon',
+    strictProductMapping: false,
+    aliases: {
+      coupon: 'coupon',
+      groupbuy: 'coupon',
+      voucher: 'coupon',
+      团购: 'coupon',
+      团购券: 'coupon',
+      deposit: 'deposit',
+      prepay: 'deposit',
+      prepaid: 'deposit',
+      定金: 'deposit',
+      预付定金: 'deposit'
+    },
+    rules: [
+      {
+        ruleId: 'sample-sku-deposit',
+        enabled: false,
+        providerCode: 'DISTRIBUTION',
+        externalSkuId: 'sku_001',
+        internalOrderType: 'deposit',
+        verificationPolicy: 'DIRECT',
+        priority: 10
+      }
+    ]
+  },
+  null,
+  2
+)
 const activeTab = ref(resolveInitialTab())
 const testing = ref(false)
 const outboxLoading = ref(false)
@@ -795,6 +853,8 @@ const processingOutbox = ref(false)
 const processingExceptions = ref(false)
 const processingStatusCheck = ref(false)
 const processingReconcile = ref(false)
+const dryRunningStatusCheck = ref(false)
+const dryRunningReconcile = ref(false)
 const retryingOutboxId = ref(null)
 const retryingExceptionId = ref(null)
 const handlingExceptionId = ref(null)
@@ -816,6 +876,7 @@ const healthLoading = ref(false)
 const acceptanceLoading = ref(false)
 const exceptionSourceContext = ref(null)
 const idempotencyHealth = ref({})
+const goLiveReadiness = ref({})
 const monitorSummary = ref({})
 const state = reactive(loadSystemConsoleState())
 const config = reactive({
@@ -835,15 +896,16 @@ const config = reactive({
   statusMapping:
     state.distributionApi?.statusMapping ||
     'paid=distribution.order.paid,cancelled=distribution.order.cancelled,refund_pending=distribution.order.refund_pending,refunded=distribution.order.refunded',
+  orderTypeMapping: state.distributionApi?.orderTypeMapping || DEFAULT_ORDER_TYPE_MAPPING,
   rateLimitPerMinute: parseIntegerConfig(state.distributionApi?.rateLimitPerMinute, state.distributionApi?.rateLimit, 60),
   cacheTtlSeconds: parseIntegerConfig(state.distributionApi?.cacheTtlSeconds, state.distributionApi?.cachePolicy, 30),
   secretConfigured: Boolean(state.distributionApi?.secretConfigured),
   fields: state.distributionApi?.fields || [
     { fieldName: 'eventType', source: '固定 distribution.order.paid', description: '只有已支付订单允许创建或匹配 Customer + Order(paid)', required: true },
     { fieldName: 'eventId', source: '外部分销事件 ID', description: '用于日志追踪与重复事件识别', required: true },
-    { fieldName: 'member.phone', source: '购买会员手机号', description: '用于匹配 Customer，手机号不能作为订单幂等键', required: true },
+    { fieldName: 'member.phone', source: '购买会员手机号', description: '用于匹配 Customer，手机号不能作为订单防重复键', required: true },
     { fieldName: 'member.externalMemberId', source: '外部会员 ID', description: '与 partnerCode 共同作为会员身份标识', required: true },
-    { fieldName: 'order.externalOrderId', source: '外部订单 ID', description: '与 partnerCode 共同作为订单幂等键', required: true },
+    { fieldName: 'order.externalOrderId', source: '外部订单 ID', description: '与 partnerCode 共同作为订单防重复键', required: true },
     { fieldName: 'order.amount', source: '已支付金额，单位分', description: '入库后转换为 Order 金额，订单状态为已支付', required: true },
     { fieldName: 'rawData', source: '三方原始报文', description: '外部数据必须完整保留，便于追踪、补偿和对账', required: true }
   ]
@@ -857,19 +919,32 @@ const statusQueryUrl = computed(() => buildSystemUrl(state, 'api', config.status
 const reconcilePullUrl = computed(() => buildSystemUrl(state, 'api', config.reconciliationPullPath))
 const userGuideUrl = '/docs/distribution-user-guide.html'
 const integrationGuideUrl = '/docs/distribution-api-integration-guide.html'
+const deploymentGuideUrl = '/docs/deployment-runbook.html'
 const statusAndReconcileTarget = computed(() => {
   const status = config.statusQueryPath ? statusQueryUrl.value : '状态回查未配置'
   const reconcile = config.reconciliationPullPath ? reconcilePullUrl.value : '对账拉取未配置'
   return `${status} / ${reconcile}`
 })
-const goLiveChecks = computed(() => [
+const fallbackGoLiveChecks = computed(() => [
   { label: apiBaseUrl.value !== '--' ? 'API 域名已配置' : 'API 域名待配置', ok: apiBaseUrl.value !== '--' },
   { label: config.executionMode === 'LIVE' ? '真实模式' : '模拟模式', ok: config.executionMode === 'LIVE' },
   { label: config.secretConfigured || String(config.appSecret || '').trim() ? '密钥已配置' : '密钥待配置', ok: config.secretConfigured || String(config.appSecret || '').trim() },
   { label: String(config.fulfillmentCallbackUrl || '').trim() ? '回推目标已配置' : '回推目标待配置', ok: String(config.fulfillmentCallbackUrl || '').trim() },
   { label: config.statusQueryPath && config.reconciliationPullPath ? '回查对账路径已配置' : '回查对账路径待配置', ok: Boolean(config.statusQueryPath && config.reconciliationPullPath) },
-  { label: idempotencyHealth.value?.healthy ? '幂等健康' : '幂等待检查', ok: Boolean(idempotencyHealth.value?.healthy) }
+  { label: idempotencyHealth.value?.healthy ? '防重复健康' : '防重复待检查', ok: Boolean(idempotencyHealth.value?.healthy) }
 ])
+const goLiveChecks = computed(() => {
+  if (goLiveReadiness.value?.checks?.length) {
+    return goLiveReadiness.value.checks.map((item) => ({
+      label: item.title,
+      ok: item.status === 'PASS',
+      status: item.status,
+      severity: item.severity,
+      action: item.recommendedAction
+    }))
+  }
+  return fallbackGoLiveChecks.value
+})
 const currentRoleCode = computed(() => String(currentUser.value?.roleCode || '').trim().toUpperCase())
 const canUpdateConfig = computed(() => ['ADMIN', 'INTEGRATION_ADMIN'].includes(currentRoleCode.value))
 const canTriggerQueues = computed(() => ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'].includes(currentRoleCode.value))
@@ -1028,8 +1103,10 @@ function resolveInitialTab() {
 
 onMounted(async () => {
   await loadDomainSettings()
+  await loadDistributionOrderTypeMappingConfig()
   applyRouteFilters()
   loadBackendProviderConfig()
+  loadGoLiveReadiness()
   loadActiveQueue()
 })
 
@@ -1149,6 +1226,18 @@ async function loadDomainSettings() {
   }
 }
 
+async function loadDistributionOrderTypeMappingConfig() {
+  try {
+    const rows = await fetchSystemConfigs('distribution.order.type.')
+    const row = rows.find((item) => item.configKey === ORDER_TYPE_MAPPING_CONFIG_KEY)
+    if (row?.configValue) {
+      config.orderTypeMapping = normalizeOrderTypeMappingJson(row.configValue)
+    }
+  } catch (error) {
+    // Keep the local default when the current role cannot read system settings.
+  }
+}
+
 async function loadBackendProviderConfig() {
   try {
     const providers = await fetchIntegrationProviders()
@@ -1180,6 +1269,14 @@ async function saveConfig() {
     ElMessage.warning('当前角色不能修改分销接口配置')
     return
   }
+  let normalizedOrderTypeMapping = DEFAULT_ORDER_TYPE_MAPPING
+  try {
+    normalizedOrderTypeMapping = normalizeOrderTypeMappingJson(config.orderTypeMapping)
+    config.orderTypeMapping = normalizedOrderTypeMapping
+  } catch (error) {
+    ElMessage.warning(error?.message || '订单类型 / SKU 映射不是有效 JSON')
+    return
+  }
   if (String(config.executionMode || '').toUpperCase() === 'LIVE') {
     const issues = validateLiveConfig()
     if (issues.length) {
@@ -1190,6 +1287,16 @@ async function saveConfig() {
       return
     }
   }
+  await saveSystemConfig({
+    configKey: ORDER_TYPE_MAPPING_CONFIG_KEY,
+    configValue: normalizedOrderTypeMapping,
+    valueType: 'JSON',
+    scopeType: 'GLOBAL',
+    scopeId: 'GLOBAL',
+    enabled: 1,
+    description: '分销外部订单类型、商品和 SKU 到内部团购 / 定金的映射配置',
+    summary: '更新分销订单类型 / SKU 映射'
+  })
   const nextState = loadSystemConsoleState()
   nextState.distributionApi = {
     ...JSON.parse(JSON.stringify(config)),
@@ -1215,6 +1322,8 @@ async function saveConfig() {
     enabled: config.enabled,
     remark: `方案B：外部分销已支付订单入站；SeedCRM 只负责预约排档、门店履约和履约状态回推；限流：${config.rateLimitPerMinute || '--'}次/分钟；缓存：${config.cacheTtlSeconds ?? '--'}秒`
   })
+  await loadBackendProviderConfig()
+  await loadGoLiveReadiness()
   ElMessage.success('分销接口配置已保存')
 }
 
@@ -1242,6 +1351,62 @@ function validateLiveConfig() {
     issues.push('AppId')
   }
   return issues
+}
+
+function normalizeOrderTypeMappingJson(value) {
+  const source = String(value || '').trim() || DEFAULT_ORDER_TYPE_MAPPING
+  let parsed
+  try {
+    parsed = JSON.parse(source)
+  } catch (error) {
+    throw new Error('订单类型 / SKU 映射必须是有效 JSON')
+  }
+  const assertOrderType = (orderType, fieldName) => {
+    const normalized = String(orderType || '').trim().toLowerCase()
+    if (!['coupon', 'deposit'].includes(normalized)) {
+      throw new Error(`${fieldName} 只能填写 coupon 或 deposit`)
+    }
+    return normalized
+  }
+  parsed.default = assertOrderType(parsed.default || 'coupon', 'default')
+  if (!parsed.aliases || typeof parsed.aliases !== 'object' || Array.isArray(parsed.aliases)) {
+    parsed.aliases = {}
+  }
+  Object.entries(parsed.aliases).forEach(([key, orderType]) => {
+    if (!String(key || '').trim()) {
+      throw new Error('aliases 里不能存在空的外部类型')
+    }
+    parsed.aliases[key] = assertOrderType(orderType, `aliases.${key}`)
+  })
+  if (!Array.isArray(parsed.rules)) {
+    parsed.rules = []
+  }
+  parsed.rules = parsed.rules.map((rule, index) => {
+    if (!rule || typeof rule !== 'object' || Array.isArray(rule)) {
+      throw new Error(`rules[${index}] 必须是对象`)
+    }
+    const enabled = rule.enabled !== false
+    if (enabled) {
+      rule.internalOrderType = assertOrderType(rule.internalOrderType || rule.orderType || rule.targetOrderType, `rules[${index}].internalOrderType`)
+      if (
+        !rule.externalProductId &&
+        !rule.externalSkuId &&
+        !rule.externalOrderType &&
+        !rule.externalType &&
+        !rule.externalStoreCode &&
+        !rule.storeCode
+      ) {
+        throw new Error(`rules[${index}] 至少填写一个商品、SKU、外部门店或外部类型条件`)
+      }
+    }
+    return {
+      ...rule,
+      enabled,
+      priority: Number.isFinite(Number(rule.priority)) ? Number(rule.priority) : 0
+    }
+  })
+  parsed.strictProductMapping = Boolean(parsed.strictProductMapping)
+  return JSON.stringify(parsed, null, 2)
 }
 
 function openExternal(url) {
@@ -1358,8 +1523,17 @@ async function loadIdempotencyHealth() {
   healthLoading.value = true
   try {
     idempotencyHealth.value = await fetchSchedulerIdempotencyHealth('DISTRIBUTION')
+    await loadGoLiveReadiness()
   } finally {
     healthLoading.value = false
+  }
+}
+
+async function loadGoLiveReadiness() {
+  try {
+    goLiveReadiness.value = await fetchSchedulerGoLiveReadiness('DISTRIBUTION')
+  } catch (error) {
+    goLiveReadiness.value = {}
   }
 }
 
@@ -1490,6 +1664,19 @@ async function handleStatusCheck() {
   }
 }
 
+async function handleStatusCheckDryRun() {
+  dryRunningStatusCheck.value = true
+  try {
+    const rows = await dryRunDistributionStatusCheck(20)
+    reconciliationResults.value = rows
+    selectedReconciliationBatchId.value = null
+    activeTab.value = 'reconcile'
+    ElMessage.success(`状态回查预检完成，预览 ${rows.length} 条记录，未写核心业务表`)
+  } finally {
+    dryRunningStatusCheck.value = false
+  }
+}
+
 async function handleReconcilePull() {
   try {
     await ElMessageBox.confirm(
@@ -1514,6 +1701,19 @@ async function handleReconcilePull() {
     await loadReconciliationHistory()
   } finally {
     processingReconcile.value = false
+  }
+}
+
+async function handleReconcileDryRun() {
+  dryRunningReconcile.value = true
+  try {
+    const rows = await dryRunDistributionReconciliation(20)
+    reconciliationResults.value = rows
+    selectedReconciliationBatchId.value = null
+    activeTab.value = 'reconcile'
+    ElMessage.success(`对账拉取预检完成，预览 ${rows.length} 条记录，未写核心业务表`)
+  } finally {
+    dryRunningReconcile.value = false
   }
 }
 
@@ -1819,7 +2019,7 @@ function formatAcceptanceTarget(sample) {
       outbox: '履约回推队列',
       exceptions: '异常队列',
       reconcile: '回查对账结果',
-      health: '幂等健康'
+      health: '防重复健康'
     }[tab] || '当前页面'
   ) + status
 }
@@ -2129,7 +2329,7 @@ function formatExceptionMessage(row) {
     return '外部订单状态与本地履约状态不一致'
   }
   if (code === 'DUPLICATE_PAYLOAD_CONFLICT') {
-    return '同一幂等键或事件ID对应的回调报文不一致，请核对外部分销系统是否重复推送了不同内容。'
+    return '同一防重复编号或事件ID对应的回调报文不一致，请核对外部分销系统是否重复推送了不同内容。'
   }
   return row?.errorMessage || '--'
 }
@@ -2176,13 +2376,13 @@ function exceptionRecommendation(row) {
     return `${suffix}请核对外部退款/取消状态与本地履约状态，确认后重新入队或标记处理；不要绕过门店履约流程。`
   }
   if (code === 'DUPLICATE_PAYLOAD_CONFLICT') {
-    return '请核对报文指纹与外部订单内容；同一幂等键/事件ID不允许承载不同订单内容，需由外部系统重新生成幂等键或修正数据后再推送。'
+    return '请核对报文指纹与外部订单内容；同一防重复编号/事件ID不允许承载不同订单内容，需由外部系统重新生成防重复编号或修正数据后再推送。'
   }
   if (code === 'PROVIDER_INVALID' || code === 'SIGNATURE_INVALID' || code === 'SIGNATURE_MISSING') {
     return '请先检查分销接口配置、签名密钥、回调地址和请求头，再重新入队处理。'
   }
   if (code === 'PAYLOAD_INVALID' || code === 'IDEMPOTENCY_MISSING') {
-    return '请检查外部回调报文格式、必填字段和幂等键，修正后重新推送。'
+    return '请检查外部回调报文格式、必填字段和防重复编号，修正后重新推送。'
   }
   return '请查看异常说明和处理建议，修正配置或外部数据后重新入队；确认无需处理时再标记处理。'
 }
@@ -2243,6 +2443,8 @@ function formatReconciliationAction(value) {
   return (
     {
       REPLAYED: '已按新状态处理',
+      WOULD_REPLAY: '预检会处理',
+      DRY_RUN: '仅预检',
       NO_CHANGE: '无需处理',
       FAILED: '处理失败'
     }[String(value || '').toUpperCase()] || (value ? '未知动作' : '--')
@@ -2253,6 +2455,8 @@ function reconciliationActionTag(value) {
   return (
     {
       REPLAYED: 'primary',
+      WOULD_REPLAY: 'warning',
+      DRY_RUN: 'info',
       NO_CHANGE: 'info',
       FAILED: 'danger'
     }[String(value || '').toUpperCase()] || 'info'
@@ -2270,6 +2474,14 @@ function reconciliationActionTag(value) {
   background: #f1f5f9;
   color: #475569;
   word-break: break-all;
+}
+
+.order-type-mapping-field small {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .go-live-overview {
@@ -2358,6 +2570,13 @@ function reconciliationActionTag(value) {
   font-size: 13px;
   line-height: 1.45;
   word-break: break-all;
+}
+
+.copy-mini {
+  justify-self: start;
+  padding: 0;
+  min-height: auto;
+  font-size: 12px;
 }
 
 .go-live-tags {

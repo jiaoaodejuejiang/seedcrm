@@ -11,7 +11,6 @@ import com.seedcrm.crm.scheduler.service.DistributionEventIngestService;
 import com.seedcrm.crm.scheduler.service.DistributionExceptionRetryService;
 import java.time.LocalDateTime;
 import java.util.List;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -51,11 +50,6 @@ public class DistributionExceptionRetryServiceImpl implements DistributionExcept
             processOne(record);
         }
         return records.stream().map(item -> exceptionRecordMapper.selectById(item.getId())).toList();
-    }
-
-    @Scheduled(fixedDelay = 10000, initialDelay = 20000)
-    public void processScheduledRetryQueue() {
-        processRetryQueue(10);
     }
 
     private void processOne(DistributionExceptionRecord record) {

@@ -2,6 +2,7 @@ package com.seedcrm.crm.scheduler.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -410,6 +411,34 @@ class SchedulerServiceImplTest {
                 "\"externalOrderId\":\"dist_order_002\"");
         verify(distributionReconciliationService).pullReconciliation(20);
         verify(schedulerJobLogMapper).updateById(queuedLog);
+    }
+
+    @Test
+    void shouldDryRunDistributionStatusCheckWithoutQueueingOrWritingCoreTables() {
+        SchedulerJob job = new SchedulerJob();
+        job.setId(6L);
+        job.setJobCode("DISTRIBUTION_STATUS_CHECK");
+        job.setModuleCode("DISTRIBUTION");
+        job.setStatus("ENABLED");
+        job.setQueueName("distribution-status-check");
+        when(schedulerJobMapper.selectOne(any())).thenReturn(job);
+        when(distributionReconciliationService.dryRunOrderStatus(20))
+                .thenReturn(List.of(reconciliationResult("dist_order_001", "WOULD_REPLAY", "PRECHECK")));
+
+        SchedulerTriggerRequest request = new SchedulerTriggerRequest();
+        request.setJobCode("DISTRIBUTION_STATUS_CHECK");
+
+        SchedulerJobLog preview = schedulerService.dryRun(request, null);
+
+        assertThat(preview.getStatus()).isEqualTo("PRECHECK");
+        assertThat(preview.getTriggerType()).isEqualTo("DRY_RUN");
+        assertThat(preview.getPayload()).contains(
+                "\"source\":\"dry-run\"",
+                "\"willWriteCoreTables\":false",
+                "\"wouldReplay\":1");
+        verify(schedulerJobLogMapper, never()).insert(any(SchedulerJobLog.class));
+        verify(distributionReconciliationService).dryRunOrderStatus(20);
+        verify(distributionReconciliationService, never()).checkOrderStatus(20);
     }
 
     private DistributionReconciliationResult reconciliationResult(String externalOrderId, String action, String status) {

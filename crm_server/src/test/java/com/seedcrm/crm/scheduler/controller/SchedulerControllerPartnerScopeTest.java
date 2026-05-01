@@ -24,6 +24,7 @@ import com.seedcrm.crm.scheduler.service.DistributionExceptionService;
 import com.seedcrm.crm.scheduler.service.DistributionReconciliationService;
 import com.seedcrm.crm.scheduler.service.SchedulerIdempotencyHealthService;
 import com.seedcrm.crm.scheduler.service.SchedulerIntegrationService;
+import com.seedcrm.crm.scheduler.service.SchedulerGoLiveReadinessService;
 import com.seedcrm.crm.scheduler.service.SchedulerMonitorService;
 import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
 import com.seedcrm.crm.scheduler.service.SchedulerService;
@@ -66,6 +67,9 @@ class SchedulerControllerPartnerScopeTest {
     private SchedulerIdempotencyHealthService schedulerIdempotencyHealthService;
 
     @Mock
+    private SchedulerGoLiveReadinessService schedulerGoLiveReadinessService;
+
+    @Mock
     private SchedulerMonitorService schedulerMonitorService;
 
     @Mock
@@ -90,6 +94,7 @@ class SchedulerControllerPartnerScopeTest {
                 distributionExceptionRetryService,
                 distributionReconciliationService,
                 schedulerIdempotencyHealthService,
+                schedulerGoLiveReadinessService,
                 schedulerMonitorService,
                 permissionRequestContextResolver,
                 schedulerModuleGuard,

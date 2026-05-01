@@ -20,7 +20,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE + 20)
 public class OpenApiDocsAccessFilter extends OncePerRequestFilter {
 
-    private static final Set<String> DOC_ROLES = Set.of("ADMIN", "INTEGRATION_ADMIN", "INTEGRATION_OPERATOR");
+    private static final Set<String> FULL_DOC_ROLES = Set.of("ADMIN", "INTEGRATION_ADMIN");
 
     private final AuthService authService;
     private final Environment environment;
@@ -50,13 +50,13 @@ public class OpenApiDocsAccessFilter extends OncePerRequestFilter {
         String token = resolveToken(request);
         AuthenticatedUser user = authService.resolve(token).orElse(null);
         String roleCode = normalize(user == null ? null : user.getRoleCode());
-        if (DOC_ROLES.contains(roleCode)) {
+        if (FULL_DOC_ROLES.contains(roleCode) || canIntegrationOperatorView(request, roleCode)) {
             filterChain.doFilter(request, response);
             return;
         }
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write("{\"code\":403,\"message\":\"Swagger/OpenAPI 仅允许管理员、集成管理员或集成操作员访问\"}");
+        response.getWriter().write("{\"code\":403,\"message\":\"Swagger/OpenAPI 仅允许管理员、集成管理员访问；集成操作员只能查看分销 OpenAPI\"}");
     }
 
     private boolean isOpenApiDocsRequest(HttpServletRequest request) {
@@ -74,6 +74,18 @@ public class OpenApiDocsAccessFilter extends OncePerRequestFilter {
                 || "0:0:0:0:0:0:0:1".equals(remoteAddress)
                 || "::1".equals(remoteAddress)
                 || "localhost".equalsIgnoreCase(remoteAddress);
+    }
+
+    private boolean canIntegrationOperatorView(HttpServletRequest request, String roleCode) {
+        if (!"INTEGRATION_OPERATOR".equals(roleCode)) {
+            return false;
+        }
+        String path = request == null ? "" : request.getRequestURI();
+        return path.equals("/swagger-ui.html")
+                || path.equals("/swagger-ui")
+                || path.startsWith("/swagger-ui/")
+                || path.equals("/v3/api-docs/swagger-config")
+                || path.equals("/v3/api-docs/distribution-open-api");
     }
 
     private String resolveToken(HttpServletRequest request) {

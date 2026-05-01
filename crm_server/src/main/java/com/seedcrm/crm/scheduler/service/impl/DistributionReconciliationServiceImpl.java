@@ -73,7 +73,7 @@ public class DistributionReconciliationServiceImpl implements DistributionReconc
     @Override
     public List<DistributionReconciliationResult> checkOrderStatus(int limit) {
         IntegrationProviderConfig provider = requireDistributionProvider();
-        return processLocalOrders(provider, JOB_STATUS_CHECK, limit, false);
+        return processLocalOrders(provider, JOB_STATUS_CHECK, limit, false, false);
     }
 
     @Override
@@ -82,22 +82,54 @@ public class DistributionReconciliationServiceImpl implements DistributionReconc
         if (isLive(provider) && StringUtils.hasText(provider.getReconciliationPullPath())) {
             return pullLiveReconciliation(provider, limit);
         }
-        return processLocalOrders(provider, JOB_RECONCILE_PULL, limit, false);
+        return processLocalOrders(provider, JOB_RECONCILE_PULL, limit, false, false);
+    }
+
+    @Override
+    public List<DistributionReconciliationResult> dryRunOrderStatus(int limit) {
+        IntegrationProviderConfig provider = requireDistributionProvider();
+        return processLocalOrders(provider, JOB_STATUS_CHECK, limit, false, true);
+    }
+
+    @Override
+    public List<DistributionReconciliationResult> dryRunReconciliation(int limit) {
+        IntegrationProviderConfig provider = requireDistributionProvider();
+        if (isLive(provider)) {
+            return List.of(result(null, provider.getProviderCode(), JOB_RECONCILE_PULL, "DRY_RUN", "PRECHECK",
+                    null, null, null, "LIVE 对账预检通过：本次不会调用外部分销系统，不会写 Customer / Order / PlanOrder / Outbox"));
+        }
+        return processLocalOrders(provider, JOB_RECONCILE_PULL, limit, false, true);
     }
 
     private List<DistributionReconciliationResult> processLocalOrders(IntegrationProviderConfig provider,
                                                                       String jobType,
                                                                       int limit,
-                                                                      boolean allowPaidReplay) {
+                                                                      boolean allowPaidReplay,
+                                                                      boolean dryRun) {
         List<DistributionReconciliationResult> results = new ArrayList<>();
         for (Order order : findDistributionOrders(provider.getProviderCode(), limit)) {
             try {
+                if (dryRun && isLive(provider)) {
+                    results.add(result(order, provider.getProviderCode(), jobType, "DRY_RUN", "PRECHECK",
+                            order.getExternalOrderId(), null, null,
+                            "LIVE precheck only: no external call, no event replay, no core table write"));
+                    continue;
+                }
                 ObjectNode event = isLive(provider)
                         ? buildEventFromLiveStatusQuery(provider, order, jobType, allowPaidReplay)
                         : buildEventFromMockOrder(order, provider, jobType, allowPaidReplay);
                 if (event == null) {
                     results.add(result(order, provider.getProviderCode(), jobType, "NO_CHANGE", "SUCCESS",
                             null, null, null, "外部状态无变化，本次未重放事件"));
+                    continue;
+                }
+                if (dryRun) {
+                    String eventType = text(event, "eventType");
+                    String externalOrderId = text(event, "order.externalOrderId");
+                    results.add(result(order, provider.getProviderCode(), jobType, "WOULD_REPLAY", "PRECHECK",
+                            externalOrderId, eventType,
+                            buildIdempotencyKey(provider.getProviderCode(), jobType, eventType, externalOrderId),
+                            "dry-run precheck: real run would replay an inbound event; this run wrote no core table"));
                     continue;
                 }
                 results.add(replayEvent(provider, jobType, order, event));

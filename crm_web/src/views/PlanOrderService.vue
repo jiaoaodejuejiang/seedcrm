@@ -332,7 +332,7 @@
               </div>
             </div>
             <div class="side-list">
-              <div v-for="item in displayTimelineItems" :key="item.label" class="side-list__item">
+              <div v-for="item in displayTimelineItems" :key="`${item.label}-${item.value}`" class="side-list__item">
                 <span>{{ item.label }}</span>
                 <strong>{{ item.value }}</strong>
               </div>
@@ -341,15 +341,90 @@
         </aside>
       </div>
 
+      <section class="print-service-form">
+        <div class="print-service-form__head">
+          <h1>{{ pageTitle }}</h1>
+          <p>纸质确认单</p>
+        </div>
+
+        <div class="print-service-form__meta">
+          <div><span>客户姓名</span><strong>{{ customerDisplayName }}</strong></div>
+          <div><span>联系电话</span><strong>{{ customerDisplayPhone }}</strong></div>
+          <div><span>服务门店</span><strong>{{ storeDisplayName }}</strong></div>
+          <div><span>预约时间</span><strong>{{ appointmentLabel }}</strong></div>
+          <div><span>订单号</span><strong>{{ detail.order?.orderNo || '--' }}</strong></div>
+          <div><span>来源渠道</span><strong>{{ formatChannel(detail.order?.sourceChannel) }}</strong></div>
+          <div v-if="canViewAmounts"><span>确认单金额</span><strong>{{ serviceConfirmAmountLabel }}</strong></div>
+        </div>
+
+        <div class="print-service-form__section">
+          <h2>服务内容</h2>
+          <dl>
+            <div>
+              <dt>到店需求</dt>
+              <dd>{{ fieldText(serviceForm.serviceRequirement) }}</dd>
+            </div>
+            <div>
+              <dt>造型确认</dt>
+              <dd>{{ fieldText(serviceForm.styleConfirmation) }}</dd>
+            </div>
+            <div>
+              <dt>服务项目</dt>
+              <dd>{{ joinDisplay(serviceForm.serviceItems) }}</dd>
+            </div>
+            <div>
+              <dt>预计时长</dt>
+              <dd>{{ fieldText(serviceForm.serviceDuration) }}</dd>
+            </div>
+            <div>
+              <dt>偏好风格</dt>
+              <dd>{{ joinDisplay(serviceForm.preferredStyles) }}</dd>
+            </div>
+            <div>
+              <dt>喜欢构图</dt>
+              <dd>{{ joinDisplay(serviceForm.preferredScenes) }}</dd>
+            </div>
+            <div>
+              <dt>加选内容</dt>
+              <dd>{{ fieldText(serviceForm.addOnContent) }}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="print-service-form__sign">
+          <div>
+            <span>客户手写签名</span>
+            <strong></strong>
+          </div>
+          <div>
+            <span>门店经办人</span>
+            <strong>{{ fieldText(serviceForm.signature) }}</strong>
+          </div>
+          <div>
+            <span>签署日期</span>
+            <strong></strong>
+          </div>
+        </div>
+      </section>
+
       <div v-if="!readOnlyMode" class="service-action-bar">
         <div class="service-action-bar__status">
           <span v-if="autosaveMessage">{{ autosaveMessage }}</span>
-          <span v-else>{{ serviceActionHint }}</span>
+          <span v-else>{{ nextActionDisabledReason || serviceActionHint }}</span>
         </div>
         <div class="action-group action-group--wrap">
           <el-button :loading="savingServiceForm" :disabled="!canEditForm" @click="handleSaveServiceForm()">保存草稿</el-button>
-          <el-button :disabled="!hasSavedServiceDetail" @click="handlePrintServiceForm">打印确认单</el-button>
-          <el-button type="primary" :loading="confirmingAction" :disabled="!canEditForm || !canConfirmAction" @click="handleConfirmAndAdvance">
+          <el-button :loading="printingServiceForm" :disabled="!canPrintServiceForm" @click="handlePrintServiceForm">打印确认单</el-button>
+          <el-button
+            v-if="showConfirmPaperButton"
+            type="warning"
+            :loading="confirmingAction"
+            :disabled="!canConfirmPaperForm"
+            @click="handleConfirmPaperForm"
+          >
+            确认纸质单
+          </el-button>
+          <el-button v-else type="primary" :loading="confirmingAction" :disabled="!canEditForm || !canConfirmAction" @click="handleConfirmAndAdvance">
             {{ confirmActionLabel }}
           </el-button>
           <el-button
@@ -396,6 +471,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   assignPlanOrderRole,
   confirmPlanOrderServiceForm,
+  printPlanOrderServiceForm,
   sendPlanOrderServiceForm,
   startPlanOrder,
   arrivePlanOrder,
@@ -421,6 +497,7 @@ const router = useRouter()
 
 const detailLoading = ref(false)
 const savingServiceForm = ref(false)
+const printingServiceForm = ref(false)
 const confirmingAction = ref(false)
 const sendingToCustomer = ref(false)
 const detail = ref(null)
@@ -454,12 +531,20 @@ const isFinishedOrder = computed(
     ['COMPLETED', 'FINISHED', 'USED'].includes(normalize(detail.value?.order?.status || ''))
 )
 const hasSavedServiceDetail = computed(() => Boolean(String(detail.value?.order?.serviceDetailJson || '').trim()))
+const hasCurrentPrintedServiceForm = computed(
+  () => normalize(serviceForm.printAudit?.status || '') === 'PRINTED' && Boolean(serviceForm.printAudit?.serviceDetailHash)
+)
 const compatibilityBackfillMode = computed(() => false)
 const hasConfirmedServiceForm = computed(() => isServiceFormConfirmed(serviceForm.confirmation))
 const canManageRoles = computed(() => ROLE_ASSIGNMENT_MANAGER_CODES.includes(normalize(currentUser.value?.roleCode || '')))
 const canViewAmounts = computed(() => ['ADMIN', 'FINANCE'].includes(normalize(currentUser.value?.roleCode || '')))
 const canEditForm = computed(() => !readOnlyMode.value && isVerified.value && (!isFinishedOrder.value || compatibilityBackfillMode.value))
 const canSwitchToEditMode = computed(() => readOnlyMode.value && !isFinishedOrder.value)
+const canPrintServiceForm = computed(() => isVerified.value && hasSavedServiceDetail.value)
+const showConfirmPaperButton = computed(
+  () => isVerified.value && !detail.value?.summary?.startTime && !detail.value?.summary?.finishTime && !hasConfirmedServiceForm.value
+)
+const canConfirmPaperForm = computed(() => canEditForm.value && hasSavedServiceDetail.value && hasCurrentPrintedServiceForm.value && !dirty.value)
 const canSendToCustomer = computed(
   () => Boolean(detail.value?.order?.customerId) && detail.value?.customer?.wecomBound === true && canEditForm.value && hasConfirmedServiceForm.value
 )
@@ -508,7 +593,13 @@ const serviceFormStatusLabel = computed(() => {
   if (hasConfirmedServiceForm.value) {
     return '已确认'
   }
-  return hasSavedServiceDetail.value ? '待打印确认' : '待填写'
+  if (!hasSavedServiceDetail.value) {
+    return '待填写'
+  }
+  if (hasCurrentPrintedServiceForm.value) {
+    return '已打印待签字'
+  }
+  return normalize(serviceForm.printAudit?.status || '') === 'STALE' ? '内容已变更，需重新打印' : '待打印确认'
 })
 const serviceStage = computed(() => {
   if (detail.value?.summary?.finishTime) {
@@ -521,7 +612,7 @@ const serviceStage = computed(() => {
     return { label: '待核销', key: 'verify' }
   }
   if (!hasConfirmedServiceForm.value) {
-    return { label: hasSavedServiceDetail.value ? '待打印确认' : '待确认单', key: 'confirm' }
+    return { label: hasCurrentPrintedServiceForm.value ? '待确认签字' : hasSavedServiceDetail.value ? '待打印确认' : '待确认单', key: 'confirm' }
   }
   return { label: '待开始服务', key: 'start' }
 })
@@ -538,7 +629,7 @@ const confirmActionLabel = computed(() => {
   if (detail.value?.summary?.startTime) {
     return '完成服务'
   }
-  return hasConfirmedServiceForm.value ? '开始服务' : '确认纸质单并开始服务'
+  return hasConfirmedServiceForm.value ? '开始服务' : '请先确认纸质单'
 })
 const canConfirmAction = computed(() => {
   if (!detail.value || !isVerified.value) {
@@ -551,9 +642,30 @@ const canConfirmAction = computed(() => {
     return false
   }
   if (!detail.value.summary?.startTime) {
-    return hasSavedServiceDetail.value
+    return hasSavedServiceDetail.value && hasConfirmedServiceForm.value
   }
   return true
+})
+const nextActionDisabledReason = computed(() => {
+  if (!detail.value || readOnlyMode.value) {
+    return ''
+  }
+  if (!isVerified.value) {
+    return isDepositOrder.value ? '请先点击直接核销，定金订单不用扫码或输码' : '请先完成团购券核销'
+  }
+  if (!hasSavedServiceDetail.value) {
+    return '请先保存服务确认单草稿'
+  }
+  if (dirty.value) {
+    return '确认单内容已变更，请保存并重新打印当前版本'
+  }
+  if (showConfirmPaperButton.value && !hasConfirmedServiceForm.value) {
+    return hasCurrentPrintedServiceForm.value ? '客户在纸质单手写签名后点击确认纸质单' : '请先打印当前版本确认单'
+  }
+  if (!detail.value.summary?.startTime && !hasConfirmedServiceForm.value) {
+    return '纸质确认单未确认，暂不能开始服务'
+  }
+  return ''
 })
 const serviceActionHint = computed(() => {
   if (compatibilityBackfillMode.value) {
@@ -569,9 +681,12 @@ const serviceActionHint = computed(() => {
     return '服务进行中，完成后点击完成服务'
   }
   if (!hasConfirmedServiceForm.value) {
-    return hasSavedServiceDetail.value ? '请确认纸质服务确认单后开始服务' : '请先保存服务确认单草稿'
+    if (!hasSavedServiceDetail.value) {
+      return '请先保存服务确认单草稿'
+    }
+    return hasCurrentPrintedServiceForm.value ? '客户手写签名后点击确认纸质单' : '请打印当前版本确认单'
   }
-  return hasConfirmedServiceForm.value ? '确认单已确认，可开始服务' : '请打印确认单，客户线下手写签名后再确认'
+  return hasConfirmedServiceForm.value ? '确认单已确认，可单独点击开始服务' : '请打印确认单，客户线下手写签名后再确认'
 })
 const roleCards = computed(() => {
   const currentRoleMap = new Map(currentRoles.value.map((item) => [normalize(item.roleCode), item]))
@@ -593,13 +708,20 @@ const orderSummaryItems = computed(() =>
 )
 const timelineItems = computed(() => [
   { label: '核销时间', value: formatDateTime(detail.value?.order?.verificationTime) || '--' },
-  { label: '确认单', value: hasConfirmedServiceForm.value ? '已确认' : hasSavedServiceDetail.value ? '待打印确认' : '待确认' },
+  { label: '打印确认单', value: hasCurrentPrintedServiceForm.value ? `${formatDateTime(serviceForm.printAudit?.printedAt) || '已打印'} / 第 ${serviceForm.printAudit?.printCount || 1} 次` : '未打印' },
+  { label: '纸质签字', value: hasConfirmedServiceForm.value ? '已确认' : hasCurrentPrintedServiceForm.value ? '待确认' : hasSavedServiceDetail.value ? '待打印' : '待确认' },
   { label: '开始服务', value: formatDateTime(detail.value?.summary?.startTime) || '--' },
   { label: '完成服务', value: formatDateTime(detail.value?.summary?.finishTime) || '--' }
 ])
+const appointmentTimelineItems = computed(() => normalizeAppointmentRecords(detail.value?.order?.appointmentRecords))
 const flowTraceItems = computed(() => normalizeFlowTrace(detail.value?.flowTrace))
-const flowTraceHint = computed(() => (flowTraceItems.value.length ? '来自已记录的业务动作。' : '暂无详细操作记录，按当前订单状态展示。'))
-const displayTimelineItems = computed(() => (flowTraceItems.value.length ? flowTraceItems.value : timelineItems.value))
+const flowTraceHint = computed(() =>
+  appointmentTimelineItems.value.length || flowTraceItems.value.length ? '来自已记录的业务动作。' : '暂无详细操作记录，按当前订单状态展示。'
+)
+const displayTimelineItems = computed(() => {
+  const items = [...appointmentTimelineItems.value, ...flowTraceItems.value]
+  return items.length ? items : timelineItems.value
+})
 const serviceProcessSteps = computed(() => {
   const stage = serviceStage.value.key
   const verified = isVerified.value
@@ -629,7 +751,7 @@ const serviceNextStepHint = computed(() => {
       ? '下一步：打印确认单，客户线下手写签名后在系统确认。'
       : '下一步：填写确认单并打印，由客户在线下纸质单确认。'
   }
-  return '下一步：确认单已确认并开始服务。'
+  return '下一步：确认单已确认，单独点击开始服务。'
 })
 
 let autosaveTimer = null
@@ -653,8 +775,19 @@ function createServiceForm(payload = {}) {
     addOnContent: String(payload.addOnContent || ''),
     signature: String(payload.signature || ''),
     internalRemark: String(payload.internalRemark || ''),
+    printAudit: normalizeServicePrintAudit(payload.printAudit),
     confirmation: normalizeServiceConfirmation(payload.confirmation || payload.serviceFormStatus),
     serviceTemplate: normalizeServiceTemplate(payload.serviceTemplate)
+  }
+}
+
+function normalizeServicePrintAudit(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  return {
+    ...value,
+    status: normalize(value.status)
   }
 }
 
@@ -687,6 +820,19 @@ function applyServiceForm(payload) {
   })
 }
 
+function syncServiceFormVersionState(serviceDetailJson) {
+  const parsed = safeParseJson(serviceDetailJson)
+  if (!parsed) {
+    return
+  }
+  suppressDirtyWatch = true
+  serviceForm.printAudit = normalizeServicePrintAudit(parsed.printAudit)
+  serviceForm.confirmation = normalizeServiceConfirmation(parsed.confirmation || parsed.serviceFormStatus)
+  queueMicrotask(() => {
+    suppressDirtyWatch = false
+  })
+}
+
 function normalizeArray(value) {
   if (Array.isArray(value)) {
     return value.map((item) => String(item || '').trim()).filter(Boolean)
@@ -706,6 +852,51 @@ function joinDisplay(values) {
 
 function fieldText(value) {
   return String(value || '').trim() || '未填写'
+}
+
+function normalizeAppointmentRecords(records) {
+  if (!Array.isArray(records) || !records.length) {
+    return []
+  }
+  return records
+    .map((record) => ({
+      label: appointmentRecordLabel(record?.actionType),
+      value: buildAppointmentRecordText(record)
+    }))
+    .filter((item) => item.label && item.value)
+}
+
+function appointmentRecordLabel(actionType) {
+  const labels = {
+    APPOINTMENT_CREATE: '约档记录',
+    APPOINTMENT_CHANGE: '改档记录',
+    APPOINTMENT_CANCEL: '取消预约'
+  }
+  return labels[normalize(actionType)] || '排档记录'
+}
+
+function buildAppointmentRecordText(record) {
+  const extra = safeParseJson(record?.extraJson) || {}
+  const parts = []
+  const actor = record?.operatorUserName || (record?.operatorUserId ? `ID ${record.operatorUserId}` : '')
+  if (actor) {
+    parts.push(`操作人：${actor}`)
+  }
+  if (extra.storeNameBefore || extra.appointmentTimeBefore) {
+    parts.push(`原档：${[extra.storeNameBefore, extra.appointmentTimeBefore].filter(Boolean).join(' ')}`)
+  }
+  if (extra.storeNameAfter || extra.appointmentTimeAfter || extra.storeName) {
+    parts.push(`新档：${[extra.storeNameAfter || extra.storeName, extra.appointmentTimeAfter].filter(Boolean).join(' ')}`)
+  }
+  const remark = extra.remark || record?.remark || ''
+  if (remark) {
+    parts.push(`备注：${remark}`)
+  }
+  const time = formatDateTime(record?.createTime)
+  if (time) {
+    parts.push(time)
+  }
+  return parts.join(' / ') || '--'
 }
 
 function normalizeFlowTrace(items) {
@@ -729,6 +920,7 @@ function formatFlowTraceAction(actionCode) {
     ORDER_VERIFY: isDepositOrder.value ? '直接核销' : '到店核销',
     PLAN_CREATE: '创建服务单',
     PLAN_ARRIVE: '确认到店',
+    SERVICE_FORM_PRINT: '打印确认单',
     SERVICE_FORM_CONFIRM: '确认纸质单',
     PLAN_START: '开始服务',
     PLAN_FINISH: '完成服务',
@@ -855,8 +1047,8 @@ async function handlePlanAction(action, options = {}) {
 
 async function handleConfirmAndAdvance() {
   if (!canEditForm.value || !canConfirmAction.value) {
-    if (isVerified.value && !detail.value?.summary?.startTime && !hasSavedServiceDetail.value) {
-      ElMessage.warning('请先保存服务确认单草稿')
+    if (nextActionDisabledReason.value) {
+      ElMessage.warning(nextActionDisabledReason.value)
     }
     return
   }
@@ -885,10 +1077,8 @@ async function handleConfirmAndAdvance() {
       return
     }
     if (!hasConfirmedServiceForm.value) {
-      await confirmPlanOrderServiceForm({
-        planOrderId: Number(route.params.id)
-      })
-      serviceForm.confirmation = { status: 'PRINT_CONFIRMED' }
+      ElMessage.warning('请先确认纸质服务确认单')
+      return
     }
     if (!detail.value?.summary?.arriveTime) {
       await handlePlanAction('arrive', { silent: true, skipReload: true })
@@ -899,12 +1089,52 @@ async function handleConfirmAndAdvance() {
   }
 }
 
+async function handleConfirmPaperForm() {
+  if (!canConfirmPaperForm.value) {
+    ElMessage.warning(nextActionDisabledReason.value || '请先保存服务确认单草稿')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      '请确认服务确认单已经打印，客户已在线下纸质单手写签名。本操作只记录纸质确认，不会自动开始服务。',
+      '确认纸质单',
+      {
+        confirmButtonText: '确认纸质单',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+  confirmingAction.value = true
+  try {
+    const saved = await handleSaveServiceForm({ silent: true })
+    if (!saved) {
+      ElMessage.error('服务单未保存成功，暂不能确认纸质单')
+      return
+    }
+    await confirmPlanOrderServiceForm({
+      planOrderId: Number(route.params.id)
+    })
+    serviceForm.confirmation = {
+      status: 'PRINT_CONFIRMED',
+      signatureMode: 'PAPER',
+      signatureRequired: true
+    }
+    ElMessage.success('纸质确认单已确认，可单独开始服务')
+    await loadPageContext()
+  } finally {
+    confirmingAction.value = false
+  }
+}
+
 function confirmAdvanceMessage() {
   if (detail.value?.summary?.startTime) {
     return '确认完成本次门店服务吗？完成后订单会进入已完成状态，并用于后续服务分成统计；此操作不会发起退款或资金划拨。'
   }
   if (!hasConfirmedServiceForm.value) {
-    return '请确认服务确认单已经打印，且客户已在线下纸质单手写签名。确认后系统会记录纸质确认并开始服务。'
+    return '纸质确认单尚未确认，请先打印并确认客户手写签名。'
   }
   return `点击后将推进到下一状态：${confirmActionLabel.value}。是否继续？`
 }
@@ -985,6 +1215,7 @@ async function handleSaveServiceForm(options = {}) {
       ...detail.value.order,
       ...response
     }
+    syncServiceFormVersionState(response?.serviceDetailJson)
     dirty.value = false
     const timeText = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
     autosaveMessage.value = options.autosave ? `已自动保存 ${timeText}` : `已保存 ${timeText}`
@@ -1008,6 +1239,9 @@ async function handlePrintServiceForm() {
     ElMessage.warning('请先保存服务确认单草稿')
     return
   }
+  if (printingServiceForm.value) {
+    return
+  }
   if (canEditForm.value && dirty.value) {
     const saved = await handleSaveServiceForm({ silent: true })
     if (!saved) {
@@ -1015,20 +1249,33 @@ async function handlePrintServiceForm() {
       return
     }
   }
-  await nextTick()
-  window.print()
+  printingServiceForm.value = true
+  try {
+    await printPlanOrderServiceForm({
+      planOrderId: Number(route.params.id)
+    })
+    await loadPageContext()
+    ElMessage.success('确认单打印记录已生成')
+    await nextTick()
+    window.print()
+  } finally {
+    printingServiceForm.value = false
+  }
 }
 
 function buildServiceFormMessage() {
   const url = buildSystemUrl(state, 'scan', `/service-scan/${route.params.id}?mode=view`)
-  return [
+  const lines = [
     `您好，${customerDisplayName.value} 的服务确认单已更新。`,
     `门店：${storeDisplayName.value}`,
     `预约时间：${appointmentLabel.value}`,
-    `服务确认单金额：${serviceConfirmAmountLabel.value}`,
     `服务需求：${fieldText(serviceForm.serviceRequirement)}`,
     `查看链接：${url}`
-  ].join('\n')
+  ]
+  if (canViewAmounts.value) {
+    lines.splice(3, 0, `服务确认单金额：${serviceConfirmAmountLabel.value}`)
+  }
+  return lines.join('\n')
 }
 
 async function handleSaveAndSend() {
@@ -1726,6 +1973,124 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
+.print-service-form {
+  display: none;
+}
+
+.print-service-form__head {
+  text-align: center;
+  border-bottom: 2px solid #0f172a;
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+}
+
+.print-service-form__head h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 26px;
+}
+
+.print-service-form__head p {
+  margin: 6px 0 0;
+  color: #475569;
+  font-size: 14px;
+}
+
+.print-service-form__meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid #0f172a;
+  border-bottom: 0;
+}
+
+.print-service-form__meta div {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  min-height: 38px;
+  border-bottom: 1px solid #0f172a;
+}
+
+.print-service-form__meta span,
+.print-service-form__meta strong {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.print-service-form__meta span {
+  border-right: 1px solid #0f172a;
+  font-weight: 700;
+  background: #f8fafc;
+}
+
+.print-service-form__section {
+  margin-top: 18px;
+}
+
+.print-service-form__section h2 {
+  margin: 0 0 10px;
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.print-service-form__section dl {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border: 1px solid #0f172a;
+  border-bottom: 0;
+}
+
+.print-service-form__section dl div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  min-height: 42px;
+  border-bottom: 1px solid #0f172a;
+}
+
+.print-service-form__section dt,
+.print-service-form__section dd {
+  margin: 0;
+  padding: 10px 12px;
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.print-service-form__section dt {
+  border-right: 1px solid #0f172a;
+  font-weight: 700;
+  background: #f8fafc;
+}
+
+.print-service-form__sign {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 36px;
+}
+
+.print-service-form__sign div {
+  display: grid;
+  gap: 18px;
+}
+
+.print-service-form__sign span {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.print-service-form__sign strong {
+  min-height: 42px;
+  border-bottom: 1px solid #0f172a;
+  color: #0f172a;
+  font-size: 14px;
+}
+
 .service-action-bar {
   position: sticky;
   bottom: 0;
@@ -1811,5 +2176,37 @@ onBeforeUnmount(() => {
     grid-template-columns: minmax(0, 1fr);
   }
 
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  :global(body) {
+    background: #ffffff !important;
+  }
+
+  .plan-order-page,
+  .service-shell {
+    display: block;
+    width: auto;
+    min-width: 0;
+    background: #ffffff !important;
+  }
+
+  .service-header,
+  .service-workspace,
+  .service-action-bar,
+  .scanner-dialog {
+    display: none !important;
+  }
+
+  .print-service-form {
+    display: block;
+    color: #0f172a;
+    background: #ffffff;
+  }
 }
 </style>

@@ -12,6 +12,7 @@ import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderActionRecordMapper;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.order.service.OrderSettlementService;
+import com.seedcrm.crm.order.support.ServiceFormVersionSupport;
 import com.seedcrm.crm.planorder.dto.PlanOrderActionDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderAssignRoleDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderCreateDTO;
@@ -46,7 +47,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
             "PHOTOGRAPHER",
             "MAKEUP_ARTIST",
             "PHOTO_SELECTOR");
-    private static final String SERVICE_FORM_CONFIRM_STATUS = "PRINT_CONFIRMED";
+    private static final String SERVICE_FORM_CONFIRM_STATUS = ServiceFormVersionSupport.CONFIRM_STATUS;
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final PlanOrderMapper planOrderMapper;
@@ -192,8 +193,39 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
             order.setStatus(OrderStatus.SERVING.name());
         }
         touchOrder(order, false);
-        systemFlowRuntimeBridge.recordOrderAction(order, "PLAN_ARRIVED", "PLAN_START",
-                operatorUserId, operatorRoleCode, "确认单已确认并开始服务");
+        systemFlowRuntimeBridge.recordOrderAction(order, "SERVICE_FORM_CONFIRMED", "PLAN_START",
+                operatorUserId, operatorRoleCode, "开始服务");
+        return planOrder;
+    }
+
+    @Override
+    @Transactional
+    public PlanOrder printServiceForm(PlanOrderActionDTO planOrderActionDTO) {
+        return printServiceForm(planOrderActionDTO, null, null);
+    }
+
+    @Override
+    @Transactional
+    public PlanOrder printServiceForm(PlanOrderActionDTO planOrderActionDTO, Long operatorUserId, String operatorRoleCode) {
+        PlanOrder planOrder = getPlanOrderForAction(planOrderActionDTO);
+        if (PlanOrderStatus.FINISHED.name().equals(planOrder.getStatus())) {
+            throw new BusinessException("cannot print service form after plan order finished");
+        }
+        Order order = dbLockService.lockOrder(planOrder.getOrderId());
+        ensureOrderVerifiedForService(order, "print service form");
+        ensureServiceDetailSaved(order);
+
+        ObjectNode root = ServiceFormVersionSupport.parseRoot(order.getServiceDetailJson(), objectMapper);
+        String currentHash = ServiceFormVersionSupport.printableHash(root, objectMapper);
+        ServiceFormVersionSupport.clearConfirmationIfHashMismatch(root, currentHash);
+        ObjectNode printAudit = buildPrintAudit(root, planOrder.getId(), currentHash, operatorUserId, operatorRoleCode);
+        root.set("printAudit", printAudit);
+
+        order.setServiceDetailJson(writeServiceDetailJson(root));
+        touchOrder(order, false);
+        String extraJson = buildServiceFormActionExtra(planOrder.getId(), currentHash, operatorRoleCode, printAudit);
+        recordOrderAction(order.getId(), "SERVICE_FORM_PRINT", order.getStatus(), order.getStatus(),
+                operatorUserId, "service confirmation form printed", extraJson);
         return planOrder;
     }
 
@@ -213,13 +245,22 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         Order order = dbLockService.lockOrder(planOrder.getOrderId());
         ensureOrderVerifiedForService(order, "confirm service form");
         ensureServiceDetailSaved(order);
-        if (isServiceFormConfirmed(order.getServiceDetailJson())) {
+        ObjectNode root = ServiceFormVersionSupport.parseRoot(order.getServiceDetailJson(), objectMapper);
+        String currentHash = ServiceFormVersionSupport.printableHash(root, objectMapper);
+        if (isServiceFormConfirmed(root)) {
+            if (!ServiceFormVersionSupport.hasCurrentConfirmation(root, currentHash)) {
+                throw new BusinessException("service form content changed; print current version before confirming");
+            }
             return planOrder;
         }
-        order.setServiceDetailJson(markServiceFormConfirmed(order.getServiceDetailJson(), operatorUserId, operatorRoleCode));
+        if (!ServiceFormVersionSupport.hasCurrentPrintAudit(root, currentHash)) {
+            throw new BusinessException("please print current service form version before confirming");
+        }
+        order.setServiceDetailJson(markServiceFormConfirmed(root, currentHash, operatorUserId, operatorRoleCode));
         touchOrder(order, false);
+        String extraJson = buildServiceFormActionExtra(planOrder.getId(), currentHash, operatorRoleCode, root.path("printAudit"));
         recordOrderAction(order.getId(), "SERVICE_FORM_CONFIRM", order.getStatus(), order.getStatus(),
-                operatorUserId, "纸质确认单已打印并手写签名确认");
+                operatorUserId, "paper service confirmation form signed", extraJson);
         systemFlowRuntimeBridge.recordOrderAction(order, "PLAN_ARRIVED", "SERVICE_FORM_CONFIRM",
                 operatorUserId, operatorRoleCode, "纸质确认单已确认");
         return planOrder;
@@ -369,8 +410,13 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
 
     private void ensureServiceFormConfirmed(Order order, String action) {
         ensureServiceDetailSaved(order);
-        if (!isServiceFormConfirmed(order.getServiceDetailJson())) {
+        ObjectNode root = ServiceFormVersionSupport.parseRoot(order.getServiceDetailJson(), objectMapper);
+        String currentHash = ServiceFormVersionSupport.printableHash(root, objectMapper);
+        if (!isServiceFormConfirmed(root)) {
             throw new BusinessException("service form must be printed and confirmed before " + action);
+        }
+        if (!ServiceFormVersionSupport.hasCurrentConfirmation(root, currentHash)) {
+            throw new BusinessException("service form content changed; print current version before " + action);
         }
     }
 
@@ -389,25 +435,96 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         }
     }
 
-    private String markServiceFormConfirmed(String serviceDetailJson, Long operatorUserId, String operatorRoleCode) {
+    private boolean isServiceFormConfirmed(ObjectNode root) {
+        if (root == null) {
+            return false;
+        }
+        String nestedStatus = root.path("confirmation").path("status").asText("");
+        String flatStatus = root.path("serviceFormStatus").asText("");
+        return SERVICE_FORM_CONFIRM_STATUS.equalsIgnoreCase(nestedStatus)
+                || SERVICE_FORM_CONFIRM_STATUS.equalsIgnoreCase(flatStatus);
+    }
+
+    private String markServiceFormConfirmed(ObjectNode root, String serviceDetailHash, Long operatorUserId, String operatorRoleCode) {
         try {
-            JsonNode parsed = objectMapper.readTree(serviceDetailJson);
-            ObjectNode root = parsed != null && parsed.isObject()
-                    ? (ObjectNode) parsed
-                    : objectMapper.createObjectNode();
             ObjectNode confirmation = objectMapper.createObjectNode();
             confirmation.put("status", SERVICE_FORM_CONFIRM_STATUS);
             confirmation.put("signatureMode", "PAPER");
             confirmation.put("signatureRequired", true);
             confirmation.put("confirmedAt", DATE_TIME_FORMATTER.format(LocalDateTime.now()));
+            confirmation.put("serviceDetailHash", serviceDetailHash);
+            confirmation.put("projectionVersion", ServiceFormVersionSupport.PROJECTION_VERSION);
             if (operatorUserId != null && operatorUserId > 0) {
                 confirmation.put("confirmedByUserId", operatorUserId);
             }
             if (StringUtils.hasText(operatorRoleCode)) {
                 confirmation.put("confirmedByRoleCode", operatorRoleCode.trim());
             }
+            if (root.has("printAudit")) {
+                confirmation.set("printAudit", root.get("printAudit").deepCopy());
+            }
             root.put("serviceFormStatus", SERVICE_FORM_CONFIRM_STATUS);
             root.set("confirmation", confirmation);
+            return objectMapper.writeValueAsString(root);
+        } catch (Exception exception) {
+            throw new BusinessException("service form json is invalid");
+        }
+    }
+
+    private ObjectNode buildPrintAudit(ObjectNode root,
+                                       Long planOrderId,
+                                       String serviceDetailHash,
+                                       Long operatorUserId,
+                                       String operatorRoleCode) {
+        JsonNode previousAudit = root == null ? null : root.path("printAudit");
+        int printCount = previousAudit == null || previousAudit.isMissingNode()
+                ? 1
+                : previousAudit.path("printCount").asInt(0) + 1;
+        ObjectNode printAudit = objectMapper.createObjectNode();
+        printAudit.put("status", ServiceFormVersionSupport.PRINT_STATUS_PRINTED);
+        printAudit.put("printedAt", DATE_TIME_FORMATTER.format(LocalDateTime.now()));
+        printAudit.put("serviceDetailHash", serviceDetailHash);
+        printAudit.put("projectionVersion", ServiceFormVersionSupport.PROJECTION_VERSION);
+        printAudit.put("printCount", printCount);
+        if (planOrderId != null && planOrderId > 0) {
+            printAudit.put("planOrderId", planOrderId);
+        }
+        if (operatorUserId != null && operatorUserId > 0) {
+            printAudit.put("printedByUserId", operatorUserId);
+        }
+        if (StringUtils.hasText(operatorRoleCode)) {
+            printAudit.put("printedByRoleCode", operatorRoleCode.trim());
+        }
+        return printAudit;
+    }
+
+    private String buildServiceFormActionExtra(Long planOrderId,
+                                               String serviceDetailHash,
+                                               String operatorRoleCode,
+                                               JsonNode printAudit) {
+        ObjectNode extra = objectMapper.createObjectNode();
+        if (planOrderId != null && planOrderId > 0) {
+            extra.put("planOrderId", planOrderId);
+        }
+        if (StringUtils.hasText(serviceDetailHash)) {
+            extra.put("serviceDetailHash", serviceDetailHash);
+        }
+        extra.put("projectionVersion", ServiceFormVersionSupport.PROJECTION_VERSION);
+        if (StringUtils.hasText(operatorRoleCode)) {
+            extra.put("operatorRoleCode", operatorRoleCode.trim());
+        }
+        if (printAudit != null && !printAudit.isMissingNode() && !printAudit.isNull()) {
+            extra.set("printAudit", printAudit.deepCopy());
+        }
+        try {
+            return objectMapper.writeValueAsString(extra);
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    private String writeServiceDetailJson(JsonNode root) {
+        try {
             return objectMapper.writeValueAsString(root);
         } catch (Exception exception) {
             throw new BusinessException("service form json is invalid");
@@ -526,6 +643,16 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
                                    String toStatus,
                                    Long operatorUserId,
                                    String remark) {
+        recordOrderAction(orderId, actionType, fromStatus, toStatus, operatorUserId, remark, null);
+    }
+
+    private void recordOrderAction(Long orderId,
+                                   String actionType,
+                                   String fromStatus,
+                                   String toStatus,
+                                   Long operatorUserId,
+                                   String remark,
+                                   String extraJson) {
         if (orderId == null || orderId <= 0) {
             return;
         }
@@ -536,6 +663,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         record.setToStatus(toStatus);
         record.setOperatorUserId(operatorUserId);
         record.setRemark(StringUtils.hasText(remark) ? remark.trim() : null);
+        record.setExtraJson(StringUtils.hasText(extraJson) ? extraJson : null);
         record.setCreateTime(LocalDateTime.now());
         orderActionRecordMapper.insert(record);
     }

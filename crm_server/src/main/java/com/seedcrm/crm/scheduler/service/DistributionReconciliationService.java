@@ -8,4 +8,8 @@ public interface DistributionReconciliationService {
     List<DistributionReconciliationResult> checkOrderStatus(int limit);
 
     List<DistributionReconciliationResult> pullReconciliation(int limit);
+
+    List<DistributionReconciliationResult> dryRunOrderStatus(int limit);
+
+    List<DistributionReconciliationResult> dryRunReconciliation(int limit);
 }

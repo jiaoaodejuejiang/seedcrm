@@ -42,8 +42,9 @@
         <div class="toolbar toolbar--compact">
           <div class="toolbar-tabs">
             <el-radio-group v-model="orderStatusFilter">
-              <el-radio-button value="UNAPPOINTED">未预约</el-radio-button>
-              <el-radio-button value="APPOINTED">已预约</el-radio-button>
+              <el-radio-button value="UNAPPOINTED">待约档</el-radio-button>
+              <el-radio-button value="APPOINTED">已约档</el-radio-button>
+              <el-radio-button value="VERIFIED">已核销</el-radio-button>
               <el-radio-button value="ALL">全部</el-radio-button>
             </el-radio-group>
           </div>
@@ -75,18 +76,7 @@
 
           <el-table-column label="门店" width="132" show-overflow-tooltip>
             <template #default="{ row }">
-              <div class="editable-cell">
-                <span class="editable-cell__text">{{ row.storeName || '--' }}</span>
-                <el-button
-                  v-if="canEditAppointment(row)"
-                  link
-                  class="editable-cell__trigger"
-                  :title="storeActionTitle(row)"
-                  @click="openAppointmentDialog(row)"
-                >
-                  <el-icon><EditPen /></el-icon>
-                </el-button>
-              </div>
+              {{ row.storeName || '--' }}
             </template>
           </el-table-column>
 
@@ -98,26 +88,21 @@
 
           <el-table-column label="是否已预约" width="120">
             <template #default="{ row }">
-              <el-tag :type="isAppointedOrder(row) ? 'success' : 'warning'">
-                {{ isAppointedOrder(row) ? '已预约' : '未预约' }}
+              <el-tag :type="appointmentStateTagType(row)">
+                {{ appointmentStateLabel(row) }}
               </el-tag>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="到店/档数" width="118">
+            <template #default="{ row }">
+              <span>{{ appointmentOccupancyText(row) }}</span>
             </template>
           </el-table-column>
 
           <el-table-column label="预约档期" width="190" show-overflow-tooltip>
             <template #default="{ row }">
-              <div class="editable-cell">
-                <span class="editable-cell__text">{{ appointmentDisplayText(row) }}</span>
-                <el-button
-                  v-if="canEditAppointment(row)"
-                  link
-                  class="editable-cell__trigger"
-                  :title="appointmentActionTitle(row)"
-                  @click="openAppointmentDialog(row)"
-                >
-                  <el-icon><EditPen /></el-icon>
-                </el-button>
-              </div>
+              {{ appointmentDisplayText(row) }}
             </template>
           </el-table-column>
 
@@ -141,10 +126,13 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="操作" width="120" fixed="right">
+          <el-table-column label="操作" width="172" fixed="right">
             <template #default="{ row }">
               <div class="action-group action-group--compact">
-                <el-popconfirm v-if="isAppointedOrder(row)" title="确认取消当前预约吗？" @confirm="handleCancelAppointment(row)">
+                <el-button v-if="canEditAppointment(row)" size="small" type="primary" @click="openAppointmentDialog(row)">
+                  约档
+                </el-button>
+                <el-popconfirm v-if="canCancelAppointment(row)" title="确认取消当前预约吗？" @confirm="handleCancelAppointment(row)">
                   <template #reference>
                     <el-button size="small" plain type="danger">取消预约</el-button>
                   </template>
@@ -229,7 +217,7 @@
               <div class="store-day-actions">
                 <div>
                   <h3>{{ selectedCalendarDay }}</h3>
-                  <p>已预约 {{ selectedDayScheduledRows.length }} 位客户，剩余 {{ selectedDayRemainingCount }} 个空档。</p>
+                  <p>已占用 {{ selectedDayScheduledRows.length }} 档，剩余 {{ selectedDayRemainingCount }} 个空档。</p>
                 </div>
                 <el-button
                   type="primary"
@@ -271,7 +259,15 @@
       </template>
     </section>
 
-    <el-dialog v-model="appointmentDialogVisible" :title="appointmentDialogTitle" width="560px">
+    <el-dialog v-model="appointmentDialogVisible" :title="appointmentDialogTitle" width="640px">
+      <el-alert
+        v-if="appointmentStatusTip"
+        class="appointment-status-tip"
+        :title="appointmentStatusTip"
+        type="info"
+        :closable="false"
+        show-icon
+      />
       <el-form :model="appointmentForm" label-width="92px">
         <el-form-item label="订单">
           <el-input :model-value="selectedOrderLabel" disabled />
@@ -286,6 +282,19 @@
             <el-option v-for="item in storeOptions" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
+        <el-form-item label="到店人数">
+          <div class="appointment-headcount-row">
+            <el-input-number
+              v-model="appointmentForm.headcount"
+              :min="1"
+              :max="20"
+              :disabled="!selectedOrderCanEditAppointment"
+              controls-position="right"
+              @change="handleAppointmentHeadcountChange"
+            />
+            <span>需占用 {{ requiredAppointmentSlotCount }} 个档</span>
+          </div>
+        </el-form-item>
         <el-form-item label="预约时间">
           <el-date-picker
             v-model="appointmentForm.appointmentTime"
@@ -294,6 +303,7 @@
             value-format="YYYY-MM-DD HH:mm:ss"
             :disabled="!selectedOrderCanEditAppointment"
             style="width: 100%"
+            @change="handleAppointmentTimeChange"
           />
         </el-form-item>
         <el-form-item v-if="selectedOrderCanEditAppointment" label="门店空档">
@@ -303,7 +313,7 @@
               :key="slot.value"
               type="button"
               class="slot-button"
-              :class="{ 'is-selected': appointmentForm.appointmentTime === slot.value }"
+              :class="{ 'is-selected': selectedAppointmentSlotValues.includes(slot.value) }"
               :disabled="slot.isOccupied"
               @click="selectAppointmentSlot(slot)"
             >
@@ -312,13 +322,16 @@
             </button>
             <span v-if="!appointmentSlotOptions.length" class="text-secondary">当前门店当天没有可用空档。</span>
           </div>
+          <div class="appointment-slot-summary">
+            已选择 {{ selectedAppointmentSlotCount }} / {{ requiredAppointmentSlotCount }} 档
+          </div>
         </el-form-item>
         <el-form-item label="排档提示">
           <div class="table-note">
             当前门店 {{ appointmentForm.storeName || '--' }} 每日可排 {{ storeCapacity(appointmentForm.storeName) }} 档；
             {{ formatDate(appointmentForm.appointmentTime) || '所选日期' }} 已约
             {{ bookedCountByStoreAndDay(appointmentForm.storeName, formatDate(appointmentForm.appointmentTime), selectedOrder?.id) }}
-            位客户。
+            档。
           </div>
         </el-form-item>
         <el-form-item label="排档备注">
@@ -334,7 +347,7 @@
       <template #footer>
         <el-button @click="appointmentDialogVisible = false">关闭</el-button>
         <el-button v-if="selectedOrderCanEditAppointment" type="primary" :loading="saving" @click="handleSaveAppointment">
-          {{ isAppointedOrder(selectedOrder) ? '确认更改档期' : '确认预约排档' }}
+          {{ appointmentSubmitText }}
         </el-button>
       </template>
     </el-dialog>
@@ -429,7 +442,6 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { appointOrder, cancelOrderAppointment } from '../api/order'
@@ -472,6 +484,8 @@ const orderFilters = reactive({
 
 const appointmentForm = reactive({
   appointmentTime: '',
+  appointmentSlots: [],
+  headcount: 1,
   remark: '',
   storeName: ''
 })
@@ -506,10 +520,13 @@ const schedulingOrders = computed(() => productFilteredOrders.value.filter((item
 
 const filteredOrderRows = computed(() =>
   schedulingOrders.value.filter((item) => {
-    if (orderStatusFilter.value === 'UNAPPOINTED' && !isUnappointedOrder(item)) {
+    if (orderStatusFilter.value === 'UNAPPOINTED' && (!isUnappointedOrder(item) || isVerifiedOrder(item))) {
       return false
     }
-    if (orderStatusFilter.value === 'APPOINTED' && !isAppointedOrder(item)) {
+    if (orderStatusFilter.value === 'APPOINTED' && (!isAppointedOrder(item) || isVerifiedOrder(item))) {
+      return false
+    }
+    if (orderStatusFilter.value === 'VERIFIED' && !isVerifiedOrder(item)) {
       return false
     }
     if (orderFilters.customerName && !String(item.customerName || '').includes(orderFilters.customerName.trim())) {
@@ -536,6 +553,7 @@ const storeCards = computed(() => {
     todayBooked: bookedCountByStoreAndDay(storeName, formatDate(new Date()))
   }))
 })
+const storeOptions = computed(() => storeCards.value.map((item) => item.storeName))
 const filteredStoreCards = computed(() =>
   storeCards.value.filter((item) => {
     const keyword = String(storeKeyword.value || '').trim()
@@ -565,9 +583,12 @@ const selectedDayScheduledRows = computed(() =>
 )
 const selectedDayCapacity = computed(() => storeCapacity(activeStoreName.value))
 const selectedDayRemainingCount = computed(() => Math.max(selectedDayCapacity.value - selectedDayScheduledRows.value.length, 0))
-const appointmentCount = computed(() => schedulingOrders.value.filter((item) => isAppointedOrder(item)).length)
-const waitingCount = computed(() => schedulingOrders.value.filter((item) => isUnappointedOrder(item)).length)
+const appointmentCount = computed(() => schedulingOrders.value.filter((item) => isAppointedOrder(item) && !isVerifiedOrder(item)).length)
+const waitingCount = computed(() => schedulingOrders.value.filter((item) => isUnappointedOrder(item) && !isVerifiedOrder(item)).length)
 const selectedOrderCanEditAppointment = computed(() => canEditAppointment(selectedOrder.value))
+const requiredAppointmentSlotCount = computed(() => normalizeHeadcount(appointmentForm.headcount))
+const selectedAppointmentSlotValues = computed(() => normalizeSlotValues(appointmentForm.appointmentSlots))
+const selectedAppointmentSlotCount = computed(() => selectedAppointmentSlotValues.value.length)
 const appointmentSlotOptions = computed(() => {
   if (!selectedOrderCanEditAppointment.value) {
     return []
@@ -590,13 +611,26 @@ const storeBookingCandidateOrders = computed(() =>
 )
 const appointmentDialogTitle = computed(() => {
   if (isAppointedOrder(selectedOrder.value)) {
-    return '更改档期'
+    return '调整排档'
   }
   if (isUnappointedOrder(selectedOrder.value)) {
     return '预约排档'
   }
   return '查看排档'
 })
+const appointmentStatusTip = computed(() => {
+  if (!selectedOrder.value) {
+    return ''
+  }
+  if (isVerifiedOrder(selectedOrder.value)) {
+    return '该客户已核销，默认不再参与待约档处理。'
+  }
+  if (isAppointedOrder(selectedOrder.value)) {
+    return '已约档，可在这里调整门店、到店人数和档期。'
+  }
+  return '待约档，选择门店和足够档位后即可保存。'
+})
+const appointmentSubmitText = computed(() => (isAppointedOrder(selectedOrder.value) ? '确认改档' : '确认约档'))
 const selectedOrderLabel = computed(() => {
   if (!selectedOrder.value) {
     return ''
@@ -665,22 +699,25 @@ function appointmentRowsByDay(day, storeName = activeStoreName.value) {
   if (!storeName) {
     return []
   }
-  return mergedOrders.value.filter((item) => item.storeName === storeName && formatDate(item.appointmentTime) === day)
+  return buildAppointmentSlots(storeName, day)
+    .filter((item) => item.order)
+    .map((item) => ({
+      ...item.order,
+      slotIndex: item.index,
+      slotLabel: item.label
+    }))
 }
 
 function bookedCountByStoreAndDay(storeName, day, excludingOrderId = null) {
   if (!storeName || !day) {
     return 0
   }
-  return mergedOrders.value.filter((item) => {
-    if (item.storeName !== storeName || formatDate(item.appointmentTime) !== day) {
-      return false
+  return mergedOrders.value.reduce((total, item) => {
+    if (item.storeName !== storeName || (excludingOrderId && item.id === excludingOrderId)) {
+      return total
     }
-    if (excludingOrderId && item.id === excludingOrderId) {
-      return false
-    }
-    return true
-  }).length
+    return total + orderAppointmentSlotValues(item).filter((slotValue) => formatDate(slotValue) === day).length
+  }, 0)
 }
 
 function storeCapacity(storeName) {
@@ -704,35 +741,87 @@ function resolveOrderStatus(row) {
 }
 
 function isSchedulingOrder(row) {
-  return isUnappointedOrder(row) || isAppointedOrder(row)
+  return isUnappointedOrder(row) || isAppointedOrder(row) || isVerifiedOrder(row)
 }
 
 function isUnappointedOrder(row) {
-  return ['PAID', 'PAID_DEPOSIT'].includes(resolveOrderStatus(row))
+  return ['PAID', 'PAID_DEPOSIT'].includes(resolveOrderStatus(row)) && !isVerifiedOrder(row)
 }
 
 function isAppointedOrder(row) {
   return resolveOrderStatus(row) === 'APPOINTMENT'
 }
 
-function canEditAppointment(row) {
-  return isUnappointedOrder(row) || isAppointedOrder(row)
+function isVerifiedOrder(row) {
+  return normalize(row?.verificationStatus) === 'VERIFIED'
 }
 
-function storeActionTitle(row) {
-  return isAppointedOrder(row) ? '调整预约门店和档期' : '选择预约门店'
+function canEditAppointment(row) {
+  return !isVerifiedOrder(row) && (isUnappointedOrder(row) || isAppointedOrder(row))
+}
+
+function canCancelAppointment(row) {
+  return !isVerifiedOrder(row) && isAppointedOrder(row)
+}
+
+function appointmentStateLabel(row) {
+  if (isVerifiedOrder(row)) {
+    return '已核销'
+  }
+  return isAppointedOrder(row) ? '已约档' : '待约档'
+}
+
+function appointmentStateTagType(row) {
+  if (isVerifiedOrder(row)) {
+    return 'info'
+  }
+  return isAppointedOrder(row) ? 'success' : 'warning'
 }
 
 function appointmentDisplayText(row) {
-  return row.appointmentTime ? formatDateTime(row.appointmentTime) : '待预约'
+  const slots = orderAppointmentSlotValues(row)
+  if (!slots.length) {
+    return '待约档'
+  }
+  if (slots.length === 1) {
+    return formatDateTime(slots[0])
+  }
+  return `${formatDateTime(slots[0])} 等 ${slots.length} 档`
 }
 
-function appointmentActionTitle(row) {
-  return isAppointedOrder(row) ? '更改档期' : '预约排档'
+function appointmentOccupancyText(row) {
+  if (!isAppointedOrder(row) && !isVerifiedOrder(row)) {
+    return '--'
+  }
+  return `${appointmentHeadcount(row)} 人 / ${appointmentSlotCount(row)} 档`
 }
 
 function appointmentRecords(row) {
   return Array.isArray(row?.appointmentRecords) ? row.appointmentRecords : []
+}
+
+function currentAppointmentExtra(row) {
+  const record = appointmentRecords(row).find((item) => ['APPOINTMENT_CREATE', 'APPOINTMENT_CHANGE'].includes(normalize(item?.actionType)))
+  return parseRecordExtra(record?.extraJson)
+}
+
+function orderAppointmentSlotValues(row) {
+  const extra = currentAppointmentExtra(row)
+  const slots = normalizeSlotValues(extra.appointmentSlotsAfter)
+  if (slots.length) {
+    return slots
+  }
+  return row?.appointmentTime ? [normalizeSlotValue(row.appointmentTime)] : []
+}
+
+function appointmentHeadcount(row) {
+  const extra = currentAppointmentExtra(row)
+  const value = Number(extra.headcountAfter || extra.slotCountAfter || orderAppointmentSlotValues(row).length || 1)
+  return Number.isFinite(value) && value > 0 ? value : 1
+}
+
+function appointmentSlotCount(row) {
+  return Math.max(orderAppointmentSlotValues(row).length, appointmentHeadcount(row), 1)
 }
 
 function latestAppointmentRecord(row) {
@@ -745,10 +834,6 @@ function appointmentChangeCount(row) {
 
 function hasCanceledAppointment(row) {
   return appointmentRecords(row).some((item) => normalize(item?.actionType) === 'APPOINTMENT_CANCEL')
-}
-
-function appointmentRecordBadgeText(row) {
-  return appointmentRecordBadges(row).join(' / ') || '首次记录'
 }
 
 function appointmentRecordBadges(row) {
@@ -802,19 +887,24 @@ function recordTagType(actionType) {
 function recentRecordText(row) {
   const record = latestAppointmentRecord(row)
   const extra = parseRecordExtra(record?.extraJson)
+  const afterSlots = normalizeSlotValues(extra.appointmentSlotsAfter)
+  const beforeSlots = normalizeSlotValues(extra.appointmentSlotsBefore)
   if (normalize(record?.actionType) === 'APPOINTMENT_CANCEL') {
-    return extra.appointmentTimeBefore || record?.createTime || '--'
+    return formatSlotList(beforeSlots) || extra.appointmentTimeBefore || record?.createTime || '--'
   }
   if (normalize(record?.actionType) === 'APPOINTMENT_CHANGE') {
-    return extra.appointmentTimeAfter ? `至 ${extra.appointmentTimeAfter}` : record?.createTime || '--'
+    const slotText = formatSlotList(afterSlots) || extra.appointmentTimeAfter
+    return slotText ? `至 ${slotText}` : record?.createTime || '--'
   }
-  return extra.appointmentTimeAfter || record?.createTime || '--'
+  return formatSlotList(afterSlots) || extra.appointmentTimeAfter || record?.createTime || '--'
 }
 
 function recordSummary(record) {
   const extra = parseRecordExtra(record?.extraJson)
   const before = extra.appointmentTimeBefore || ''
   const after = extra.appointmentTimeAfter || ''
+  const beforeSlots = normalizeSlotValues(extra.appointmentSlotsBefore)
+  const afterSlots = normalizeSlotValues(extra.appointmentSlotsAfter)
   const beforeStore = extra.storeNameBefore || ''
   const afterStore = extra.storeNameAfter || extra.storeName || ''
   const remark = extra.remark || record?.remark || ''
@@ -823,7 +913,10 @@ function recordSummary(record) {
     if (beforeStore) {
       parts.push(`原门店：${beforeStore}`)
     }
-    parts.push(before ? `原档期：${before}` : '已取消预约')
+    parts.push(beforeSlots.length ? `原档期：${formatSlotList(beforeSlots)}` : (before ? `原档期：${before}` : '已取消预约'))
+    if (Number(extra.headcountBefore) > 0) {
+      parts.push(`原人数：${extra.headcountBefore} 人`)
+    }
     if (remark) {
       parts.push(remark)
     }
@@ -835,10 +928,19 @@ function recordSummary(record) {
   } else if (afterStore) {
     parts.push(`门店：${afterStore}`)
   }
-  if (before && after && before !== after) {
-    parts.push(`${before} -> ${after}`)
+  if (beforeSlots.length || afterSlots.length) {
+    const beforeText = formatSlotList(beforeSlots)
+    const afterText = formatSlotList(afterSlots)
+    parts.push(beforeText && afterText && beforeText !== afterText ? `档期：${beforeText} -> ${afterText}` : `档期：${afterText || beforeText}`)
+  } else if (before && after && before !== after) {
+    parts.push(`档期：${before} -> ${after}`)
   } else if (after) {
     parts.push(`档期：${after}`)
+  }
+  if (Number(extra.headcountAfter) > 0) {
+    const beforeHeadcount = Number(extra.headcountBefore || 0)
+    const afterHeadcount = Number(extra.headcountAfter)
+    parts.push(beforeHeadcount > 0 && beforeHeadcount !== afterHeadcount ? `人数：${beforeHeadcount} -> ${afterHeadcount}` : `人数：${afterHeadcount} 人`)
   }
   if (remark && !['预约排档', '更改预约档期'].includes(remark)) {
     parts.push(remark)
@@ -861,6 +963,54 @@ function parseRecordExtra(value) {
   } catch {
     return {}
   }
+}
+
+function normalizeHeadcount(value) {
+  const numericValue = Number(value || 1)
+  if (!Number.isFinite(numericValue) || numericValue < 1) {
+    return 1
+  }
+  return Math.min(Math.floor(numericValue), 20)
+}
+
+function normalizeSlotValues(value) {
+  const rawValues = Array.isArray(value) ? value : (value ? [value] : [])
+  return [...new Set(rawValues.map((item) => normalizeSlotValue(item)).filter(Boolean))]
+}
+
+function normalizeSlotValue(value) {
+  if (!value) {
+    return ''
+  }
+  const raw = String(value).trim().replace('T', ' ')
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(raw)) {
+    return `${raw}:00`
+  }
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(raw)) {
+    return raw.slice(0, 19)
+  }
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) {
+    return raw
+  }
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  const second = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`
+}
+
+function formatSlotList(values) {
+  const slots = normalizeSlotValues(values)
+  if (!slots.length) {
+    return ''
+  }
+  if (slots.length === 1) {
+    return formatDateTime(slots[0])
+  }
+  return `${formatDateTime(slots[0])} 等 ${slots.length} 档`
 }
 
 function parseClockMinutes(value) {
@@ -915,7 +1065,9 @@ function buildAppointmentSlots(storeName, day, excludingOrderId = null) {
         if (item.id === excludingOrderId || item.storeName !== storeName) {
           return false
         }
-        return isAppointmentWithinSlot(item.appointmentTime, day, current, current + slotMinutes)
+        return orderAppointmentSlotValues(item).some((appointmentSlot) =>
+          isAppointmentWithinSlot(appointmentSlot, day, current, current + slotMinutes)
+        )
       })
       slots.push({
         index: slotIndex,
@@ -931,8 +1083,37 @@ function buildAppointmentSlots(storeName, day, excludingOrderId = null) {
   })
 }
 
-function firstAvailableSlotValue(storeName, day, excludingOrderId = null) {
-  return buildAppointmentSlots(storeName, day, excludingOrderId).find((item) => !item.isOccupied)?.value || ''
+function firstAvailableSlotValues(storeName, day, excludingOrderId = null, count = 1) {
+  const slots = buildAppointmentSlots(storeName, day, excludingOrderId)
+  const requiredCount = normalizeHeadcount(count)
+  for (let index = 0; index <= slots.length - requiredCount; index += 1) {
+    const candidateSlots = slots.slice(index, index + requiredCount)
+    if (candidateSlots.length === requiredCount && candidateSlots.every((item) => !item.isOccupied)) {
+      return candidateSlots.map((item) => item.value)
+    }
+  }
+  return []
+}
+
+function consecutiveSlotValuesFrom(startValue) {
+  const normalizedStartValue = normalizeSlotValue(startValue)
+  const requiredCount = requiredAppointmentSlotCount.value
+  const slots = appointmentSlotOptions.value
+  const startIndex = slots.findIndex((item) => item.value === normalizedStartValue)
+  if (startIndex < 0) {
+    return firstAvailableSlotValues(appointmentForm.storeName, selectedCalendarDay.value, selectedOrder.value?.id, requiredCount)
+  }
+  const candidateSlots = slots.slice(startIndex, startIndex + requiredCount)
+  if (candidateSlots.length === requiredCount && candidateSlots.every((item) => !item.isOccupied)) {
+    return candidateSlots.map((item) => item.value)
+  }
+  return []
+}
+
+function setAppointmentSlots(values) {
+  const slots = normalizeSlotValues(values)
+  appointmentForm.appointmentSlots = slots
+  appointmentForm.appointmentTime = slots[0] || ''
 }
 
 function handleCalendarDayClick(day) {
@@ -940,9 +1121,14 @@ function handleCalendarDayClick(day) {
   if (!appointmentDialogVisible.value || !selectedOrderCanEditAppointment.value) {
     return
   }
-  const nextValue = firstAvailableSlotValue(appointmentForm.storeName, day, selectedOrder.value?.id)
-  if (nextValue) {
-    appointmentForm.appointmentTime = nextValue
+  const nextValues = firstAvailableSlotValues(
+    appointmentForm.storeName,
+    day,
+    selectedOrder.value?.id,
+    requiredAppointmentSlotCount.value
+  )
+  if (nextValues.length) {
+    setAppointmentSlots(nextValues)
   }
 }
 
@@ -950,23 +1136,61 @@ function selectAppointmentSlot(slot) {
   if (slot?.isOccupied) {
     return
   }
-  appointmentForm.appointmentTime = slot.value
+  const nextValues = consecutiveSlotValuesFrom(slot.value)
+  if (!nextValues.length) {
+    ElMessage.warning('当前日期没有足够连续空档，请减少人数或更换日期')
+    return
+  }
+  setAppointmentSlots(nextValues)
+}
+
+function handleAppointmentHeadcountChange() {
+  appointmentForm.headcount = normalizeHeadcount(appointmentForm.headcount)
+  const nextValues = consecutiveSlotValuesFrom(appointmentForm.appointmentTime)
+  if (nextValues.length) {
+    setAppointmentSlots(nextValues)
+    return
+  }
+  setAppointmentSlots([])
+}
+
+function handleAppointmentTimeChange(value) {
+  const normalizedValue = normalizeSlotValue(value)
+  if (!normalizedValue) {
+    setAppointmentSlots([])
+    return
+  }
+  const nextDay = formatDate(normalizedValue)
+  if (nextDay) {
+    syncCalendarDay(nextDay)
+  }
+  const nextValues = consecutiveSlotValuesFrom(normalizedValue)
+  if (nextValues.length) {
+    setAppointmentSlots(nextValues)
+    return
+  }
+  setAppointmentSlots([normalizedValue])
 }
 
 function openAppointmentDialog(row) {
   selectedOrder.value = row
   appointmentForm.remark = row.remark || ''
   appointmentForm.storeName = row.storeName || activeStoreName.value || storeCards.value[0]?.storeName || ''
+  appointmentForm.headcount = appointmentHeadcount(row)
   if (appointmentForm.storeName) {
     selectedStoreName.value = appointmentForm.storeName
   }
-  const preferredDay = formatDate(row.appointmentTime) || selectedCalendarDay.value || formatDate(new Date())
+  const currentSlots = orderAppointmentSlotValues(row)
+  const preferredDay = formatDate(currentSlots[0] || row.appointmentTime) || selectedCalendarDay.value || formatDate(new Date())
   syncCalendarDay(preferredDay)
   if (canEditAppointment(row)) {
-    appointmentForm.appointmentTime =
-      row.appointmentTime || firstAvailableSlotValue(appointmentForm.storeName, preferredDay, row.id)
+    if (currentSlots.length) {
+      setAppointmentSlots(currentSlots)
+    } else {
+      setAppointmentSlots(firstAvailableSlotValues(appointmentForm.storeName, preferredDay, row.id, appointmentForm.headcount))
+    }
   } else {
-    appointmentForm.appointmentTime = row.appointmentTime || ''
+    setAppointmentSlots(currentSlots)
   }
   appointmentDialogVisible.value = true
 }
@@ -976,9 +1200,9 @@ function handleAppointmentStoreChange(value) {
   if (!selectedOrderCanEditAppointment.value) {
     return
   }
-  const nextValue = firstAvailableSlotValue(value, selectedCalendarDay.value, selectedOrder.value?.id)
-  if (nextValue) {
-    appointmentForm.appointmentTime = nextValue
+  const nextValues = firstAvailableSlotValues(value, selectedCalendarDay.value, selectedOrder.value?.id, requiredAppointmentSlotCount.value)
+  if (nextValues.length) {
+    setAppointmentSlots(nextValues)
   }
 }
 
@@ -1048,15 +1272,20 @@ async function handleSaveAppointment() {
     appointmentDialogVisible.value = false
     return
   }
+  const selectedSlots = selectedAppointmentSlotValues.value
   if (!selectedOrder.value?.id || !appointmentForm.appointmentTime || !appointmentForm.storeName) {
     ElMessage.warning('请先选择预约门店和预约时间')
+    return
+  }
+  if (selectedSlots.length < requiredAppointmentSlotCount.value) {
+    ElMessage.warning(`请先选择 ${requiredAppointmentSlotCount.value} 个连续空档`)
     return
   }
 
   const day = formatDate(appointmentForm.appointmentTime)
   const capacity = storeCapacity(appointmentForm.storeName)
   const booked = bookedCountByStoreAndDay(appointmentForm.storeName, day, selectedOrder.value.id)
-  if (capacity > 0 && booked >= capacity) {
+  if (capacity > 0 && booked + selectedSlots.length > capacity) {
     ElMessage.warning('当前日期门店档位已满，请改约其他日期')
     return
   }
@@ -1065,13 +1294,16 @@ async function handleSaveAppointment() {
   try {
     await appointOrder({
       orderId: selectedOrder.value.id,
-      appointmentTime: appointmentForm.appointmentTime,
+      appointmentTime: selectedSlots[0],
+      appointmentSlots: selectedSlots,
+      headcount: requiredAppointmentSlotCount.value,
       previousStoreName: selectedOrder.value.storeName || undefined,
       storeName: appointmentForm.storeName,
+      sourceSurface: 'CUSTOMER_SCHEDULE',
       remark: appointmentForm.remark || undefined
     })
     persistPreferredStore(selectedOrder.value, appointmentForm.storeName)
-    ElMessage.success(isAppointedOrder(selectedOrder.value) ? '档期已更新' : '预约排档成功')
+    ElMessage.success(isAppointedOrder(selectedOrder.value) ? '已改档，记录已保存' : '已约档，门店可在服务列表查看')
     appointmentDialogVisible.value = false
     pendingRouteOrderId.value = 0
     selectedOrder.value = null
@@ -1096,6 +1328,7 @@ async function handleCancelAppointment(row) {
   try {
     await cancelOrderAppointment({
       orderId: row.id,
+      sourceSurface: 'CUSTOMER_SCHEDULE',
       remark: '取消预约'
     })
     ElMessage.success('已取消预约，客户已回到未预约状态')
@@ -1136,8 +1369,11 @@ async function handleStoreBookingConfirm() {
     await appointOrder({
       orderId: order.id,
       appointmentTime: storeBookingForm.slotValue,
+      appointmentSlots: [storeBookingForm.slotValue],
+      headcount: 1,
       previousStoreName: order.storeName || undefined,
       storeName: activeStoreName.value,
+      sourceSurface: 'STORE_SCHEDULE',
       remark: order.remark || undefined
     })
     persistPreferredStore(order, activeStoreName.value)
@@ -1161,6 +1397,26 @@ loadOrders()
 </script>
 
 <style scoped>
+.appointment-status-tip {
+  margin-bottom: 14px;
+}
+
+.appointment-headcount-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.appointment-slot-summary {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+  margin-top: 8px;
+  width: 100%;
+}
+
 .schedule-record-preview {
   display: grid;
   gap: 6px;

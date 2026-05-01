@@ -79,6 +79,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
@@ -420,14 +421,24 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 .map(this::buildCurrentRoleResponse)
                 .toList();
 
+        OrderItemResponse orderResponse = buildOrderResponse(order, summary == null ? null : summary.getPlanOrderId(),
+                summary == null ? null : summary.getPlanOrderStatus(), customer);
+        if (orderResponse != null && order != null && order.getId() != null) {
+            orderResponse.setAppointmentRecords(loadAppointmentRecordsByOrderId(List.of(order.getId()))
+                    .getOrDefault(order.getId(), List.of()));
+        }
+
+        Long orderId = order == null ? null : order.getId();
+        List<FlowTraceItemResponse> flowTrace = loadOrderFlowTrace(orderId);
+        flowTrace = mergeServiceFormActionTrace(orderId, flowTrace);
+
         return new PlanOrderWorkbenchResponse(
                 summary,
-                buildOrderResponse(order, summary == null ? null : summary.getPlanOrderId(),
-                        summary == null ? null : summary.getPlanOrderStatus(), customer),
+                orderResponse,
                 buildCustomerSnapshot(customer, wecomRelation, ecomUsers.size()),
                 currentRoles,
                 roleRecordResponses,
-                loadOrderFlowTrace(order == null ? null : order.getId()));
+                flowTrace);
     }
 
     private List<FlowTraceItemResponse> loadOrderFlowTrace(Long orderId) {
@@ -463,6 +474,34 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         } catch (DataAccessException exception) {
             return List.of();
         }
+    }
+
+    private List<FlowTraceItemResponse> mergeServiceFormActionTrace(Long orderId, List<FlowTraceItemResponse> flowTrace) {
+        List<FlowTraceItemResponse> merged = new ArrayList<>(flowTrace == null ? List.of() : flowTrace);
+        if (orderId == null || orderId <= 0) {
+            return merged;
+        }
+        Set<String> existingActionCodes = merged.stream()
+                .map(FlowTraceItemResponse::getActionCode)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        List<OrderActionRecord> records = orderActionRecordMapper.selectList(Wrappers.<OrderActionRecord>lambdaQuery()
+                .eq(OrderActionRecord::getOrderId, orderId)
+                .in(OrderActionRecord::getActionType, List.of("SERVICE_FORM_PRINT", "SERVICE_FORM_CONFIRM"))
+                .orderByAsc(OrderActionRecord::getCreateTime)
+                .orderByAsc(OrderActionRecord::getId));
+        records.stream()
+                .filter(record -> !existingActionCodes.contains(record.getActionType()))
+                .map(record -> new FlowTraceItemResponse(
+                        record.getActionType(),
+                        record.getFromStatus(),
+                        record.getToStatus(),
+                        record.getRemark(),
+                        null,
+                        record.getCreateTime()))
+                .forEach(merged::add);
+        merged.sort(Comparator.comparing(FlowTraceItemResponse::getEventTime, Comparator.nullsLast(LocalDateTime::compareTo)));
+        return merged;
     }
 
     @Override

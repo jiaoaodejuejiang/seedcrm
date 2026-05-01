@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM 上线与联调运行手册</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #12201a;
+      --muted: #64748b;
+      --line: #dce8df;
+      --soft: #f5faf6;
+      --brand: #1f7a4f;
+      --warn: #9a5b00;
+      --danger: #a32020;
+      --card: #ffffff;
+    }
+    body {
+      margin: 0;
+      background: linear-gradient(135deg, #f2f8f3, #f8fbff);
+      color: var(--ink);
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+      line-height: 1.7;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 36px 22px 64px;
+    }
+    header {
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: 0 20px 60px rgba(31, 122, 79, 0.08);
+    }
+    h1, h2, h3 {
+      margin: 0;
+      line-height: 1.3;
+    }
+    h1 {
+      font-size: 30px;
+    }
+    h2 {
+      margin-top: 28px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+      font-size: 22px;
+    }
+    h3 {
+      margin-top: 18px;
+      font-size: 17px;
+    }
+    p {
+      margin: 10px 0 0;
+      color: var(--muted);
+    }
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: #e7f4ec;
+      color: var(--brand);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    section {
+      margin-top: 18px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--card);
+    }
+    table {
+      width: 100%;
+      margin-top: 14px;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 14px;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 11px 12px;
+      border-bottom: 1px solid #e8f0ea;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--soft);
+      color: #315344;
+      font-weight: 700;
+    }
+    code {
+      padding: 2px 6px;
+      border-radius: 7px;
+      background: #edf5ef;
+      color: #174f34;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+    pre {
+      overflow: auto;
+      padding: 16px;
+      border-radius: 16px;
+      background: #102018;
+      color: #d9f3e2;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    ol, ul {
+      margin: 10px 0 0;
+      padding-left: 22px;
+      color: var(--muted);
+    }
+    li {
+      margin: 6px 0;
+    }
+    .notice {
+      margin-top: 14px;
+      padding: 13px 15px;
+      border-radius: 16px;
+      background: #fff8e8;
+      color: var(--warn);
+    }
+    .danger {
+      background: #fff1f1;
+      color: var(--danger);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .card {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--soft);
+    }
+    @media (max-width: 760px) {
+      main { padding: 20px 12px 42px; }
+      header, section { padding: 18px; border-radius: 20px; }
+      .grid { grid-template-columns: 1fr; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SeedCRM 上线与联调运行手册</h1>
+    <p>本文用于方案 B 上线前检查、服务器部署、外部分销联调和问题回退。方案 B 主链路固定为：外部分销已支付订单 → Customer → Order(已支付) → PlanOrder → Order used → Outbox 回推。</p>
+    <div class="badge-row">
+      <span class="badge">不进入 Clue</span>
+      <span class="badge">受控 Open API</span>
+      <span class="badge">Dry-run 不落库</span>
+      <span class="badge">Outbox 异步回推</span>
+      <span class="badge">Swagger 受保护</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>1. 上线前硬性约束</h2>
+    <ul>
+      <li>外部分销已支付订单只能通过 <code>/open/distribution/events</code> 入站，不允许进入 <code>Clue</code>。</li>
+      <li>API Controller 和 Scheduler 都必须复用 <code>DistributionEventIngestService</code>，不得直接写 <code>Customer / Order / PlanOrder</code>。</li>
+      <li>联调工作台必须使用 dry-run，不能写核心业务表。</li>
+      <li>履约完成只能先写 <code>scheduler_outbox_event</code>，再由 Scheduler 异步回推外部分销系统。</li>
+      <li>生产环境必须关闭本地 Swagger 免 token：<code>SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN=false</code>。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>2. 服务器环境变量</h2>
+    <table>
+      <thead>
+      <tr>
+        <th>变量</th>
+        <th>用途</th>
+        <th>生产建议</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td><code>SPRING_PROFILES_ACTIVE</code></td>
+        <td>后端运行环境</td>
+        <td>生产建议设置为 <code>prod</code>，默认关闭 Swagger 并关闭本地免 token</td>
+      </tr>
+      <tr>
+        <td><code>SEEDCRM_DATASOURCE_URL</code></td>
+        <td>后端数据库连接</td>
+        <td>使用正式 MySQL 地址，禁止连接本地测试库</td>
+      </tr>
+      <tr>
+        <td><code>SEEDCRM_DATASOURCE_USERNAME</code></td>
+        <td>数据库账号</td>
+        <td>最小权限账号，至少区分生产和测试</td>
+      </tr>
+      <tr>
+        <td><code>SEEDCRM_DATASOURCE_PASSWORD</code></td>
+        <td>数据库密码</td>
+        <td>通过服务器密钥管理或环境变量注入，不写入仓库</td>
+      </tr>
+      <tr>
+        <td><code>SEEDCRM_SYSTEM_BASE_URL</code></td>
+        <td>后台系统访问域名</td>
+        <td>例如 <code>https://crm.example.com</code></td>
+      </tr>
+      <tr>
+        <td><code>SEEDCRM_API_BASE_URL</code></td>
+        <td>API、回调、Swagger 示例地址域名</td>
+        <td>例如 <code>https://api.example.com</code>，必须外网可访问</td>
+      </tr>
+      <tr>
+        <td><code>SEEDCRM_OPENAPI_ENABLED</code></td>
+        <td>是否启用 Swagger UI / OpenAPI JSON</td>
+        <td>需要联调时可启用；生产公网建议配合网关鉴权</td>
+      </tr>
+      <tr>
+        <td><code>SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN</code></td>
+        <td>本地访问 Swagger 是否免 token</td>
+        <td>生产必须设置为 <code>false</code></td>
+      </tr>
+      </tbody>
+    </table>
+    <pre><code>SPRING_PROFILES_ACTIVE=prod
+SEEDCRM_SYSTEM_BASE_URL=https://crm.example.com
+SEEDCRM_API_BASE_URL=https://api.example.com
+SEEDCRM_OPENAPI_ENABLED=false
+SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN=false</code></pre>
+  </section>
+
+  <section>
+    <h2>3. 域名与回调配置</h2>
+    <ol>
+      <li>进入【系统设置 → 基础配置 → 域名配置】，保存系统基础域名和 API 域名。</li>
+      <li>进入【系统设置 → 调度中心 → 分销接口】，确认“生产联调信息”中的入站、回查、对账和 Swagger 地址已经变为线上域名。</li>
+      <li>在外部分销系统中配置 SeedCRM 入站地址：<code>{API 域名}/open/distribution/events</code>。</li>
+      <li>在 SeedCRM 分销接口配置中填写外部分销系统的履约回推目标、状态回查路径、对账拉取路径和 AppSecret。</li>
+      <li>若涉及抖音、企业微信、支付回调，各配置页只能编辑路径或三方地址，基础域名必须来自域名配置。</li>
+    </ol>
+    <div class="notice">如果页面仍显示 <code>127.0.0.1</code>，不要进入真实联调，先检查环境变量和域名配置保存结果。</div>
+  </section>
+
+  <section>
+    <h2>4. Swagger 与联调工作台</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Swagger UI</h3>
+        <p>用于查看接口定义、字段结构和 OpenAPI 分组。远程访问只允许管理员、集成管理员、集成操作员。</p>
+        <p>入口：<code>{API 域名}/swagger-ui.html</code></p>
+      </div>
+      <div class="card">
+        <h3>联调工作台</h3>
+        <p>用于 dry-run 验证签名、字段映射、状态映射、Customer 匹配和 Order 幂等结果。</p>
+        <p>要求：不能写入 <code>Customer / Order / PlanOrder</code>。</p>
+      </div>
+    </div>
+    <div class="danger notice">生产环境不要把 Swagger/OpenAPI 直接暴露给公网未授权访问。若通过 Nginx/Gateway 暴露，必须叠加鉴权、IP 白名单或 VPN。</div>
+  </section>
+
+  <section>
+    <h2>5. 方案 B 联调步骤</h2>
+    <ol>
+      <li>在 MOCK 模式下保存分销配置，打开联调工作台，执行 <code>DISTRIBUTION_ORDER_PAID</code> dry-run。</li>
+      <li>确认结果显示：不写 Clue、预览 Customer 匹配、预览 Order 幂等、PlanOrder 不直接创建。</li>
+      <li>切换 LIVE 模式前补齐 API 域名、AppId、AppSecret、入站路径、回推目标、状态回查路径、对账路径。</li>
+      <li>外部系统发起真实 <code>distribution.order.paid</code> 入站，确认返回 traceId、customerId、orderId。</li>
+      <li>进入【会员信息】确认分销成交会员显示为 Customer 视角，不出现客资/线索/公海话术。</li>
+      <li>进入【顾客排档】预约门店档期，再进入【门店服务】完成核销、服务确认和订单完成。</li>
+      <li>确认 <code>crm.order.used</code> 进入 Outbox，Scheduler 成功回推外部分销系统。</li>
+      <li>若回推失败，进入异常队列或 Outbox 重试，不回滚本地订单履约。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>6. 上线验收清单</h2>
+    <ul>
+      <li>域名配置保存后，分销接口页显示的所有地址都是线上域名。</li>
+      <li>Swagger UI / OpenAPI JSON 远程访问需要后台 token，普通业务角色和 partner_app 不能访问。</li>
+      <li>联调工作台 dry-run 不写核心业务表。</li>
+      <li>重复 <code>X-Idempotency-Key</code> 或重复外部订单不会重复创建 Order。</li>
+      <li>历史重复 callback log 已治理，或形成上线风险确认。</li>
+      <li>PlanOrder 完成后生成 Outbox，而不是同步阻塞等待外部系统。</li>
+      <li>外部分销退款、取消只记录状态影响，不在 SeedCRM 处理资金流、分佣、提现。</li>
+      <li>数据库、后端、前端构建和浏览器冒烟验证均通过。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>7. 常见问题处理</h2>
+    <table>
+      <thead>
+      <tr>
+        <th>现象</th>
+        <th>处理建议</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td>外部系统回调 403</td>
+        <td>检查 X-Partner-Code、签名头、时间戳窗口、nonce 是否重复，确认分销配置已启用。</td>
+      </tr>
+      <tr>
+        <td>Swagger 线上无法打开</td>
+        <td>检查 <code>SEEDCRM_OPENAPI_ENABLED</code>、后台 token、网关鉴权和 <code>SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN=false</code>。</td>
+      </tr>
+      <tr>
+        <td>入站进入异常队列</td>
+        <td>查看冲突字段、外部订单号、本地订单号、TraceId 和处理建议；修复配置或数据后再重试。</td>
+      </tr>
+      <tr>
+        <td>Outbox 回推失败</td>
+        <td>检查外部分销回调地址、AppSecret、网络连通性和响应码；修复后执行单条重试或队列处理。</td>
+      </tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+</body>
+</html>

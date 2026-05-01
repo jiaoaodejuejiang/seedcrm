@@ -122,8 +122,9 @@
             <template #default="{ row }">
               <div class="action-group">
                 <el-button size="small" @click="pickJob(row)">编辑</el-button>
-                <el-button size="small" type="primary" plain :loading="triggeringJob === row.jobCode" @click="handleTrigger(row)">
-                  执行一次
+                <el-button size="small" plain :loading="dryRunningJob === row.jobCode" @click="handleDryRun(row)">预检（不入库）</el-button>
+                <el-button size="small" type="warning" plain :loading="triggeringJob === row.jobCode" @click="handleTrigger(row)">
+                  立即执行真实任务
                 </el-button>
                 <el-button size="small" plain :loading="retryingJob === row.jobCode" @click="handleRetry(row)">重试失败</el-button>
               </div>
@@ -339,9 +340,10 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
+  dryRunSchedulerJob,
   fetchSchedulerAuditLogs,
   fetchSchedulerJobs,
   fetchSchedulerLogs,
@@ -412,6 +414,7 @@ const router = useRouter()
 const loading = ref(false)
 const monitorSummaryLoading = ref(false)
 const savingJob = ref(false)
+const dryRunningJob = ref('')
 const triggeringJob = ref('')
 const retryingJob = ref('')
 const selectedJobCode = ref('')
@@ -562,7 +565,37 @@ async function handleSaveJob() {
   }
 }
 
+async function handleDryRun(row) {
+  dryRunningJob.value = row.jobCode
+  try {
+    const preview = await dryRunSchedulerJob({
+      jobCode: row.jobCode,
+      payload: JSON.stringify({ source: 'scheduler-center-dry-run' })
+    })
+    selectedJobCode.value = row.jobCode
+    activeTab.value = 'monitor'
+    const payload = parseLogPayload(preview?.payload)
+    ElMessage.success(payload?.message || '预检完成：未入队、未调用外部接口、未写核心业务表')
+    await loadData()
+  } finally {
+    dryRunningJob.value = ''
+  }
+}
+
 async function handleTrigger(row) {
+  try {
+    await ElMessageBox.confirm(
+      '该操作会按当前任务配置执行真实调度，可能处理队列、回查外部状态或生成受控入站重放事件。建议先执行预检，确认继续吗？',
+      '确认执行真实任务',
+      {
+        type: 'warning',
+        confirmButtonText: '确认执行',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    return
+  }
   triggeringJob.value = row.jobCode
   try {
     await triggerSchedulerJob({

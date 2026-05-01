@@ -1,5 +1,6 @@
 package com.seedcrm.crm.systemconfig.config;
 
+import com.seedcrm.crm.scheduler.support.DistributionOrderTypeMappingResolver;
 import jakarta.annotation.PostConstruct;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Value;
@@ -61,6 +62,11 @@ public class SystemConfigSchemaInitializer {
         seedDefault("amount.visibility.store_staff_hidden", "true", "BOOLEAN", "门店角色隐藏前置订单金额");
         seedDefault("form_designer.adapter.enabled", "true", "BOOLEAN", "启用服务单设计器适配层");
         seedDefault("form_designer.provider", "INTERNAL_SCHEMA", "STRING", "默认服务单设计器适配器");
+        seedDefault("system.environment.mode", "TEST", "STRING", "系统运行环境：LOCAL/DEV/TEST/STAGING/PROD；清理测试数据会阻断 PROD");
+        seedDefault(DistributionOrderTypeMappingResolver.CONFIG_KEY,
+                DistributionOrderTypeMappingResolver.DEFAULT_MAPPING_JSON,
+                "JSON",
+                "分销外部订单类型、商品和 SKU 到内部团购 / 定金的映射配置");
         seedDefault("system.domain.systemBaseUrl", defaultSystemBaseUrl, "URL", "系统后台访问基础域名，用于页面跳转和扫码服务单地址");
         seedDefault("system.domain.apiBaseUrl", defaultApiBaseUrl, "URL", "系统 API 基础域名，用于 Open API、回调接口和三方平台联调地址");
     }

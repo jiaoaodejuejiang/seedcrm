@@ -66,6 +66,17 @@ public class PlanOrderController {
                 context.getRoleCode())));
     }
 
+    @PostMapping("/print-service-form")
+    public ApiResponse<PlanOrderResponse> printServiceForm(@RequestBody PlanOrderActionDTO planOrderActionDTO,
+                                                           HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        planOrderPermissionGuard.checkUpdate(context, planOrderActionDTO == null ? null : planOrderActionDTO.getPlanOrderId());
+        return ApiResponse.success(PlanOrderResponse.from(planOrderService.printServiceForm(
+                planOrderActionDTO,
+                context.getCurrentUserId(),
+                context.getRoleCode())));
+    }
+
     @PostMapping("/confirm-service-form")
     public ApiResponse<PlanOrderResponse> confirmServiceForm(@RequestBody PlanOrderActionDTO planOrderActionDTO,
                                                              HttpServletRequest request) {

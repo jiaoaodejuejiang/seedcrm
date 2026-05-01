@@ -1,6 +1,7 @@
 package com.seedcrm.crm.scheduler.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -315,6 +316,39 @@ class SchedulerIntegrationServiceImplTest {
         assertThat(result.getVerifyCodeField()).isEqualTo(existing.getVerifyCodeField());
         assertThat(result.getRateLimitPerMinute()).isEqualTo(80);
         assertThat(result.getCacheTtlSeconds()).isEqualTo(45);
+    }
+
+    @Test
+    void shouldRejectExpiredAuthCodeBeforeTokenExchange() {
+        IntegrationProviderConfig existing = new IntegrationProviderConfig();
+        existing.setId(18L);
+        existing.setProviderCode("DOUYIN_LAIKE");
+        existing.setProviderName("鎶栭煶鏉ュ");
+        existing.setModuleCode("CLUE");
+        existing.setExecutionMode("LIVE");
+        existing.setAuthType("AUTH_CODE");
+        existing.setAppId("app-001");
+        existing.setBaseUrl("https://open.douyin.com");
+        existing.setClientSecret("secret-001");
+        existing.setAuthCode("expired-code");
+        existing.setLastAuthCodeAt(LocalDateTime.now().minusMinutes(10));
+
+        IntegrationProviderConfig request = new IntegrationProviderConfig();
+        request.setProviderCode("DOUYIN_LAIKE");
+        request.setProviderName("鎶栭煶鏉ュ");
+        request.setModuleCode("CLUE");
+        request.setExecutionMode("LIVE");
+        request.setBaseUrl("https://open.douyin.com");
+        when(providerConfigMapper.selectOne(any())).thenReturn(existing);
+        when(providerConfigMapper.selectById(18L)).thenReturn(existing);
+
+        assertThatThrownBy(() -> schedulerIntegrationService.testProvider(request))
+                .hasMessageContaining("auth_code");
+
+        ArgumentCaptor<IntegrationProviderConfig> providerCaptor = ArgumentCaptor.forClass(IntegrationProviderConfig.class);
+        verify(providerConfigMapper).updateById(providerCaptor.capture());
+        assertThat(providerCaptor.getValue().getAuthStatus()).isEqualTo("EXPIRED");
+        assertThat(providerCaptor.getValue().getAuthCodeStatus()).isEqualTo("EXPIRED");
     }
 
     @Test

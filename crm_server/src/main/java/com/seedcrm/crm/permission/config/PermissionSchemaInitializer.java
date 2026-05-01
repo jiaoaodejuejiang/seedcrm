@@ -173,9 +173,9 @@ public class PermissionSchemaInitializer {
         seedPolicy("PLANORDER", "VIEW", "PRIVATE_DOMAIN_SERVICE", "SELF", "bound customer");
         seedPolicy("ORDER", "VIEW", "PRIVATE_DOMAIN_SERVICE", "SELF", "bound customer");
         seedPolicy("ORDER", "VIEW", "FINANCE", "ALL", "verified and finished order finance scope");
-        seedPolicy("ORDER", "UPDATE", "FINANCE", "ALL", "verified payment refund registration");
         seedPolicy("ORDER", "REFUND_PAYMENT", "FINANCE", "ALL", "verified payment refund registration");
-        seedPolicy("ORDER", "FINISH", "FINANCE", "ALL", "order(status=finished)");
+        disablePolicy("ORDER", "UPDATE", "FINANCE", "ALL");
+        disablePolicy("ORDER", "FINISH", "FINANCE", "ALL");
 
         seedPolicy("SCHEDULER", "VIEW", "CLUE_MANAGER", "ALL", "scheduler monitor");
         seedPolicy("SCHEDULER", "UPDATE", "CLUE_MANAGER", "ALL", "scheduler config");
@@ -240,5 +240,16 @@ public class PermissionSchemaInitializer {
                 INSERT INTO permission_policy(module_code, action_code, role_code, data_scope, condition_rule, is_enabled, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, 1, ?, ?)
                 """, moduleCode, actionCode, roleCode, dataScope, conditionRule, LocalDateTime.now(), LocalDateTime.now());
+    }
+
+    private void disablePolicy(String moduleCode, String actionCode, String roleCode, String dataScope) {
+        jdbcTemplate.update("""
+                UPDATE permission_policy
+                SET is_enabled = 0, updated_at = ?
+                WHERE module_code = ?
+                  AND action_code = ?
+                  AND role_code = ?
+                  AND data_scope = ?
+                """, LocalDateTime.now(), moduleCode, actionCode, roleCode, dataScope);
     }
 }

@@ -17,7 +17,7 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("SeedCRM API")
                         .version("distribution-scheme-b-v1")
-                        .description("SeedCRM 后台与外部分销方案 B 联调接口文档。Swagger 用于查看接口定义，正式联调仍以接口调试 dry-run 和异常队列追踪为准。"))
+                        .description("SeedCRM 后台与外部分销方案 B 联调接口文档。Swagger 用于查看接口定义，正式联调仍以联调工作台 dry-run 和异常队列追踪为准。"))
                 .components(new Components()
                         .addSecuritySchemes("BackendToken", apiKey("X-Auth-Token", "后台登录 token"))
                         .addSecuritySchemes("PartnerCode", apiKey("X-Partner-Code", "外部合作方编码"))

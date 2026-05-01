@@ -154,6 +154,30 @@ public class SchedulerServiceImpl implements SchedulerService {
         return schedulerJobLogMapper.selectById(log.getId());
     }
 
+    @Override
+    public SchedulerJobLog dryRun(SchedulerTriggerRequest request, PermissionRequestContext context) {
+        if (request == null || !StringUtils.hasText(request.getJobCode())) {
+            throw new BusinessException("jobCode is required");
+        }
+        SchedulerJob job = getJobOrThrow(request.getJobCode());
+        SchedulerExecutionResult result = dryRunSupportedJob(job);
+        SchedulerJobLog preview = new SchedulerJobLog();
+        preview.setJobCode(job.getJobCode());
+        preview.setQueueName(job.getQueueName());
+        preview.setProviderId(job.getProviderId());
+        preview.setSyncMode(job.getSyncMode());
+        preview.setTriggerType("DRY_RUN");
+        preview.setStatus("PRECHECK");
+        preview.setRetryCount(0);
+        preview.setImportedCount(result.processedCount());
+        preview.setPayload(result.payload());
+        preview.setCreatedAt(LocalDateTime.now());
+        audit(job.getJobCode(), null, "JOB_DRY_RUN", context, "PRECHECK",
+                "scheduler dry-run finished without queueing, external calls, or core table writes",
+                result.auditDetail());
+        return preview;
+    }
+
     @Scheduled(fixedDelay = 15000, initialDelay = 15000)
     public void dispatchDueJobs() {
         LocalDateTime now = LocalDateTime.now();
@@ -401,6 +425,43 @@ public class SchedulerServiceImpl implements SchedulerService {
         throw new BusinessException("unsupported distribution scheduler job");
     }
 
+    private SchedulerExecutionResult dryRunSupportedJob(SchedulerJob job) {
+        String moduleCode = normalize(job.getModuleCode());
+        String jobCode = normalize(job.getJobCode());
+        if ("DISTRIBUTION".equals(moduleCode)) {
+            return dryRunDistributionJob(jobCode);
+        }
+        if ("DOUYIN_CLUE_INCREMENTAL".equals(jobCode) || "CLUE".equals(moduleCode)) {
+            String payload = "{\"source\":\"dry-run\",\"jobCode\":\"" + json(jobCode)
+                    + "\",\"willWriteCoreTables\":false,\"willCallExternal\":false,"
+                    + "\"message\":\"Douyin clue precheck only; no external call and no Clue write\"}";
+            return new SchedulerExecutionResult(0, payload, "dry-run=clue-no-write");
+        }
+        throw new BusinessException("unsupported scheduler dry-run job");
+    }
+
+    private SchedulerExecutionResult dryRunDistributionJob(String jobCode) {
+        if (JOB_DISTRIBUTION_OUTBOX_PROCESS.equals(jobCode)) {
+            String payload = "{\"source\":\"dry-run\",\"jobCode\":\"" + json(jobCode)
+                    + "\",\"willWriteCoreTables\":false,\"willCallExternal\":false,"
+                    + "\"message\":\"Outbox precheck only; real run will push crm.order.used asynchronously\"}";
+            return new SchedulerExecutionResult(0, payload, "dry-run=outbox-no-write");
+        }
+        if (JOB_DISTRIBUTION_EXCEPTION_RETRY.equals(jobCode)) {
+            String payload = "{\"source\":\"dry-run\",\"jobCode\":\"" + json(jobCode)
+                    + "\",\"willWriteCoreTables\":false,\"willReplay\":false,"
+                    + "\"message\":\"Exception retry precheck only; real run will replay through DistributionEventIngestService\"}";
+            return new SchedulerExecutionResult(0, payload, "dry-run=exception-no-replay");
+        }
+        if (JOB_DISTRIBUTION_STATUS_CHECK.equals(jobCode)) {
+            return reconciliationResult(jobCode, distributionReconciliationService.dryRunOrderStatus(20), true);
+        }
+        if (JOB_DISTRIBUTION_RECONCILE_PULL.equals(jobCode)) {
+            return reconciliationResult(jobCode, distributionReconciliationService.dryRunReconciliation(20), true);
+        }
+        throw new BusinessException("unsupported distribution scheduler dry-run job");
+    }
+
     private SchedulerExecutionResult simpleResult(String jobCode, int processedCount, String countField) {
         String payload = "{\"source\":\"sync\",\"jobCode\":\"" + json(jobCode) + "\",\""
                 + countField + "\":" + processedCount + "}";
@@ -408,22 +469,32 @@ public class SchedulerServiceImpl implements SchedulerService {
     }
 
     private SchedulerExecutionResult reconciliationResult(String jobCode, List<DistributionReconciliationResult> results) {
+        return reconciliationResult(jobCode, results, false);
+    }
+
+    private SchedulerExecutionResult reconciliationResult(String jobCode,
+                                                          List<DistributionReconciliationResult> results,
+                                                          boolean dryRun) {
         List<DistributionReconciliationResult> safeResults = results == null ? List.of() : results;
         long replayed = countAction(safeResults, "REPLAYED");
+        long wouldReplay = countAction(safeResults, "WOULD_REPLAY");
         long noChange = countAction(safeResults, "NO_CHANGE");
         long failed = countAction(safeResults, "FAILED");
         String sample = safeResults.stream()
                 .limit(10)
                 .map(this::reconciliationItemJson)
                 .collect(Collectors.joining(","));
-        String payload = "{\"source\":\"sync\",\"jobCode\":\"" + json(jobCode) + "\",\"processedCount\":"
+        String payload = "{\"source\":\"" + (dryRun ? "dry-run" : "sync") + "\",\"jobCode\":\"" + json(jobCode) + "\",\"processedCount\":"
                 + safeResults.size()
+                + ",\"willWriteCoreTables\":" + (!dryRun)
                 + ",\"actionCounts\":{\"replayed\":" + replayed
+                + ",\"wouldReplay\":" + wouldReplay
                 + ",\"noChange\":" + noChange
                 + ",\"failed\":" + failed
                 + "},\"items\":[" + sample + "]}";
         String auditDetail = "processedCount=" + safeResults.size()
                 + ",replayed=" + replayed
+                + ",wouldReplay=" + wouldReplay
                 + ",noChange=" + noChange
                 + ",failed=" + failed;
         return new SchedulerExecutionResult(safeResults.size(), payload, auditDetail);

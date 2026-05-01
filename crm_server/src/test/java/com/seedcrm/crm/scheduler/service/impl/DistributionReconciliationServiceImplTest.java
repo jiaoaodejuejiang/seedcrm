@@ -136,6 +136,38 @@ class DistributionReconciliationServiceImplTest {
     }
 
     @Test
+    void shouldDryRunLiveStatusCheckWithoutCallingProviderOrReplaying() {
+        IntegrationProviderConfig provider = distributionProvider();
+        provider.setExecutionMode("LIVE");
+        provider.setBaseUrl("https://distribution.example.test");
+        provider.setStatusQueryPath("/open/distribution/orders/status");
+        provider.setClientSecret("live-secret");
+        when(providerConfigMapper.selectOne(any())).thenReturn(provider);
+        when(orderMapper.selectList(any())).thenReturn(List.of(distributionOrder("refunded")));
+
+        List<DistributionReconciliationResult> results = service.dryRunOrderStatus(20);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getAction()).isEqualTo("DRY_RUN");
+        assertThat(results.get(0).getStatus()).isEqualTo("PRECHECK");
+        verify(distributionEventIngestService, never()).replayFromScheduler(any(), any(), any());
+    }
+
+    @Test
+    void shouldDryRunMockStatusCheckAndOnlyPreviewReplay() {
+        when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
+        when(orderMapper.selectList(any())).thenReturn(List.of(distributionOrder("refunded")));
+
+        List<DistributionReconciliationResult> results = service.dryRunOrderStatus(20);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getAction()).isEqualTo("WOULD_REPLAY");
+        assertThat(results.get(0).getStatus()).isEqualTo("PRECHECK");
+        assertThat(results.get(0).getEventType()).isEqualTo("distribution.order.refunded");
+        verify(distributionEventIngestService, never()).replayFromScheduler(any(), any(), any());
+    }
+
+    @Test
     void shouldCallLiveStatusQueryAndReplayReturnedEvent() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();

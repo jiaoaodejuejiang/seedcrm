@@ -15,6 +15,7 @@ import com.seedcrm.crm.scheduler.service.SchedulerIntegrationService;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Base64;
@@ -47,6 +48,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     private static final String SIGNATURE_MODE_DYNAMIC_PROVIDER = "DYNAMIC_PROVIDER";
     private static final String PROCESS_POLICY_LOG_ONLY = "LOG_ONLY";
     private static final String PROCESS_POLICY_AUTH_UPDATE_ONLY = "AUTH_UPDATE_ONLY";
+    private static final String MASKED_VALUE = "******";
     private static final String DOUYIN_TOKEN_URL = "https://open.douyin.com/oauth/access_token/";
     private static final String DOUYIN_REFRESH_TOKEN_URL = "https://open.douyin.com/oauth/refresh_token/";
     private static final String DOUYIN_DEFAULT_VOUCHER_PREPARE_PATH = "/goodlife/v1/fulfilment/certificate/prepare/";
@@ -59,6 +61,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     private static final String DOUYIN_DEFAULT_REFUND_AUDIT_CALLBACK_PATH = "/scheduler/callback/douyin/refund-audit";
     private static final String DOUYIN_DEFAULT_REFUND_AMOUNT_UNIT = "CENT";
     private static final String DOUYIN_DEFAULT_VERIFY_CODE_FIELD = "encrypted_codes";
+    private static final int AUTH_CODE_VALID_MINUTES = 5;
 
     private final IntegrationProviderConfigMapper providerConfigMapper;
     private final IntegrationCallbackConfigMapper callbackConfigMapper;
@@ -132,7 +135,16 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         }
         assertHttps(working.getBaseUrl(), "baseUrl");
         if (PROVIDER_DOUYIN.equals(working.getProviderCode())) {
-            String token = resolveDouyinAccessToken(working);
+            String token;
+            try {
+                token = resolveDouyinAccessToken(working);
+            } catch (BusinessException exception) {
+                working.setLastTestStatus("FAILED");
+                working.setLastTestMessage(exception.getMessage());
+                working.setLastTestAt(LocalDateTime.now());
+                updateProviderTestStateIfPersisted(working);
+                throw exception;
+            }
             working.setLastTestStatus("SUCCESS");
             working.setLastTestMessage("连接成功，已获取 access_token：" + maskValue(token));
             working.setLastTestAt(LocalDateTime.now());
@@ -297,6 +309,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             if (canUpdateAuthorization) {
                 provider.setAuthCode(resolveSensitiveValue(authCode, provider.getAuthCode()));
                 provider.setAuthCodeStatus(StringUtils.hasText(authCode) ? "RECEIVED" : provider.getAuthCodeStatus());
+                provider.setLastAuthCodeAt(StringUtils.hasText(authCode) ? now : provider.getLastAuthCodeAt());
                 provider.setAccessToken(resolveSensitiveValue(accessToken, provider.getAccessToken()));
                 provider.setRefreshToken(resolveSensitiveValue(refreshToken, provider.getRefreshToken()));
                 try {
@@ -597,6 +610,9 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         target.setRedirectUri(trimToNull(source.getRedirectUri()));
         target.setScope(trimToNull(source.getScope()));
         target.setAuthCode(resolveSensitiveValue(source.getAuthCode(), existing == null ? null : existing.getAuthCode()));
+        if (StringUtils.hasText(source.getAuthCode()) && !MASKED_VALUE.equals(source.getAuthCode().trim())) {
+            target.setLastAuthCodeAt(LocalDateTime.now());
+        }
         target.setAuthCodeStatus(trimToNull(firstNonBlank(source.getAuthCodeStatus(), existing == null ? null : existing.getAuthCodeStatus())));
         target.setAccessToken(resolveSensitiveValue(source.getAccessToken(), existing == null ? null : existing.getAccessToken()));
         target.setRefreshToken(resolveSensitiveValue(source.getRefreshToken(), existing == null ? null : existing.getRefreshToken()));
@@ -659,6 +675,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         provider.setClientSecretMasked(maskValue(provider.getClientSecret()));
         provider.setClientSecretConfigured(StringUtils.hasText(provider.getClientSecret()));
         provider.setAuthCodeMasked(maskValue(provider.getAuthCode()));
+        applyAuthCodeExpiryPreview(provider);
         provider.setAccessTokenMasked(maskValue(provider.getAccessToken()));
         provider.setRefreshTokenMasked(maskValue(provider.getRefreshToken()));
         return provider;
@@ -683,6 +700,40 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         existing.setLastAuthCodeAt(provider.getLastAuthCodeAt());
         existing.setUpdatedAt(LocalDateTime.now());
         providerConfigMapper.updateById(existing);
+    }
+
+    private void applyAuthCodeExpiryPreview(IntegrationProviderConfig provider) {
+        if (provider == null || !AUTH_TYPE_AUTH_CODE.equals(normalize(provider.getAuthType()))) {
+            return;
+        }
+        if (provider.getLastAuthCodeAt() == null) {
+            provider.setAuthCodeExpired(StringUtils.hasText(provider.getAuthCode()));
+            provider.setAuthCodeWarning(StringUtils.hasText(provider.getAuthCode())
+                    ? "auth_code 缺少接收时间，请重新授权后再换取 token"
+                    : "尚未收到 auth_code");
+            return;
+        }
+        LocalDateTime expiresAt = provider.getLastAuthCodeAt().plusMinutes(AUTH_CODE_VALID_MINUTES);
+        long remainingSeconds = Duration.between(LocalDateTime.now(), expiresAt).getSeconds();
+        provider.setAuthCodeExpiresAt(expiresAt);
+        provider.setAuthCodeSecondsRemaining(Math.max(remainingSeconds, 0));
+        boolean expired = remainingSeconds <= 0;
+        provider.setAuthCodeExpired(expired);
+        if (expired) {
+            provider.setAuthCodeWarning("auth_code 已过期，请重新授权后再换取 token");
+        } else if (remainingSeconds <= 60) {
+            provider.setAuthCodeWarning("auth_code 即将过期，请尽快完成联调测试");
+        } else {
+            provider.setAuthCodeWarning("auth_code 有效期内");
+        }
+    }
+
+    private boolean isAuthCodeExpired(IntegrationProviderConfig provider) {
+        if (provider == null || !StringUtils.hasText(provider.getAuthCode())) {
+            return false;
+        }
+        return provider.getLastAuthCodeAt() == null
+                || provider.getLastAuthCodeAt().plusMinutes(AUTH_CODE_VALID_MINUTES).isBefore(LocalDateTime.now());
     }
 
     private IntegrationCallbackConfig maskCallback(IntegrationCallbackConfig callback) {
@@ -727,6 +778,11 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             return refreshDouyinAccessToken(config);
         }
         if (StringUtils.hasText(config.getAuthCode())) {
+            if (isAuthCodeExpired(config)) {
+                config.setAuthStatus("EXPIRED");
+                config.setAuthCodeStatus("EXPIRED");
+                throw new BusinessException("auth_code 已过期，请重新授权后再测试接口");
+            }
             return exchangeDouyinAuthCode(config);
         }
         throw new BusinessException("当前为 LIVE 模式，请先完成 auth_code 授权");
@@ -735,7 +791,6 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     private String exchangeDouyinAuthCode(IntegrationProviderConfig config) {
         String appId = resolveDouyinAppId(config);
         String secret = resolveDouyinSecret(config);
-        config.setLastAuthCodeAt(LocalDateTime.now());
         JsonNode response = RestClient.create()
                 .post()
                 .uri(resolveDouyinTokenUrl(config))
@@ -1410,6 +1465,9 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     }
 
     private String resolveSensitiveValue(String incoming, String existing) {
+        if (StringUtils.hasText(incoming) && MASKED_VALUE.equals(incoming.trim())) {
+            return existing;
+        }
         return StringUtils.hasText(incoming) ? incoming.trim() : existing;
     }
 

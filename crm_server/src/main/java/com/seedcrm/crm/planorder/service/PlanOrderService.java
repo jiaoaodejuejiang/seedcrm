@@ -25,6 +25,10 @@ public interface PlanOrderService extends IService<PlanOrder> {
 
     PlanOrder start(PlanOrderActionDTO planOrderActionDTO, Long operatorUserId, String operatorRoleCode);
 
+    PlanOrder printServiceForm(PlanOrderActionDTO planOrderActionDTO);
+
+    PlanOrder printServiceForm(PlanOrderActionDTO planOrderActionDTO, Long operatorUserId, String operatorRoleCode);
+
     PlanOrder confirmServiceForm(PlanOrderActionDTO planOrderActionDTO);
 
     PlanOrder confirmServiceForm(PlanOrderActionDTO planOrderActionDTO, Long operatorUserId, String operatorRoleCode);

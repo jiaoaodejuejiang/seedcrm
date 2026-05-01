@@ -1,9 +1,11 @@
 package com.seedcrm.crm.order.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.enums.OrderType;
+import com.seedcrm.crm.order.support.OrderAmountMaskingSupport;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import lombok.Data;
@@ -75,6 +77,12 @@ public class OrderResponse {
     public OrderResponse maskAmounts() {
         this.amount = null;
         this.deposit = null;
+        return this;
+    }
+
+    public OrderResponse maskAmounts(ObjectMapper objectMapper) {
+        maskAmounts();
+        this.serviceDetailJson = OrderAmountMaskingSupport.maskServiceDetailJson(this.serviceDetailJson, objectMapper);
         return this;
     }
 }

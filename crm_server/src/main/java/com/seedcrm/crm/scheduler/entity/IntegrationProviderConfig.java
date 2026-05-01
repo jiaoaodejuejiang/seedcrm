@@ -242,6 +242,19 @@ public class IntegrationProviderConfig {
     @TableField(exist = false)
     private String authCodeMasked;
 
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField(exist = false)
+    private LocalDateTime authCodeExpiresAt;
+
+    @TableField(exist = false)
+    private Boolean authCodeExpired;
+
+    @TableField(exist = false)
+    private Long authCodeSecondsRemaining;
+
+    @TableField(exist = false)
+    private String authCodeWarning;
+
     @TableField(exist = false)
     private String accessTokenMasked;
 

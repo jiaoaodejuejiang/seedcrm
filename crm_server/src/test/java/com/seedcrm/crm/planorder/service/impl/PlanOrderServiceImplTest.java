@@ -15,6 +15,7 @@ import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderActionRecordMapper;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.order.service.OrderSettlementService;
+import com.seedcrm.crm.order.support.ServiceFormVersionSupport;
 import com.seedcrm.crm.planorder.dto.PlanOrderActionDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderAssignRoleDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderCreateDTO;
@@ -28,6 +29,7 @@ import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
 import com.seedcrm.crm.systemflow.support.SystemFlowRuntimeBridge;
 import com.seedcrm.crm.wecom.service.WecomTouchService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -65,13 +67,16 @@ class PlanOrderServiceImplTest {
     @Mock
     private SystemFlowRuntimeBridge systemFlowRuntimeBridge;
 
+    private ObjectMapper objectMapper;
+
     private PlanOrderServiceImpl planOrderService;
 
     @BeforeEach
     void setUp() {
+        objectMapper = new ObjectMapper();
         planOrderService = new PlanOrderServiceImpl(planOrderMapper, orderMapper, orderRoleRecordService,
                 orderSettlementService, wecomTouchService, orderActionRecordMapper, dbLockService,
-                schedulerOutboxService, systemFlowRuntimeBridge, new ObjectMapper());
+                schedulerOutboxService, systemFlowRuntimeBridge, objectMapper);
     }
 
     @Test
@@ -160,7 +165,7 @@ class PlanOrderServiceImplTest {
         order.setId(500L);
         order.setStatus(OrderStatus.ARRIVED.name());
         order.setVerificationStatus("VERIFIED");
-        order.setServiceDetailJson("{\"serviceRequirement\":\"paper form\"}");
+        order.setServiceDetailJson(printedServiceDetail("paper form"));
         when(dbLockService.lockOrder(500L)).thenReturn(order);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
 
@@ -173,11 +178,95 @@ class PlanOrderServiceImplTest {
         assertThat(order.getServiceDetailJson()).contains(
                 "\"serviceFormStatus\":\"PRINT_CONFIRMED\"",
                 "\"signatureMode\":\"PAPER\"",
+                "\"serviceDetailHash\"",
                 "\"confirmedByUserId\":9001",
                 "\"confirmedByRoleCode\":\"STORE_SERVICE\"");
         ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
         verify(orderActionRecordMapper).insert(recordCaptor.capture());
         assertThat(recordCaptor.getValue().getActionType()).isEqualTo("SERVICE_FORM_CONFIRM");
+        assertThat(recordCaptor.getValue().getExtraJson()).contains("serviceDetailHash");
+    }
+
+    @Test
+    void printServiceFormShouldWriteAuditAndActionRecord() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(53L);
+        planOrder.setOrderId(530L);
+        planOrder.setStatus(PlanOrderStatus.ARRIVED.name());
+        when(planOrderMapper.selectById(53L)).thenReturn(planOrder);
+
+        Order order = new Order();
+        order.setId(530L);
+        order.setStatus(OrderStatus.ARRIVED.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson("{\"serviceRequirement\":\"print me\"}");
+        when(dbLockService.lockOrder(530L)).thenReturn(order);
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        PlanOrderActionDTO dto = new PlanOrderActionDTO();
+        dto.setPlanOrderId(53L);
+
+        PlanOrder printed = planOrderService.printServiceForm(dto, 9002L, "STORE_SERVICE");
+
+        assertThat(printed).isSameAs(planOrder);
+        assertThat(order.getServiceDetailJson()).contains(
+                "\"printAudit\"",
+                "\"status\":\"PRINTED\"",
+                "\"serviceDetailHash\"",
+                "\"printCount\":1",
+                "\"printedByUserId\":9002");
+        ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
+        verify(orderActionRecordMapper).insert(recordCaptor.capture());
+        assertThat(recordCaptor.getValue().getActionType()).isEqualTo("SERVICE_FORM_PRINT");
+        assertThat(recordCaptor.getValue().getExtraJson()).contains("serviceDetailHash");
+    }
+
+    @Test
+    void confirmServiceFormShouldRejectWhenCurrentVersionNotPrinted() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(54L);
+        planOrder.setOrderId(540L);
+        planOrder.setStatus(PlanOrderStatus.ARRIVED.name());
+        when(planOrderMapper.selectById(54L)).thenReturn(planOrder);
+
+        Order order = new Order();
+        order.setId(540L);
+        order.setStatus(OrderStatus.ARRIVED.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson("{\"serviceRequirement\":\"saved only\"}");
+        when(dbLockService.lockOrder(540L)).thenReturn(order);
+
+        PlanOrderActionDTO dto = new PlanOrderActionDTO();
+        dto.setPlanOrderId(54L);
+
+        assertThatThrownBy(() -> planOrderService.confirmServiceForm(dto, 9001L, "STORE_SERVICE"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("print current service form version");
+        verify(orderMapper, never()).updateById(any(Order.class));
+    }
+
+    @Test
+    void confirmServiceFormShouldRejectWhenPrintedVersionIsStale() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(55L);
+        planOrder.setOrderId(550L);
+        planOrder.setStatus(PlanOrderStatus.ARRIVED.name());
+        when(planOrderMapper.selectById(55L)).thenReturn(planOrder);
+
+        Order order = new Order();
+        order.setId(550L);
+        order.setStatus(OrderStatus.ARRIVED.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson(stalePrintedServiceDetail());
+        when(dbLockService.lockOrder(550L)).thenReturn(order);
+
+        PlanOrderActionDTO dto = new PlanOrderActionDTO();
+        dto.setPlanOrderId(55L);
+
+        assertThatThrownBy(() -> planOrderService.confirmServiceForm(dto, 9001L, "STORE_SERVICE"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("print current service form version");
+        verify(orderMapper, never()).updateById(any(Order.class));
     }
 
     @Test
@@ -444,5 +533,40 @@ class PlanOrderServiceImplTest {
 
         assertThat(arrived.getArriveTime()).isNotNull();
         assertThat(order.getArriveTime()).isNotNull();
+    }
+
+    private String printedServiceDetail(String serviceRequirement) {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("serviceRequirement", serviceRequirement);
+        String hash = ServiceFormVersionSupport.printableHash(root, objectMapper);
+        ObjectNode printAudit = objectMapper.createObjectNode();
+        printAudit.put("status", ServiceFormVersionSupport.PRINT_STATUS_PRINTED);
+        printAudit.put("serviceDetailHash", hash);
+        printAudit.put("projectionVersion", ServiceFormVersionSupport.PROJECTION_VERSION);
+        printAudit.put("printCount", 1);
+        root.set("printAudit", printAudit);
+        return writeJson(root);
+    }
+
+    private String stalePrintedServiceDetail() {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("serviceRequirement", "old content");
+        String hash = ServiceFormVersionSupport.printableHash(root, objectMapper);
+        ObjectNode printAudit = objectMapper.createObjectNode();
+        printAudit.put("status", ServiceFormVersionSupport.PRINT_STATUS_PRINTED);
+        printAudit.put("serviceDetailHash", hash);
+        printAudit.put("projectionVersion", ServiceFormVersionSupport.PROJECTION_VERSION);
+        printAudit.put("printCount", 1);
+        root.set("printAudit", printAudit);
+        root.put("serviceRequirement", "new content");
+        return writeJson(root);
+    }
+
+    private String writeJson(ObjectNode root) {
+        try {
+            return objectMapper.writeValueAsString(root);
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 }

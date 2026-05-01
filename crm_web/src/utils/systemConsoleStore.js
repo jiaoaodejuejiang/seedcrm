@@ -184,7 +184,7 @@ const DEFAULT_STATE = {
     { id: 28, menuGroup: '系统设置 / 调度中心', menuName: '抖音接口', routePath: '/settings/integration/third-party', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 29, menuGroup: '系统设置 / 调度中心', menuName: '回调接口', routePath: '/settings/integration/callback', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 30, menuGroup: '系统设置 / 调度中心', menuName: '任务调度', routePath: '/settings/integration/jobs', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 31, menuGroup: '系统设置 / 调度中心', menuName: '接口调试', routePath: '/settings/integration/debug', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'], moduleCode: 'SETTING', isEnabled: 1 },
+    { id: 31, menuGroup: '系统设置 / 调度中心', menuName: '联调工作台', routePath: '/settings/integration/debug', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 32, menuGroup: '系统设置 / 调度中心', menuName: '对外接口', routePath: '/settings/integration/public-api', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 33, menuGroup: '系统设置 / 调度中心', menuName: '分销接口', routePath: '/settings/integration/distribution-api', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 34, menuGroup: '系统设置 / 基础配置', menuName: '字典管理', routePath: '/settings/dictionaries', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },

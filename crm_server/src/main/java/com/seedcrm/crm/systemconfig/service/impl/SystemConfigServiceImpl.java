@@ -1,7 +1,10 @@
 package com.seedcrm.crm.systemconfig.service.impl;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
+import com.seedcrm.crm.scheduler.support.DistributionOrderTypeMappingResolver;
 import com.seedcrm.crm.systemconfig.dto.SystemConfigDtos;
 import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import java.net.URI;
@@ -24,6 +27,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     private static final String DEFAULT_SYSTEM_BASE_URL = "http://127.0.0.1:4173";
     private static final String DEFAULT_API_BASE_URL = "http://127.0.0.1:8080";
     private static final String MASKED_VALUE = "******";
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final List<String> ALLOWED_CONFIG_PREFIXES = List.of(
             "system.domain.",
             "workflow.",
@@ -83,6 +87,9 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         String configValue = "URL".equals(valueType) ? normalizeBaseUrl(request.getConfigValue()) : request.getConfigValue();
         if ("URL".equals(valueType)) {
             validateBaseUrl(configValue, key);
+        }
+        if ("JSON".equals(valueType)) {
+            validateJsonConfig(key, configValue);
         }
         String beforeValue = findValue(key, scopeType, scopeId);
         LocalDateTime now = LocalDateTime.now();
@@ -234,6 +241,94 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         } catch (URISyntaxException exception) {
             throw new BusinessException(label + "格式不正确");
         }
+    }
+
+    private void validateJsonConfig(String key, String value) {
+        if (!StringUtils.hasText(value)) {
+            throw new BusinessException(key + " JSON 配置不能为空");
+        }
+        JsonNode root;
+        try {
+            root = OBJECT_MAPPER.readTree(value);
+        } catch (Exception exception) {
+            throw new BusinessException(key + " 不是有效 JSON");
+        }
+        if (DistributionOrderTypeMappingResolver.CONFIG_KEY.equals(key)) {
+            validateDistributionOrderTypeMapping(root);
+        }
+    }
+
+    private void validateDistributionOrderTypeMapping(JsonNode root) {
+        if (root == null || !root.isObject()) {
+            throw new BusinessException("分销订单类型映射必须是 JSON 对象");
+        }
+        validateConfigOrderType(root.path("default").asText("coupon"), "default");
+        JsonNode aliases = root.path("aliases");
+        if (!aliases.isMissingNode()) {
+            if (!aliases.isObject()) {
+                throw new BusinessException("分销订单类型映射 aliases 必须是对象");
+            }
+            aliases.fields().forEachRemaining(entry ->
+                    validateConfigOrderType(entry.getValue().asText(null), "aliases." + entry.getKey()));
+        }
+        JsonNode rules = root.path("rules");
+        if (!rules.isMissingNode() && !rules.isArray()) {
+            throw new BusinessException("分销订单类型映射 rules 必须是数组");
+        }
+        if (rules.isArray()) {
+            int index = 0;
+            for (JsonNode rule : rules) {
+                if (rule == null || !rule.isObject()) {
+                    throw new BusinessException("分销订单类型映射 rules[" + index + "] 必须是对象");
+                }
+                if (rule.path("enabled").asBoolean(true)) {
+                    String type = firstNonBlank(
+                            text(rule, "internalOrderType"),
+                            text(rule, "orderType"),
+                            text(rule, "targetOrderType"));
+                    validateConfigOrderType(type, "rules[" + index + "].internalOrderType");
+                }
+                index++;
+            }
+        }
+    }
+
+    private void validateConfigOrderType(String value, String fieldName) {
+        String normalized = normalizeConfigOrderType(value);
+        if (!StringUtils.hasText(normalized)) {
+            throw new BusinessException(fieldName + " 只能填写 coupon 或 deposit");
+        }
+    }
+
+    private String normalizeConfigOrderType(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return switch (value.trim().toLowerCase(Locale.ROOT).replace('-', '_').replace(' ', '_')) {
+            case "coupon", "groupbuy", "voucher", "团购", "团购券" -> "coupon";
+            case "deposit", "prepay", "prepaid", "定金", "预付定金" -> "deposit";
+            default -> null;
+        };
+    }
+
+    private String text(JsonNode node, String fieldName) {
+        JsonNode value = node == null ? null : node.get(fieldName);
+        if (value == null || value.isNull() || value.isMissingNode()) {
+            return null;
+        }
+        return value.isTextual() ? value.asText() : value.toString();
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     private String normalizeBaseUrl(String value) {

@@ -40,6 +40,10 @@ export function confirmPlanOrderServiceForm(payload) {
   return http.post('/planOrder/confirm-service-form', payload)
 }
 
+export function printPlanOrderServiceForm(payload) {
+  return http.post('/planOrder/print-service-form', payload)
+}
+
 export function finishPlanOrder(payload) {
   return http.post('/planOrder/finish', payload)
 }

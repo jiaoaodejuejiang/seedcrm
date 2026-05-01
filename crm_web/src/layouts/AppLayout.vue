@@ -448,6 +448,7 @@ const navGroups = [
         icon: icon(MenuIcon),
         items: [
           { key: 'settings-domain', to: '/settings/base/domain', label: '域名配置', icon: icon(Link), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+          { key: 'settings-go-live', to: '/settings/base/go-live', label: '上线工具', icon: icon(Operation), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
           {
             key: 'settings-wecom',
             to: '/settings/base/wecom',
@@ -498,13 +499,13 @@ const navGroups = [
             moduleCode: 'SETTING',
             roleCodes: integrationViewRoleCodes
           },
-          {
-            key: 'settings-interface-debug',
-            to: '/settings/integration/debug',
-            label: '接口调试',
-            icon: icon(Operation),
-            moduleCode: 'SETTING',
-            roleCodes: integrationViewRoleCodes
+            {
+              key: 'settings-interface-debug',
+              to: '/settings/integration/debug',
+              label: '联调工作台',
+              icon: icon(Operation),
+              moduleCode: 'SETTING',
+              roleCodes: integrationViewRoleCodes
           },
           { key: 'settings-public-api', to: '/settings/integration/public-api', label: '对外接口', icon: icon(Connection), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
           {
@@ -564,8 +565,9 @@ const routeTitleMap = {
   'settings-third-party': '抖音接口',
   'settings-callback': '回调接口',
   'settings-jobs': '任务调度',
-  'settings-interface-debug': '接口调试',
+  'settings-interface-debug': '联调工作台',
   'settings-domain': '域名配置',
+  'settings-go-live': '上线工具',
   'settings-wecom': '企业微信',
   'settings-menu': '菜单管理',
   'settings-public-api': '对外接口',
@@ -612,6 +614,7 @@ const routeSectionMap = {
   'settings-jobs': '系统设置 / 调度中心',
   'settings-interface-debug': '系统设置 / 调度中心',
   'settings-domain': '系统设置 / 基础配置',
+  'settings-go-live': '系统设置 / 基础配置',
   'settings-wecom': '系统设置 / 基础配置',
   'settings-menu': '系统设置 / 基础配置',
   'settings-public-api': '系统设置 / 调度中心',

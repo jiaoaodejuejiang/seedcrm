@@ -21,6 +21,8 @@
             <article class="detail-card">
               <h3>授权信息</h3>
               <p>授权码状态：{{ formatResultStatus(provider.authCodeStatus || '--') }}</p>
+              <p>授权码有效期：{{ provider.authCodeExpiresAt ? formatDateTime(provider.authCodeExpiresAt) : '--' }}</p>
+              <p v-if="provider.authCodeWarning" :class="{ 'danger-text': provider.authCodeExpired }">{{ provider.authCodeWarning }}</p>
               <p>Access Token：{{ provider.accessTokenMasked || '--' }}</p>
               <p>Refresh Token：{{ provider.refreshTokenMasked || '--' }}</p>
               <p>到期时间：{{ formatDateTime(provider.tokenExpiresAt) || '--' }}</p>
@@ -196,6 +198,7 @@
             <label>
               <span>授权码</span>
               <el-input v-model="provider.authCode" :placeholder="provider.authCodeMasked || '回调后自动回填，也可手动补录'" />
+              <small :class="{ 'danger-text': provider.authCodeExpired }">{{ provider.authCodeWarning || 'auth_code 通常为短时效一次性授权码，过期后请重新授权' }}</small>
             </label>
           </div>
         </el-tab-pane>
@@ -458,6 +461,10 @@ function createProvider() {
     authCode: '',
     authCodeMasked: '',
     authCodeStatus: '',
+    authCodeExpiresAt: '',
+    authCodeExpired: false,
+    authCodeSecondsRemaining: 0,
+    authCodeWarning: '',
     accessTokenMasked: '',
     refreshTokenMasked: '',
     tokenExpiresAt: '',
@@ -671,6 +678,11 @@ async function handleTrigger() {
 
 .action-group--section {
   margin-top: 20px;
+}
+
+.danger-text {
+  color: #dc2626;
+  font-weight: 700;
 }
 
 .platform-tabs :deep(.el-tabs__header) {

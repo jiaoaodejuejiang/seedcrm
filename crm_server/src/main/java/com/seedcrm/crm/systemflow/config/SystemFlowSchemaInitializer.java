@@ -234,7 +234,7 @@ public class SystemFlowSchemaInitializer {
                 """, now, definitionId);
         jdbcTemplate.update("""
                 INSERT INTO system_flow_version(definition_id, version_no, status, change_summary, published_at, created_at, updated_at)
-                VALUES (?, ?, 'PUBLISHED', '系统内置主链路约束升级：主链域限定为 Clue/Customer/Order/PlanOrder，触发器仅保留元数据', ?, ?, ?)
+                VALUES (?, ?, 'PUBLISHED', '系统内置主链路约束升级：补齐纸质确认单节点，主链域限定为 Clue/Customer/Order/PlanOrder，触发器仅保留元数据', ?, ?, ?)
                 """, definitionId, nextVersionNo, now, now, now);
         Long versionId = jdbcTemplate.queryForObject("""
                 SELECT id
@@ -270,7 +270,7 @@ public class SystemFlowSchemaInitializer {
                 FROM system_flow_node
                 WHERE version_id = ?
                   AND domain_code = 'PLANORDER'
-                  AND LOWER(business_state) IN ('arrived', 'servicing', 'finished')
+                  AND LOWER(business_state) IN ('arrived', 'service_form_confirmed', 'servicing', 'finished')
                 """, Integer.class, versionId);
         Integer schedulerNodeCount = jdbcTemplate.queryForObject("""
                 SELECT COUNT(1)
@@ -293,12 +293,19 @@ public class SystemFlowSchemaInitializer {
                 WHERE version_id = ?
                   AND action_code = 'ORDER_APPOINTMENT_CANCEL'
                 """, Integer.class, versionId);
+        Integer serviceFormConfirmCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM system_flow_transition
+                WHERE version_id = ?
+                  AND action_code = 'SERVICE_FORM_CONFIRM'
+                """, Integer.class, versionId);
         return customerNodeCount != null && customerNodeCount > 0
                 && orderCoreStateCount != null && orderCoreStateCount >= 2
-                && planOrderCoreStateCount != null && planOrderCoreStateCount >= 3
+                && planOrderCoreStateCount != null && planOrderCoreStateCount >= 4
                 && schedulerNodeCount != null && schedulerNodeCount == 0
                 && unsafeTriggerCount != null && unsafeTriggerCount == 0
-                && appointmentCancelCount != null && appointmentCancelCount > 0;
+                && appointmentCancelCount != null && appointmentCancelCount > 0
+                && serviceFormConfirmCount != null && serviceFormConfirmCount > 0;
     }
 
     private boolean isSystemManagedVersion(Long versionId) {
@@ -321,9 +328,10 @@ public class SystemFlowSchemaInitializer {
         seedNode(versionId, "ORDER", "VERIFY", "门店核销", "TASK", "paid", "STORE_SERVICE", 70, "核销团购券或定金，Order 仍处于 paid 到 used 的受控流程");
         seedNode(versionId, "PLANORDER", "PLAN_CREATED", "创建计划单", "TASK", "arrived", "SYSTEM", 80, "PlanOrder 必须绑定 Order，数量 1:1");
         seedNode(versionId, "PLANORDER", "PLAN_ARRIVED", "到店", "STATE", "arrived", "STORE_SERVICE", 90, "PlanOrder arrived");
-        seedNode(versionId, "PLANORDER", "PLAN_SERVICING", "服务中", "STATE", "servicing", "STORE_SERVICE", 100, "PlanOrder servicing");
-        seedNode(versionId, "PLANORDER", "PLAN_FINISHED", "服务完成", "STATE", "finished", "STORE_SERVICE", 110, "PlanOrder finished");
-        seedNode(versionId, "ORDER", "ORDER_USED", "订单已使用", "END", "used", "STORE_SERVICE", 120, "Order used，主链路终点");
+        seedNode(versionId, "PLANORDER", "SERVICE_FORM_CONFIRMED", "纸质确认单已确认", "STATE", "service_form_confirmed", "STORE_SERVICE", 100, "打印确认单，客户手写签名后在系统确认");
+        seedNode(versionId, "PLANORDER", "PLAN_SERVICING", "服务中", "STATE", "servicing", "STORE_SERVICE", 110, "PlanOrder servicing");
+        seedNode(versionId, "PLANORDER", "PLAN_FINISHED", "服务完成", "STATE", "finished", "STORE_SERVICE", 120, "PlanOrder finished");
+        seedNode(versionId, "ORDER", "ORDER_USED", "订单已使用", "END", "used", "STORE_SERVICE", 130, "Order used，主链路终点");
 
         seedTransition(versionId, "CLUE_INTAKE", "CLUE_ASSIGN", "CLUE_AUTO_ASSIGN", "自动分配", "Clue raw_data 已保存", 10);
         seedTransition(versionId, "CLUE_ASSIGN", "CLUE_FOLLOW", "CLUE_FOLLOW", "客服跟进", "客服拥有客资数据权限", 20);
@@ -334,9 +342,10 @@ public class SystemFlowSchemaInitializer {
         seedTransition(versionId, "APPOINTMENT", "VERIFY", "ORDER_VERIFY", "门店核销", "门店人员有订单权限", 60);
         seedTransition(versionId, "VERIFY", "PLAN_CREATED", "PLAN_CREATE", "创建计划单", "订单已核销，PlanOrder 1:1 绑定 Order", 70);
         seedTransition(versionId, "PLAN_CREATED", "PLAN_ARRIVED", "PLAN_ARRIVE", "确认到店", "PlanOrder 已创建", 80);
-        seedTransition(versionId, "PLAN_ARRIVED", "PLAN_SERVICING", "PLAN_START", "开始服务", "PlanOrder 已到店", 90);
-        seedTransition(versionId, "PLAN_SERVICING", "PLAN_FINISHED", "PLAN_FINISH", "完成服务", "确认单已确认并完成服务", 100);
-        seedTransition(versionId, "PLAN_FINISHED", "ORDER_USED", "ORDER_COMPLETE", "订单完成", "PlanOrder 已完成", 110);
+        seedTransition(versionId, "PLAN_ARRIVED", "SERVICE_FORM_CONFIRMED", "SERVICE_FORM_CONFIRM", "确认纸质服务单", "服务确认单已打印，客户已手写签名", 90);
+        seedTransition(versionId, "SERVICE_FORM_CONFIRMED", "PLAN_SERVICING", "PLAN_START", "开始服务", "纸质确认单已确认", 100);
+        seedTransition(versionId, "PLAN_SERVICING", "PLAN_FINISHED", "PLAN_FINISH", "完成服务", "确认单已确认并完成服务", 110);
+        seedTransition(versionId, "PLAN_FINISHED", "ORDER_USED", "ORDER_COMPLETE", "订单完成", "PlanOrder 已完成", 120);
 
         seedTrigger(versionId, "CLUE_INTAKE", "SCHEDULER_JOB", "调度拉取客资", "DOUYIN_CLUE_INCREMENTAL", "METADATA_ONLY", 10,
                 "{\"jobCode\":\"DOUYIN_CLUE_INCREMENTAL\"}");

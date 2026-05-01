@@ -1,6 +1,8 @@
 package com.seedcrm.crm.workbench.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.common.api.ApiResponse;
+import com.seedcrm.crm.order.support.OrderAmountMaskingSupport;
 import com.seedcrm.crm.permission.support.CluePermissionGuard;
 import com.seedcrm.crm.permission.support.CustomerPermissionGuard;
 import com.seedcrm.crm.permission.support.OrderPermissionGuard;
@@ -44,19 +46,22 @@ public class WorkbenchController {
     private final CustomerPermissionGuard customerPermissionGuard;
     private final OrderPermissionGuard orderPermissionGuard;
     private final PlanOrderPermissionGuard planOrderPermissionGuard;
+    private final ObjectMapper objectMapper;
 
     public WorkbenchController(WorkbenchService workbenchService,
                                PermissionRequestContextResolver permissionRequestContextResolver,
                                CluePermissionGuard cluePermissionGuard,
                                CustomerPermissionGuard customerPermissionGuard,
                                OrderPermissionGuard orderPermissionGuard,
-                               PlanOrderPermissionGuard planOrderPermissionGuard) {
+                               PlanOrderPermissionGuard planOrderPermissionGuard,
+                               ObjectMapper objectMapper) {
         this.workbenchService = workbenchService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
         this.cluePermissionGuard = cluePermissionGuard;
         this.customerPermissionGuard = customerPermissionGuard;
         this.orderPermissionGuard = orderPermissionGuard;
         this.planOrderPermissionGuard = planOrderPermissionGuard;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping("/clues")
@@ -142,6 +147,8 @@ public class WorkbenchController {
         if (response != null && shouldMaskAmounts(context)) {
             response.setAmount(null);
             response.setDeposit(null);
+            response.setServiceDetailJson(OrderAmountMaskingSupport.maskServiceDetailJson(
+                    response.getServiceDetailJson(), objectMapper));
         }
     }
 

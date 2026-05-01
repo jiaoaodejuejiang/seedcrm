@@ -2,6 +2,7 @@ package com.seedcrm.crm.permission.support;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.seedcrm.crm.auth.service.AuthService;
@@ -75,5 +76,20 @@ class PlanOrderPermissionGuardTest {
         context.setCurrentUserId(1001L);
 
         guard.checkView(context, 1L);
+    }
+
+    @Test
+    void shouldRejectFinancePlanOrderMutationEvenIfPolicyWouldAllow() {
+        PermissionRequestContext context = new PermissionRequestContext();
+        context.setRoleCode("FINANCE");
+        context.setDataScope("ALL");
+
+        assertThatThrownBy(() -> guard.checkUpdate(context, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("ledger-only");
+        assertThatThrownBy(() -> guard.checkAssignRole(context, 1L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("ledger-only");
+        verifyNoInteractions(permissionService);
     }
 }

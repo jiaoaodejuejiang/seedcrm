@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
+import com.seedcrm.crm.scheduler.support.DistributionOrderTypeMappingResolver;
 import com.seedcrm.crm.systemconfig.dto.SystemConfigDtos;
 import java.util.List;
 import org.h2.jdbcx.JdbcDataSource;
@@ -104,6 +105,55 @@ class SystemConfigServiceImplTest {
                 WHERE config_key = 'workflow.service_order.enabled'
                 """, String.class);
         assertThat(summary).isEqualTo("开启服务单流程灰度");
+    }
+
+    @Test
+    void shouldAllowDistributionOrderTypeMappingJson() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey(DistributionOrderTypeMappingResolver.CONFIG_KEY);
+        request.setConfigValue("""
+                {
+                  "default": "coupon",
+                  "strictProductMapping": true,
+                  "aliases": {
+                    "deposit": "deposit",
+                    "coupon": "coupon"
+                  },
+                  "rules": [
+                    {
+                      "ruleId": "sku-001",
+                      "externalSkuId": "sku_001",
+                      "internalOrderType": "deposit",
+                      "priority": 10
+                    }
+                  ]
+                }
+                """);
+        request.setValueType("JSON");
+
+        SystemConfigDtos.ConfigResponse response = service.saveConfig(request, adminContext());
+
+        assertThat(response.getConfigKey()).isEqualTo(DistributionOrderTypeMappingResolver.CONFIG_KEY);
+        assertThat(valueOf(DistributionOrderTypeMappingResolver.CONFIG_KEY)).contains("\"sku_001\"");
+    }
+
+    @Test
+    void shouldRejectInvalidDistributionOrderTypeMappingJson() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey(DistributionOrderTypeMappingResolver.CONFIG_KEY);
+        request.setConfigValue("""
+                {
+                  "default": "normal",
+                  "aliases": {
+                    "coupon": "coupon"
+                  }
+                }
+                """);
+        request.setValueType("JSON");
+
+        assertThatThrownBy(() -> service.saveConfig(request, adminContext()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("coupon 或 deposit");
     }
 
     private void createSchema() {

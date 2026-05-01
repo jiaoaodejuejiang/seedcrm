@@ -4,10 +4,18 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.seedcrm.crm.common.api.ApiResponse;
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.scheduler.dto.DistributionEventDtos.DistributionEventRequest;
 import com.seedcrm.crm.scheduler.dto.DistributionEventDtos.DistributionEventResponse;
 import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
 import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
 import com.seedcrm.crm.scheduler.service.DistributionEventIngestService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -32,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/open/distribution")
+@Tag(name = "分销 Open API", description = "外部分销方案 B 受控入口。已支付订单进入 Customer + Order(paid)，不进入 Clue。")
 public class DistributionOpenController {
 
     private static final String PROVIDER_DISTRIBUTION = "DISTRIBUTION";
@@ -52,12 +61,18 @@ public class DistributionOpenController {
     }
 
     @GetMapping("/leads")
+    @Operation(
+            summary = "兼容旧分销客资拉取接口（GET）",
+            description = "方案 B 不再向外部分销系统输出 Clue 客资；该接口仅返回空列表和迁移提示，不创建 Clue / Customer / Order。")
     public ApiResponse<Map<String, Object>> listLeadsByGet(@RequestParam Map<String, String> parameters,
                                                            HttpServletRequest request) {
         return ApiResponse.success(buildLeadResponse(parameters, request));
     }
 
     @PostMapping("/leads")
+    @Operation(
+            summary = "兼容旧分销客资拉取接口（POST）",
+            description = "方案 B 不再向外部分销系统输出 Clue 客资；该接口仅返回空列表和迁移提示，不创建 Clue / Customer / Order。")
     public ApiResponse<Map<String, Object>> listLeadsByPost(@RequestParam Map<String, String> parameters,
                                                             @RequestBody(required = false) Map<String, Object> body,
                                                             HttpServletRequest request) {
@@ -69,6 +84,27 @@ public class DistributionOpenController {
     }
 
     @PostMapping("/events")
+    @Operation(
+            summary = "接收外部分销已支付 / 退款 / 取消事件",
+            description = "所有事件必须经 DistributionEventIngestService 统一处理。仅 distribution.order.paid 允许在同一事务内创建或匹配 Customer，并创建 Order(paid)。",
+            security = {
+                    @SecurityRequirement(name = "PartnerCode"),
+                    @SecurityRequirement(name = "IdempotencyKey"),
+                    @SecurityRequirement(name = "Timestamp"),
+                    @SecurityRequirement(name = "Nonce"),
+                    @SecurityRequirement(name = "Signature")
+            },
+            parameters = {
+                    @Parameter(name = "X-Partner-Code", in = ParameterIn.HEADER, required = true, description = "外部合作方编码"),
+                    @Parameter(name = "X-Idempotency-Key", in = ParameterIn.HEADER, required = true, description = "幂等键 / 防重复编号"),
+                    @Parameter(name = "X-Timestamp", in = ParameterIn.HEADER, required = true, description = "签名时间戳"),
+                    @Parameter(name = "X-Nonce", in = ParameterIn.HEADER, required = true, description = "防重放随机串"),
+                    @Parameter(name = "X-Signature", in = ParameterIn.HEADER, required = true, description = "HMAC-SHA256 签名")
+            },
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    required = true,
+                    description = "外部分销入站事件报文",
+                    content = @Content(schema = @Schema(implementation = DistributionEventRequest.class))))
     public ApiResponse<DistributionEventResponse> receiveEvent(@RequestBody JsonNode body,
                                                                HttpServletRequest request) {
         IntegrationProviderConfig provider = findProvider(resolvePartnerCode(body, request));

@@ -7,6 +7,10 @@ import com.seedcrm.crm.permission.support.SchedulerModuleGuard;
 import com.seedcrm.crm.permission.support.SettingModuleGuard;
 import com.seedcrm.crm.systemconfig.dto.SystemConfigDtos;
 import com.seedcrm.crm.systemconfig.service.SystemConfigService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Locale;
@@ -20,9 +24,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/system-config")
+@Tag(name = "系统配置", description = "系统基础域名、API 域名和受控配置项。域名配置用于生成回调、Swagger 和分销联调地址。")
 public class SystemConfigController {
 
     private static final Set<String> DOMAIN_READ_ROLES = Set.of("INTEGRATION_ADMIN", "INTEGRATION_OPERATOR");
+    private static final Set<String> INTEGRATION_CONFIG_WRITE_ROLES = Set.of("INTEGRATION_ADMIN");
+    private static final String DISTRIBUTION_ORDER_TYPE_PREFIX = "distribution.order.type.";
 
     private final SystemConfigService systemConfigService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
@@ -40,14 +47,27 @@ public class SystemConfigController {
     }
 
     @GetMapping("/list")
+    @Operation(
+            summary = "查询系统配置列表",
+            description = "敏感配置值会按服务端规则脱敏返回。仅系统设置视图权限可访问。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<List<SystemConfigDtos.ConfigResponse>> list(@RequestParam(required = false) String prefix,
+                                                                   @Parameter(hidden = true)
                                                                    HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        if (isDistributionIntegrationConfig(prefix) && isIntegrationReader(context)) {
+            schedulerModuleGuard.checkView(context);
+            return ApiResponse.success(systemConfigService.listConfigs(prefix));
+        }
         settingModuleGuard.checkView(context);
         return ApiResponse.success(systemConfigService.listConfigs(prefix));
     }
 
     @GetMapping("/domain-settings")
+    @Operation(
+            summary = "读取系统基础域名和 API 域名",
+            description = "集成管理员 / 集成操作员可通过调度查看权限读取；写入仍只允许系统设置更新权限。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<SystemConfigDtos.DomainSettingsResponse> getDomainSettings(HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         checkDomainSettingsView(context);
@@ -55,6 +75,10 @@ public class SystemConfigController {
     }
 
     @PostMapping("/domain-settings")
+    @Operation(
+            summary = "保存系统基础域名和 API 域名",
+            description = "保存后会重新生成分销入站、Swagger/OpenAPI、支付/企微/抖音等配置页展示用地址，并写入配置变更审计。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<SystemConfigDtos.DomainSettingsResponse> saveDomainSettings(@RequestBody SystemConfigDtos.SaveDomainSettingsRequest requestBody,
                                                                                   HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
@@ -63,9 +87,19 @@ public class SystemConfigController {
     }
 
     @PostMapping("/save")
+    @Operation(
+            summary = "保存受控系统配置项",
+            description = "仅允许白名单配置 key 写入，所有保存都会记录配置变更日志。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<SystemConfigDtos.ConfigResponse> save(@RequestBody SystemConfigDtos.SaveConfigRequest requestBody,
                                                             HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        if (requestBody != null
+                && isDistributionIntegrationConfig(requestBody.getConfigKey())
+                && isIntegrationWriter(context)) {
+            schedulerModuleGuard.checkUpdate(context);
+            return ApiResponse.success(systemConfigService.saveConfig(requestBody, context));
+        }
         settingModuleGuard.checkUpdate(context);
         return ApiResponse.success(systemConfigService.saveConfig(requestBody, context));
     }
@@ -81,5 +115,20 @@ public class SystemConfigController {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private boolean isIntegrationReader(PermissionRequestContext context) {
+        return DOMAIN_READ_ROLES.contains(normalize(context == null ? null : context.getRoleCode()));
+    }
+
+    private boolean isIntegrationWriter(PermissionRequestContext context) {
+        return INTEGRATION_CONFIG_WRITE_ROLES.contains(normalize(context == null ? null : context.getRoleCode()));
+    }
+
+    private boolean isDistributionIntegrationConfig(String keyOrPrefix) {
+        String value = keyOrPrefix == null ? "" : keyOrPrefix.trim();
+        return value.startsWith(DISTRIBUTION_ORDER_TYPE_PREFIX)
+                || value.equals("distribution.order.type")
+                || value.equals("distribution.order.type.mapping");
     }
 }

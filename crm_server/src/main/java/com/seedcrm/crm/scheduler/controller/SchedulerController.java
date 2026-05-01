@@ -8,6 +8,7 @@ import com.seedcrm.crm.permission.support.SchedulerModuleGuard;
 import com.seedcrm.crm.scheduler.dto.SchedulerJobUpsertRequest;
 import com.seedcrm.crm.scheduler.dto.DistributionReconciliationDtos.DistributionReconciliationResult;
 import com.seedcrm.crm.scheduler.dto.SchedulerCallbackDebugRequest;
+import com.seedcrm.crm.scheduler.dto.SchedulerGoLiveReadinessResponse;
 import com.seedcrm.crm.scheduler.dto.SchedulerIdempotencyHealthResponse;
 import com.seedcrm.crm.scheduler.dto.SchedulerInterfaceDebugRequest;
 import com.seedcrm.crm.scheduler.dto.SchedulerQueueActionRequest;
@@ -26,11 +27,15 @@ import com.seedcrm.crm.scheduler.service.DistributionExceptionRetryService;
 import com.seedcrm.crm.scheduler.service.DistributionReconciliationService;
 import com.seedcrm.crm.scheduler.service.SchedulerIdempotencyHealthService;
 import com.seedcrm.crm.scheduler.service.SchedulerIntegrationService;
+import com.seedcrm.crm.scheduler.service.SchedulerGoLiveReadinessService;
 import com.seedcrm.crm.scheduler.service.SchedulerMonitorService;
 import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
 import com.seedcrm.crm.scheduler.service.SchedulerService;
 import com.seedcrm.crm.scheduler.service.impl.DistributionEventDryRunService;
 import com.seedcrm.crm.scheduler.support.SchedulerSensitiveDataMasker;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.LinkedHashMap;
@@ -47,6 +52,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/scheduler")
+@Tag(name = "调度中心后台 API", description = "调度配置、联调工作台、Outbox 回推、异常队列、状态回查和对账。Distribution 调度不得绕过统一入站服务直接写核心表。")
 public class SchedulerController {
 
     private static final Set<String> GLOBAL_DISTRIBUTION_PROCESS_ROLES = Set.of("ADMIN", "INTEGRATION_ADMIN");
@@ -59,6 +65,7 @@ public class SchedulerController {
     private final DistributionExceptionRetryService distributionExceptionRetryService;
     private final DistributionReconciliationService distributionReconciliationService;
     private final SchedulerIdempotencyHealthService schedulerIdempotencyHealthService;
+    private final SchedulerGoLiveReadinessService schedulerGoLiveReadinessService;
     private final SchedulerMonitorService schedulerMonitorService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
     private final SchedulerModuleGuard schedulerModuleGuard;
@@ -72,6 +79,7 @@ public class SchedulerController {
                                DistributionExceptionRetryService distributionExceptionRetryService,
                                DistributionReconciliationService distributionReconciliationService,
                                SchedulerIdempotencyHealthService schedulerIdempotencyHealthService,
+                               SchedulerGoLiveReadinessService schedulerGoLiveReadinessService,
                                SchedulerMonitorService schedulerMonitorService,
                                PermissionRequestContextResolver permissionRequestContextResolver,
                                SchedulerModuleGuard schedulerModuleGuard,
@@ -84,6 +92,7 @@ public class SchedulerController {
         this.distributionExceptionRetryService = distributionExceptionRetryService;
         this.distributionReconciliationService = distributionReconciliationService;
         this.schedulerIdempotencyHealthService = schedulerIdempotencyHealthService;
+        this.schedulerGoLiveReadinessService = schedulerGoLiveReadinessService;
         this.schedulerMonitorService = schedulerMonitorService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
         this.schedulerModuleGuard = schedulerModuleGuard;
@@ -121,6 +130,10 @@ public class SchedulerController {
     }
 
     @GetMapping("/outbox/events")
+    @Operation(
+            summary = "查询分销履约回推 Outbox",
+            description = "PlanOrder finished 后的 crm.order.used 回推事件在此查看；失败不会回滚本地履约事务。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<List<SchedulerOutboxEvent>> listOutboxEvents(@RequestParam(required = false) String status,
                                                                     HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
@@ -131,6 +144,10 @@ public class SchedulerController {
     }
 
     @PostMapping("/outbox/retry")
+    @Operation(
+            summary = "重试单条 Outbox 回推事件",
+            description = "仅重置可重试状态，不直接修改 Customer / Order / PlanOrder。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<SchedulerOutboxEvent> retryOutboxEvent(@RequestBody(required = false) SchedulerQueueActionRequest request,
                                                               HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
@@ -141,6 +158,10 @@ public class SchedulerController {
     }
 
     @PostMapping("/outbox/process")
+    @Operation(
+            summary = "处理到期 Outbox 回推队列",
+            description = "仅管理员或集成管理员可触发全局批处理；LIVE 模式按配置签名回推外部分销系统。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<List<SchedulerOutboxEvent>> processOutboxEvents(@RequestParam(required = false) Integer limit,
                                                                         HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
@@ -153,6 +174,10 @@ public class SchedulerController {
     }
 
     @GetMapping("/distribution/exceptions")
+    @Operation(
+            summary = "查询分销异常队列",
+            description = "入站冲突、字段缺失、幂等冲突等异常在此追踪和处理；异常队列不得绕过入站服务写核心表。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<List<DistributionExceptionRecord>> listDistributionExceptions(@RequestParam(required = false) String status,
                                                                                     HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
@@ -163,6 +188,10 @@ public class SchedulerController {
     }
 
     @PostMapping("/distribution/exceptions/retry")
+    @Operation(
+            summary = "重放分销异常事件",
+            description = "由 Scheduler 以可信重放方式调用 DistributionEventIngestService.replayFromScheduler；仅管理员或集成管理员可执行。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<DistributionExceptionRecord> retryDistributionException(@RequestBody(required = false) SchedulerQueueActionRequest request,
                                                                               HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
@@ -172,6 +201,10 @@ public class SchedulerController {
     }
 
     @PostMapping("/distribution/exceptions/handled")
+    @Operation(
+            summary = "标记分销异常为已处理",
+            description = "用于人工治理后关闭异常记录，不直接修正核心业务数据。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<DistributionExceptionRecord> markDistributionExceptionHandled(@RequestBody(required = false) SchedulerQueueActionRequest request,
                                                                                    HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
@@ -180,6 +213,10 @@ public class SchedulerController {
     }
 
     @PostMapping("/distribution/exceptions/process")
+    @Operation(
+            summary = "处理分销异常重试队列",
+            description = "批量处理 RETRY_QUEUED 异常，成功后标记 HANDLED，失败回到 OPEN。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<List<DistributionExceptionRecord>> processDistributionExceptionRetries(@RequestParam(required = false) Integer limit,
                                                                                               HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
@@ -190,6 +227,10 @@ public class SchedulerController {
     }
 
     @PostMapping("/distribution/status-check/process")
+    @Operation(
+            summary = "执行分销订单状态回查",
+            description = "回查结果如需改变订单状态，必须生成 distribution.order.* 事件并经统一入站服务重放。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<List<DistributionReconciliationResult>> processDistributionStatusCheck(@RequestParam(required = false) Integer limit,
                                                                                                HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
@@ -199,7 +240,24 @@ public class SchedulerController {
         return ApiResponse.success(distributionReconciliationService.checkOrderStatus(limit == null ? 20 : limit));
     }
 
+    @PostMapping("/distribution/status-check/dry-run")
+    @Operation(
+            summary = "分销订单状态回查预检",
+            description = "只预览本地订单、接口路径和可能产生的入站事件；不调用外部接口，不重放事件，不写 Customer / Order / PlanOrder。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<List<DistributionReconciliationResult>> dryRunDistributionStatusCheck(@RequestParam(required = false) Integer limit,
+                                                                                              HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        schedulerModuleGuard.checkDebug(context);
+        rejectPartnerScopedGlobalMutation(context);
+        return ApiResponse.success(distributionReconciliationService.dryRunOrderStatus(limit == null ? 20 : limit));
+    }
+
     @PostMapping("/distribution/reconcile/process")
+    @Operation(
+            summary = "执行分销对账拉取",
+            description = "对账拉取只读取外部或 MOCK 数据；需要创建或更新订单时必须转成入站事件处理。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<List<DistributionReconciliationResult>> processDistributionReconciliation(@RequestParam(required = false) Integer limit,
                                                                                                  HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
@@ -209,7 +267,24 @@ public class SchedulerController {
         return ApiResponse.success(distributionReconciliationService.pullReconciliation(limit == null ? 20 : limit));
     }
 
+    @PostMapping("/distribution/reconcile/dry-run")
+    @Operation(
+            summary = "分销对账拉取预检",
+            description = "只校验配置与本地样本；LIVE 模式不调用外部分销系统，MOCK 模式不重放事件，不写核心业务表。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<List<DistributionReconciliationResult>> dryRunDistributionReconciliation(@RequestParam(required = false) Integer limit,
+                                                                                                HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        schedulerModuleGuard.checkDebug(context);
+        rejectPartnerScopedGlobalMutation(context);
+        return ApiResponse.success(distributionReconciliationService.dryRunReconciliation(limit == null ? 20 : limit));
+    }
+
     @GetMapping("/idempotency-health")
+    @Operation(
+            summary = "检查接口幂等健康",
+            description = "用于上线前发现重复回调日志、唯一约束缺失等数据治理风险。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<SchedulerIdempotencyHealthResponse> inspectIdempotencyHealth(@RequestParam(required = false) String providerCode,
                                                                                     HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
@@ -221,12 +296,29 @@ public class SchedulerController {
     }
 
     @GetMapping("/monitor/summary")
+    @Operation(
+            summary = "查询调度与分销验收监控摘要",
+            description = "提供方案 B 上线验收样本、Outbox、异常队列和回查对账概览。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<SchedulerMonitorSummaryResponse> inspectMonitorSummary(@RequestParam(required = false) String providerCode,
                                                                               HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         schedulerModuleGuard.checkView(context);
         rejectPartnerScopedHealthView(context);
         return ApiResponse.success(schedulerMonitorService.summarize(providerCode));
+    }
+
+    @GetMapping("/go-live/readiness")
+    @Operation(
+            summary = "上线前检查",
+            description = "检查域名、回调地址、分销 LIVE 配置、幂等唯一约束、生产 OpenAPI 与调度任务是否具备上线条件。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SchedulerGoLiveReadinessResponse> inspectGoLiveReadiness(@RequestParam(required = false) String providerCode,
+                                                                                HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        schedulerModuleGuard.checkView(context);
+        rejectPartnerScopedHealthView(context);
+        return ApiResponse.success(schedulerGoLiveReadinessService.inspect(providerCode));
     }
 
     @GetMapping("/providers")
@@ -339,6 +431,19 @@ public class SchedulerController {
         return ApiResponse.success(schedulerService.trigger(request, context));
     }
 
+    @PostMapping("/trigger/dry-run")
+    @Operation(
+            summary = "调度任务预检",
+            description = "预览任务执行影响，不入队、不调用外部接口、不写 Customer / Order / PlanOrder / Outbox。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SchedulerJobLog> dryRunTrigger(@RequestBody SchedulerTriggerRequest request,
+                                                       HttpServletRequest httpServletRequest) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
+        schedulerModuleGuard.checkDebug(context);
+        rejectPartnerScopedGlobalMutation(context);
+        return ApiResponse.success(schedulerService.dryRun(request, context));
+    }
+
     @PostMapping("/retry")
     public ApiResponse<List<SchedulerJobLog>> retry(@RequestParam String jobCode,
                                                     HttpServletRequest request) {
@@ -358,6 +463,10 @@ public class SchedulerController {
     }
 
     @PostMapping("/interface/debug")
+    @Operation(
+            summary = "联调工作台 dry-run",
+            description = "分销接口 dry-run 只预览字段映射、状态映射、Customer 匹配和 Order 幂等结果，不写 Customer / Order / PlanOrder。",
+            security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<Map<String, Object>> debugInterface(@RequestBody SchedulerInterfaceDebugRequest request,
                                                            HttpServletRequest httpServletRequest) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
@@ -396,7 +505,7 @@ public class SchedulerController {
             return ApiResponse.success(schedulerSensitiveDataMasker.maskDryRunResult(response, context));
         }
         response.put("success", true);
-        response.put("message", "模拟接口调试成功，未调用外部平台");
+        response.put("message", "模拟联调预检成功，未调用外部平台");
         response.put("mockData", Map.of(
                 "traceId", java.util.UUID.randomUUID().toString(),
                 "received", true,

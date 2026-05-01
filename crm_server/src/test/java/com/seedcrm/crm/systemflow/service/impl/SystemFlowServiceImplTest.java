@@ -97,13 +97,15 @@ class SystemFlowServiceImplTest {
                         "VERIFY",
                         "PLAN_CREATED",
                         "PLAN_ARRIVED",
+                        "SERVICE_FORM_CONFIRMED",
                         "PLAN_SERVICING",
                         "PLAN_FINISHED",
                         "ORDER_USED");
         assertThat(detail.getNodes()).extracting(SystemFlowDtos.NodeResponse::getDomainCode)
                 .containsSubsequence("CLUE", "CUSTOMER", "ORDER", "PLANORDER");
         assertThat(detail.getTransitions()).extracting(SystemFlowDtos.TransitionResponse::getActionCode)
-                .contains("PAYMENT_SYNC", "ORDER_APPOINTMENT", "ORDER_VERIFY", "PLAN_CREATE", "PLAN_FINISH");
+                .contains("PAYMENT_SYNC", "ORDER_APPOINTMENT", "ORDER_VERIFY", "PLAN_CREATE",
+                        "SERVICE_FORM_CONFIRM", "PLAN_FINISH");
     }
 
     @Test
@@ -153,9 +155,10 @@ class SystemFlowServiceImplTest {
                 node("ORDER", "VERIFY", "门店核销", "paid", 70),
                 node("PLANORDER", "PLAN_CREATED", "创建计划单", "arrived", 80),
                 node("PLANORDER", "PLAN_ARRIVED", "到店", "arrived", 90),
-                node("PLANORDER", "PLAN_SERVICING", "服务中", "servicing", 100),
-                node("PLANORDER", "PLAN_FINISHED", "服务完成", "finished", 110, "STORE_SERVICE"),
-                node("ORDER", "ORDER_USED", "订单已使用", "used", 120)));
+                node("PLANORDER", "SERVICE_FORM_CONFIRMED", "纸质确认单已确认", "service_form_confirmed", 100),
+                node("PLANORDER", "PLAN_SERVICING", "服务中", "servicing", 110),
+                node("PLANORDER", "PLAN_FINISHED", "服务完成", "finished", 120, "STORE_SERVICE"),
+                node("ORDER", "ORDER_USED", "订单已使用", "used", 130)));
 
         assertThatThrownBy(() -> service.saveDraft(request, null))
                 .isInstanceOf(BusinessException.class)
@@ -175,7 +178,8 @@ class SystemFlowServiceImplTest {
                 transition("APPOINTMENT", "VERIFY", "ORDER_VERIFY"),
                 transition("VERIFY", "PLAN_CREATED", "PLAN_CREATE"),
                 transition("PLAN_CREATED", "PLAN_ARRIVED", "PLAN_ARRIVE"),
-                transition("PLAN_ARRIVED", "PLAN_SERVICING", "PLAN_START"),
+                transition("PLAN_ARRIVED", "SERVICE_FORM_CONFIRMED", "SERVICE_FORM_CONFIRM"),
+                transition("SERVICE_FORM_CONFIRMED", "PLAN_SERVICING", "PLAN_START"),
                 transition("PLAN_SERVICING", "PLAN_FINISHED", "PLAN_FINISH"),
                 transition("PLAN_FINISHED", "ORDER_USED", "ORDER_COMPLETE")));
 
@@ -334,9 +338,10 @@ class SystemFlowServiceImplTest {
                 node("ORDER", "VERIFY", "门店核销", "paid", 70),
                 node("PLANORDER", "PLAN_CREATED", "创建计划单", "arrived", 80),
                 node("PLANORDER", "PLAN_ARRIVED", "到店", "arrived", 90),
-                node("PLANORDER", "PLAN_SERVICING", "服务中", "servicing", 100),
-                node("PLANORDER", "PLAN_FINISHED", "服务完成", "finished", 110, "STORE_SERVICE"),
-                node("ORDER", "ORDER_USED", "订单已使用", "used", 120)));
+                node("PLANORDER", "SERVICE_FORM_CONFIRMED", "纸质确认单已确认", "service_form_confirmed", 100),
+                node("PLANORDER", "PLAN_SERVICING", "服务中", "servicing", 110),
+                node("PLANORDER", "PLAN_FINISHED", "服务完成", "finished", 120, "STORE_SERVICE"),
+                node("ORDER", "ORDER_USED", "订单已使用", "used", 130)));
         detail.setTransitions(List.of(
                 transition("CLUE_INTAKE", "CLUE_ASSIGN", "CLUE_AUTO_ASSIGN"),
                 transition("CLUE_ASSIGN", "CLUE_FOLLOW", "CLUE_FOLLOW"),
@@ -346,7 +351,8 @@ class SystemFlowServiceImplTest {
                 transition("APPOINTMENT", "VERIFY", "ORDER_VERIFY"),
                 transition("VERIFY", "PLAN_CREATED", "PLAN_CREATE"),
                 transition("PLAN_CREATED", "PLAN_ARRIVED", "PLAN_ARRIVE"),
-                transition("PLAN_ARRIVED", "PLAN_SERVICING", "PLAN_START"),
+                transition("PLAN_ARRIVED", "SERVICE_FORM_CONFIRMED", "SERVICE_FORM_CONFIRM"),
+                transition("SERVICE_FORM_CONFIRMED", "PLAN_SERVICING", "PLAN_START"),
                 transition("PLAN_SERVICING", "PLAN_FINISHED", "PLAN_FINISH"),
                 transition("PLAN_FINISHED", "ORDER_USED", "ORDER_COMPLETE")));
         detail.setTriggers(List.of(trigger("ORDER_USED", "SALARY_SETTLEMENT_METADATA")));

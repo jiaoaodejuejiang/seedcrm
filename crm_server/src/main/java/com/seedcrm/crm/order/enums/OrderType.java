@@ -2,7 +2,8 @@ package com.seedcrm.crm.order.enums;
 
 public enum OrderType {
     DEPOSIT(1, "deposit"),
-    COUPON(2, "coupon");
+    COUPON(2, "coupon"),
+    DISTRIBUTION_PRODUCT(3, "distribution_product");
 
     private final int code;
     private final String apiValue;
@@ -31,8 +32,11 @@ public enum OrderType {
         if (code == 1) {
             return DEPOSIT.code;
         }
-        if (code == 2 || code == 3) {
+        if (code == 2) {
             return COUPON.code;
+        }
+        if (code == 3) {
+            return DISTRIBUTION_PRODUCT.code;
         }
         return null;
     }

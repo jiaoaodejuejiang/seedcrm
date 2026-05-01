@@ -13,6 +13,8 @@ import com.seedcrm.crm.scheduler.entity.IntegrationCallbackEventLog;
 import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
 import com.seedcrm.crm.scheduler.mapper.IntegrationCallbackEventLogMapper;
 import com.seedcrm.crm.scheduler.mapper.IntegrationProviderConfigMapper;
+import com.seedcrm.crm.scheduler.support.DistributionOrderTypeMappingResolver;
+import com.seedcrm.crm.scheduler.support.DistributionOrderTypeMappingResolver.ResolvedOrderType;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
@@ -41,17 +43,22 @@ public class DistributionEventDryRunService {
     private final CustomerMapper customerMapper;
     private final OrderMapper orderMapper;
     private final ObjectMapper objectMapper;
+    private final DistributionOrderTypeMappingResolver orderTypeMappingResolver;
 
     public DistributionEventDryRunService(IntegrationProviderConfigMapper providerConfigMapper,
                                           IntegrationCallbackEventLogMapper eventLogMapper,
                                           CustomerMapper customerMapper,
                                           OrderMapper orderMapper,
-                                          ObjectMapper objectMapper) {
+                                          ObjectMapper objectMapper,
+                                          DistributionOrderTypeMappingResolver orderTypeMappingResolver) {
         this.providerConfigMapper = providerConfigMapper;
         this.eventLogMapper = eventLogMapper;
         this.customerMapper = customerMapper;
         this.orderMapper = orderMapper;
         this.objectMapper = objectMapper;
+        this.orderTypeMappingResolver = orderTypeMappingResolver == null
+                ? new DistributionOrderTypeMappingResolver(objectMapper, null)
+                : orderTypeMappingResolver;
     }
 
     public Map<String, Object> dryRun(SchedulerInterfaceDebugRequest request) {
@@ -91,6 +98,7 @@ public class DistributionEventDryRunService {
         Order existingOrder = findOrder(providerCode, externalOrderId);
         IntegrationCallbackEventLog duplicateLog = findDuplicateLog(providerCode, eventId, idempotencyKey);
         IntegrationCallbackEventLog nonceLog = findNonceLog(providerCode, header(parameters, "X-Nonce"));
+        ResolvedOrderType mappedOrderType = orderTypeMappingResolver.resolve(providerCode, "DISTRIBUTOR", payload.path("order"));
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("dryRun", true);
@@ -99,11 +107,12 @@ public class DistributionEventDryRunService {
         response.put("provider", providerPreview(providerCode, provider, mode));
         response.put("envelope", envelopePreview(eventType, eventId, providerCode, idempotencyKey));
         response.put("signaturePreview", signaturePreview(mode, provider, rawPayload, idempotencyKey, parameters, nonceLog));
-        response.put("fieldMapping", fieldMapping(payload));
+        response.put("fieldMapping", fieldMapping(payload, mappedOrderType));
+        response.put("orderTypeMapping", mappedOrderType.toPreviewMap());
         response.put("statusMapping", statusMapping(eventType));
         response.put("customerMatch", customerMatchPreview(matchedCustomer, externalCustomer, phoneCustomer, externalMemberId, phone));
-        response.put("orderIdempotency", orderIdempotencyPreview(existingOrder, duplicateLog, externalOrderId, payload));
-        response.put("validation", validationPreview(provider, eventType, eventId, idempotencyKey, externalMemberId, phone, externalOrderId, payload));
+        response.put("orderIdempotency", orderIdempotencyPreview(existingOrder, duplicateLog, externalOrderId, payload, mappedOrderType));
+        response.put("validation", validationPreview(provider, eventType, eventId, idempotencyKey, externalMemberId, phone, externalOrderId, payload, mappedOrderType));
         response.put("willWrite", willWritePreview(eventType, matchedCustomer, existingOrder));
         response.put("rawDataPolicy", Map.of(
                 "storedInFormalIngest", true,
@@ -279,7 +288,7 @@ public class DistributionEventDryRunService {
         return result;
     }
 
-    private Map<String, Object> fieldMapping(JsonNode payload) {
+    private Map<String, Object> fieldMapping(JsonNode payload, ResolvedOrderType mappedOrderType) {
         Map<String, Object> result = new LinkedHashMap<>();
         Map<String, Object> member = new LinkedHashMap<>();
         member.put("externalMemberId", text(payload, "member.externalMemberId"));
@@ -297,6 +306,12 @@ public class DistributionEventDryRunService {
         order.put("externalOrderId", text(payload, "order.externalOrderId"));
         order.put("externalTradeNo", text(payload, "order.externalTradeNo"));
         order.put("type", firstNonBlank(text(payload, "order.type"), "coupon"));
+        order.put("externalProductId", text(payload, "order.externalProductId"));
+        order.put("externalSkuId", text(payload, "order.externalSkuId"));
+        order.put("productName", text(payload, "order.productName"));
+        order.put("channelCode", text(payload, "order.channelCode"));
+        order.put("mappedInternalType", mappedOrderType == null ? null : mappedOrderType.apiValue());
+        order.put("mappingResolution", mappedOrderType == null ? null : mappedOrderType.resolution());
         order.put("amountCent", decimalText(payload, "order.amount"));
         order.put("amountYuan", amountYuan(payload));
         order.put("paidAt", text(payload, "order.paidAt"));
@@ -353,8 +368,9 @@ public class DistributionEventDryRunService {
     private Map<String, Object> orderIdempotencyPreview(Order order,
                                                         IntegrationCallbackEventLog duplicateLog,
                                                         String externalOrderId,
-                                                        JsonNode payload) {
-        List<String> conflicts = detectExistingOrderConflicts(order, payload);
+                                                        JsonNode payload,
+                                                        ResolvedOrderType mappedOrderType) {
+        List<String> conflicts = detectExistingOrderConflicts(order, payload, mappedOrderType);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("externalOrderId", externalOrderId);
         result.put("orderExists", order != null);
@@ -378,7 +394,9 @@ public class DistributionEventDryRunService {
         return result;
     }
 
-    private List<String> detectExistingOrderConflicts(Order order, JsonNode payload) {
+    private List<String> detectExistingOrderConflicts(Order order,
+                                                      JsonNode payload,
+                                                      ResolvedOrderType mappedOrderType) {
         List<String> conflicts = new ArrayList<>();
         if (order == null || payload == null) {
             return conflicts;
@@ -388,11 +406,13 @@ public class DistributionEventDryRunService {
 
         String incomingType = text(payload, "order.type");
         Integer existingType = OrderType.normalizeCode(order.getType());
-        Integer incomingTypeCode = resolveOrderType(incomingType);
-        if (StringUtils.hasText(incomingType) && existingType != null && incomingTypeCode != null
+        Integer incomingTypeCode = mappedOrderType == null ? null : mappedOrderType.code();
+        boolean shouldCompareType = StringUtils.hasText(incomingType)
+                || (mappedOrderType != null && mappedOrderType.productIdentityPresent());
+        if (shouldCompareType && existingType != null && incomingTypeCode != null
                 && !existingType.equals(incomingTypeCode)) {
             conflicts.add("type existing=" + OrderType.toApiValue(order.getType())
-                    + " incoming=" + normalizeLower(incomingType));
+                    + " incoming=" + (mappedOrderType == null ? normalizeLower(incomingType) : mappedOrderType.apiValue()));
         }
 
         BigDecimal incomingAmount = amountYuanValue(payload);
@@ -419,7 +439,8 @@ public class DistributionEventDryRunService {
                                                                   String externalMemberId,
                                                                   String phone,
                                                                   String externalOrderId,
-                                                                  JsonNode payload) {
+                                                                  JsonNode payload,
+                                                                  ResolvedOrderType mappedOrderType) {
         java.util.List<Map<String, Object>> items = new java.util.ArrayList<>();
         addValidation(items, provider != null, "PROVIDER_CONFIG", "ERROR", "未找到分销接口配置");
         addValidation(items, StringUtils.hasText(eventType), "EVENT_TYPE", "ERROR", "eventType 不能为空");
@@ -430,6 +451,8 @@ public class DistributionEventDryRunService {
             addValidation(items, StringUtils.hasText(phone), "MEMBER_PHONE", "ERROR", "member.phone 不能为空");
             addValidation(items, StringUtils.hasText(externalOrderId), "EXTERNAL_ORDER_ID", "ERROR", "order.externalOrderId 不能为空");
             addValidation(items, payload.at("/order/amount").isNumber(), "ORDER_AMOUNT", "ERROR", "order.amount 必须是分为单位的数字");
+            addValidation(items, mappedOrderType == null || !mappedOrderType.missingProductRule(),
+                    "PRODUCT_MAPPING", "ERROR", "当前商品 / SKU 未配置订单类型映射，正式入站会进入异常队列");
         }
         if (items.isEmpty()) {
             items.add(Map.of("code", "READY", "level", "INFO", "message", "结构预检通过，可进入正式入站联调"));
@@ -570,17 +593,6 @@ public class DistributionEventDryRunService {
             return null;
         }
         return node.decimalValue().divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-    }
-
-    private Integer resolveOrderType(String type) {
-        String normalized = normalizeLower(type);
-        if (!StringUtils.hasText(normalized)) {
-            return null;
-        }
-        if ("deposit".equals(normalized)) {
-            return OrderType.DEPOSIT.getCode();
-        }
-        return OrderType.COUPON.getCode();
     }
 
     private String validateTimestamp(String timestamp) {

@@ -1,5 +1,6 @@
 package com.seedcrm.crm.order.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.common.api.ApiResponse;
 import com.seedcrm.crm.order.dto.OrderActionDTO;
 import com.seedcrm.crm.order.dto.OrderAppointmentDTO;
@@ -33,13 +34,16 @@ public class OrderController {
     private final OrderService orderService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
     private final OrderPermissionGuard orderPermissionGuard;
+    private final ObjectMapper objectMapper;
 
     public OrderController(OrderService orderService,
                            PermissionRequestContextResolver permissionRequestContextResolver,
-                           OrderPermissionGuard orderPermissionGuard) {
+                           OrderPermissionGuard orderPermissionGuard,
+                           ObjectMapper objectMapper) {
         this.orderService = orderService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
         this.orderPermissionGuard = orderPermissionGuard;
+        this.objectMapper = objectMapper;
     }
 
     @PostMapping("/create")
@@ -138,7 +142,7 @@ public class OrderController {
             return response;
         }
         return STORE_AMOUNT_RESTRICTED_ROLES.contains(context.getRoleCode().trim().toUpperCase())
-                ? response.maskAmounts()
+                ? response.maskAmounts(objectMapper)
                 : response;
     }
 }

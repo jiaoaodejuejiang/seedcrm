@@ -1,0 +1,1100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM 分销接口联调说明</title>
+  <style>
+    :root {
+      --ink: #17231f;
+      --muted: #64736d;
+      --soft: #f6f8f5;
+      --panel: #ffffff;
+      --line: #dfe7e2;
+      --brand: #176b54;
+      --brand-weak: #e6f3ee;
+      --warn: #9a5b00;
+      --warn-weak: #fff4df;
+      --danger: #9f2f2f;
+      --danger-weak: #fff0f0;
+      --ok: #25734f;
+      --ok-weak: #edf8f2;
+      --code-bg: #10231d;
+      --code-fg: #dff7ee;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(23, 107, 84, 0.13), transparent 34rem),
+        linear-gradient(135deg, #fbfcf8 0%, #edf4ef 100%);
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+      line-height: 1.7;
+    }
+
+    a {
+      color: var(--brand);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 288px minmax(0, 1fr);
+      gap: 28px;
+      width: min(1320px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 32px 0 52px;
+    }
+
+    .toc {
+      position: sticky;
+      top: 18px;
+      align-self: start;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.90);
+      box-shadow: 0 20px 60px rgba(21, 48, 38, 0.08);
+    }
+
+    .toc strong {
+      display: block;
+      margin-bottom: 14px;
+      color: var(--brand);
+      font-size: 18px;
+    }
+
+    .toc a {
+      display: block;
+      margin: 7px 0;
+      padding: 7px 10px;
+      border-radius: 12px;
+      color: #335047;
+      font-size: 14px;
+    }
+
+    .toc a:hover {
+      background: var(--brand-weak);
+      text-decoration: none;
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    .hero {
+      padding: 34px;
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 24px 80px rgba(21, 48, 38, 0.10);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--brand);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.15;
+    }
+
+    h2 {
+      margin: 0 0 18px;
+      padding-top: 8px;
+      font-size: 26px;
+      line-height: 1.25;
+    }
+
+    h3 {
+      margin: 22px 0 10px;
+      font-size: 19px;
+    }
+
+    p {
+      margin: 10px 0;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: var(--brand-weak);
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .section {
+      margin-top: 24px;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 16px 50px rgba(21, 48, 38, 0.06);
+    }
+
+    .notice {
+      margin: 18px 0;
+      padding: 16px 18px;
+      border-left: 4px solid var(--brand);
+      border-radius: 16px;
+      background: var(--brand-weak);
+    }
+
+    .notice.warn {
+      border-left-color: var(--warn);
+      background: var(--warn-weak);
+      color: #5d3900;
+    }
+
+    .notice.danger {
+      border-left-color: var(--danger);
+      background: var(--danger-weak);
+      color: #5d1f1f;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin: 18px 0;
+    }
+
+    .step {
+      min-height: 112px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--soft);
+      font-size: 14px;
+    }
+
+    .step b {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--brand);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+    }
+
+    table {
+      width: 100%;
+      margin: 14px 0 4px;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #eef5f1;
+      color: #25483d;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    code,
+    pre {
+      font-family: Consolas, "SFMono-Regular", Menlo, monospace;
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: #edf2ef;
+      color: #10231d;
+    }
+
+    pre {
+      overflow: auto;
+      margin: 14px 0;
+      padding: 16px;
+      border-radius: 18px;
+      background: var(--code-bg);
+      color: var(--code-fg);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .tag {
+      display: inline-flex;
+      margin: 2px 4px 2px 0;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: #edf2ef;
+      color: #29493f;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .tag.ok {
+      background: var(--ok-weak);
+      color: var(--ok);
+    }
+
+    .tag.warn {
+      background: var(--warn-weak);
+      color: var(--warn);
+    }
+
+    .tag.danger {
+      background: var(--danger-weak);
+      color: var(--danger);
+    }
+
+    .checklist {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .checklist li {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--soft);
+    }
+
+    .endpoint {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--soft);
+    }
+
+    .method {
+      display: inline-flex;
+      justify-content: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--brand);
+      color: white;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding: 20px 8px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    @media (max-width: 1080px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .toc {
+        position: static;
+      }
+
+      .flow,
+      .grid,
+      .checklist {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="toc">
+      <strong>目录</strong>
+      <a href="#overview">1. 接入概览</a>
+      <a href="#environment">2. 环境与权限</a>
+      <a href="#inbound">3. 已支付订单入站</a>
+      <a href="#signature">4. 签名与防重放</a>
+      <a href="#idempotency">5. 防重复规则</a>
+      <a href="#outbox">6. 履约回推</a>
+      <a href="#reconcile">7. 状态回查与对账</a>
+      <a href="#debug">8. 调试与诊断</a>
+      <a href="#errors">9. 错误码与排障</a>
+      <a href="#acceptance">10. 上线验收</a>
+    </aside>
+
+    <main>
+      <header class="hero">
+        <p class="eyebrow">SEEDCRM DISTRIBUTION API</p>
+        <h1>分销接口联调说明</h1>
+        <p>
+          本文面向外部分销 / 电商系统研发、SeedCRM 集成管理员和联调人员，说明方案 B 的入站事件、签名、防重复、Outbox 回推、异常队列、回查对账和验收样本。
+        </p>
+        <div class="meta">
+          <span class="pill">适用版本：方案 B V1</span>
+          <span class="pill">最后更新：2026-05-01</span>
+          <span class="pill">响应包：code / message / data</span>
+        </div>
+      </header>
+
+      <section id="overview" class="section">
+        <h2>1. 接入概览</h2>
+        <div class="notice">
+          分销方案 B 的接口目标是：外部分销系统把已支付成交订单推送给 SeedCRM；SeedCRM 完成预约排档和门店履约后，再把 <code>crm.order.used</code> 异步回推给外部分销系统。
+        </div>
+        <div class="flow">
+          <div class="step">
+            <b>1. 外部支付</b>
+            分销小程序或电商系统完成付款。
+          </div>
+          <div class="step">
+            <b>2. 入站事件</b>
+            调用 <code>POST /open/distribution/events</code>。
+          </div>
+          <div class="step">
+            <b>3. 入站服务</b>
+            统一经 <code>DistributionEventIngestService</code>。
+          </div>
+          <div class="step">
+            <b>4. 本地主链</b>
+            创建或匹配 <code>Customer</code>，创建 <code>Order(paid)</code>。
+          </div>
+          <div class="step">
+            <b>5. 门店履约</b>
+            预约排档，生成并完成 <code>PlanOrder</code>。
+          </div>
+          <div class="step">
+            <b>6. 回推完成</b>
+            Outbox 异步回推 <code>crm.order.used</code>。
+          </div>
+        </div>
+        <pre><code>ExternalDistributionPaidOrder -> Customer -> Order(paid) -> PlanOrder -> scheduler_outbox_event -> crm.order.used</code></pre>
+        <div class="notice danger">
+          分销已支付订单不进入 <code>Clue</code>；SeedCRM 不处理外部分销佣金、提现、退款资金流；Open API / Scheduler 都不得绕过入站服务直接写 <code>Customer / Order / PlanOrder</code>。
+        </div>
+      </section>
+
+      <section id="environment" class="section">
+        <h2>2. 环境与权限</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>后台接口前缀</td>
+              <td>本地默认 <code>http://127.0.0.1:8080</code>；前端代理默认 <code>/api</code>。</td>
+            </tr>
+            <tr>
+              <td>Open API 入口</td>
+              <td>外部分销系统调用 <code>/open/distribution/events</code>，不需要后台登录 token，但需要渠道配置和签名规则。</td>
+            </tr>
+            <tr>
+              <td>后台调试接口</td>
+              <td>后台用户登录后使用 <code>X-Auth-Token</code> 调用 <code>/scheduler/*</code> 接口。</td>
+            </tr>
+            <tr>
+              <td>配置入口</td>
+              <td>系统设置 -> 调度中心 -> 分销接口 -> 接入配置。</td>
+            </tr>
+            <tr>
+              <td>联调角色</td>
+              <td><code>INTEGRATION_ADMIN</code> 配置和执行全局处理；<code>INTEGRATION_OPERATOR</code> 查看日志、异常和脱敏结果。</td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>2.1 MOCK 与 LIVE</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>模式</th>
+              <th>用途</th>
+              <th>安全规则</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>MOCK</code></td>
+              <td>本地联调、回归测试、验收样本生成。</td>
+              <td>入站仍需要 <code>X-Idempotency-Key</code> 和事件字段；签名可跳过。</td>
+            </tr>
+            <tr>
+              <td><code>LIVE</code></td>
+              <td>真实外部分销系统联调或生产接入。</td>
+              <td>必须配置 <code>AppId</code>、<code>AppSecret</code>、回推地址、状态回查路径、对账路径，并携带签名头。</td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>2.2 上线域名与 OpenAPI</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>配置项</th>
+              <th>用途</th>
+              <th>上线要求</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>SEEDCRM_SYSTEM_BASE_URL</code></td>
+              <td>系统后台访问域名，用于页面跳转、扫码服务单等前端入口。</td>
+              <td>生产环境必须配置为可访问的 HTTPS 域名。</td>
+            </tr>
+            <tr>
+              <td><code>SEEDCRM_API_BASE_URL</code></td>
+              <td>API 域名，用于分销入站、回调地址、Swagger/OpenAPI 示例地址。</td>
+              <td>生产环境必须配置为外部分销系统可访问的 HTTPS 地址。</td>
+            </tr>
+            <tr>
+              <td><code>SEEDCRM_OPENAPI_ENABLED</code></td>
+              <td>是否启用 Swagger UI 和 <code>/v3/api-docs/*</code>。</td>
+              <td>生产可启用，但必须通过后台 token 访问；未授权用户不能看到接口定义。</td>
+            </tr>
+            <tr>
+              <td><code>SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN</code></td>
+              <td>本地访问 Swagger 是否允许免 token。</td>
+              <td>生产环境建议设置为 <code>false</code>。</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="notice warn">
+          Swagger UI 用于查看接口定义；正式联调请优先使用“接口调试 / 联调工作台”进行 dry-run 验证。生产环境不要把 Swagger/OpenAPI 直接暴露给公网未授权访问。
+        </div>
+      </section>
+
+      <section id="inbound" class="section">
+        <h2>3. 已支付订单入站</h2>
+        <div class="endpoint">
+          <span class="method">POST</span>
+          <code>/open/distribution/events</code>
+        </div>
+        <p>该接口接收外部分销已支付订单、取消、退款待处理、已退款等事件。所有写入动作统一进入入站业务服务。</p>
+
+        <h3>3.1 请求头</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Header</th>
+              <th>是否必填</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>X-Partner-Code</code></td>
+              <td>建议必填</td>
+              <td>渠道编码，默认 <code>DISTRIBUTION</code>。如请求头和报文 <code>partnerCode</code> 同时存在，必须一致。</td>
+            </tr>
+            <tr>
+              <td><code>X-Idempotency-Key</code></td>
+              <td>必填</td>
+              <td>幂等键，页面展示为“防重复编号”。禁止使用手机号作为订单幂等依据。</td>
+            </tr>
+            <tr>
+              <td><code>X-Timestamp</code></td>
+              <td>LIVE 必填</td>
+              <td>签名时间，允许 10 分钟窗口。建议 ISO-8601 UTC 时间。</td>
+            </tr>
+            <tr>
+              <td><code>X-Nonce</code></td>
+              <td>LIVE 必填</td>
+              <td>随机串，用于防重放。同渠道已验证 nonce 不能重复使用。</td>
+            </tr>
+            <tr>
+              <td><code>X-Signature</code></td>
+              <td>LIVE 必填</td>
+              <td>HMAC-SHA256 签名，规则见“签名与防重放”。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>3.2 支持事件</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>eventType</th>
+              <th>SeedCRM 行为</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>distribution.order.paid</code></td>
+              <td>创建或匹配 <code>Customer</code>，创建 <code>Order(paid)</code>。</td>
+              <td>唯一允许创建订单的事件。</td>
+            </tr>
+            <tr>
+              <td><code>distribution.order.cancelled</code></td>
+              <td>只能更新已有订单的外部状态或进入异常队列。</td>
+              <td>不能反向创建订单。</td>
+            </tr>
+            <tr>
+              <td><code>distribution.order.refund_pending</code></td>
+              <td>记录外部退款待处理状态，必要时进入异常队列。</td>
+              <td>外部退款资金流仍由外部分销系统处理。</td>
+            </tr>
+            <tr>
+              <td><code>distribution.order.refunded</code></td>
+              <td>更新已有订单外部退款状态，或按冲突进入异常队列。</td>
+              <td>不得绕过入站服务直接改核心表。</td>
+            </tr>
+            <tr>
+              <td><code>distribution.promoter.synced</code> / <code>distribution.member.updated</code></td>
+              <td>V1 仅记录事件日志。</td>
+              <td>不创建核心模型，不触发分佣提现。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>3.3 请求体字段</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>字段</th>
+              <th>必填</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>eventType</code></td>
+              <td>是</td>
+              <td>事件类型，例如 <code>distribution.order.paid</code>。</td>
+            </tr>
+            <tr>
+              <td><code>eventId</code></td>
+              <td>是</td>
+              <td>外部事件 ID，用于日志追踪和重复事件识别。</td>
+            </tr>
+            <tr>
+              <td><code>partnerCode</code></td>
+              <td>建议</td>
+              <td>渠道编码，默认 <code>DISTRIBUTION</code>。</td>
+            </tr>
+            <tr>
+              <td><code>member.externalMemberId</code></td>
+              <td>paid 必填</td>
+              <td>外部会员 ID，与 <code>partnerCode</code> 一起用于会员身份匹配。</td>
+            </tr>
+            <tr>
+              <td><code>member.phone</code></td>
+              <td>paid 必填</td>
+              <td>会员手机号，用于 Customer 匹配。不能作为订单幂等键。</td>
+            </tr>
+            <tr>
+              <td><code>member.role</code></td>
+              <td>否</td>
+              <td>会员身份展示字段，例如 <code>leader</code>、<code>member</code>，仅用于展示 / 画像。</td>
+            </tr>
+            <tr>
+              <td><code>promoter.externalPromoterId</code></td>
+              <td>否</td>
+              <td>外部分销者 ID，仅记录外部快照，不参与 SeedCRM 分佣提现。</td>
+            </tr>
+            <tr>
+              <td><code>order.externalOrderId</code></td>
+              <td>paid 必填</td>
+              <td>外部订单号，与 <code>partnerCode</code> 共同作为订单唯一依据。</td>
+            </tr>
+            <tr>
+              <td><code>order.externalTradeNo</code></td>
+              <td>建议</td>
+              <td>外部支付流水号，用于对账和冲突排查。</td>
+            </tr>
+            <tr>
+              <td><code>order.type</code></td>
+              <td>建议</td>
+              <td><code>deposit</code> 或 <code>coupon</code>，V1 本地默认可映射为团购券 / 定金类订单。</td>
+            </tr>
+            <tr>
+              <td><code>order.amount</code></td>
+              <td>paid 必填</td>
+              <td>已支付金额，单位为分。系统入库时转换为元并保留两位小数。</td>
+            </tr>
+            <tr>
+              <td><code>order.status</code></td>
+              <td>建议</td>
+              <td>外部状态，例如 <code>paid</code>、<code>cancelled</code>、<code>refund_pending</code>、<code>refunded</code>。</td>
+            </tr>
+            <tr>
+              <td><code>rawData</code></td>
+              <td>是</td>
+              <td>外部原始报文快照，用于追踪、补偿、对账和审计。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>3.4 paid 样例</h3>
+        <pre><code>POST /open/distribution/events
+X-Partner-Code: DISTRIBUTION
+X-Idempotency-Key: DISTRIBUTION:ORDER_PAID:o_202605010001
+Content-Type: application/json
+
+{
+  "eventType": "distribution.order.paid",
+  "eventId": "evt_202605010001",
+  "partnerCode": "DISTRIBUTION",
+  "occurredAt": "2026-05-01T10:30:00+08:00",
+  "member": {
+    "externalMemberId": "m_10001",
+    "name": "张三",
+    "phone": "13800000000",
+    "role": "member"
+  },
+  "promoter": {
+    "externalPromoterId": "p_90001",
+    "role": "leader"
+  },
+  "order": {
+    "externalOrderId": "o_202605010001",
+    "externalTradeNo": "pay_202605010001",
+    "type": "coupon",
+    "amount": 19900,
+    "paidAt": "2026-05-01T10:29:40+08:00",
+    "status": "paid"
+  },
+  "rawData": {
+    "source": "external-distribution",
+    "originalStatus": "paid"
+  }
+}</code></pre>
+
+        <h3>3.5 成功响应</h3>
+        <pre><code>{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "traceId": "b3455c9f-cf34-4860-a63f-c26b723c7ff1",
+    "idempotencyResult": "CREATED",
+    "customerId": 101,
+    "orderId": 202,
+    "processStatus": "SUCCESS",
+    "message": "distribution paid order created"
+  }
+}</code></pre>
+      </section>
+
+      <section id="signature" class="section">
+        <h2>4. 签名与防重放</h2>
+        <p>LIVE 模式下，入站事件必须携带时间戳、随机串和签名。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>规则</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>签名算法</td>
+              <td><code>HMAC-SHA256</code></td>
+            </tr>
+            <tr>
+              <td>签名密钥</td>
+              <td>分销接口配置中的 <code>AppSecret</code> / <code>clientSecret</code></td>
+            </tr>
+            <tr>
+              <td>入站签名原文</td>
+              <td><code>X-Timestamp + "|" + X-Nonce + "|" + X-Idempotency-Key + "|" + rawRequestBody</code></td>
+            </tr>
+            <tr>
+              <td>时间窗口</td>
+              <td>允许 10 分钟偏差，超出会返回时间戳异常。</td>
+            </tr>
+            <tr>
+              <td>nonce 防重放</td>
+              <td>同渠道已验证 nonce 不能重复使用。</td>
+            </tr>
+          </tbody>
+        </table>
+        <pre><code>// 伪代码
+source = timestamp + "|" + nonce + "|" + idempotencyKey + "|" + rawJsonBody
+signature = hmacSha256Hex(clientSecret, source)
+
+headers = {
+  "X-Partner-Code": "DISTRIBUTION",
+  "X-Idempotency-Key": idempotencyKey,
+  "X-Timestamp": timestamp,
+  "X-Nonce": nonce,
+  "X-Signature": signature
+}</code></pre>
+        <div class="notice warn">
+          生成签名时必须使用原始请求体字符串。字段顺序、空格、换行变化都会改变签名结果，联调时建议先固定 JSON 序列化方式。
+        </div>
+      </section>
+
+      <section id="idempotency" class="section">
+        <h2>5. 防重复规则</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>场景</th>
+              <th>结果</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>同 <code>X-Idempotency-Key</code> 或同 <code>eventId</code>，报文一致</td>
+              <td><span class="tag ok">DUPLICATE</span></td>
+              <td>系统返回成功并忽略重复事件，不重复创建订单。</td>
+            </tr>
+            <tr>
+              <td>同 <code>X-Idempotency-Key</code> 或同 <code>eventId</code>，报文不一致</td>
+              <td><span class="tag danger">EXCEPTION_QUEUED</span></td>
+              <td>进入异常队列，异常类型为重复报文冲突，需要人工核对内容指纹。</td>
+            </tr>
+            <tr>
+              <td>同 <code>partnerCode + externalOrderId</code> 已存在，关键字段一致</td>
+              <td><span class="tag ok">EXISTING</span></td>
+              <td>刷新外部状态快照，不重复创建订单。</td>
+            </tr>
+            <tr>
+              <td>同外部订单号已存在，但交易号、会员、类型或金额冲突</td>
+              <td><span class="tag danger">EXCEPTION_QUEUED</span></td>
+              <td>进入异常队列，显示冲突字段、本地值、外部值和处理建议。</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="notice danger">
+          上线前请检查“幂等健康”。若历史重复接口接收日志导致唯一索引暂未生效，需要先导出、人工确认、治理重复记录，再由管理员或 DBA 重建唯一索引。禁止直接删除 <code>Customer / Order / PlanOrder</code> 数据。
+        </div>
+      </section>
+
+      <section id="outbox" class="section">
+        <h2>6. 履约回推</h2>
+        <p>
+          门店服务完成后，SeedCRM 先在本地完成 <code>PlanOrder finished -> Order used</code>，再写入 <code>scheduler_outbox_event</code>，由调度器异步调用外部分销系统。
+        </p>
+        <h3>6.1 回推事件</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>项目</th>
+              <th>值</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>事件类型</td>
+              <td><code>crm.order.used</code></td>
+            </tr>
+            <tr>
+              <td>回推地址</td>
+              <td>分销接口配置中的 <code>callbackUrl</code>，或 <code>baseUrl + endpointPath</code></td>
+            </tr>
+            <tr>
+              <td>幂等键</td>
+              <td><code>providerCode:eventType:orderId:planOrderId</code></td>
+            </tr>
+            <tr>
+              <td>签名原文</td>
+              <td><code>timestamp + "|" + nonce + "|" + idempotencyKey + "|" + payload</code></td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>6.2 回推 Header</h3>
+        <pre><code>X-Partner-Code: DISTRIBUTION
+X-Idempotency-Key: DISTRIBUTION:crm.order.used:202:301
+X-Trace-Id: outbox-188
+X-Event-Type: crm.order.used
+X-Timestamp: 2026-05-01T02:30:00Z
+X-Nonce: 7f29c40a-91e7-4e58-b38b-bb2cb6a3401c
+X-Signature: hmac_sha256_hex</code></pre>
+        <h3>6.3 回推 Body</h3>
+        <pre><code>{
+  "eventType": "crm.order.used",
+  "eventId": "crm.order.used_202_301",
+  "occurredAt": "2026-05-01T10:30:00",
+  "partnerCode": "DISTRIBUTION",
+  "order": {
+    "externalOrderId": "o_202605010001",
+    "internalOrderId": 202,
+    "orderStatus": "used",
+    "localOrderStatus": "COMPLETED",
+    "usedAt": "2026-05-01T10:29:58"
+  },
+  "planOrder": {
+    "planOrderId": 301,
+    "planOrderStatus": "finished",
+    "finishedAt": "2026-05-01T10:29:58"
+  }
+}</code></pre>
+        <div class="notice">
+          Outbox 是异步机制。外部系统短时不可用不会回滚本地履约，失败会进入失败或死信状态，待修正配置或外部接口后重新入队。
+        </div>
+      </section>
+
+      <section id="reconcile" class="section">
+        <h2>7. 状态回查与对账</h2>
+        <p>
+          Scheduler 负责状态回查、对账拉取、失败重试和补偿同步。它只能读取外部状态或本地 MOCK 数据；若需要改变订单状态，必须生成 <code>distribution.order.*</code> 事件并调用 <code>DistributionEventIngestService.replayFromScheduler</code>。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>任务</th>
+              <th>后台触发接口</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>履约回推队列处理</td>
+              <td><code>POST /scheduler/outbox/process?limit=20</code></td>
+              <td>处理 <code>PENDING</code> / 到期 <code>FAILED</code> 回推事件。</td>
+            </tr>
+            <tr>
+              <td>异常重试队列处理</td>
+              <td><code>POST /scheduler/distribution/exceptions/process?limit=10</code></td>
+              <td>处理 <code>RETRY_QUEUED</code> 异常，可信重放入站服务。</td>
+            </tr>
+            <tr>
+              <td>状态回查</td>
+              <td><code>POST /scheduler/distribution/status-check/process?limit=20</code></td>
+              <td>读取外部订单状态，生成状态事件重放。</td>
+            </tr>
+            <tr>
+              <td>对账拉取</td>
+              <td><code>POST /scheduler/distribution/reconcile/process?limit=20</code></td>
+              <td>拉取外部对账记录，统一转成入站事件处理。</td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>7.1 LIVE 外部接口要求</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>能力</th>
+              <th>配置字段</th>
+              <th>外部接口期望</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>状态回查</td>
+              <td><code>statusQueryPath</code></td>
+              <td>SeedCRM POST 外部地址，请返回状态或标准事件。支持 <code>paid/cancelled/refund_pending/refunded</code> 映射。</td>
+            </tr>
+            <tr>
+              <td>对账拉取</td>
+              <td><code>reconciliationPullPath</code></td>
+              <td>SeedCRM POST 外部地址，请返回 <code>items / records / list / orders</code> 或单条对象。</td>
+            </tr>
+            <tr>
+              <td>履约回推</td>
+              <td><code>callbackUrl</code> 或 <code>baseUrl + endpointPath</code></td>
+              <td>外部分销系统接收 <code>crm.order.used</code>，并按幂等键去重。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="debug" class="section">
+        <h2>8. 调试与诊断</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>接口调试 dry-run</h3>
+            <p>入口：系统设置 -> 调度中心 -> 接口调试。</p>
+            <p>用途：预览字段映射、状态映射、Customer 匹配、Order 幂等结果，不落库。</p>
+            <p>后台接口：<code>POST /scheduler/interface/debug</code>。</p>
+          </div>
+          <div class="card">
+            <h3>验收样本</h3>
+            <p>入口：系统设置 -> 调度中心 -> 分销接口 -> 验收样本。</p>
+            <p>覆盖成功回推、失败回推、死信、异常待处理、对账失败样本。</p>
+          </div>
+          <div class="card">
+            <h3>幂等健康</h3>
+            <p>后台接口：<code>GET /scheduler/idempotency-health?providerCode=DISTRIBUTION</code>。</p>
+            <p>用于查看唯一索引状态、重复分组、建议保留记录、需核对记录和日志样例。</p>
+          </div>
+          <div class="card">
+            <h3>监控摘要</h3>
+            <p>后台接口：<code>GET /scheduler/monitor/summary?providerCode=DISTRIBUTION</code>。</p>
+            <p>返回 Outbox、异常队列、幂等健康、最近调度批次和验收样本。</p>
+          </div>
+        </div>
+        <h3>8.1 后台接口鉴权</h3>
+        <pre><code>POST /auth/login
+Content-Type: application/json
+
+{
+  "username": "integration_admin",
+  "password": "123456"
+}
+
+后续请求：
+X-Auth-Token: 登录响应中的 token</code></pre>
+      </section>
+
+      <section id="errors" class="section">
+        <h2>9. 错误码与排障</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>错误类型</th>
+              <th>常见原因</th>
+              <th>处理建议</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>PROVIDER_INVALID</code></td>
+              <td>分销渠道未配置、被停用或 partnerCode 不匹配。</td>
+              <td>检查分销接口配置、启用状态、请求头和报文中的渠道编码。</td>
+            </tr>
+            <tr>
+              <td><code>SIGNATURE_MISSING</code> / <code>SIGNATURE_INVALID</code></td>
+              <td>LIVE 请求缺少签名头，或签名原文 / 密钥不一致。</td>
+              <td>核对 AppSecret、原始请求体、timestamp、nonce、idempotencyKey。</td>
+            </tr>
+            <tr>
+              <td><code>TIMESTAMP_INVALID</code></td>
+              <td>时间戳格式错误或超出 10 分钟窗口。</td>
+              <td>统一服务器时间，使用 ISO-8601 或秒 / 毫秒时间戳。</td>
+            </tr>
+            <tr>
+              <td><code>IDEMPOTENCY_MISSING</code></td>
+              <td>缺少 <code>X-Idempotency-Key</code>。</td>
+              <td>外部系统为每个业务事件生成稳定防重复编号。</td>
+            </tr>
+            <tr>
+              <td><code>DUPLICATE_PAYLOAD_CONFLICT</code></td>
+              <td>同幂等键或同事件 ID 发送了不同报文。</td>
+              <td>核对内容指纹，外部系统修正报文或生成新的幂等键后重推。</td>
+            </tr>
+            <tr>
+              <td><code>EXTERNAL_ORDER_CONFLICT</code></td>
+              <td>同外部订单号已存在，但交易号、会员、类型或金额冲突。</td>
+              <td>查看异常队列冲突字段，确认以本地值或外部值为准后再处理。</td>
+            </tr>
+            <tr>
+              <td><code>EXTERNAL_STATUS_CONFLICT</code></td>
+              <td>外部取消 / 退款事件与本地履约状态冲突。</td>
+              <td>由业务人员确认是否需要退款、冲正绩效或仅记录外部状态。</td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>9.1 异常处理标准流程</h3>
+        <div class="flow">
+          <div class="step">
+            <b>查看异常</b>
+            进入分销接口 -> 异常队列。
+          </div>
+          <div class="step">
+            <b>定位订单</b>
+            复制外部订单号、本地订单号、追踪编号。
+          </div>
+          <div class="step">
+            <b>核对字段</b>
+            查看冲突字段、本地值、外部值。
+          </div>
+          <div class="step">
+            <b>修复源头</b>
+            修正外部数据、接口配置或状态映射。
+          </div>
+          <div class="step">
+            <b>重新入队</b>
+            管理员触发重试，系统可信重放。
+          </div>
+          <div class="step">
+            <b>关闭记录</b>
+            成功后自动已处理，或人工标记处理。
+          </div>
+        </div>
+      </section>
+
+      <section id="acceptance" class="section">
+        <h2>10. 上线验收</h2>
+        <ul class="checklist">
+          <li><code>distribution.order.paid</code> 可创建 / 匹配 <code>Customer</code> 并创建 <code>Order(paid)</code>。</li>
+          <li>分销已支付订单不进入 <code>Clue</code>，不参与公海和客资分配。</li>
+          <li>重复同报文返回成功且不重复创建订单。</li>
+          <li>同幂等键不同报文进入异常队列。</li>
+          <li>同外部订单号关键字段冲突进入异常队列并显示冲突字段。</li>
+          <li>门店完成 <code>PlanOrder</code> 后生成 <code>crm.order.used</code> Outbox。</li>
+          <li>MOCK 模式 Outbox 可模拟成功，LIVE 模式按签名调用外部回调地址。</li>
+          <li>失败回推可重新入队，超过重试进入死信。</li>
+          <li>状态回查 / 对账拉取只能生成事件重放，不直接更新核心表。</li>
+          <li>异常 OPEN / RETRY_QUEUED / HANDLED 状态可闭环。</li>
+          <li>幂等健康能显示唯一索引风险和重复数据治理建议。</li>
+          <li><code>INTEGRATION_OPERATOR</code> 查看敏感字段为脱敏结果。</li>
+          <li><code>PARTNER_APP</code> 只能访问自身 <code>partner_code</code> 范围，不能触发全局批处理。</li>
+          <li>验收样本页 5 类样本可展示：成功、失败、死信、异常、对账失败。</li>
+          <li>系统设置 -> 基础配置 -> 域名配置保存后，分销接口页展示的入站、回查、对账和 Swagger 地址同步更新。</li>
+          <li>Swagger UI / OpenAPI JSON 仅允许管理员、集成管理员或集成操作员访问；普通业务角色和外部分销应用不能访问。</li>
+          <li>生产环境变量已配置：<code>SEEDCRM_SYSTEM_BASE_URL</code>、<code>SEEDCRM_API_BASE_URL</code>、<code>SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN=false</code>。</li>
+        </ul>
+        <div class="notice warn">
+          若幂等唯一索引因历史重复接收日志暂未生效，上线前必须完成数据治理或形成书面风险确认。治理原则是导出、人工确认、备份 / 归档、重建索引、复查，禁止直接删除核心业务数据。禁止直接删除 Customer / Order / PlanOrder 数据。
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>附录：已废弃客资输出接口</h2>
+        <div class="endpoint">
+          <span class="method">GET/POST</span>
+          <code>/open/distribution/leads</code>
+        </div>
+        <p>
+          该接口保留为兼容兜底，当前方案 B 不再向外部分销系统输出 Clue 客资。调用后会返回空列表和废弃提示，不会创建 <code>Clue / Customer / Order</code>。
+        </p>
+      </section>
+
+      <footer>
+        SeedCRM 分销接口联调说明。本文档由系统当前实现和 AGENT.md / CONTEXT.md 约束生成，适用于 2026-05-01 当前项目状态。
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

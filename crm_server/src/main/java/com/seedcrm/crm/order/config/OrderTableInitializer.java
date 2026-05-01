@@ -14,6 +14,7 @@ public class OrderTableInitializer {
 
     private static final String TABLE_NAME = "order_info";
     private static final String EXTERNAL_ORDER_INDEX = "uk_order_external_order";
+    private static final String APPOINTMENT_STORE_INDEX = "idx_order_appointment_store_time";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -30,6 +31,7 @@ public class OrderTableInitializer {
             ensureMissingColumns();
         }
         ensureExternalOrderIndex();
+        ensureAppointmentStoreIndex();
         normalizeLegacyVerificationStates();
         normalizeLegacyPlanOrderStates();
     }
@@ -103,6 +105,7 @@ public class OrderTableInitializer {
                     deposit DECIMAL(10,2),
                     status VARCHAR(32) NOT NULL,
                     appointment_time DATETIME,
+                    appointment_store_name VARCHAR(100),
                     arrive_time DATETIME,
                     complete_time DATETIME,
                     remark VARCHAR(255),
@@ -141,6 +144,7 @@ public class OrderTableInitializer {
         columns.put("deposit", "deposit DECIMAL(10,2)");
         columns.put("status", "status VARCHAR(32) NOT NULL");
         columns.put("appointment_time", "appointment_time DATETIME");
+        columns.put("appointment_store_name", "appointment_store_name VARCHAR(100)");
         columns.put("arrive_time", "arrive_time DATETIME");
         columns.put("complete_time", "complete_time DATETIME");
         columns.put("remark", "remark VARCHAR(255)");
@@ -153,6 +157,21 @@ public class OrderTableInitializer {
         columns.put("create_time", "create_time DATETIME DEFAULT CURRENT_TIMESTAMP");
         columns.put("update_time", "update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
         return columns;
+    }
+
+    private void ensureAppointmentStoreIndex() {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = ?
+                  AND INDEX_NAME = ?
+                """, Integer.class, TABLE_NAME, APPOINTMENT_STORE_INDEX);
+        if (count == null || count == 0) {
+            jdbcTemplate.execute("ALTER TABLE " + TABLE_NAME
+                    + " ADD INDEX " + APPOINTMENT_STORE_INDEX + " (appointment_store_name, appointment_time)");
+            log.info("added index {} on order appointment store/time", APPOINTMENT_STORE_INDEX);
+        }
     }
 
     private void normalizeLegacyVerificationStates() {

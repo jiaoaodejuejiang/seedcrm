@@ -24,6 +24,60 @@
             :closable="false"
             title="当前角色仅可查看配置和安全日志，不能修改配置、执行入站测试或触发全局批处理。"
           />
+          <div class="go-live-overview">
+            <div class="go-live-overview__head">
+              <div>
+                <strong>生产联调信息</strong>
+                <span>地址来自【系统设置 / 基础配置 / 域名配置】；Swagger 看接口定义，接口调试做 dry-run 验证。</span>
+              </div>
+              <div class="action-group">
+                <el-button plain @click="copyText(eventIngestUrl, '分销入站地址')">复制入站地址</el-button>
+                <el-button plain @click="openExternal(userGuideUrl)">使用说明</el-button>
+                <el-button plain @click="openExternal(integrationGuideUrl)">联调说明</el-button>
+                <el-button plain @click="openExternal(swaggerUiUrl)">查看接口定义</el-button>
+                <el-button plain @click="router.push('/settings/integration/debug')">进入联调工作台</el-button>
+              </div>
+            </div>
+            <div class="go-live-chain">
+              <span>方案 B 主链路</span>
+              <strong>外部分销已支付订单 → Customer → Order(已支付) → PlanOrder → Order used → Outbox 回推</strong>
+              <small>已支付分销订单不进入 Clue；SeedCRM 不承接外部分佣、提现和退款资金流。</small>
+            </div>
+            <div class="go-live-grid">
+              <article>
+                <span>API 域名</span>
+                <strong>{{ apiBaseUrl }}</strong>
+              </article>
+              <article>
+                <span>已支付订单入站</span>
+                <strong>{{ eventIngestUrl }}</strong>
+              </article>
+              <article>
+                <span>履约回推目标</span>
+                <strong>{{ config.fulfillmentCallbackUrl || '待配置外部分销系统回调地址' }}</strong>
+              </article>
+              <article>
+                <span>状态回查地址</span>
+                <strong>{{ statusQueryUrl }}</strong>
+              </article>
+              <article>
+                <span>对账拉取地址</span>
+                <strong>{{ reconcilePullUrl }}</strong>
+              </article>
+              <article>
+                <span>OpenAPI JSON</span>
+                <strong>{{ openApiDocsUrl }}</strong>
+              </article>
+              <article>
+                <span>上线检查</span>
+                <div class="go-live-tags">
+                  <el-tag v-for="item in goLiveChecks" :key="item.label" :type="item.ok ? 'success' : 'warning'" effect="light">
+                    {{ item.label }}
+                  </el-tag>
+                </div>
+              </article>
+            </div>
+          </div>
           <div class="form-grid">
             <div class="full-span form-group-title">应用身份</div>
             <label>
@@ -727,6 +781,7 @@ import {
 } from '../api/scheduler'
 import { formatDateTime } from '../utils/format'
 import { currentUser } from '../utils/auth'
+import { syncDomainSettingsFromBackend } from '../utils/domainSettings'
 import { buildSystemUrl, loadSystemConsoleState, saveSystemConsoleState } from '../utils/systemConsoleStore'
 
 const route = useRoute()
@@ -782,6 +837,7 @@ const config = reactive({
     'paid=distribution.order.paid,cancelled=distribution.order.cancelled,refund_pending=distribution.order.refund_pending,refunded=distribution.order.refunded',
   rateLimitPerMinute: parseIntegerConfig(state.distributionApi?.rateLimitPerMinute, state.distributionApi?.rateLimit, 60),
   cacheTtlSeconds: parseIntegerConfig(state.distributionApi?.cacheTtlSeconds, state.distributionApi?.cachePolicy, 30),
+  secretConfigured: Boolean(state.distributionApi?.secretConfigured),
   fields: state.distributionApi?.fields || [
     { fieldName: 'eventType', source: '固定 distribution.order.paid', description: '只有已支付订单允许创建或匹配 Customer + Order(paid)', required: true },
     { fieldName: 'eventId', source: '外部分销事件 ID', description: '用于日志追踪与重复事件识别', required: true },
@@ -795,6 +851,25 @@ const config = reactive({
 
 const apiBaseUrl = computed(() => String(state.domainSettings?.apiBaseUrl || '').trim() || '--')
 const eventIngestUrl = computed(() => buildSystemUrl(state, 'api', config.eventIngestPath))
+const swaggerUiUrl = computed(() => buildSystemUrl(state, 'api', '/swagger-ui.html'))
+const openApiDocsUrl = computed(() => buildSystemUrl(state, 'api', '/v3/api-docs/distribution-open-api'))
+const statusQueryUrl = computed(() => buildSystemUrl(state, 'api', config.statusQueryPath))
+const reconcilePullUrl = computed(() => buildSystemUrl(state, 'api', config.reconciliationPullPath))
+const userGuideUrl = '/docs/distribution-user-guide.html'
+const integrationGuideUrl = '/docs/distribution-api-integration-guide.html'
+const statusAndReconcileTarget = computed(() => {
+  const status = config.statusQueryPath ? statusQueryUrl.value : '状态回查未配置'
+  const reconcile = config.reconciliationPullPath ? reconcilePullUrl.value : '对账拉取未配置'
+  return `${status} / ${reconcile}`
+})
+const goLiveChecks = computed(() => [
+  { label: apiBaseUrl.value !== '--' ? 'API 域名已配置' : 'API 域名待配置', ok: apiBaseUrl.value !== '--' },
+  { label: config.executionMode === 'LIVE' ? '真实模式' : '模拟模式', ok: config.executionMode === 'LIVE' },
+  { label: config.secretConfigured || String(config.appSecret || '').trim() ? '密钥已配置' : '密钥待配置', ok: config.secretConfigured || String(config.appSecret || '').trim() },
+  { label: String(config.fulfillmentCallbackUrl || '').trim() ? '回推目标已配置' : '回推目标待配置', ok: String(config.fulfillmentCallbackUrl || '').trim() },
+  { label: config.statusQueryPath && config.reconciliationPullPath ? '回查对账路径已配置' : '回查对账路径待配置', ok: Boolean(config.statusQueryPath && config.reconciliationPullPath) },
+  { label: idempotencyHealth.value?.healthy ? '幂等健康' : '幂等待检查', ok: Boolean(idempotencyHealth.value?.healthy) }
+])
 const currentRoleCode = computed(() => String(currentUser.value?.roleCode || '').trim().toUpperCase())
 const canUpdateConfig = computed(() => ['ADMIN', 'INTEGRATION_ADMIN'].includes(currentRoleCode.value))
 const canTriggerQueues = computed(() => ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'].includes(currentRoleCode.value))
@@ -951,7 +1026,8 @@ function resolveInitialTab() {
   return ['config', 'fields', 'health', 'outbox', 'exceptions', 'reconcile', 'acceptance'].includes(tab) ? tab : 'config'
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await loadDomainSettings()
   applyRouteFilters()
   loadBackendProviderConfig()
   loadActiveQueue()
@@ -1061,6 +1137,18 @@ function parseIntegerConfig(primary, fallback, defaultValue) {
   return defaultValue
 }
 
+async function loadDomainSettings() {
+  try {
+    const domainSettings = await syncDomainSettingsFromBackend()
+    state.domainSettings = {
+      ...(state.domainSettings || {}),
+      ...domainSettings
+    }
+  } catch (error) {
+    // Keep local fallback values when backend config is unavailable.
+  }
+}
+
 async function loadBackendProviderConfig() {
   try {
     const providers = await fetchIntegrationProviders()
@@ -1079,7 +1167,8 @@ async function loadBackendProviderConfig() {
       reconciliationPullPath: provider.reconciliationPullPath || config.reconciliationPullPath,
       statusMapping: provider.statusMapping || config.statusMapping,
       rateLimitPerMinute: parseIntegerConfig(provider.rateLimitPerMinute, config.rateLimitPerMinute, 60),
-      cacheTtlSeconds: parseIntegerConfig(provider.cacheTtlSeconds, config.cacheTtlSeconds, 30)
+      cacheTtlSeconds: parseIntegerConfig(provider.cacheTtlSeconds, config.cacheTtlSeconds, 30),
+      secretConfigured: Boolean(provider.clientSecretConfigured || provider.clientSecretMasked)
     })
   } catch (error) {
     // The page can still work with local draft settings when the user has no provider permission.
@@ -1091,8 +1180,21 @@ async function saveConfig() {
     ElMessage.warning('当前角色不能修改分销接口配置')
     return
   }
+  if (String(config.executionMode || '').toUpperCase() === 'LIVE') {
+    const issues = validateLiveConfig()
+    if (issues.length) {
+      await ElMessageBox.alert(`真实模式保存前请先补齐：\n${issues.map((item) => `- ${item}`).join('\n')}`, '上线配置未完成', {
+        confirmButtonText: '我知道了',
+        type: 'warning'
+      })
+      return
+    }
+  }
   const nextState = loadSystemConsoleState()
-  nextState.distributionApi = JSON.parse(JSON.stringify(config))
+  nextState.distributionApi = {
+    ...JSON.parse(JSON.stringify(config)),
+    secretConfigured: config.secretConfigured || Boolean(config.appSecret)
+  }
   saveSystemConsoleState(nextState)
   Object.assign(state, nextState)
   await saveIntegrationProvider({
@@ -1114,6 +1216,40 @@ async function saveConfig() {
     remark: `方案B：外部分销已支付订单入站；SeedCRM 只负责预约排档、门店履约和履约状态回推；限流：${config.rateLimitPerMinute || '--'}次/分钟；缓存：${config.cacheTtlSeconds ?? '--'}秒`
   })
   ElMessage.success('分销接口配置已保存')
+}
+
+function validateLiveConfig() {
+  const issues = []
+  if (!String(state.domainSettings?.apiBaseUrl || '').trim()) {
+    issues.push('API 域名')
+  }
+  if (!String(config.eventIngestPath || '').trim()) {
+    issues.push('已支付订单入站路径')
+  }
+  if (!String(config.fulfillmentCallbackUrl || '').trim()) {
+    issues.push('外部分销系统履约回推目标')
+  }
+  if (!String(config.statusQueryPath || '').trim()) {
+    issues.push('状态回查路径')
+  }
+  if (!String(config.reconciliationPullPath || '').trim()) {
+    issues.push('对账拉取路径')
+  }
+  if (!config.secretConfigured && !String(config.appSecret || '').trim()) {
+    issues.push('签名密钥 AppSecret')
+  }
+  if (String(config.authMode || '').toUpperCase() === 'APP_SECRET' && !String(config.appId || '').trim()) {
+    issues.push('AppId')
+  }
+  return issues
+}
+
+function openExternal(url) {
+  if (!url || url === '--') {
+    ElMessage.warning('地址未配置')
+    return
+  }
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 async function testConfig() {
@@ -2136,6 +2272,100 @@ function reconciliationActionTag(value) {
   word-break: break-all;
 }
 
+.go-live-overview {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid #cfe3da;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 96% 8%, rgba(23, 107, 84, 0.10), transparent 28%),
+    #f8fcfa;
+}
+
+.go-live-overview__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.go-live-overview__head div:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.go-live-overview__head strong {
+  color: #173b33;
+  font-size: 16px;
+}
+
+.go-live-overview__head span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.go-live-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.go-live-chain {
+  display: grid;
+  gap: 5px;
+  padding: 13px 14px;
+  border: 1px solid #cfe3da;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.go-live-chain span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.go-live-chain strong {
+  color: #173b33;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.go-live-chain small {
+  color: #7a5a18;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.go-live-grid article {
+  display: grid;
+  gap: 6px;
+  min-height: 76px;
+  padding: 13px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.go-live-grid span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.go-live-grid strong {
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.go-live-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .endpoint-preview {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2523,6 +2753,14 @@ function reconciliationActionTag(value) {
 }
 
 @media (max-width: 900px) {
+  .go-live-overview__head {
+    flex-direction: column;
+  }
+
+  .go-live-grid {
+    grid-template-columns: 1fr;
+  }
+
   .endpoint-preview {
     grid-template-columns: 1fr;
   }

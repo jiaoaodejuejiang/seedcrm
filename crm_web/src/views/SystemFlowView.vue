@@ -29,6 +29,46 @@
     <section class="panel">
       <div class="panel-heading">
         <div>
+          <h3>能力开关</h3>
+        </div>
+        <div class="action-group">
+          <el-button :loading="configLoading" @click="loadCapabilityConfigs">刷新开关</el-button>
+        </div>
+      </div>
+      <el-table v-loading="configLoading" :data="capabilityConfigs" stripe>
+        <el-table-column label="配置项" min-width="260">
+          <template #default="{ row }">
+            <div class="table-primary">
+              <strong>{{ row.configKey }}</strong>
+              <span>{{ row.description || '--' }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="值" width="180">
+          <template #default="{ row }">
+            <el-switch
+              v-if="row.valueType === 'BOOLEAN'"
+              :model-value="row.configValue === 'true'"
+              :loading="savingConfigKey === row.configKey"
+              @change="toggleCapabilityConfig(row, $event)"
+            />
+            <el-tag v-else effect="plain">{{ row.configValue || '--' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="110">
+          <template #default="{ row }">
+            <el-tag :type="row.enabled === 1 ? 'success' : 'info'">{{ row.enabled === 1 ? '启用' : '停用' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="更新时间" width="180">
+          <template #default="{ row }">{{ formatDateTime(row.updateTime) }}</template>
+        </el-table-column>
+      </el-table>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
           <h3>系统流程</h3>
         </div>
         <div class="action-group">
@@ -202,6 +242,76 @@
             </el-table>
           </el-tab-pane>
 
+          <el-tab-pane label="旁路记录" name="runtime">
+            <div class="flow-validation-summary">
+              <el-tag type="success">轻量状态机</el-tag>
+              <span>仅记录实例、人工任务和事件日志，不自动改订单、财务或三方接口。</span>
+            </div>
+            <div class="flow-hero__stats flow-hero__stats--inline">
+              <article>
+                <span>旁路实例</span>
+                <strong>{{ runtimeOverview?.runningCount || 0 }}</strong>
+              </article>
+              <article>
+                <span>待办任务</span>
+                <strong>{{ runtimeOverview?.openTaskCount || 0 }}</strong>
+              </article>
+              <article>
+                <span>最近事件</span>
+                <strong>{{ runtimeOverview?.recentEvents?.length || 0 }}</strong>
+              </article>
+            </div>
+            <el-tabs v-model="runtimeTab" class="flow-tabs">
+              <el-tab-pane label="实例" name="instances">
+                <el-table :data="runtimeOverview?.recentInstances || []" stripe>
+                  <el-table-column label="业务" min-width="180">
+                    <template #default="{ row }">
+                      <div class="table-primary">
+                        <strong>{{ row.title || `${row.businessObject}#${row.businessId}` }}</strong>
+                        <span>{{ row.businessObject }} / {{ row.businessId }}</span>
+                      </div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="当前节点" min-width="180">
+                    <template #default="{ row }">{{ row.currentNodeName || row.currentNodeCode }}</template>
+                  </el-table-column>
+                  <el-table-column label="状态" width="120" prop="status" />
+                  <el-table-column label="更新时间" width="180">
+                    <template #default="{ row }">{{ formatDateTime(row.updateTime) }}</template>
+                  </el-table-column>
+                </el-table>
+              </el-tab-pane>
+              <el-tab-pane label="人工任务" name="tasks">
+                <el-table :data="runtimeOverview?.openTasks || []" stripe>
+                  <el-table-column label="任务" min-width="220">
+                    <template #default="{ row }">
+                      <div class="table-primary">
+                        <strong>{{ row.taskName }}</strong>
+                        <span>{{ row.nodeName || row.nodeCode }}</span>
+                      </div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="角色" width="160" prop="roleCode" />
+                  <el-table-column label="打开时间" width="180">
+                    <template #default="{ row }">{{ formatDateTime(row.openedAt) }}</template>
+                  </el-table-column>
+                </el-table>
+              </el-tab-pane>
+              <el-tab-pane label="事件日志" name="events">
+                <el-table :data="runtimeOverview?.recentEvents || []" stripe>
+                  <el-table-column label="动作" width="170" prop="actionCode" />
+                  <el-table-column label="流转" width="210">
+                    <template #default="{ row }">{{ row.fromNodeCode || '开始' }} -> {{ row.toNodeCode || '--' }}</template>
+                  </el-table-column>
+                  <el-table-column label="说明" min-width="220" prop="summary" />
+                  <el-table-column label="时间" width="180">
+                    <template #default="{ row }">{{ formatDateTime(row.eventTime) }}</template>
+                  </el-table-column>
+                </el-table>
+              </el-tab-pane>
+            </el-tabs>
+          </el-tab-pane>
+
           <el-tab-pane label="审计记录" name="audit">
             <el-table :data="auditLogs" stripe>
               <el-table-column label="时间" width="180">
@@ -224,7 +334,7 @@
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h3>只读模拟</h3>
+          <h3>只读试算</h3>
         </div>
       </div>
       <div class="form-grid">
@@ -253,16 +363,24 @@
         </label>
       </div>
       <div class="action-group action-group--section">
-        <el-button type="primary" :disabled="!detail.definition" @click="runSimulation">只读模拟</el-button>
+        <el-button type="primary" :disabled="!detail.definition" @click="runSimulation">只读试算</el-button>
+        <el-button type="success" plain :disabled="!detail.definition" :loading="runtimeStarting" @click="startRuntimeProbe">创建沙盒记录</el-button>
         <el-button @click="resetSimulation">重置</el-button>
       </div>
 
       <div v-if="simulation" class="simulation-result" :class="{ 'simulation-result--ok': simulation.allowed }">
-        <strong>{{ simulation.allowed ? '只读模拟通过' : '未命中流转' }}</strong>
+        <strong>{{ simulation.allowed ? '只读试算通过' : '未命中流转' }}</strong>
         <span>{{ simulation.message }}</span>
         <small>下一节点：{{ simulation.nextNodeCode || '--' }}</small>
         <small>命中触发器元数据：{{ simulation.matchedTriggers?.map((item) => item.triggerName).join('、') || '无' }}</small>
-        <small>本次模拟没有执行调度任务、三方接口或内部服务。</small>
+        <small>本次试算没有执行调度任务、三方接口或内部服务。</small>
+      </div>
+
+      <div v-if="runtimeProbe" class="simulation-result simulation-result--ok">
+        <strong>沙盒记录已创建</strong>
+        <span>{{ runtimeProbe.title || `${runtimeProbe.businessObject}#${runtimeProbe.businessId}` }}</span>
+        <small>当前节点：{{ runtimeProbe.currentNodeName || runtimeProbe.currentNodeCode }}</small>
+        <small>它只写入流程旁路记录表，不会改真实订单、排档、薪酬或接口配置。</small>
       </div>
     </section>
 
@@ -441,14 +559,17 @@ import {
   fetchSystemFlowAuditLogs,
   fetchSystemFlowDetail,
   fetchSystemFlowTriggerLinkageReport,
+  fetchSystemFlowRuntimeOverview,
   fetchSystemFlowValidationReport,
   fetchSystemFlows,
   fetchSystemFlowVersions,
   previewSystemFlowDiff,
   publishSystemFlow,
   saveSystemFlowDraft,
-  simulateSystemFlow
+  simulateSystemFlow,
+  startSystemFlowRuntime
 } from '../api/systemFlow'
+import { fetchSystemConfigs, saveSystemConfig } from '../api/systemConfig'
 import { formatDateTime } from '../utils/format'
 
 const flows = ref([])
@@ -464,10 +585,17 @@ const detail = reactive({
 const auditLogs = ref([])
 const validationReport = ref(null)
 const triggerLinkageReport = ref(null)
+const runtimeOverview = ref(null)
+const capabilityConfigs = ref([])
+const configLoading = ref(false)
+const savingConfigKey = ref('')
 const detailTab = ref('transitions')
+const runtimeTab = ref('instances')
 const draftTab = ref('nodes')
 const draftDialogVisible = ref(false)
 const simulation = ref(null)
+const runtimeProbe = ref(null)
+const runtimeStarting = ref(false)
 const simulateForm = reactive({
   currentNodeCode: '',
   actionCode: '',
@@ -520,8 +648,35 @@ function applyDetail(payload) {
 
 async function loadAll() {
   flows.value = await fetchSystemFlows()
+  await loadCapabilityConfigs()
   const firstFlowCode = flows.value[0]?.flowCode || 'ORDER_MAIN_FLOW'
   await loadDetail(firstFlowCode)
+}
+
+async function loadCapabilityConfigs() {
+  configLoading.value = true
+  try {
+    const prefixes = ['workflow.', 'deposit.direct', 'amount.visibility', 'form_designer.']
+    const results = await Promise.all(prefixes.map((prefix) => fetchSystemConfigs(prefix)))
+    capabilityConfigs.value = results.flat()
+  } finally {
+    configLoading.value = false
+  }
+}
+
+async function toggleCapabilityConfig(row, value) {
+  savingConfigKey.value = row.configKey
+  try {
+    const saved = await saveSystemConfig({
+      ...row,
+      configValue: String(Boolean(value)),
+      summary: '流程配置页更新能力开关'
+    })
+    capabilityConfigs.value = capabilityConfigs.value.map((item) => (item.id === saved.id ? saved : item))
+    ElMessage.success('能力开关已更新')
+  } finally {
+    savingConfigKey.value = ''
+  }
 }
 
 async function loadDetail(flowCode, versionId) {
@@ -538,16 +693,18 @@ async function handleVersionChange(versionId) {
 }
 
 async function refreshFlowMeta(flowCode, versionId) {
-  const [versionPayload, auditPayload, validationPayload, linkagePayload] = await Promise.all([
+  const [versionPayload, auditPayload, validationPayload, linkagePayload, runtimePayload] = await Promise.all([
     fetchSystemFlowVersions(flowCode),
     fetchSystemFlowAuditLogs(flowCode),
     fetchSystemFlowValidationReport(flowCode, versionId),
-    fetchSystemFlowTriggerLinkageReport(flowCode, versionId)
+    fetchSystemFlowTriggerLinkageReport(flowCode, versionId),
+    fetchSystemFlowRuntimeOverview(flowCode)
   ])
   versions.value = versionPayload
   auditLogs.value = auditPayload
   validationReport.value = validationPayload
   triggerLinkageReport.value = linkagePayload
+  runtimeOverview.value = runtimePayload
 }
 
 async function publishCurrentVersion() {
@@ -573,7 +730,7 @@ async function publishCurrentVersion() {
     summary: draftForm.changeSummary || detail.version.changeSummary || '页面发布当前流程版本'
   }))
   await refreshFlowMeta(detail.definition.flowCode, detail.version?.id)
-  ElMessage.success('流程配置版本已发布，仅用于配置展示和只读模拟，不会自动执行真实业务动作')
+  ElMessage.success('流程配置版本已发布，仅用于配置展示和只读试算，不会自动执行真实业务动作')
 }
 
 async function disableFlow(row) {
@@ -648,11 +805,35 @@ async function runSimulation() {
   })
 }
 
+async function startRuntimeProbe() {
+  if (!detail.definition) {
+    return
+  }
+  runtimeStarting.value = true
+  try {
+    const businessId = Date.now()
+    runtimeProbe.value = await startSystemFlowRuntime({
+      flowCode: detail.definition.flowCode,
+      businessObject: 'CONFIG_PROBE',
+      businessId,
+      startNodeCode: simulateForm.currentNodeCode || detail.nodes[0]?.nodeCode,
+      title: `流程沙盒记录 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`,
+      remark: '页面创建沙盒记录，仅用于验证流程旁路记录'
+    })
+    await refreshFlowMeta(detail.definition.flowCode, detail.version?.id)
+    detailTab.value = 'runtime'
+    ElMessage.success('沙盒记录已创建，不会改动真实业务单据')
+  } finally {
+    runtimeStarting.value = false
+  }
+}
+
 function resetSimulation() {
   simulateForm.currentNodeCode = detail.nodes[0]?.nodeCode || ''
   simulateForm.actionCode = ''
   simulateForm.roleCode = 'ADMIN'
   simulation.value = null
+  runtimeProbe.value = null
 }
 
 function formatFlowStatus(status) {
@@ -960,6 +1141,11 @@ loadAll()
   grid-template-columns: repeat(3, minmax(110px, 1fr));
   gap: 10px;
   min-width: 390px;
+}
+
+.flow-hero__stats--inline {
+  min-width: 0;
+  margin-bottom: 12px;
 }
 
 .flow-hero__stats article {

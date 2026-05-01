@@ -410,7 +410,7 @@ public class SystemFlowServiceImpl implements SystemFlowService {
         if (!StringUtils.hasText(businessObject) || businessId == null || businessId <= 0) {
             throw new BusinessException("businessObject and businessId are required");
         }
-        String startNodeCode = normalizeCode(request.getStartNodeCode());
+        String startNodeCode = normalizeCode(request == null ? null : request.getStartNodeCode());
         if (!StringUtils.hasText(startNodeCode)) {
             startNodeCode = detail.getNodes().isEmpty() ? null : detail.getNodes().get(0).getNodeCode();
         }
@@ -435,7 +435,7 @@ public class SystemFlowServiceImpl implements SystemFlowService {
                 )
                 VALUES (?, ?, ?, ?, ?, ?, 'RUNNING', ?, ?, ?, ?, ?)
                 """, flowCode, detail.getVersion().getId(), detail.getVersion().getVersionNo(), businessObject, businessId,
-                startNode.getNodeCode(), trimToNull(request.getTitle()),
+                startNode.getNodeCode(), trimToNull(request == null ? null : request.getTitle()),
                 context == null ? null : context.getRoleCode(),
                 context == null ? null : context.getCurrentUserId(),
                 now, now);
@@ -447,7 +447,7 @@ public class SystemFlowServiceImpl implements SystemFlowService {
                 """, flowCode, businessObject, businessId);
         createOpenTask(instanceId, flowCode, startNode, "待处理：" + startNode.getNodeName(), null);
         insertRuntimeEvent(instanceId, flowCode, detail.getVersion().getVersionNo(), "INSTANCE_START", null, startNode.getNodeCode(),
-                context, StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : "创建流程实例");
+                context, StringUtils.hasText(request == null ? null : request.getRemark()) ? request.getRemark().trim() : "创建流程实例");
         return getRuntimeInstance(instanceId);
     }
 
@@ -1229,6 +1229,138 @@ public class SystemFlowServiceImpl implements SystemFlowService {
         return result;
     }
 
+    private List<SystemFlowDtos.InstanceResponse> listRuntimeInstances(String flowCode, int limit) {
+        return jdbcTemplate.query("""
+                SELECT i.id, i.flow_code, i.version_id, i.version_no, i.business_object, i.business_id,
+                       i.current_node_code, n.node_name AS current_node_name, i.status, i.title,
+                       i.created_by_role_code, i.created_by_user_id, i.create_time, i.update_time
+                FROM system_flow_instance i
+                LEFT JOIN system_flow_node n ON n.version_id = i.version_id AND n.node_code = i.current_node_code
+                WHERE i.flow_code = ?
+                ORDER BY i.update_time DESC, i.id DESC
+                LIMIT ?
+                """, (rs, rowNum) -> mapInstance(rs), flowCode, limit);
+    }
+
+    private SystemFlowDtos.InstanceResponse getRuntimeInstance(Long instanceId) {
+        List<SystemFlowDtos.InstanceResponse> rows = jdbcTemplate.query("""
+                SELECT i.id, i.flow_code, i.version_id, i.version_no, i.business_object, i.business_id,
+                       i.current_node_code, n.node_name AS current_node_name, i.status, i.title,
+                       i.created_by_role_code, i.created_by_user_id, i.create_time, i.update_time
+                FROM system_flow_instance i
+                LEFT JOIN system_flow_node n ON n.version_id = i.version_id AND n.node_code = i.current_node_code
+                WHERE i.id = ?
+                """, (rs, rowNum) -> mapInstance(rs), instanceId);
+        if (rows.isEmpty()) {
+            throw new BusinessException("workflow instance not found");
+        }
+        return rows.get(0);
+    }
+
+    private SystemFlowDtos.InstanceResponse mapInstance(java.sql.ResultSet rs) throws java.sql.SQLException {
+        SystemFlowDtos.InstanceResponse item = new SystemFlowDtos.InstanceResponse();
+        item.setId(rs.getLong("id"));
+        item.setFlowCode(rs.getString("flow_code"));
+        item.setVersionId(rs.getLong("version_id"));
+        item.setVersionNo(rs.getInt("version_no"));
+        item.setBusinessObject(rs.getString("business_object"));
+        item.setBusinessId(rs.getLong("business_id"));
+        item.setCurrentNodeCode(rs.getString("current_node_code"));
+        item.setCurrentNodeName(rs.getString("current_node_name"));
+        item.setStatus(rs.getString("status"));
+        item.setTitle(rs.getString("title"));
+        item.setCreatedByRoleCode(rs.getString("created_by_role_code"));
+        long createdByUserId = rs.getLong("created_by_user_id");
+        item.setCreatedByUserId(rs.wasNull() ? null : createdByUserId);
+        item.setCreateTime(rs.getTimestamp("create_time") == null ? null : rs.getTimestamp("create_time").toLocalDateTime());
+        item.setUpdateTime(rs.getTimestamp("update_time") == null ? null : rs.getTimestamp("update_time").toLocalDateTime());
+        return item;
+    }
+
+    private SystemFlowDtos.TaskResponse mapTask(java.sql.ResultSet rs) throws java.sql.SQLException {
+        SystemFlowDtos.TaskResponse item = new SystemFlowDtos.TaskResponse();
+        item.setId(rs.getLong("id"));
+        item.setInstanceId(rs.getLong("instance_id"));
+        item.setFlowCode(rs.getString("flow_code"));
+        item.setNodeCode(rs.getString("node_code"));
+        item.setNodeName(rs.getString("node_name"));
+        item.setTaskName(rs.getString("task_name"));
+        item.setRoleCode(rs.getString("role_code"));
+        long assigneeUserId = rs.getLong("assignee_user_id");
+        item.setAssigneeUserId(rs.wasNull() ? null : assigneeUserId);
+        item.setStatus(rs.getString("status"));
+        item.setOpenedAt(rs.getTimestamp("opened_at") == null ? null : rs.getTimestamp("opened_at").toLocalDateTime());
+        item.setCompletedAt(rs.getTimestamp("completed_at") == null ? null : rs.getTimestamp("completed_at").toLocalDateTime());
+        item.setRemark(rs.getString("remark"));
+        return item;
+    }
+
+    private SystemFlowDtos.EventLogResponse mapEvent(java.sql.ResultSet rs) throws java.sql.SQLException {
+        SystemFlowDtos.EventLogResponse item = new SystemFlowDtos.EventLogResponse();
+        item.setId(rs.getLong("id"));
+        item.setInstanceId(rs.getLong("instance_id"));
+        item.setFlowCode(rs.getString("flow_code"));
+        int versionNo = rs.getInt("version_no");
+        item.setVersionNo(rs.wasNull() ? null : versionNo);
+        item.setActionCode(rs.getString("action_code"));
+        item.setFromNodeCode(rs.getString("from_node_code"));
+        item.setToNodeCode(rs.getString("to_node_code"));
+        item.setActorRoleCode(rs.getString("actor_role_code"));
+        long actorUserId = rs.getLong("actor_user_id");
+        item.setActorUserId(rs.wasNull() ? null : actorUserId);
+        item.setSummary(rs.getString("summary"));
+        item.setEventTime(rs.getTimestamp("event_time") == null ? null : rs.getTimestamp("event_time").toLocalDateTime());
+        return item;
+    }
+
+    private void createOpenTask(Long instanceId,
+                                String flowCode,
+                                SystemFlowDtos.NodeResponse node,
+                                String taskName,
+                                Long assigneeUserId) {
+        if (instanceId == null || node == null || !"TASK".equalsIgnoreCase(node.getNodeType())) {
+            return;
+        }
+        jdbcTemplate.update("""
+                INSERT INTO system_flow_task(
+                    instance_id, flow_code, node_code, node_name, task_name, role_code, assignee_user_id, status, opened_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
+                """, instanceId, flowCode, node.getNodeCode(), node.getNodeName(),
+                StringUtils.hasText(taskName) ? taskName : node.getNodeName(),
+                node.getRoleCode(), assigneeUserId, LocalDateTime.now());
+    }
+
+    private void insertRuntimeEvent(Long instanceId,
+                                    String flowCode,
+                                    Integer versionNo,
+                                    String actionCode,
+                                    String fromNodeCode,
+                                    String toNodeCode,
+                                    PermissionRequestContext context,
+                                    String summary) {
+        jdbcTemplate.update("""
+                INSERT INTO system_flow_event_log(
+                    instance_id, flow_code, version_no, action_code, from_node_code, to_node_code,
+                    actor_role_code, actor_user_id, summary, event_time
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, instanceId, flowCode, versionNo, normalizeCode(actionCode), fromNodeCode, toNodeCode,
+                context == null ? null : context.getRoleCode(),
+                context == null ? null : context.getCurrentUserId(),
+                summary, LocalDateTime.now());
+    }
+
+    private Integer queryCount(String sql, Object... args) {
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, args);
+        return count == null ? 0 : count;
+    }
+
+    private Long queryLongOrNull(String sql, Object... args) {
+        List<Long> rows = jdbcTemplate.query(sql, (rs, rowNum) -> rs.getLong(1), args);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     private void audit(String flowCode, Integer versionNo, String actionType, PermissionRequestContext context, String summary) {
         jdbcTemplate.update("""
                 INSERT INTO system_flow_audit_log(flow_code, version_no, action_type, actor_role_code, actor_user_id, summary, created_at)
@@ -1279,6 +1411,10 @@ public class SystemFlowServiceImpl implements SystemFlowService {
         return value.trim();
     }
 
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
     private SystemFlowDtos.NodeResponse findNode(List<SystemFlowDtos.NodeResponse> nodes, String nodeCode) {
         if (nodes == null || !StringUtils.hasText(nodeCode)) {
             return null;
@@ -1295,7 +1431,7 @@ public class SystemFlowServiceImpl implements SystemFlowService {
         if (!StringUtils.hasText(ownerRole) || "SYSTEM".equals(ownerRole)) {
             return true;
         }
-        if ("ADMIN".equals(requestedRole)) {
+        if ("ADMIN".equals(requestedRole) || "SYSTEM".equals(requestedRole)) {
             return true;
         }
         return ownerRole.equals(requestedRole);

@@ -25,10 +25,13 @@ import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.risk.service.DbLockService;
 import com.seedcrm.crm.scheduler.entity.SchedulerOutboxEvent;
 import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
+import com.seedcrm.crm.systemflow.support.SystemFlowRuntimeBridge;
 import com.seedcrm.crm.wecom.service.WecomTouchService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -59,13 +62,16 @@ class PlanOrderServiceImplTest {
     @Mock
     private SchedulerOutboxService schedulerOutboxService;
 
+    @Mock
+    private SystemFlowRuntimeBridge systemFlowRuntimeBridge;
+
     private PlanOrderServiceImpl planOrderService;
 
     @BeforeEach
     void setUp() {
         planOrderService = new PlanOrderServiceImpl(planOrderMapper, orderMapper, orderRoleRecordService,
                 orderSettlementService, wecomTouchService, orderActionRecordMapper, dbLockService,
-                schedulerOutboxService);
+                schedulerOutboxService, systemFlowRuntimeBridge, new ObjectMapper());
     }
 
     @Test
@@ -140,6 +146,90 @@ class PlanOrderServiceImplTest {
         assertThatThrownBy(() -> planOrderService.start(dto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("must arrive before start");
+    }
+
+    @Test
+    void confirmServiceFormShouldMarkPaperConfirmationAndRecordAction() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(50L);
+        planOrder.setOrderId(500L);
+        planOrder.setStatus(PlanOrderStatus.ARRIVED.name());
+        when(planOrderMapper.selectById(50L)).thenReturn(planOrder);
+
+        Order order = new Order();
+        order.setId(500L);
+        order.setStatus(OrderStatus.ARRIVED.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson("{\"serviceRequirement\":\"paper form\"}");
+        when(dbLockService.lockOrder(500L)).thenReturn(order);
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        PlanOrderActionDTO dto = new PlanOrderActionDTO();
+        dto.setPlanOrderId(50L);
+
+        PlanOrder confirmed = planOrderService.confirmServiceForm(dto, 9001L, "STORE_SERVICE");
+
+        assertThat(confirmed).isSameAs(planOrder);
+        assertThat(order.getServiceDetailJson()).contains(
+                "\"serviceFormStatus\":\"PRINT_CONFIRMED\"",
+                "\"signatureMode\":\"PAPER\"",
+                "\"confirmedByUserId\":9001",
+                "\"confirmedByRoleCode\":\"STORE_SERVICE\"");
+        ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
+        verify(orderActionRecordMapper).insert(recordCaptor.capture());
+        assertThat(recordCaptor.getValue().getActionType()).isEqualTo("SERVICE_FORM_CONFIRM");
+    }
+
+    @Test
+    void startShouldRejectWhenServiceFormNotConfirmed() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(51L);
+        planOrder.setOrderId(510L);
+        planOrder.setStatus(PlanOrderStatus.ARRIVED.name());
+        planOrder.setArriveTime(java.time.LocalDateTime.now().minusMinutes(20));
+        when(planOrderMapper.selectById(51L)).thenReturn(planOrder);
+
+        Order order = new Order();
+        order.setId(510L);
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson("{\"serviceRequirement\":\"saved only\"}");
+        when(orderMapper.selectById(510L)).thenReturn(order);
+
+        PlanOrderActionDTO dto = new PlanOrderActionDTO();
+        dto.setPlanOrderId(51L);
+
+        assertThatThrownBy(() -> planOrderService.start(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("printed and confirmed");
+        verify(planOrderMapper, never()).updateById(any(PlanOrder.class));
+    }
+
+    @Test
+    void startShouldAllowConfirmedPaperServiceForm() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(52L);
+        planOrder.setOrderId(520L);
+        planOrder.setStatus(PlanOrderStatus.ARRIVED.name());
+        planOrder.setArriveTime(java.time.LocalDateTime.now().minusMinutes(20));
+        when(planOrderMapper.selectById(52L)).thenReturn(planOrder);
+        when(planOrderMapper.updateById(any(PlanOrder.class))).thenReturn(1);
+
+        Order order = new Order();
+        order.setId(520L);
+        order.setStatus(OrderStatus.ARRIVED.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson("{\"serviceFormStatus\":\"PRINT_CONFIRMED\"}");
+        when(orderMapper.selectById(520L)).thenReturn(order);
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        PlanOrderActionDTO dto = new PlanOrderActionDTO();
+        dto.setPlanOrderId(52L);
+
+        PlanOrder started = planOrderService.start(dto);
+
+        assertThat(started.getStatus()).isEqualTo(PlanOrderStatus.SERVICING.name());
+        assertThat(started.getStartTime()).isNotNull();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.SERVING.name());
     }
 
     @Test
@@ -222,7 +312,7 @@ class PlanOrderServiceImplTest {
         order.setVerificationStatus("VERIFIED");
         order.setExternalPartnerCode("DISTRIBUTION");
         order.setExternalOrderId("o_20001");
-        order.setServiceDetailJson("{\"serviceRequirement\":\"已确认到店需求\",\"customerSignature\":\"data:image/png;base64,test\"}");
+        order.setServiceDetailJson("{\"serviceRequirement\":\"confirmed offline paper form\"}");
         when(dbLockService.lockOrder(30L)).thenReturn(order);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
         when(schedulerOutboxService.enqueueFulfillmentEvent(order, planOrder, "crm.order.used"))
@@ -259,7 +349,7 @@ class PlanOrderServiceImplTest {
         order.setVerificationStatus("VERIFIED");
         order.setExternalPartnerCode("DISTRIBUTION");
         order.setExternalOrderId("dist_order_330");
-        order.setServiceDetailJson("{\"serviceRequirement\":\"已确认到店需求\",\"customerSignature\":\"data:image/png;base64,test\"}");
+        order.setServiceDetailJson("{\"serviceRequirement\":\"confirmed offline paper form\"}");
         when(dbLockService.lockOrder(330L)).thenReturn(order);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
         when(schedulerOutboxService.enqueueFulfillmentEvent(order, planOrder, "crm.order.used"))
@@ -291,7 +381,7 @@ class PlanOrderServiceImplTest {
         order.setStatus(OrderStatus.SERVING.name());
         order.setSource("distribution");
         order.setVerificationStatus("VERIFIED");
-        order.setServiceDetailJson("{\"serviceRequirement\":\"已确认到店需求\",\"customerSignature\":\"data:image/png;base64,test\"}");
+        order.setServiceDetailJson("{\"serviceRequirement\":\"confirmed offline paper form\"}");
         when(dbLockService.lockOrder(340L)).thenReturn(order);
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
         when(schedulerOutboxService.enqueueFulfillmentEvent(order, planOrder, "crm.order.used")).thenReturn(null);

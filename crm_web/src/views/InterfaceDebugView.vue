@@ -6,6 +6,7 @@
           <h3>接口调试</h3>
         </div>
         <div class="action-group">
+          <el-button plain @click="openSwagger">Swagger UI</el-button>
           <el-button type="primary" :loading="testing" @click="handleTest">发送测试</el-button>
         </div>
       </div>
@@ -68,9 +69,13 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { debugSchedulerInterface } from '../api/scheduler'
+import { syncDomainSettingsFromBackend } from '../utils/domainSettings'
+import { buildSystemUrl, loadSystemConsoleState } from '../utils/systemConsoleStore'
+
+const systemState = reactive(loadSystemConsoleState())
 
 const modeOptions = [
   { label: '模拟', value: 'MOCK' },
@@ -224,8 +229,21 @@ const requestTargetLabel = computed(() =>
     ? `真实模式：校验 ${form.providerCode || '--'} ${form.requestMethod || 'POST'} ${form.path || '--'}，不会直接改写业务数据`
     : `模拟模式：仅在系统内预检 ${form.providerCode || '--'} ${form.interfaceCode || '--'}，不落核心业务表`
 )
+const swaggerUiUrl = computed(() => buildSystemUrl(systemState, 'api', '/swagger-ui.html'))
 
 applyTemplate()
+
+onMounted(async () => {
+  try {
+    const domainSettings = await syncDomainSettingsFromBackend()
+    systemState.domainSettings = {
+      ...(systemState.domainSettings || {}),
+      ...domainSettings
+    }
+  } catch (error) {
+    // Keep local fallback values when backend config is unavailable.
+  }
+})
 
 function applyTemplate() {
   const template = interfaceTemplates.find((item) => item.key === selectedTemplateKey.value) || interfaceTemplates[0]
@@ -295,6 +313,10 @@ async function handleTest() {
   } finally {
     testing.value = false
   }
+}
+
+function openSwagger() {
+  window.open(swaggerUiUrl.value, '_blank', 'noopener,noreferrer')
 }
 </script>
 

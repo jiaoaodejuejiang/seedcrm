@@ -14,7 +14,7 @@ public interface OrderMapper extends BaseMapper<Order> {
                    external_partner_code, external_order_id, external_trade_no, external_member_id,
                    external_promoter_id, external_status, refund_status, raw_data,
                    type, amount, deposit, status,
-                   appointment_time, arrive_time, complete_time, remark, service_detail_json, verification_status,
+                   appointment_time, appointment_store_name, arrive_time, complete_time, remark, service_detail_json, verification_status,
                    verification_method, verification_code, verification_time, verification_operator_id,
                    create_time, update_time
             FROM order_info

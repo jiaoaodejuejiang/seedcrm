@@ -121,6 +121,26 @@
             </template>
           </el-table-column>
 
+          <el-table-column label="最近排档动态" min-width="230">
+            <template #default="{ row }">
+              <div v-if="latestAppointmentRecord(row)" class="schedule-record-preview">
+                <div class="schedule-record-preview__head">
+                  <el-tag size="small" :type="recordTagType(latestAppointmentRecord(row)?.actionType)">
+                    {{ recordActionLabel(latestAppointmentRecord(row)?.actionType) }}
+                  </el-tag>
+                  <span>{{ recentRecordText(row) }}</span>
+                </div>
+                <div v-if="appointmentRecordBadges(row).length" class="schedule-record-preview__badges">
+                  <el-tag v-for="badge in appointmentRecordBadges(row)" :key="badge" size="small" effect="plain">
+                    {{ badge }}
+                  </el-tag>
+                </div>
+                <el-button link type="primary" @click="openAppointmentRecordDialog(row)">查看记录</el-button>
+              </div>
+              <span v-else class="text-secondary">暂无排档记录</span>
+            </template>
+          </el-table-column>
+
           <el-table-column label="操作" width="120" fixed="right">
             <template #default="{ row }">
               <div class="action-group action-group--compact">
@@ -383,6 +403,27 @@
         <el-button type="primary" :loading="saving" @click="handleStoreBookingConfirm">确定</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="appointmentRecordDialogVisible" :title="appointmentRecordDialogTitle" width="680px">
+      <el-timeline v-if="selectedAppointmentRecords.length" class="schedule-record-timeline">
+        <el-timeline-item
+          v-for="(record, index) in selectedAppointmentRecords"
+          :key="`${record.actionType}-${record.createTime}-${index}`"
+          :timestamp="record.createTime || '--'"
+          placement="top"
+        >
+          <div class="schedule-record-line">
+            <strong>{{ timelineActionLabel(record.actionType) }}</strong>
+            <span v-if="recordActorText(record)">{{ recordActorText(record) }}</span>
+            <span>{{ recordSummary(record) }}</span>
+          </div>
+        </el-timeline-item>
+      </el-timeline>
+      <el-empty v-else description="暂无排档记录" />
+      <template #footer>
+        <el-button @click="appointmentRecordDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -419,7 +460,9 @@ const selectedStoreName = ref(String(route.query.storeName || '').trim())
 const storeKeyword = ref('')
 const appointmentDialogVisible = ref(false)
 const storeBookingDialogVisible = ref(false)
+const appointmentRecordDialogVisible = ref(false)
 const selectedOrder = ref(null)
+const selectedRecordOrder = ref(null)
 const pendingRouteOrderId = ref(Number(route.query.orderId || 0))
 
 const orderFilters = reactive({
@@ -442,9 +485,10 @@ const storeBookingForm = reactive({
 const mergedOrders = computed(() =>
   orders.value.map((item) => {
     const clueProfile = (consoleState.clueConsoleProfiles || []).find((profile) => profile.clueId === item.clueId)
+    const storeName = isAppointedOrder(item) ? item.storeName : clueProfile?.intendedStoreName || item.storeName
     return {
       ...item,
-      storeName: clueProfile?.intendedStoreName || item.storeName
+      storeName
     }
   })
 )
@@ -514,7 +558,6 @@ const selectedDayScheduledRows = computed(() =>
       id: item.order.id,
       customerName: item.order.customerName || item.order.orderNo,
       customerPhone: item.order.customerPhone || '--',
-      amount: item.order.amount,
       createTime: item.order.createTime,
       slotIndex: item.index,
       slotLabel: item.label
@@ -559,6 +602,13 @@ const selectedOrderLabel = computed(() => {
     return ''
   }
   return `${selectedOrder.value.orderNo} / ${selectedOrder.value.customerName || '未绑定客户'}`
+})
+const selectedAppointmentRecords = computed(() => appointmentRecords(selectedRecordOrder.value))
+const appointmentRecordDialogTitle = computed(() => {
+  if (!selectedRecordOrder.value) {
+    return '排档记录'
+  }
+  return `排档记录 / ${selectedRecordOrder.value.customerName || selectedRecordOrder.value.orderNo || '--'}`
 })
 
 function formatDate(value) {
@@ -679,6 +729,138 @@ function appointmentDisplayText(row) {
 
 function appointmentActionTitle(row) {
   return isAppointedOrder(row) ? '更改档期' : '预约排档'
+}
+
+function appointmentRecords(row) {
+  return Array.isArray(row?.appointmentRecords) ? row.appointmentRecords : []
+}
+
+function latestAppointmentRecord(row) {
+  return appointmentRecords(row)[0] || null
+}
+
+function appointmentChangeCount(row) {
+  return appointmentRecords(row).filter((item) => normalize(item?.actionType) === 'APPOINTMENT_CHANGE').length
+}
+
+function hasCanceledAppointment(row) {
+  return appointmentRecords(row).some((item) => normalize(item?.actionType) === 'APPOINTMENT_CANCEL')
+}
+
+function appointmentRecordBadgeText(row) {
+  return appointmentRecordBadges(row).join(' / ') || '首次记录'
+}
+
+function appointmentRecordBadges(row) {
+  const parts = []
+  const changeCount = appointmentChangeCount(row)
+  if (changeCount > 0) {
+    parts.push(`改档${changeCount}次`)
+  }
+  if (hasCanceledAppointment(row)) {
+    parts.push('曾取消')
+  }
+  return parts
+}
+
+function openAppointmentRecordDialog(row) {
+  selectedRecordOrder.value = row
+  appointmentRecordDialogVisible.value = true
+}
+
+function recordActionLabel(actionType) {
+  const normalized = normalize(actionType)
+  const labels = {
+    APPOINTMENT_CREATE: '已约档',
+    APPOINTMENT_CHANGE: '已改档',
+    APPOINTMENT_CANCEL: '已取消'
+  }
+  return labels[normalized] || '记录'
+}
+
+function timelineActionLabel(actionType) {
+  const normalized = normalize(actionType)
+  const labels = {
+    APPOINTMENT_CREATE: '约档',
+    APPOINTMENT_CHANGE: '改档',
+    APPOINTMENT_CANCEL: '取消预约'
+  }
+  return labels[normalized] || '排档记录'
+}
+
+function recordTagType(actionType) {
+  const normalized = normalize(actionType)
+  if (normalized === 'APPOINTMENT_CANCEL') {
+    return 'danger'
+  }
+  if (normalized === 'APPOINTMENT_CHANGE') {
+    return 'warning'
+  }
+  return 'success'
+}
+
+function recentRecordText(row) {
+  const record = latestAppointmentRecord(row)
+  const extra = parseRecordExtra(record?.extraJson)
+  if (normalize(record?.actionType) === 'APPOINTMENT_CANCEL') {
+    return extra.appointmentTimeBefore || record?.createTime || '--'
+  }
+  if (normalize(record?.actionType) === 'APPOINTMENT_CHANGE') {
+    return extra.appointmentTimeAfter ? `至 ${extra.appointmentTimeAfter}` : record?.createTime || '--'
+  }
+  return extra.appointmentTimeAfter || record?.createTime || '--'
+}
+
+function recordSummary(record) {
+  const extra = parseRecordExtra(record?.extraJson)
+  const before = extra.appointmentTimeBefore || ''
+  const after = extra.appointmentTimeAfter || ''
+  const beforeStore = extra.storeNameBefore || ''
+  const afterStore = extra.storeNameAfter || extra.storeName || ''
+  const remark = extra.remark || record?.remark || ''
+  if (normalize(record?.actionType) === 'APPOINTMENT_CANCEL') {
+    const parts = []
+    if (beforeStore) {
+      parts.push(`原门店：${beforeStore}`)
+    }
+    parts.push(before ? `原档期：${before}` : '已取消预约')
+    if (remark) {
+      parts.push(remark)
+    }
+    return parts.join(' / ')
+  }
+  const parts = []
+  if (beforeStore && afterStore && beforeStore !== afterStore) {
+    parts.push(`门店：${beforeStore} -> ${afterStore}`)
+  } else if (afterStore) {
+    parts.push(`门店：${afterStore}`)
+  }
+  if (before && after && before !== after) {
+    parts.push(`${before} -> ${after}`)
+  } else if (after) {
+    parts.push(`档期：${after}`)
+  }
+  if (remark && !['预约排档', '更改预约档期'].includes(remark)) {
+    parts.push(remark)
+  }
+  return parts.join(' / ') || record?.createTime || '--'
+}
+
+function recordActorText(record) {
+  const actor = record?.operatorUserName || (record?.operatorUserId ? `ID ${record.operatorUserId}` : '')
+  return actor ? `操作人：${actor}` : ''
+}
+
+function parseRecordExtra(value) {
+  if (!value) {
+    return {}
+  }
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
 }
 
 function parseClockMinutes(value) {
@@ -884,6 +1066,8 @@ async function handleSaveAppointment() {
     await appointOrder({
       orderId: selectedOrder.value.id,
       appointmentTime: appointmentForm.appointmentTime,
+      previousStoreName: selectedOrder.value.storeName || undefined,
+      storeName: appointmentForm.storeName,
       remark: appointmentForm.remark || undefined
     })
     persistPreferredStore(selectedOrder.value, appointmentForm.storeName)
@@ -952,6 +1136,8 @@ async function handleStoreBookingConfirm() {
     await appointOrder({
       orderId: order.id,
       appointmentTime: storeBookingForm.slotValue,
+      previousStoreName: order.storeName || undefined,
+      storeName: activeStoreName.value,
       remark: order.remark || undefined
     })
     persistPreferredStore(order, activeStoreName.value)
@@ -973,3 +1159,45 @@ async function handleStoreBookingConfirm() {
 
 loadOrders()
 </script>
+
+<style scoped>
+.schedule-record-preview {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.schedule-record-line strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.schedule-record-preview__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.schedule-record-preview__head span,
+.schedule-record-line span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.schedule-record-preview__badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.schedule-record-line {
+  display: grid;
+  gap: 6px;
+}
+
+.schedule-record-timeline {
+  padding: 6px 4px 0;
+}
+</style>

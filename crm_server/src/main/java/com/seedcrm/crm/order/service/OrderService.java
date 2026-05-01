@@ -17,7 +17,11 @@ public interface OrderService extends IService<Order> {
 
     Order appointment(OrderAppointmentDTO orderAppointmentDTO);
 
+    Order appointment(OrderAppointmentDTO orderAppointmentDTO, Long operatorUserId, String operatorRoleCode);
+
     Order cancelAppointment(OrderActionDTO orderActionDTO);
+
+    Order cancelAppointment(OrderActionDTO orderActionDTO, Long operatorUserId, String operatorRoleCode);
 
     Order arrive(OrderActionDTO orderActionDTO);
 
@@ -34,6 +38,8 @@ public interface OrderService extends IService<Order> {
     Order refund(OrderActionDTO orderActionDTO, Long operatorUserId);
 
     Order verifyVoucher(OrderVoucherVerifyDTO orderVoucherVerifyDTO, Long operatorUserId);
+
+    Order verifyVoucher(OrderVoucherVerifyDTO orderVoucherVerifyDTO, Long operatorUserId, String operatorRoleCode);
 
     Order updateServiceDetail(OrderServiceDetailDTO orderServiceDetailDTO);
 }

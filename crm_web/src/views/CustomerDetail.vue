@@ -103,7 +103,7 @@
               <el-tag effect="plain">{{ orderTypeLabel(row.type) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="金额" width="120">
+          <el-table-column v-if="canViewOrderAmounts" label="金额" width="120">
             <template #default="{ row }">
               {{ money(row.amount) }}
             </template>
@@ -199,6 +199,9 @@ const messageForm = reactive({
 const customer = computed(() => profile.value?.customer || {})
 const fromMembers = computed(() => route.query.from === 'private-domain-members')
 const highlightedOrderId = computed(() => Number(route.query.orderId || 0))
+const canViewOrderAmounts = computed(() =>
+  (profile.value?.orderHistory || []).some((order) => order?.amount !== null && order?.amount !== undefined)
+)
 
 async function loadProfile(customerId) {
   if (!customerId) {
@@ -237,6 +240,9 @@ async function handleSendMessage() {
 }
 
 function money(value) {
+  if (value === null || value === undefined || value === '') {
+    return '--'
+  }
   const number = Number(value || 0)
   return `¥${number.toLocaleString('zh-CN', {
     minimumFractionDigits: 2,

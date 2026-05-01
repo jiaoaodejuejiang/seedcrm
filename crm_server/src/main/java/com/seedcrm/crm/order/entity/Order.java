@@ -74,6 +74,9 @@ public class Order {
     @TableField("appointment_time")
     private LocalDateTime appointmentTime;
 
+    @TableField("appointment_store_name")
+    private String appointmentStoreName;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("arrive_time")
     private LocalDateTime arriveTime;

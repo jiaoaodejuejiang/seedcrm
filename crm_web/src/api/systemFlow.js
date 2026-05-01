@@ -66,3 +66,35 @@ export function fetchSystemFlowAuditLogs(flowCode) {
     }
   })
 }
+
+export function fetchSystemFlowRuntimeOverview(flowCode) {
+  return http.get('/system-flow/runtime-overview', {
+    params: {
+      flowCode: flowCode || undefined
+    }
+  })
+}
+
+export function startSystemFlowRuntime(payload) {
+  return http.post('/system-flow/runtime/start', payload)
+}
+
+export function transitionSystemFlowRuntime(payload) {
+  return http.post('/system-flow/runtime/transition', payload)
+}
+
+export function fetchSystemFlowRuntimeTasks(flowCode) {
+  return http.get('/system-flow/runtime/tasks', {
+    params: {
+      flowCode: flowCode || undefined
+    }
+  })
+}
+
+export function fetchSystemFlowRuntimeEvents(instanceId) {
+  return http.get('/system-flow/runtime/events', {
+    params: {
+      instanceId
+    }
+  })
+}

@@ -18,7 +18,10 @@ public final class ServiceFormTemplateDtos {
         private String title;
         private String industry;
         private String layoutMode;
+        private String designerEngine;
         private String configJson;
+        private String rawSchemaJson;
+        private String normalizedSchemaJson;
         private Integer recommended;
         private Integer enabled;
         private String status;
@@ -57,7 +60,10 @@ public final class ServiceFormTemplateDtos {
         private String title;
         private String industry;
         private String layoutMode;
+        private String designerEngine;
         private String configJson;
+        private String rawSchemaJson;
+        private String normalizedSchemaJson;
         private Integer recommended;
         private String description;
     }

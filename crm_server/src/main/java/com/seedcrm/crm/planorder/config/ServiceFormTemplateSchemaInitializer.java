@@ -89,12 +89,12 @@ public class ServiceFormTemplateSchemaInitializer {
         }
         jdbcTemplate.update("""
                 INSERT INTO plan_order_service_form_template(
-                    template_code, template_name, title, industry, layout_mode, config_json,
-                    recommended, enabled, status, description, create_time, update_time, published_time
+                    template_code, template_name, title, industry, layout_mode, designer_engine, config_json,
+                    raw_schema_json, normalized_schema_json, recommended, enabled, status, description, create_time, update_time, published_time
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'PUBLISHED', ?, NOW(), NOW(), NOW())
+                VALUES (?, ?, ?, ?, ?, 'INTERNAL_SCHEMA', ?, ?, ?, ?, 1, 'PUBLISHED', ?, NOW(), NOW(), NOW())
                 """, templateCode, templateName, title, industry, layoutMode, defaultConfigJson(layoutMode),
-                recommended, description);
+                null, defaultConfigJson(layoutMode), recommended, description);
         log.info("inserted default service form template {}", templateCode);
     }
 
@@ -178,7 +178,7 @@ public class ServiceFormTemplateSchemaInitializer {
         return "{"
                 + "\"layoutMode\":\"" + layoutMode + "\","
                 + "\"density\":\"compact\","
-                + "\"sections\":[\"基础信息\",\"服务确认\",\"偏好与补充\",\"客户签名\"],"
+                + "\"sections\":[\"基础信息\",\"服务确认\",\"偏好与补充\",\"纸质签名留位\"],"
                 + "\"flexFields\":[{\"label\":\"灵活字段\",\"type\":\"text\",\"required\":false}]"
                 + "}";
     }
@@ -193,7 +193,10 @@ public class ServiceFormTemplateSchemaInitializer {
                     title VARCHAR(100) NOT NULL,
                     industry VARCHAR(100),
                     layout_mode VARCHAR(32) NOT NULL,
+                    designer_engine VARCHAR(64) DEFAULT 'INTERNAL_SCHEMA',
                     config_json TEXT,
+                    raw_schema_json MEDIUMTEXT,
+                    normalized_schema_json MEDIUMTEXT,
                     recommended TINYINT DEFAULT 0,
                     enabled TINYINT DEFAULT 0,
                     status VARCHAR(32) NOT NULL DEFAULT 'DRAFT',
@@ -216,7 +219,10 @@ public class ServiceFormTemplateSchemaInitializer {
         columns.put("title", "title VARCHAR(100) NOT NULL");
         columns.put("industry", "industry VARCHAR(100)");
         columns.put("layout_mode", "layout_mode VARCHAR(32) NOT NULL");
+        columns.put("designer_engine", "designer_engine VARCHAR(64) DEFAULT 'INTERNAL_SCHEMA'");
         columns.put("config_json", "config_json TEXT");
+        columns.put("raw_schema_json", "raw_schema_json MEDIUMTEXT");
+        columns.put("normalized_schema_json", "normalized_schema_json MEDIUMTEXT");
         columns.put("recommended", "recommended TINYINT DEFAULT 0");
         columns.put("enabled", "enabled TINYINT DEFAULT 0");
         columns.put("status", "status VARCHAR(32) NOT NULL DEFAULT 'DRAFT'");

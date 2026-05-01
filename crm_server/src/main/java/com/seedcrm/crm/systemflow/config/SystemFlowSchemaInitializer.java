@@ -287,11 +287,18 @@ public class SystemFlowSchemaInitializer {
                     OR UPPER(target_code) NOT IN ('DOUYIN_CLUE_INCREMENTAL', 'DOUYIN_VOUCHER_VERIFY', 'ORDER_SETTLEMENT_METADATA', 'SALARY_SETTLEMENT_METADATA')
                   )
                 """, Integer.class, versionId);
+        Integer appointmentCancelCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM system_flow_transition
+                WHERE version_id = ?
+                  AND action_code = 'ORDER_APPOINTMENT_CANCEL'
+                """, Integer.class, versionId);
         return customerNodeCount != null && customerNodeCount > 0
                 && orderCoreStateCount != null && orderCoreStateCount >= 2
                 && planOrderCoreStateCount != null && planOrderCoreStateCount >= 3
                 && schedulerNodeCount != null && schedulerNodeCount == 0
-                && unsafeTriggerCount != null && unsafeTriggerCount == 0;
+                && unsafeTriggerCount != null && unsafeTriggerCount == 0
+                && appointmentCancelCount != null && appointmentCancelCount > 0;
     }
 
     private boolean isSystemManagedVersion(Long versionId) {
@@ -323,11 +330,12 @@ public class SystemFlowSchemaInitializer {
         seedTransition(versionId, "CLUE_FOLLOW", "CUSTOMER_CREATED", "PAYMENT_SYNC", "付款同步生成客户", "外部平台付款成功，Customer 在 Order 创建时生成", 30);
         seedTransition(versionId, "CUSTOMER_CREATED", "ORDER_PAID", "ORDER_MARK_PAID", "订单进入已付款", "Order 绑定 Customer", 40);
         seedTransition(versionId, "ORDER_PAID", "APPOINTMENT", "ORDER_APPOINTMENT", "预约门店档期", "订单处于 paid 阶段", 50);
+        seedTransition(versionId, "APPOINTMENT", "ORDER_PAID", "ORDER_APPOINTMENT_CANCEL", "取消预约排档", "订单未到店且未核销", 55);
         seedTransition(versionId, "APPOINTMENT", "VERIFY", "ORDER_VERIFY", "门店核销", "门店人员有订单权限", 60);
         seedTransition(versionId, "VERIFY", "PLAN_CREATED", "PLAN_CREATE", "创建计划单", "订单已核销，PlanOrder 1:1 绑定 Order", 70);
         seedTransition(versionId, "PLAN_CREATED", "PLAN_ARRIVED", "PLAN_ARRIVE", "确认到店", "PlanOrder 已创建", 80);
         seedTransition(versionId, "PLAN_ARRIVED", "PLAN_SERVICING", "PLAN_START", "开始服务", "PlanOrder 已到店", 90);
-        seedTransition(versionId, "PLAN_SERVICING", "PLAN_FINISHED", "PLAN_FINISH", "完成服务", "确认单已签字", 100);
+        seedTransition(versionId, "PLAN_SERVICING", "PLAN_FINISHED", "PLAN_FINISH", "完成服务", "确认单已确认并完成服务", 100);
         seedTransition(versionId, "PLAN_FINISHED", "ORDER_USED", "ORDER_COMPLETE", "订单完成", "PlanOrder 已完成", 110);
 
         seedTrigger(versionId, "CLUE_INTAKE", "SCHEDULER_JOB", "调度拉取客资", "DOUYIN_CLUE_INCREMENTAL", "METADATA_ONLY", 10,

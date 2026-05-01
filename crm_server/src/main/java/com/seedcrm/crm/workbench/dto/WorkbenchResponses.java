@@ -89,6 +89,22 @@ public final class WorkbenchResponses {
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime verificationTime;
         private Long verificationOperatorId;
+        private List<AppointmentRecordResponse> appointmentRecords;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime createTime;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AppointmentRecordResponse {
+        private String actionType;
+        private String fromStatus;
+        private String toStatus;
+        private Long operatorUserId;
+        private String operatorUserName;
+        private String remark;
+        private String extraJson;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime createTime;
     }
@@ -195,6 +211,20 @@ public final class WorkbenchResponses {
         private CustomerSnapshotResponse customer;
         private List<CurrentRoleResponse> currentRoles;
         private List<RoleRecordResponse> roleRecords;
+        private List<FlowTraceItemResponse> flowTrace;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class FlowTraceItemResponse {
+        private String actionCode;
+        private String fromNodeCode;
+        private String toNodeCode;
+        private String summary;
+        private String actorRoleCode;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime eventTime;
     }
 
     @Data

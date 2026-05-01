@@ -68,6 +68,22 @@ class SystemFlowServiceImplTest {
     }
 
     @Test
+    void simulateShouldAllowSystemRoleForSidecarRuntime() {
+        SystemFlowServiceImpl service = new StubSystemFlowService(buildOrderMainFlow());
+
+        SystemFlowDtos.SimulateRequest request = new SystemFlowDtos.SimulateRequest();
+        request.setFlowCode("ORDER_MAIN_FLOW");
+        request.setCurrentNodeCode("PLAN_FINISHED");
+        request.setActionCode("ORDER_COMPLETE");
+        request.setRoleCode("SYSTEM");
+
+        SystemFlowDtos.SimulateResponse response = service.simulate(request);
+
+        assertThat(response.isAllowed()).isTrue();
+        assertThat(response.getNextNodeCode()).isEqualTo("ORDER_USED");
+    }
+
+    @Test
     void orderMainFlowShouldKeepRequiredBusinessChainOrder() {
         SystemFlowDtos.DetailResponse detail = buildOrderMainFlow();
 

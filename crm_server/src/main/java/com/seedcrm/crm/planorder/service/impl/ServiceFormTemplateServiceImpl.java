@@ -36,7 +36,8 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
     public List<ServiceFormTemplateDtos.TemplateResponse> listTemplates() {
         return jdbcTemplate.query("""
                 SELECT id, source_template_id, template_code, template_name, title, industry, layout_mode,
-                       config_json, recommended, enabled, status, description, create_time, update_time, published_time
+                       designer_engine, config_json, raw_schema_json, normalized_schema_json,
+                       recommended, enabled, status, description, create_time, update_time, published_time
                 FROM plan_order_service_form_template
                 ORDER BY FIELD(status, 'DRAFT', 'PUBLISHED', 'DISABLED', 'ARCHIVED'), recommended DESC, id DESC
                 """, (rs, rowNum) -> mapTemplate(rs));
@@ -73,34 +74,41 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
         if (existing == null) {
             jdbcTemplate.update("""
                     INSERT INTO plan_order_service_form_template(
-                        template_code, template_name, title, industry, layout_mode, config_json,
-                        recommended, enabled, status, description, create_time, update_time
+                        template_code, template_name, title, industry, layout_mode, designer_engine, config_json,
+                        raw_schema_json, normalized_schema_json, recommended, enabled, status, description, create_time, update_time
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'DRAFT', ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'DRAFT', ?, ?, ?)
                     """, normalizeCode(request.getTemplateCode()), request.getTemplateName().trim(), request.getTitle().trim(),
-                    trimToNull(request.getIndustry()), normalizeLayoutMode(request.getLayoutMode()), normalizeConfigJson(request.getConfigJson()),
+                    trimToNull(request.getIndustry()), normalizeLayoutMode(request.getLayoutMode()), normalizeDesignerEngine(request.getDesignerEngine()),
+                    normalizeConfigJson(request.getConfigJson()), normalizeSchemaJson(request.getRawSchemaJson()),
+                    normalizeNormalizedSchemaJson(request),
                     request.getRecommended() == null ? 0 : request.getRecommended(), request.getDescription(), now, now);
             targetId = latestTemplateId(normalizeCode(request.getTemplateCode()), STATUS_DRAFT);
         } else if (STATUS_PUBLISHED.equalsIgnoreCase(existing.getStatus())) {
             jdbcTemplate.update("""
                     INSERT INTO plan_order_service_form_template(
-                        source_template_id, template_code, template_name, title, industry, layout_mode, config_json,
-                        recommended, enabled, status, description, create_time, update_time
+                        source_template_id, template_code, template_name, title, industry, layout_mode, designer_engine, config_json,
+                        raw_schema_json, normalized_schema_json, recommended, enabled, status, description, create_time, update_time
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'DRAFT', ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'DRAFT', ?, ?, ?)
                     """, existing.getId(), normalizeCode(request.getTemplateCode()), request.getTemplateName().trim(),
                     request.getTitle().trim(), trimToNull(request.getIndustry()), normalizeLayoutMode(request.getLayoutMode()),
-                    normalizeConfigJson(request.getConfigJson()), request.getRecommended() == null ? 0 : request.getRecommended(),
+                    normalizeDesignerEngine(request.getDesignerEngine()), normalizeConfigJson(request.getConfigJson()),
+                    normalizeSchemaJson(request.getRawSchemaJson()), normalizeNormalizedSchemaJson(request),
+                    request.getRecommended() == null ? 0 : request.getRecommended(),
                     request.getDescription(), now, now);
             targetId = latestTemplateId(normalizeCode(request.getTemplateCode()), STATUS_DRAFT);
         } else {
             jdbcTemplate.update("""
                     UPDATE plan_order_service_form_template
                     SET template_code = ?, template_name = ?, title = ?, industry = ?, layout_mode = ?,
-                        config_json = ?, recommended = ?, description = ?, update_time = ?
+                        designer_engine = ?, config_json = ?, raw_schema_json = ?, normalized_schema_json = ?,
+                        recommended = ?, description = ?, update_time = ?
                     WHERE id = ?
                     """, normalizeCode(request.getTemplateCode()), request.getTemplateName().trim(), request.getTitle().trim(),
-                    trimToNull(request.getIndustry()), normalizeLayoutMode(request.getLayoutMode()), normalizeConfigJson(request.getConfigJson()),
+                    trimToNull(request.getIndustry()), normalizeLayoutMode(request.getLayoutMode()), normalizeDesignerEngine(request.getDesignerEngine()),
+                    normalizeConfigJson(request.getConfigJson()), normalizeSchemaJson(request.getRawSchemaJson()),
+                    normalizeNormalizedSchemaJson(request),
                     request.getRecommended() == null ? 0 : request.getRecommended(), request.getDescription(), now, existing.getId());
         }
         ServiceFormTemplateDtos.TemplateResponse saved = getTemplate(targetId);
@@ -290,11 +298,21 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
             throw new BusinessException("模板编码、模板名称和表单标题不能为空");
         }
         if (StringUtils.hasText(request.getConfigJson())) {
-            try {
-                OBJECT_MAPPER.readTree(request.getConfigJson());
-            } catch (Exception ex) {
-                throw new BusinessException("模板配置 JSON 格式不正确");
-            }
+            validateJson(request.getConfigJson(), "模板配置 JSON 格式不正确");
+        }
+        if (StringUtils.hasText(request.getRawSchemaJson())) {
+            validateJson(request.getRawSchemaJson(), "设计器原始 Schema JSON 格式不正确");
+        }
+        if (StringUtils.hasText(request.getNormalizedSchemaJson())) {
+            validateJson(request.getNormalizedSchemaJson(), "系统标准 Schema JSON 格式不正确");
+        }
+    }
+
+    private void validateJson(String value, String message) {
+        try {
+            OBJECT_MAPPER.readTree(value);
+        } catch (Exception ex) {
+            throw new BusinessException(message);
         }
     }
 
@@ -352,7 +370,8 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
         }
         List<ServiceFormTemplateDtos.TemplateResponse> rows = jdbcTemplate.query("""
                 SELECT id, source_template_id, template_code, template_name, title, industry, layout_mode,
-                       config_json, recommended, enabled, status, description, create_time, update_time, published_time
+                       designer_engine, config_json, raw_schema_json, normalized_schema_json,
+                       recommended, enabled, status, description, create_time, update_time, published_time
                 FROM plan_order_service_form_template
                 WHERE id = ?
                 """, (rs, rowNum) -> mapTemplate(rs), templateId);
@@ -404,7 +423,10 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
         item.setTitle(rs.getString("title"));
         item.setIndustry(rs.getString("industry"));
         item.setLayoutMode(rs.getString("layout_mode"));
+        item.setDesignerEngine(rs.getString("designer_engine"));
         item.setConfigJson(rs.getString("config_json"));
+        item.setRawSchemaJson(rs.getString("raw_schema_json"));
+        item.setNormalizedSchemaJson(rs.getString("normalized_schema_json"));
         item.setRecommended(rs.getInt("recommended"));
         item.setEnabled(rs.getInt("enabled"));
         item.setStatus(rs.getString("status"));
@@ -486,7 +508,29 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
     }
 
     private String normalizeConfigJson(String value) {
-        return StringUtils.hasText(value) ? value.trim() : "{\"sections\":[\"基础信息\",\"服务确认\",\"偏好与补充\",\"客户签名\"]}";
+        return StringUtils.hasText(value) ? value.trim() : "{\"sections\":[\"基础信息\",\"服务确认\",\"偏好与补充\",\"纸质签名留位\"]}";
+    }
+
+    private String normalizeDesignerEngine(String value) {
+        String normalized = StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : "INTERNAL_SCHEMA";
+        return switch (normalized) {
+            case "INTERNAL_SCHEMA", "FORMILY", "VFORM3", "LOWCODE_ENGINE", "JSON_SCHEMA" -> normalized;
+            default -> "INTERNAL_SCHEMA";
+        };
+    }
+
+    private String normalizeSchemaJson(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String normalizeNormalizedSchemaJson(ServiceFormTemplateDtos.SaveTemplateRequest request) {
+        if (StringUtils.hasText(request.getNormalizedSchemaJson())) {
+            return request.getNormalizedSchemaJson().trim();
+        }
+        return normalizeConfigJson(request.getConfigJson());
     }
 
     private String trimToNull(String value) {

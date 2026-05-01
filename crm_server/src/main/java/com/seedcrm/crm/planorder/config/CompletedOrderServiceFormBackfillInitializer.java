@@ -89,9 +89,9 @@ public class CompletedOrderServiceFormBackfillInitializer {
                         'serviceDuration', '',
                         'addOnCount', 0,
                         'addOnContent', '',
-                        'signature', '系统补齐',
-                        'customerSignature', 'data:image/png;base64,legacy-service-confirmed',
-                        'customerSignatureSignedAt', DATE_FORMAT(COALESCE(p.finish_time, o.complete_time, o.update_time, o.create_time, NOW()), '%Y-%m-%dT%H:%i:%s'),
+                        'offlineConfirmedBy', '系统补齐',
+                        'offlineConfirmedAt', DATE_FORMAT(COALESCE(p.finish_time, o.complete_time, o.update_time, o.create_time, NOW()), '%Y-%m-%dT%H:%i:%s'),
+                        'paperSignaturePlaceholder', '客户纸质确认单手写签名',
                         'internalRemark', '历史脏数据补齐：已完成订单必须有服务确认单'
                     ),
                     o.verification_status = 'VERIFIED',

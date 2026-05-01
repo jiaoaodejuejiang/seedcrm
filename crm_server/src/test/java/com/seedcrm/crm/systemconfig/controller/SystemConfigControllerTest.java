@@ -1,0 +1,96 @@
+package com.seedcrm.crm.systemconfig.controller;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.seedcrm.crm.common.api.ApiResponse;
+import com.seedcrm.crm.permission.support.PermissionRequestContext;
+import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
+import com.seedcrm.crm.permission.support.SchedulerModuleGuard;
+import com.seedcrm.crm.permission.support.SettingModuleGuard;
+import com.seedcrm.crm.systemconfig.dto.SystemConfigDtos;
+import com.seedcrm.crm.systemconfig.service.SystemConfigService;
+import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+class SystemConfigControllerTest {
+
+    private SystemConfigService systemConfigService;
+    private PermissionRequestContextResolver resolver;
+    private SettingModuleGuard settingModuleGuard;
+    private SchedulerModuleGuard schedulerModuleGuard;
+    private SystemConfigController controller;
+    private HttpServletRequest request;
+
+    @BeforeEach
+    void setUp() {
+        systemConfigService = mock(SystemConfigService.class);
+        resolver = mock(PermissionRequestContextResolver.class);
+        settingModuleGuard = mock(SettingModuleGuard.class);
+        schedulerModuleGuard = mock(SchedulerModuleGuard.class);
+        controller = new SystemConfigController(systemConfigService, resolver, settingModuleGuard, schedulerModuleGuard);
+        request = mock(HttpServletRequest.class);
+        when(systemConfigService.getDomainSettings()).thenReturn(domainSettings());
+    }
+
+    @Test
+    void shouldAllowIntegrationOperatorToReadDomainSettingsThroughSchedulerViewPermission() {
+        PermissionRequestContext context = context("INTEGRATION_OPERATOR");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        ApiResponse<SystemConfigDtos.DomainSettingsResponse> response = controller.getDomainSettings(request);
+
+        assertThat(response.getCode()).isZero();
+        assertThat(response.getData().getApiBaseUrl()).isEqualTo("https://api.seedcrm.test");
+        verify(schedulerModuleGuard).checkView(context);
+        verify(settingModuleGuard, never()).checkView(context);
+    }
+
+    @Test
+    void shouldKeepAdminDomainReadOnSettingViewPermission() {
+        PermissionRequestContext context = context("ADMIN");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.getDomainSettings(request);
+
+        verify(settingModuleGuard).checkView(context);
+        verify(schedulerModuleGuard, never()).checkView(context);
+    }
+
+    @Test
+    void shouldKeepDomainSettingsWriteRestrictedToSettingUpdatePermission() {
+        PermissionRequestContext context = context("INTEGRATION_OPERATOR");
+        SystemConfigDtos.SaveDomainSettingsRequest body = new SystemConfigDtos.SaveDomainSettingsRequest();
+        body.setSystemBaseUrl("https://crm.seedcrm.test");
+        body.setApiBaseUrl("https://api.seedcrm.test");
+        when(resolver.resolve(request)).thenReturn(context);
+        when(systemConfigService.saveDomainSettings(body, context)).thenReturn(domainSettings());
+
+        controller.saveDomainSettings(body, request);
+
+        verify(settingModuleGuard).checkUpdate(context);
+        verify(schedulerModuleGuard, never()).checkView(context);
+    }
+
+    private PermissionRequestContext context(String roleCode) {
+        PermissionRequestContext context = new PermissionRequestContext();
+        context.setRoleCode(roleCode);
+        context.setDataScope("ALL");
+        context.setCurrentUserId(1L);
+        return context;
+    }
+
+    private SystemConfigDtos.DomainSettingsResponse domainSettings() {
+        SystemConfigDtos.DomainSettingsResponse response = new SystemConfigDtos.DomainSettingsResponse();
+        response.setSystemBaseUrl("https://crm.seedcrm.test");
+        response.setApiBaseUrl("https://api.seedcrm.test");
+        response.setEventIngestUrl("https://api.seedcrm.test/open/distribution/events");
+        response.setSwaggerUiUrl("https://api.seedcrm.test/swagger-ui.html");
+        response.setOpenApiDocsUrl("https://api.seedcrm.test/v3/api-docs/distribution-open-api");
+        return response;
+    }
+}

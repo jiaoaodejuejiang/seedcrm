@@ -50,21 +50,41 @@ public class PlanOrderController {
     public ApiResponse<PlanOrderResponse> arrive(@RequestBody PlanOrderActionDTO planOrderActionDTO, HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         planOrderPermissionGuard.checkUpdate(context, planOrderActionDTO == null ? null : planOrderActionDTO.getPlanOrderId());
-        return ApiResponse.success(PlanOrderResponse.from(planOrderService.arrive(planOrderActionDTO)));
+        return ApiResponse.success(PlanOrderResponse.from(planOrderService.arrive(
+                planOrderActionDTO,
+                context.getCurrentUserId(),
+                context.getRoleCode())));
     }
 
     @PostMapping("/start")
     public ApiResponse<PlanOrderResponse> start(@RequestBody PlanOrderActionDTO planOrderActionDTO, HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         planOrderPermissionGuard.checkUpdate(context, planOrderActionDTO == null ? null : planOrderActionDTO.getPlanOrderId());
-        return ApiResponse.success(PlanOrderResponse.from(planOrderService.start(planOrderActionDTO)));
+        return ApiResponse.success(PlanOrderResponse.from(planOrderService.start(
+                planOrderActionDTO,
+                context.getCurrentUserId(),
+                context.getRoleCode())));
+    }
+
+    @PostMapping("/confirm-service-form")
+    public ApiResponse<PlanOrderResponse> confirmServiceForm(@RequestBody PlanOrderActionDTO planOrderActionDTO,
+                                                             HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        planOrderPermissionGuard.checkUpdate(context, planOrderActionDTO == null ? null : planOrderActionDTO.getPlanOrderId());
+        return ApiResponse.success(PlanOrderResponse.from(planOrderService.confirmServiceForm(
+                planOrderActionDTO,
+                context.getCurrentUserId(),
+                context.getRoleCode())));
     }
 
     @PostMapping("/finish")
     public ApiResponse<PlanOrderResponse> finish(@RequestBody PlanOrderActionDTO planOrderActionDTO, HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         planOrderPermissionGuard.checkUpdate(context, planOrderActionDTO == null ? null : planOrderActionDTO.getPlanOrderId());
-        return ApiResponse.success(PlanOrderResponse.from(planOrderService.finish(planOrderActionDTO, context.getCurrentUserId())));
+        return ApiResponse.success(PlanOrderResponse.from(planOrderService.finish(
+                planOrderActionDTO,
+                context.getCurrentUserId(),
+                context.getRoleCode())));
     }
 
     @PostMapping("/assignRole")

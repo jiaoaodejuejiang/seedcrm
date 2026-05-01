@@ -19,7 +19,23 @@
       <div class="panel-heading">
         <div>
           <h3>财务看板</h3>
+          <p>本系统仅记录账务数据，不执行收款或资金划拨。</p>
         </div>
+      </div>
+
+      <div class="finance-boundary">
+        <article>
+          <strong>只记账</strong>
+          <span>订单完成、薪酬、分销和退款只形成账务记录，真实资金处理在线下或三方平台完成。</span>
+        </article>
+        <article>
+          <strong>退款冲正</strong>
+          <span>退款不覆盖原账，后续应以冲正记录追溯调整。</span>
+        </article>
+        <article>
+          <strong>提现确认</strong>
+          <span>提现状态仅表示线下处理进度，不代表系统发起资金划拨。</span>
+        </article>
       </div>
 
       <el-tabs v-model="activeTab" class="platform-tabs finance-tabs">
@@ -85,9 +101,37 @@
                 {{ formatMoney(row.distributorIncome) }}
               </template>
             </el-table-column>
-            <el-table-column label="提现金额" min-width="140">
+            <el-table-column label="线下处理金额" min-width="140">
               <template #default="{ row }">
                 {{ formatMoney(row.withdrawAmount) }}
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <el-tab-pane label="提现记录" name="withdraw">
+          <el-table v-loading="loading" :data="overview?.withdrawRecords || []" stripe>
+            <el-table-column label="对象" min-width="180">
+              <template #default="{ row }">
+                <div class="table-primary">
+                  <strong>{{ row.ownerName || '--' }}</strong>
+                  <span>{{ formatOwnerType(row.ownerType) }} #{{ row.ownerId || '--' }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="记账金额" min-width="140">
+              <template #default="{ row }">
+                {{ formatMoney(row.amount) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="线下处理状态" min-width="140">
+              <template #default="{ row }">
+                <el-tag :type="withdrawStatusTag(row.status)">{{ formatWithdrawStatus(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="记录时间" min-width="180">
+              <template #default="{ row }">
+                {{ row.createTime || '--' }}
               </template>
             </el-table-column>
           </el-table>
@@ -136,12 +180,74 @@ function displayTeamLabel(value) {
     .trim()
 }
 
+function formatOwnerType(value) {
+  const normalized = String(value || '').trim().toUpperCase()
+  if (normalized === 'DISTRIBUTOR') {
+    return '分销'
+  }
+  if (normalized === 'EMPLOYEE' || normalized === 'STAFF') {
+    return '员工'
+  }
+  return normalized || '对象'
+}
+
+function formatWithdrawStatus(value) {
+  const normalized = String(value || '').trim().toUpperCase()
+  const labels = {
+    PENDING: '待线下处理',
+    PROCESSING: '线下处理中',
+    PAID: '已标记处理',
+    COMPLETED: '已标记处理',
+    REJECTED: '已驳回',
+    CANCELLED: '已取消'
+  }
+  return labels[normalized] || value || '--'
+}
+
+function withdrawStatusTag(value) {
+  const normalized = String(value || '').trim().toUpperCase()
+  if (['PAID', 'COMPLETED'].includes(normalized)) {
+    return 'success'
+  }
+  if (['REJECTED', 'CANCELLED'].includes(normalized)) {
+    return 'danger'
+  }
+  return 'warning'
+}
+
 onMounted(loadOverview)
 </script>
 
 <style scoped>
 .finance-tabs :deep(.el-tabs__header) {
   margin-bottom: 18px;
+}
+
+.finance-boundary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.finance-boundary article {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f8fbff;
+  border: 1px solid #e5edf4;
+}
+
+.finance-boundary strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.finance-boundary span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .tab-summary {
@@ -171,7 +277,8 @@ onMounted(loadOverview)
 }
 
 @media (max-width: 900px) {
-  .tab-summary {
+  .tab-summary,
+  .finance-boundary {
     grid-template-columns: 1fr;
   }
 }

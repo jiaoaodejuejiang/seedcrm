@@ -158,6 +158,7 @@ import {
 } from '@element-plus/icons-vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { currentUser, getEffectiveMenuConfigs, hasRouteAccess, logout } from '../utils/auth'
+import { syncDomainSettingsFromBackend } from '../utils/domainSettings'
 import { formatRoleCode } from '../utils/format'
 
 const route = useRoute()
@@ -695,6 +696,11 @@ async function handleLogout() {
 
 onMounted(() => {
   window.addEventListener('seedcrm:system-console-updated', refreshSystemConsoleVersion)
+  syncDomainSettingsFromBackend()
+    .then(refreshSystemConsoleVersion)
+    .catch(() => {
+      // Keep the local fallback so the console remains usable when the config API is unavailable.
+    })
 })
 
 onUnmounted(() => {

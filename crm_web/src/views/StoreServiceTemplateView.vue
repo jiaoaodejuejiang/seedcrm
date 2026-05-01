@@ -44,6 +44,9 @@
             <el-table-column label="布局" width="110">
               <template #default="{ row }">{{ formatLayout(row.layoutMode) }}</template>
             </el-table-column>
+            <el-table-column label="设计器" width="140">
+              <template #default="{ row }">{{ formatDesignerEngine(row.designerEngine) }}</template>
+            </el-table-column>
             <el-table-column label="状态" width="120">
               <template #default="{ row }">
                 <el-tag :type="templateStatusType(row.status)">{{ formatTemplateStatus(row.status) }}</el-tag>
@@ -253,6 +256,16 @@
           </el-select>
         </label>
         <label>
+          <span>设计器引擎</span>
+          <el-select v-model="templateForm.designerEngine">
+            <el-option label="系统轻量 Schema" value="INTERNAL_SCHEMA" />
+            <el-option label="Formily 适配" value="FORMILY" />
+            <el-option label="VForm 3 适配" value="VFORM3" />
+            <el-option label="阿里 LowCode Engine 适配" value="LOWCODE_ENGINE" />
+            <el-option label="JSON Schema 适配" value="JSON_SCHEMA" />
+          </el-select>
+        </label>
+        <label>
           <span>推荐模板</span>
           <el-select v-model="templateForm.recommended">
             <el-option :value="1" label="是" />
@@ -266,6 +279,14 @@
         <label class="template-form__wide">
           <span>模板配置 JSON</span>
           <el-input v-model="templateForm.configJson" type="textarea" :rows="5" placeholder='{"sections":["基础信息","服务确认","纸质签名留位"]}' />
+        </label>
+        <label class="template-form__wide">
+          <span>设计器原始 Schema</span>
+          <el-input v-model="templateForm.rawSchemaJson" type="textarea" :rows="4" placeholder="第三方设计器导出的原始 JSON，可留空" />
+        </label>
+        <label class="template-form__wide">
+          <span>系统标准 Schema</span>
+          <el-input v-model="templateForm.normalizedSchemaJson" type="textarea" :rows="4" placeholder="平台字段模型 JSON；留空时使用模板配置 JSON" />
         </label>
       </div>
       <template #footer>
@@ -336,7 +357,10 @@ function createTemplateForm(payload = {}) {
     title: payload.title || '',
     industry: payload.industry || '',
     layoutMode: payload.layoutMode || 'classic',
-  configJson: payload.configJson || '{"sections":["基础信息","服务确认","偏好与补充","纸质签名留位"]}',
+    designerEngine: payload.designerEngine || 'INTERNAL_SCHEMA',
+    configJson: payload.configJson || '{"sections":["基础信息","服务确认","偏好与补充","纸质签名留位"]}',
+    rawSchemaJson: payload.rawSchemaJson || '',
+    normalizedSchemaJson: payload.normalizedSchemaJson || '',
     description: payload.description || '',
     recommended: payload.recommended ?? 0
   }
@@ -387,6 +411,14 @@ async function saveTemplateDraft() {
   }
   if (!isJsonLike(templateForm.configJson)) {
     ElMessage.warning('模板配置 JSON 格式不正确')
+    return
+  }
+  if (templateForm.rawSchemaJson && !isJsonLike(templateForm.rawSchemaJson)) {
+    ElMessage.warning('设计器原始 Schema JSON 格式不正确')
+    return
+  }
+  if (templateForm.normalizedSchemaJson && !isJsonLike(templateForm.normalizedSchemaJson)) {
+    ElMessage.warning('系统标准 Schema JSON 格式不正确')
     return
   }
   savingTemplate.value = true
@@ -522,6 +554,17 @@ function formatLayout(layoutMode) {
     premium: '高级版'
   }
   return map[String(layoutMode || '').toLowerCase()] || layoutMode || '--'
+}
+
+function formatDesignerEngine(value) {
+  const map = {
+    INTERNAL_SCHEMA: '系统 Schema',
+    FORMILY: 'Formily',
+    VFORM3: 'VForm 3',
+    LOWCODE_ENGINE: 'LowCode Engine',
+    JSON_SCHEMA: 'JSON Schema'
+  }
+  return map[String(value || 'INTERNAL_SCHEMA').toUpperCase()] || value || '系统 Schema'
 }
 
 function parsePreviewSections(configJson) {

@@ -12,5 +12,9 @@ public class OrderAppointmentDTO {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime appointmentTime;
 
+    private String storeName;
+
+    private String previousStoreName;
+
     private String remark;
 }

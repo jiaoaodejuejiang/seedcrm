@@ -350,12 +350,13 @@ order_role_record
 3. 字段映射、状态映射、金额校验
 4. 创建或匹配 Customer
 5. 创建或更新 Order(paid)
-6. 预约 / 排档创建 PlanOrder
+6. 预约 / 排档留存约档、改档、取消预约动作记录
 7. 门店核销 / 服务确认
-8. PlanOrder → finished
-9. Order → used
-10. 回推履约状态给外部分销系统
-11. 外部分销系统负责分佣、提现、退款资金流
+8. 预约 / 排档 / 门店服务流程创建 PlanOrder
+9. PlanOrder → finished
+10. Order → used
+11. 回推履约状态给外部分销系统
+12. 外部分销系统负责分佣、提现、退款资金流
 
 ---
 
@@ -415,5 +416,6 @@ order_role_record
 - 分销系统选择方案 B
 - SeedCRM 不负责外部分销分佣、提现、退款资金流
 - SeedCRM 只承接已成交 / 已支付数据、预约排档、门店履约、状态回推
+- 约档 / 改档 / 取消预约记录只作为订单动作留痕和展示，不反向驱动 Order / PlanOrder 主链路
 - distribution paid order 不进入 Clue
 - 外部接入必须受控、幂等、可追踪、可补偿

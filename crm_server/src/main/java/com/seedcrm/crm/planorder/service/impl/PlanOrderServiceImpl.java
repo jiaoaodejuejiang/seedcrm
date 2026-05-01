@@ -2,6 +2,9 @@ package com.seedcrm.crm.planorder.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.entity.OrderActionRecord;
@@ -23,13 +26,13 @@ import com.seedcrm.crm.planorder.service.PlanOrderService;
 import com.seedcrm.crm.risk.service.DbLockService;
 import com.seedcrm.crm.scheduler.entity.SchedulerOutboxEvent;
 import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
+import com.seedcrm.crm.systemflow.support.SystemFlowRuntimeBridge;
 import com.seedcrm.crm.wecom.entity.WecomTouchLog;
 import com.seedcrm.crm.wecom.service.WecomTouchService;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -37,15 +40,14 @@ import org.springframework.util.StringUtils;
 @Service
 public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder> implements PlanOrderService {
 
-    private static final Pattern CUSTOMER_SIGNATURE_PATTERN =
-            Pattern.compile("\\\"customerSignature\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
-
     private static final Set<String> AUTO_ASSIGN_ROLE_CODES = Set.of(
             "STORE_SERVICE",
             "STORE_MANAGER",
             "PHOTOGRAPHER",
             "MAKEUP_ARTIST",
             "PHOTO_SELECTOR");
+    private static final String SERVICE_FORM_CONFIRM_STATUS = "PRINT_CONFIRMED";
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final PlanOrderMapper planOrderMapper;
     private final OrderMapper orderMapper;
@@ -55,6 +57,8 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     private final OrderActionRecordMapper orderActionRecordMapper;
     private final DbLockService dbLockService;
     private final SchedulerOutboxService schedulerOutboxService;
+    private final SystemFlowRuntimeBridge systemFlowRuntimeBridge;
+    private final ObjectMapper objectMapper;
 
     public PlanOrderServiceImpl(PlanOrderMapper planOrderMapper,
                                 OrderMapper orderMapper,
@@ -63,7 +67,9 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
                                  WecomTouchService wecomTouchService,
                                  OrderActionRecordMapper orderActionRecordMapper,
                                  DbLockService dbLockService,
-                                 SchedulerOutboxService schedulerOutboxService) {
+                                 SchedulerOutboxService schedulerOutboxService,
+                                 SystemFlowRuntimeBridge systemFlowRuntimeBridge,
+                                 ObjectMapper objectMapper) {
         this.planOrderMapper = planOrderMapper;
         this.orderMapper = orderMapper;
         this.orderRoleRecordService = orderRoleRecordService;
@@ -72,6 +78,8 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         this.orderActionRecordMapper = orderActionRecordMapper;
         this.dbLockService = dbLockService;
         this.schedulerOutboxService = schedulerOutboxService;
+        this.systemFlowRuntimeBridge = systemFlowRuntimeBridge;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -106,12 +114,24 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
             throw new BusinessException("failed to create plan order");
         }
         bindInitialRole(planOrder, operatorUserId, operatorRoleCode);
+        systemFlowRuntimeBridge.recordOrderAction(order, "VERIFY", "PLAN_CREATE",
+                operatorUserId, operatorRoleCode, "创建服务计划单");
+        if (!completedCompatibilityOrder) {
+            systemFlowRuntimeBridge.recordOrderAction(order, "PLAN_CREATED", "PLAN_ARRIVE",
+                    operatorUserId, operatorRoleCode, "进入到店服务准备");
+        }
         return planOrder;
     }
 
     @Override
     @Transactional
     public PlanOrder arrive(PlanOrderActionDTO planOrderActionDTO) {
+        return arrive(planOrderActionDTO, null, null);
+    }
+
+    @Override
+    @Transactional
+    public PlanOrder arrive(PlanOrderActionDTO planOrderActionDTO, Long operatorUserId, String operatorRoleCode) {
         PlanOrder planOrder = getPlanOrderForAction(planOrderActionDTO);
         ensureStatus(planOrder, PlanOrderStatus.ARRIVED);
         Order order = getOrderOrThrow(planOrder.getOrderId());
@@ -135,12 +155,20 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
             order.setStatus(OrderStatus.ARRIVED.name());
         }
         touchOrder(order, false);
+        systemFlowRuntimeBridge.recordOrderAction(order, "PLAN_CREATED", "PLAN_ARRIVE",
+                operatorUserId, operatorRoleCode, "确认到店");
         return planOrder;
     }
 
     @Override
     @Transactional
     public PlanOrder start(PlanOrderActionDTO planOrderActionDTO) {
+        return start(planOrderActionDTO, null, null);
+    }
+
+    @Override
+    @Transactional
+    public PlanOrder start(PlanOrderActionDTO planOrderActionDTO, Long operatorUserId, String operatorRoleCode) {
         PlanOrder planOrder = getPlanOrderForAction(planOrderActionDTO);
         ensureStatus(planOrder, PlanOrderStatus.SERVICING);
         Order order = getOrderOrThrow(planOrder.getOrderId());
@@ -151,6 +179,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         if (planOrder.getStartTime() != null) {
             throw new BusinessException("plan order already started");
         }
+        ensureServiceFormConfirmed(order, "start");
 
         planOrder.setStartTime(LocalDateTime.now());
         updatePlanOrder(planOrder, "failed to start plan order");
@@ -163,6 +192,36 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
             order.setStatus(OrderStatus.SERVING.name());
         }
         touchOrder(order, false);
+        systemFlowRuntimeBridge.recordOrderAction(order, "PLAN_ARRIVED", "PLAN_START",
+                operatorUserId, operatorRoleCode, "确认单已确认并开始服务");
+        return planOrder;
+    }
+
+    @Override
+    @Transactional
+    public PlanOrder confirmServiceForm(PlanOrderActionDTO planOrderActionDTO) {
+        return confirmServiceForm(planOrderActionDTO, null, null);
+    }
+
+    @Override
+    @Transactional
+    public PlanOrder confirmServiceForm(PlanOrderActionDTO planOrderActionDTO, Long operatorUserId, String operatorRoleCode) {
+        PlanOrder planOrder = getPlanOrderForAction(planOrderActionDTO);
+        if (PlanOrderStatus.FINISHED.name().equals(planOrder.getStatus())) {
+            throw new BusinessException("cannot confirm service form after plan order finished");
+        }
+        Order order = dbLockService.lockOrder(planOrder.getOrderId());
+        ensureOrderVerifiedForService(order, "confirm service form");
+        ensureServiceDetailSaved(order);
+        if (isServiceFormConfirmed(order.getServiceDetailJson())) {
+            return planOrder;
+        }
+        order.setServiceDetailJson(markServiceFormConfirmed(order.getServiceDetailJson(), operatorUserId, operatorRoleCode));
+        touchOrder(order, false);
+        recordOrderAction(order.getId(), "SERVICE_FORM_CONFIRM", order.getStatus(), order.getStatus(),
+                operatorUserId, "纸质确认单已打印并手写签名确认");
+        systemFlowRuntimeBridge.recordOrderAction(order, "PLAN_ARRIVED", "SERVICE_FORM_CONFIRM",
+                operatorUserId, operatorRoleCode, "纸质确认单已确认");
         return planOrder;
     }
 
@@ -175,6 +234,12 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     @Override
     @Transactional
     public PlanOrder finish(PlanOrderActionDTO planOrderActionDTO, Long operatorUserId) {
+        return finish(planOrderActionDTO, operatorUserId, null);
+    }
+
+    @Override
+    @Transactional
+    public PlanOrder finish(PlanOrderActionDTO planOrderActionDTO, Long operatorUserId, String operatorRoleCode) {
         PlanOrder planOrder = getPlanOrderForAction(planOrderActionDTO);
         ensureStatus(planOrder, PlanOrderStatus.FINISHED);
         Order order = dbLockService.lockOrder(planOrder.getOrderId());
@@ -209,6 +274,10 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         if (requiresDistributionOutbox(order) && outboxEvent == null) {
             throw new BusinessException("distribution fulfillment outbox event is required");
         }
+        systemFlowRuntimeBridge.recordOrderAction(order, "PLAN_SERVICING", "PLAN_FINISH",
+                operatorUserId, operatorRoleCode, "完成服务");
+        systemFlowRuntimeBridge.recordOrderAction(order, "PLAN_FINISHED", "ORDER_COMPLETE",
+                operatorUserId, operatorRoleCode, "订单完成");
         return planOrder;
     }
 
@@ -296,9 +365,52 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         if (!StringUtils.hasText(serviceDetailJson)) {
             throw new BusinessException("service form must be saved before finish");
         }
-        Matcher matcher = CUSTOMER_SIGNATURE_PATTERN.matcher(serviceDetailJson);
-        if (!matcher.find() || !StringUtils.hasText(matcher.group(1))) {
-            throw new BusinessException("customer signature is required before finish");
+    }
+
+    private void ensureServiceFormConfirmed(Order order, String action) {
+        ensureServiceDetailSaved(order);
+        if (!isServiceFormConfirmed(order.getServiceDetailJson())) {
+            throw new BusinessException("service form must be printed and confirmed before " + action);
+        }
+    }
+
+    private boolean isServiceFormConfirmed(String serviceDetailJson) {
+        if (!StringUtils.hasText(serviceDetailJson)) {
+            return false;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(serviceDetailJson);
+            String nestedStatus = root.path("confirmation").path("status").asText("");
+            String flatStatus = root.path("serviceFormStatus").asText("");
+            return SERVICE_FORM_CONFIRM_STATUS.equalsIgnoreCase(nestedStatus)
+                    || SERVICE_FORM_CONFIRM_STATUS.equalsIgnoreCase(flatStatus);
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
+    private String markServiceFormConfirmed(String serviceDetailJson, Long operatorUserId, String operatorRoleCode) {
+        try {
+            JsonNode parsed = objectMapper.readTree(serviceDetailJson);
+            ObjectNode root = parsed != null && parsed.isObject()
+                    ? (ObjectNode) parsed
+                    : objectMapper.createObjectNode();
+            ObjectNode confirmation = objectMapper.createObjectNode();
+            confirmation.put("status", SERVICE_FORM_CONFIRM_STATUS);
+            confirmation.put("signatureMode", "PAPER");
+            confirmation.put("signatureRequired", true);
+            confirmation.put("confirmedAt", DATE_TIME_FORMATTER.format(LocalDateTime.now()));
+            if (operatorUserId != null && operatorUserId > 0) {
+                confirmation.put("confirmedByUserId", operatorUserId);
+            }
+            if (StringUtils.hasText(operatorRoleCode)) {
+                confirmation.put("confirmedByRoleCode", operatorRoleCode.trim());
+            }
+            root.put("serviceFormStatus", SERVICE_FORM_CONFIRM_STATUS);
+            root.set("confirmation", confirmation);
+            return objectMapper.writeValueAsString(root);
+        } catch (Exception exception) {
+            throw new BusinessException("service form json is invalid");
         }
     }
 

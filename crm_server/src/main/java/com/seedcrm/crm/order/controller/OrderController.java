@@ -60,7 +60,10 @@ public class OrderController {
     public ApiResponse<OrderResponse> appointment(@RequestBody OrderAppointmentDTO orderAppointmentDTO, HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         orderPermissionGuard.checkUpdate(context, orderAppointmentDTO == null ? null : orderAppointmentDTO.getOrderId());
-        return ApiResponse.success(maskAmountsIfNeeded(OrderResponse.from(orderService.appointment(orderAppointmentDTO)), context));
+        return ApiResponse.success(maskAmountsIfNeeded(OrderResponse.from(orderService.appointment(
+                orderAppointmentDTO,
+                context.getCurrentUserId(),
+                context.getRoleCode())), context));
     }
 
     @PostMapping("/appointment/cancel")
@@ -68,7 +71,10 @@ public class OrderController {
                                                         HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         orderPermissionGuard.checkUpdate(context, orderActionDTO == null ? null : orderActionDTO.getOrderId());
-        return ApiResponse.success(maskAmountsIfNeeded(OrderResponse.from(orderService.cancelAppointment(orderActionDTO)), context));
+        return ApiResponse.success(maskAmountsIfNeeded(OrderResponse.from(orderService.cancelAppointment(
+                orderActionDTO,
+                context.getCurrentUserId(),
+                context.getRoleCode())), context));
     }
 
     @PostMapping("/arrive")
@@ -113,7 +119,10 @@ public class OrderController {
                                              HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         orderPermissionGuard.checkUpdate(context, orderVoucherVerifyDTO == null ? null : orderVoucherVerifyDTO.getOrderId());
-        return ApiResponse.success(maskAmountsIfNeeded(OrderResponse.from(orderService.verifyVoucher(orderVoucherVerifyDTO, context.getCurrentUserId())), context));
+        return ApiResponse.success(maskAmountsIfNeeded(OrderResponse.from(orderService.verifyVoucher(
+                orderVoucherVerifyDTO,
+                context.getCurrentUserId(),
+                context.getRoleCode())), context));
     }
 
     @PostMapping("/service-detail")

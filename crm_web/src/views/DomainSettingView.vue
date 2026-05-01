@@ -17,11 +17,19 @@
           <h3>域名配置</h3>
         </div>
         <div class="action-group">
-          <el-button type="primary" @click="saveDomains">保存配置</el-button>
+          <el-button type="primary" :loading="saving" @click="saveDomains">保存配置</el-button>
         </div>
       </div>
 
-      <div class="form-grid">
+      <el-alert
+        class="domain-alert"
+        type="info"
+        show-icon
+        :closable="false"
+        title="API 域名会用于分销入站、支付回调、抖音回调、企微回调和 Swagger/OpenAPI 地址；上线前请确认外网可访问。"
+      />
+
+      <div v-loading="loading" class="form-grid">
         <label class="full-span">
           <span>系统基础域名</span>
           <el-input v-model="form.systemBaseUrl" placeholder="例如 https://crm.seedcrm.com" />
@@ -36,17 +44,54 @@
 </template>
 
 <script setup>
-import { computed, reactive } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { fetchDomainSettings, saveDomainSettings } from '../api/systemConfig'
+import { applyDomainSettingsToLocal } from '../utils/domainSettings'
 import { buildSystemUrl, getDomainSettings, loadSystemConsoleState, saveSystemConsoleState } from '../utils/systemConsoleStore'
 
 const state = reactive(loadSystemConsoleState())
 const form = reactive(getDomainSettings(state))
+const loading = ref(false)
+const saving = ref(false)
 
 const baseDomainStatus = computed(() => (String(form.systemBaseUrl || '').trim() ? '已设置' : '待设置'))
 const apiDomainStatus = computed(() => (String(form.apiBaseUrl || '').trim() ? '已设置' : '待设置'))
 
-function saveDomains() {
+onMounted(loadDomains)
+
+async function loadDomains() {
+  loading.value = true
+  try {
+    const settings = await fetchDomainSettings()
+    const synced = applyDomainSettingsToLocal(settings)
+    Object.assign(state, loadSystemConsoleState())
+    Object.assign(form, synced)
+  } catch (error) {
+    // Keep existing local fallback when the backend is offline.
+  } finally {
+    loading.value = false
+  }
+}
+
+async function saveDomains() {
+  saving.value = true
+  try {
+    const saved = await saveDomainSettings({
+      systemBaseUrl: String(form.systemBaseUrl || '').trim(),
+      apiBaseUrl: String(form.apiBaseUrl || '').trim()
+    })
+    applyDomainSettingsToLocal(saved)
+    syncDerivedLocalUrls()
+    Object.assign(state, loadSystemConsoleState())
+    Object.assign(form, getDomainSettings(state))
+    ElMessage.success('域名配置已保存，相关回调地址已重新生成')
+  } finally {
+    saving.value = false
+  }
+}
+
+function syncDerivedLocalUrls() {
   const nextState = loadSystemConsoleState()
   nextState.domainSettings = {
     systemBaseUrl: String(form.systemBaseUrl || '').trim(),
@@ -68,8 +113,12 @@ function saveDomains() {
     callbackUrl: buildSystemUrl(nextState, 'callback', item.callbackPath || '/api/callback/default')
   }))
   saveSystemConsoleState(nextState)
-  Object.assign(state, loadSystemConsoleState())
-  Object.assign(form, getDomainSettings(state))
-  ElMessage.success('域名配置已保存')
 }
 </script>
+
+<style scoped>
+.domain-alert {
+  margin-bottom: 16px;
+  border-radius: 14px;
+}
+</style>

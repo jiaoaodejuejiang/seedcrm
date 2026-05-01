@@ -15,6 +15,7 @@ public class OrderActionRecordTableInitializer {
     private static final String TABLE_NAME = "order_action_record";
     private static final String INDEX_ORDER = "idx_order_action_record_order_id";
     private static final String INDEX_ACTION = "idx_order_action_record_action_type";
+    private static final String INDEX_ORDER_ACTION_TIME = "idx_order_action_record_order_action_time";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -69,6 +70,8 @@ public class OrderActionRecordTableInitializer {
                 + " ADD INDEX " + INDEX_ORDER + " (order_id)");
         ensureIndex(INDEX_ACTION, "ALTER TABLE " + TABLE_NAME
                 + " ADD INDEX " + INDEX_ACTION + " (action_type)");
+        ensureIndex(INDEX_ORDER_ACTION_TIME, "ALTER TABLE " + TABLE_NAME
+                + " ADD INDEX " + INDEX_ORDER_ACTION_TIME + " (order_id, action_type, create_time, id)");
     }
 
     private void ensureIndex(String indexName, String sql) {
@@ -98,7 +101,8 @@ public class OrderActionRecordTableInitializer {
                     extra_json TEXT,
                     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                     KEY idx_order_action_record_order_id (order_id),
-                    KEY idx_order_action_record_action_type (action_type)
+                    KEY idx_order_action_record_action_type (action_type),
+                    KEY idx_order_action_record_order_action_time (order_id, action_type, create_time, id)
                 )
                 """;
     }

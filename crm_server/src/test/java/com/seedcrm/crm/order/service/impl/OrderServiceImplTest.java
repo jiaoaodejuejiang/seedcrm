@@ -35,6 +35,7 @@ import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.risk.service.DbLockService;
 import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
+import com.seedcrm.crm.systemflow.support.SystemFlowRuntimeBridge;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
@@ -43,6 +44,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -82,13 +84,17 @@ class OrderServiceImplTest {
     @Mock
     private SalaryDetailMapper salaryDetailMapper;
 
+    @Mock
+    private SystemFlowRuntimeBridge systemFlowRuntimeBridge;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
     void setUp() {
         orderService = new OrderServiceImpl(orderMapper, clueMapper, customerService, customerTagService,
                 planOrderMapper, distributorIncomeService, dbLockService, orderSettlementService,
-                orderActionRecordMapper, orderRefundRecordMapper, salaryDetailMapper, new ObjectMapper());
+                orderActionRecordMapper, orderRefundRecordMapper, salaryDetailMapper, new ObjectMapper(),
+                systemFlowRuntimeBridge);
     }
 
     @Test
@@ -220,20 +226,138 @@ class OrderServiceImplTest {
         order.setCustomerId(205L);
         order.setStatus(OrderStatus.APPOINTMENT.name());
         order.setAppointmentTime(LocalDateTime.of(2026, 4, 25, 10, 0));
-        when(orderMapper.selectById(5L)).thenReturn(order);
+        when(dbLockService.lockOrder(5L)).thenReturn(order);
         when(customerService.getByIdOrThrow(205L)).thenReturn(new Customer());
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
 
         OrderAppointmentDTO dto = new OrderAppointmentDTO();
         dto.setOrderId(5L);
         dto.setAppointmentTime(LocalDateTime.of(2026, 4, 26, 11, 30));
+        dto.setPreviousStoreName("Store A");
+        dto.setStoreName("Store B");
         dto.setRemark("reschedule");
 
-        Order updated = orderService.appointment(dto);
+        Order updated = orderService.appointment(dto, 9001L, "CLUE_MANAGER");
 
         assertThat(updated.getStatus()).isEqualTo(OrderStatus.APPOINTMENT.name());
         assertThat(updated.getAppointmentTime()).isEqualTo(LocalDateTime.of(2026, 4, 26, 11, 30));
+        assertThat(updated.getAppointmentStoreName()).isEqualTo("Store B");
         verify(customerService).refreshCustomerLifecycle(205L);
+        ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
+        verify(orderActionRecordMapper).insert(recordCaptor.capture());
+        assertThat(recordCaptor.getValue().getActionType()).isEqualTo("APPOINTMENT_CHANGE");
+        assertThat(recordCaptor.getValue().getOperatorUserId()).isEqualTo(9001L);
+        assertThat(recordCaptor.getValue().getExtraJson()).contains(
+                "appointmentTimeBefore",
+                "2026-04-25 10:00",
+                "appointmentTimeAfter",
+                "2026-04-26 11:30",
+                "storeNameBefore",
+                "Store A",
+                "storeNameAfter",
+                "Store B");
+    }
+    @Test
+    void appointmentShouldUseServerStoreSnapshotWhenRescheduling() throws Exception {
+        Order order = new Order();
+        order.setId(51L);
+        order.setOrderNo("ORD202604211234567951");
+        order.setCustomerId(251L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setAppointmentTime(LocalDateTime.of(2026, 4, 25, 10, 0));
+        order.setAppointmentStoreName("Store A");
+        when(dbLockService.lockOrder(51L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(251L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderAppointmentDTO dto = new OrderAppointmentDTO();
+        dto.setOrderId(51L);
+        dto.setAppointmentTime(LocalDateTime.of(2026, 4, 26, 11, 30));
+        dto.setPreviousStoreName("Stale Browser Store");
+        dto.setStoreName("Store B");
+
+        Order updated = orderService.appointment(dto, 9001L, "CLUE_MANAGER");
+
+        assertThat(updated.getAppointmentStoreName()).isEqualTo("Store B");
+        ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
+        verify(orderActionRecordMapper).insert(recordCaptor.capture());
+        JsonNode extra = new ObjectMapper().readTree(recordCaptor.getValue().getExtraJson());
+        assertThat(extra.path("storeNameBefore").asText()).isEqualTo("Store A");
+        assertThat(extra.path("storeNameAfter").asText()).isEqualTo("Store B");
+    }
+
+    @Test
+    void appointmentShouldRejectOccupiedSlot() {
+        Order order = new Order();
+        order.setId(53L);
+        order.setOrderNo("ORD202604211234567953");
+        order.setCustomerId(253L);
+        order.setStatus(OrderStatus.PAID_DEPOSIT.name());
+        when(dbLockService.lockOrder(53L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(253L)).thenReturn(new Customer());
+        when(orderMapper.selectCount(any())).thenReturn(1L);
+
+        OrderAppointmentDTO dto = new OrderAppointmentDTO();
+        dto.setOrderId(53L);
+        dto.setAppointmentTime(LocalDateTime.of(2026, 4, 26, 11, 30));
+        dto.setStoreName("Store B");
+
+        assertThatThrownBy(() -> orderService.appointment(dto, 9001L, "CLUE_MANAGER"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("appointment slot already occupied");
+        verify(orderMapper, never()).updateById(any(Order.class));
+        verify(orderActionRecordMapper, never()).insert(any(OrderActionRecord.class));
+    }
+
+    @Test
+    void appointmentShouldRequireStoreNameForFirstAppointment() {
+        Order order = new Order();
+        order.setId(54L);
+        order.setOrderNo("ORD202604211234567954");
+        order.setCustomerId(254L);
+        order.setStatus(OrderStatus.PAID_DEPOSIT.name());
+        when(dbLockService.lockOrder(54L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(254L)).thenReturn(new Customer());
+
+        OrderAppointmentDTO dto = new OrderAppointmentDTO();
+        dto.setOrderId(54L);
+        dto.setAppointmentTime(LocalDateTime.of(2026, 4, 26, 11, 30));
+
+        assertThatThrownBy(() -> orderService.appointment(dto, 9001L, "CLUE_MANAGER"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("appointment storeName is required");
+        verify(orderMapper, never()).updateById(any(Order.class));
+        verify(orderActionRecordMapper, never()).insert(any(OrderActionRecord.class));
+    }
+
+    @Test
+    void cancelAppointmentShouldKeepStoreSnapshotInActionRecord() throws Exception {
+        Order order = new Order();
+        order.setId(52L);
+        order.setOrderNo("ORD202604211234567952");
+        order.setCustomerId(252L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setAppointmentTime(LocalDateTime.of(2026, 4, 25, 15, 0));
+        order.setAppointmentStoreName("Store A");
+        when(dbLockService.lockOrder(52L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(252L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderActionDTO dto = new OrderActionDTO();
+        dto.setOrderId(52L);
+        dto.setRemark("cancel appointment");
+
+        Order updated = orderService.cancelAppointment(dto, 9001L, "CLUE_MANAGER");
+
+        assertThat(updated.getAppointmentTime()).isNull();
+        assertThat(updated.getAppointmentStoreName()).isNull();
+        ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
+        verify(orderActionRecordMapper).insert(recordCaptor.capture());
+        JsonNode extra = new ObjectMapper().readTree(recordCaptor.getValue().getExtraJson());
+        assertThat(extra.path("appointmentTimeBefore").asText()).isEqualTo("2026-04-25 15:00");
+        assertThat(extra.path("appointmentTimeAfter").isNull()).isTrue();
+        assertThat(extra.path("storeNameBefore").asText()).isEqualTo("Store A");
+        assertThat(extra.path("storeNameAfter").isNull()).isTrue();
     }
 
     @Test
@@ -244,7 +368,7 @@ class OrderServiceImplTest {
         order.setCustomerId(207L);
         order.setStatus(OrderStatus.APPOINTMENT.name());
         order.setAppointmentTime(LocalDateTime.of(2026, 4, 25, 15, 0));
-        when(orderMapper.selectById(7L)).thenReturn(order);
+        when(dbLockService.lockOrder(7L)).thenReturn(order);
         when(customerService.getByIdOrThrow(207L)).thenReturn(new Customer());
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
 
@@ -257,6 +381,10 @@ class OrderServiceImplTest {
         assertThat(updated.getStatus()).isEqualTo(OrderStatus.PAID_DEPOSIT.name());
         assertThat(updated.getAppointmentTime()).isNull();
         verify(customerService).refreshCustomerLifecycle(207L);
+        ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
+        verify(orderActionRecordMapper).insert(recordCaptor.capture());
+        assertThat(recordCaptor.getValue().getActionType()).isEqualTo("APPOINTMENT_CANCEL");
+        assertThat(recordCaptor.getValue().getExtraJson()).contains("appointmentTimeBefore", "2026-04-25 15:00");
     }
 
     @Test
@@ -448,3 +576,4 @@ class OrderServiceImplTest {
                 .hasMessageContaining("only paid orders can be verified");
     }
 }
+

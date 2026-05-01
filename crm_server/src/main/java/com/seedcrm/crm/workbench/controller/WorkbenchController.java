@@ -156,7 +156,16 @@ public class WorkbenchController {
                                                                HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         customerPermissionGuard.checkView(context, customerId);
-        return ApiResponse.success(workbenchService.getCustomerProfile(customerId));
+        CustomerProfileResponse response = workbenchService.getCustomerProfile(customerId);
+        maskCustomerProfileAmountsIfNeeded(response, context);
+        return ApiResponse.success(response);
+    }
+
+    private void maskCustomerProfileAmountsIfNeeded(CustomerProfileResponse response, PermissionRequestContext context) {
+        if (response == null || !shouldMaskAmounts(context) || response.getOrderHistory() == null) {
+            return;
+        }
+        response.getOrderHistory().forEach(order -> maskOrderAmountsIfNeeded(order, context));
     }
 
     @GetMapping("/distributors")

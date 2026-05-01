@@ -23,6 +23,7 @@ public class OrderResponse {
     private String status;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime appointmentTime;
+    private String appointmentStoreName;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime arriveTime;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -56,6 +57,7 @@ public class OrderResponse {
         response.setDeposit(order.getDeposit());
         response.setStatus(OrderStatus.toApiValue(order.getStatus()));
         response.setAppointmentTime(order.getAppointmentTime());
+        response.setAppointmentStoreName(order.getAppointmentStoreName());
         response.setArriveTime(order.getArriveTime());
         response.setCompleteTime(order.getCompleteTime());
         response.setRemark(order.getRemark());

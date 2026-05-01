@@ -36,6 +36,7 @@ import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.risk.service.DbLockService;
 import com.seedcrm.crm.salary.entity.SalaryDetail;
 import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
+import com.seedcrm.crm.systemflow.support.SystemFlowRuntimeBridge;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
@@ -81,6 +82,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final OrderRefundRecordMapper orderRefundRecordMapper;
     private final SalaryDetailMapper salaryDetailMapper;
     private final ObjectMapper objectMapper;
+    private final SystemFlowRuntimeBridge systemFlowRuntimeBridge;
 
     public OrderServiceImpl(OrderMapper orderMapper,
                             ClueMapper clueMapper,
@@ -93,7 +95,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                             OrderActionRecordMapper orderActionRecordMapper,
                             OrderRefundRecordMapper orderRefundRecordMapper,
                             SalaryDetailMapper salaryDetailMapper,
-                            ObjectMapper objectMapper) {
+                            ObjectMapper objectMapper,
+                            SystemFlowRuntimeBridge systemFlowRuntimeBridge) {
         this.orderMapper = orderMapper;
         this.clueMapper = clueMapper;
         this.customerService = customerService;
@@ -106,6 +109,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         this.orderRefundRecordMapper = orderRefundRecordMapper;
         this.salaryDetailMapper = salaryDetailMapper;
         this.objectMapper = objectMapper;
+        this.systemFlowRuntimeBridge = systemFlowRuntimeBridge;
     }
 
     @Override
@@ -167,34 +171,84 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     @Transactional
     public Order appointment(OrderAppointmentDTO orderAppointmentDTO) {
+        return appointment(orderAppointmentDTO, null, null);
+    }
+
+    @Override
+    @Transactional
+    public Order appointment(OrderAppointmentDTO orderAppointmentDTO, Long operatorUserId, String operatorRoleCode) {
         validateOrderId(orderAppointmentDTO == null ? null : orderAppointmentDTO.getOrderId());
         if (orderAppointmentDTO.getAppointmentTime() == null) {
             throw new BusinessException("appointmentTime is required");
         }
 
-        Order order = getOrderById(orderAppointmentDTO.getOrderId());
+        Order order = dbLockService.lockOrder(orderAppointmentDTO.getOrderId());
         ensureOrderCustomerBound(order);
         OrderStatus currentStatus = getCurrentStatus(order);
+        LocalDateTime previousAppointmentTime = order.getAppointmentTime();
+        String previousStoreName = firstText(order.getAppointmentStoreName(), orderAppointmentDTO.getPreviousStoreName());
+        String nextStoreName = firstText(orderAppointmentDTO.getStoreName(), previousStoreName);
+        if (!StringUtils.hasText(nextStoreName)) {
+            throw new BusinessException("appointment storeName is required");
+        }
+        assertAppointmentSlotAvailable(order.getId(), nextStoreName, orderAppointmentDTO.getAppointmentTime());
         if (currentStatus != OrderStatus.APPOINTMENT) {
             assertNextStatus(order, OrderStatus.APPOINTMENT);
         }
         order.setAppointmentTime(orderAppointmentDTO.getAppointmentTime());
+        order.setAppointmentStoreName(nextStoreName);
         updateRemark(order, orderAppointmentDTO.getRemark());
-        return updateOrderStatus(order, OrderStatus.APPOINTMENT);
+        Order updated = updateOrderStatus(order, OrderStatus.APPOINTMENT);
+        boolean reschedule = currentStatus == OrderStatus.APPOINTMENT;
+        recordOrderAction(updated.getId(),
+                reschedule ? "APPOINTMENT_CHANGE" : "APPOINTMENT_CREATE",
+                currentStatus.name(),
+                OrderStatus.APPOINTMENT.name(),
+                operatorUserId,
+                reschedule ? "更改预约档期" : "预约排档",
+                buildAppointmentActionExtra(
+                        previousAppointmentTime,
+                        orderAppointmentDTO.getAppointmentTime(),
+                        previousStoreName,
+                        nextStoreName,
+                        orderAppointmentDTO.getRemark()));
+        systemFlowRuntimeBridge.recordOrderAction(updated, "ORDER_PAID", "ORDER_APPOINTMENT",
+                operatorUserId, operatorRoleCode, reschedule ? "更改预约档期" : "预约门店档期");
+        return updated;
     }
 
     @Override
     @Transactional
     public Order cancelAppointment(OrderActionDTO orderActionDTO) {
+        return cancelAppointment(orderActionDTO, null, null);
+    }
+
+    @Override
+    @Transactional
+    public Order cancelAppointment(OrderActionDTO orderActionDTO, Long operatorUserId, String operatorRoleCode) {
         validateOrderId(orderActionDTO == null ? null : orderActionDTO.getOrderId());
-        Order order = getOrderById(orderActionDTO.getOrderId());
+        Order order = dbLockService.lockOrder(orderActionDTO.getOrderId());
         ensureOrderCustomerBound(order);
         if (getCurrentStatus(order) != OrderStatus.APPOINTMENT) {
             throw new BusinessException("only appointment order can cancel appointment");
         }
+        LocalDateTime previousAppointmentTime = order.getAppointmentTime();
+        String previousStoreName = order.getAppointmentStoreName();
         order.setAppointmentTime(null);
+        order.setAppointmentStoreName(null);
         updateRemark(order, orderActionDTO.getRemark());
-        return updateOrderStatus(order, OrderStatus.PAID_DEPOSIT);
+        Order updated = updateOrderStatus(order, OrderStatus.PAID_DEPOSIT);
+        recordOrderAction(updated.getId(),
+                "APPOINTMENT_CANCEL",
+                OrderStatus.APPOINTMENT.name(),
+                OrderStatus.PAID_DEPOSIT.name(),
+                operatorUserId,
+                "取消预约排档",
+                buildAppointmentActionExtra(previousAppointmentTime, null, previousStoreName, null,
+                        orderActionDTO == null ? null : orderActionDTO.getRemark()));
+        systemFlowRuntimeBridge.recordOrderAction(updated, "APPOINTMENT", "ORDER_APPOINTMENT_CANCEL",
+                operatorUserId, operatorRoleCode, "取消预约排档");
+        return updated;
     }
 
     @Override
@@ -297,6 +351,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     @Transactional
     public Order verifyVoucher(OrderVoucherVerifyDTO orderVoucherVerifyDTO, Long operatorUserId) {
+        return verifyVoucher(orderVoucherVerifyDTO, operatorUserId, null);
+    }
+
+    @Override
+    @Transactional
+    public Order verifyVoucher(OrderVoucherVerifyDTO orderVoucherVerifyDTO, Long operatorUserId, String operatorRoleCode) {
         validateOrderId(orderVoucherVerifyDTO == null ? null : orderVoucherVerifyDTO.getOrderId());
         Order order = dbLockService.lockOrder(orderVoucherVerifyDTO.getOrderId());
         ensureOrderCustomerBound(order);
@@ -332,6 +392,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 currentStatus.name(), currentStatus.name(),
                 operatorUserId, verificationCode);
         refreshCustomerLifecycle(order.getCustomerId());
+        systemFlowRuntimeBridge.recordOrderAction(order, "APPOINTMENT", "ORDER_VERIFY",
+                operatorUserId, operatorRoleCode,
+                isDirectDepositVerification(verificationMethod) ? "定金免码确认" : "券码核销");
         return order;
     }
 
@@ -589,6 +652,20 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
     }
 
+    private void assertAppointmentSlotAvailable(Long orderId, String storeName, LocalDateTime appointmentTime) {
+        if (!StringUtils.hasText(storeName) || appointmentTime == null) {
+            return;
+        }
+        Long conflictCount = orderMapper.selectCount(new LambdaQueryWrapper<Order>()
+                .ne(orderId != null, Order::getId, orderId)
+                .eq(Order::getStatus, OrderStatus.APPOINTMENT.name())
+                .eq(Order::getAppointmentStoreName, storeName.trim())
+                .eq(Order::getAppointmentTime, appointmentTime));
+        if (conflictCount != null && conflictCount > 0) {
+            throw new BusinessException("appointment slot already occupied");
+        }
+    }
+
     private void ensurePlanOrderFinished(Long orderId) {
         PlanOrder planOrder = planOrderMapper.selectOne(new LambdaQueryWrapper<PlanOrder>()
                 .eq(PlanOrder::getOrderId, orderId)
@@ -733,6 +810,24 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 + ",\"fundsTransferred\":false"
                 + ",\"scope\":" + jsonString(scope)
                 + "}";
+    }
+
+    private String buildAppointmentActionExtra(LocalDateTime previousAppointmentTime,
+                                               LocalDateTime nextAppointmentTime,
+                                               String previousStoreName,
+                                               String storeName,
+                                               String remark) {
+        return "{"
+                + "\"appointmentTimeBefore\":" + jsonString(formatDateTime(previousAppointmentTime))
+                + ",\"appointmentTimeAfter\":" + jsonString(formatDateTime(nextAppointmentTime))
+                + ",\"storeNameBefore\":" + jsonString(previousStoreName)
+                + ",\"storeNameAfter\":" + jsonString(storeName)
+                + ",\"remark\":" + jsonString(remark)
+                + "}";
+    }
+
+    private String formatDateTime(LocalDateTime value) {
+        return value == null ? null : value.toString().replace('T', ' ');
     }
 
     private void validateRefundRequest(Order order, OrderActionDTO orderActionDTO) {

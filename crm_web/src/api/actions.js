@@ -36,6 +36,10 @@ export function startPlanOrder(payload) {
   return http.post('/planOrder/start', payload)
 }
 
+export function confirmPlanOrderServiceForm(payload) {
+  return http.post('/planOrder/confirm-service-form', payload)
+}
+
 export function finishPlanOrder(payload) {
   return http.post('/planOrder/finish', payload)
 }

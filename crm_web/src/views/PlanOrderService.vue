@@ -240,7 +240,7 @@
               <div class="service-field service-field--full">
                 <label>纸质签名位置</label>
                 <div class="table-note">
-                  确认单打印后由客户线下手写签名，系统不采集电子签名。
+                  确认单打印后由客户在线下纸质单手写确认。
                 </div>
               </div>
 
@@ -308,11 +308,31 @@
           <section class="service-card">
             <div class="service-card__header">
               <div>
-                <h3>履约轨迹</h3>
+                <h3>当前流程</h3>
+                <p>{{ serviceNextStepHint }}</p>
+              </div>
+            </div>
+            <div class="process-steps">
+              <div
+                v-for="item in serviceProcessSteps"
+                :key="item.key"
+                class="process-step"
+                :class="{ 'is-done': item.done, 'is-current': item.current }"
+              >
+                <span>{{ item.label }}</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="service-card">
+            <div class="service-card__header">
+              <div>
+                <h3>业务轨迹</h3>
+                <p>{{ flowTraceHint }}</p>
               </div>
             </div>
             <div class="side-list">
-              <div v-for="item in timelineItems" :key="item.label" class="side-list__item">
+              <div v-for="item in displayTimelineItems" :key="item.label" class="side-list__item">
                 <span>{{ item.label }}</span>
                 <strong>{{ item.value }}</strong>
               </div>
@@ -328,6 +348,7 @@
         </div>
         <div class="action-group action-group--wrap">
           <el-button :loading="savingServiceForm" :disabled="!canEditForm" @click="handleSaveServiceForm()">保存草稿</el-button>
+          <el-button :disabled="!hasSavedServiceDetail" @click="handlePrintServiceForm">打印确认单</el-button>
           <el-button type="primary" :loading="confirmingAction" :disabled="!canEditForm || !canConfirmAction" @click="handleConfirmAndAdvance">
             {{ confirmActionLabel }}
           </el-button>
@@ -374,6 +395,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import {
   assignPlanOrderRole,
+  confirmPlanOrderServiceForm,
   sendPlanOrderServiceForm,
   startPlanOrder,
   arrivePlanOrder,
@@ -433,7 +455,7 @@ const isFinishedOrder = computed(
 )
 const hasSavedServiceDetail = computed(() => Boolean(String(detail.value?.order?.serviceDetailJson || '').trim()))
 const compatibilityBackfillMode = computed(() => false)
-const hasConfirmedServiceForm = computed(() => hasSavedServiceDetail.value)
+const hasConfirmedServiceForm = computed(() => isServiceFormConfirmed(serviceForm.confirmation))
 const canManageRoles = computed(() => ROLE_ASSIGNMENT_MANAGER_CODES.includes(normalize(currentUser.value?.roleCode || '')))
 const canViewAmounts = computed(() => ['ADMIN', 'FINANCE'].includes(normalize(currentUser.value?.roleCode || '')))
 const canEditForm = computed(() => !readOnlyMode.value && isVerified.value && (!isFinishedOrder.value || compatibilityBackfillMode.value))
@@ -446,7 +468,7 @@ const sendToCustomerDisabledReason = computed(() => {
     return ''
   }
   if (!hasConfirmedServiceForm.value) {
-    return '确认单尚未保存，暂不能发送'
+    return '确认单尚未打印确认，暂不能发送'
   }
   return '客户尚未绑定企业微信，暂不能发送'
 })
@@ -486,7 +508,7 @@ const serviceFormStatusLabel = computed(() => {
   if (hasConfirmedServiceForm.value) {
     return '已确认'
   }
-  return hasSavedServiceDetail.value ? '已保存' : '待填写'
+  return hasSavedServiceDetail.value ? '待打印确认' : '待填写'
 })
 const serviceStage = computed(() => {
   if (detail.value?.summary?.finishTime) {
@@ -499,7 +521,7 @@ const serviceStage = computed(() => {
     return { label: '待核销', key: 'verify' }
   }
   if (!hasConfirmedServiceForm.value) {
-    return { label: '待确认单', key: 'confirm' }
+    return { label: hasSavedServiceDetail.value ? '待打印确认' : '待确认单', key: 'confirm' }
   }
   return { label: '待开始服务', key: 'start' }
 })
@@ -516,7 +538,7 @@ const confirmActionLabel = computed(() => {
   if (detail.value?.summary?.startTime) {
     return '完成服务'
   }
-  return '确认单已确认并开始服务'
+  return hasConfirmedServiceForm.value ? '开始服务' : '确认纸质单并开始服务'
 })
 const canConfirmAction = computed(() => {
   if (!detail.value || !isVerified.value) {
@@ -529,7 +551,7 @@ const canConfirmAction = computed(() => {
     return false
   }
   if (!detail.value.summary?.startTime) {
-    return hasConfirmedServiceForm.value
+    return hasSavedServiceDetail.value
   }
   return true
 })
@@ -547,9 +569,9 @@ const serviceActionHint = computed(() => {
     return '服务进行中，完成后点击完成服务'
   }
   if (!hasConfirmedServiceForm.value) {
-    return '请先保存并确认服务确认单'
+    return hasSavedServiceDetail.value ? '请确认纸质服务确认单后开始服务' : '请先保存服务确认单草稿'
   }
-  return '确认单已确认，可开始服务'
+  return hasConfirmedServiceForm.value ? '确认单已确认，可开始服务' : '请打印确认单，客户线下手写签名后再确认'
 })
 const roleCards = computed(() => {
   const currentRoleMap = new Map(currentRoles.value.map((item) => [normalize(item.roleCode), item]))
@@ -571,10 +593,44 @@ const orderSummaryItems = computed(() =>
 )
 const timelineItems = computed(() => [
   { label: '核销时间', value: formatDateTime(detail.value?.order?.verificationTime) || '--' },
-  { label: '确认单', value: hasConfirmedServiceForm.value ? '已确认' : '待确认' },
+  { label: '确认单', value: hasConfirmedServiceForm.value ? '已确认' : hasSavedServiceDetail.value ? '待打印确认' : '待确认' },
   { label: '开始服务', value: formatDateTime(detail.value?.summary?.startTime) || '--' },
   { label: '完成服务', value: formatDateTime(detail.value?.summary?.finishTime) || '--' }
 ])
+const flowTraceItems = computed(() => normalizeFlowTrace(detail.value?.flowTrace))
+const flowTraceHint = computed(() => (flowTraceItems.value.length ? '来自已记录的业务动作。' : '暂无详细操作记录，按当前订单状态展示。'))
+const displayTimelineItems = computed(() => (flowTraceItems.value.length ? flowTraceItems.value : timelineItems.value))
+const serviceProcessSteps = computed(() => {
+  const stage = serviceStage.value.key
+  const verified = isVerified.value
+  const confirmed = hasConfirmedServiceForm.value
+  const started = Boolean(detail.value?.summary?.startTime)
+  const finished = Boolean(detail.value?.summary?.finishTime)
+  return [
+    { key: 'appointment', label: '预约', done: Boolean(detail.value?.order?.appointmentTime) || verified || started || finished },
+    { key: 'verify', label: isDepositOrder.value ? '直接核销' : '到店核销', done: verified, current: stage === 'verify' },
+    { key: 'form', label: '确认单', done: confirmed, current: stage === 'confirm' },
+    { key: 'serving', label: '服务中', done: started || finished, current: stage === 'serving' },
+    { key: 'finish', label: '已完成', done: finished, current: stage === 'finish' }
+  ]
+})
+const serviceNextStepHint = computed(() => {
+  if (serviceStage.value.key === 'finish') {
+    return '本次门店服务已完成。'
+  }
+  if (serviceStage.value.key === 'serving') {
+    return '下一步：结束订单，系统只做账务记录。'
+  }
+  if (!isVerified.value) {
+    return isDepositOrder.value ? '下一步：直接确认到店，不用扫码或输码。' : '下一步：完成团购券码核销。'
+  }
+  if (!hasConfirmedServiceForm.value) {
+    return hasSavedServiceDetail.value
+      ? '下一步：打印确认单，客户线下手写签名后在系统确认。'
+      : '下一步：填写确认单并打印，由客户在线下纸质单确认。'
+  }
+  return '下一步：确认单已确认并开始服务。'
+})
 
 let autosaveTimer = null
 let scannerStream = null
@@ -597,8 +653,29 @@ function createServiceForm(payload = {}) {
     addOnContent: String(payload.addOnContent || ''),
     signature: String(payload.signature || ''),
     internalRemark: String(payload.internalRemark || ''),
+    confirmation: normalizeServiceConfirmation(payload.confirmation || payload.serviceFormStatus),
     serviceTemplate: normalizeServiceTemplate(payload.serviceTemplate)
   }
+}
+
+function normalizeServiceConfirmation(value) {
+  if (!value) {
+    return null
+  }
+  if (typeof value === 'string') {
+    return normalize(value) === 'PRINT_CONFIRMED' ? { status: 'PRINT_CONFIRMED' } : null
+  }
+  if (typeof value === 'object') {
+    return {
+      ...value,
+      status: normalize(value.status)
+    }
+  }
+  return null
+}
+
+function isServiceFormConfirmed(value) {
+  return normalize(value?.status || value) === 'PRINT_CONFIRMED'
 }
 
 function applyServiceForm(payload) {
@@ -629,6 +706,48 @@ function joinDisplay(values) {
 
 function fieldText(value) {
   return String(value || '').trim() || '未填写'
+}
+
+function normalizeFlowTrace(items) {
+  if (!Array.isArray(items) || !items.length) {
+    return []
+  }
+  return items
+    .map((item) => ({
+      label: formatFlowTraceAction(item?.actionCode),
+      value: buildFlowTraceText(item)
+    }))
+    .filter((item) => item.label && item.value)
+}
+
+function formatFlowTraceAction(actionCode) {
+  const code = normalize(actionCode)
+  const labels = {
+    INSTANCE_START: '流程记录',
+    ORDER_APPOINTMENT: '预约排档',
+    ORDER_APPOINTMENT_CANCEL: '取消预约',
+    ORDER_VERIFY: isDepositOrder.value ? '直接核销' : '到店核销',
+    PLAN_CREATE: '创建服务单',
+    PLAN_ARRIVE: '确认到店',
+    SERVICE_FORM_CONFIRM: '确认纸质单',
+    PLAN_START: '开始服务',
+    PLAN_FINISH: '完成服务',
+    ORDER_COMPLETE: '订单完成'
+  }
+  return labels[code] || '业务动作'
+}
+
+function buildFlowTraceText(item) {
+  const parts = []
+  const summary = String(item?.summary || '').replace(/；实际操作人：.+$/, '').trim()
+  if (summary) {
+    parts.push(summary)
+  }
+  const time = formatDateTime(item?.eventTime)
+  if (time) {
+    parts.push(time)
+  }
+  return parts.join(' / ') || '--'
 }
 
 function toAmount(value) {
@@ -736,8 +855,8 @@ async function handlePlanAction(action, options = {}) {
 
 async function handleConfirmAndAdvance() {
   if (!canEditForm.value || !canConfirmAction.value) {
-    if (isVerified.value && !detail.value?.summary?.startTime && !hasConfirmedServiceForm.value) {
-      ElMessage.warning('请先保存并确认服务确认单')
+    if (isVerified.value && !detail.value?.summary?.startTime && !hasSavedServiceDetail.value) {
+      ElMessage.warning('请先保存服务确认单草稿')
     }
     return
   }
@@ -765,6 +884,12 @@ async function handleConfirmAndAdvance() {
       await handlePlanAction('finish')
       return
     }
+    if (!hasConfirmedServiceForm.value) {
+      await confirmPlanOrderServiceForm({
+        planOrderId: Number(route.params.id)
+      })
+      serviceForm.confirmation = { status: 'PRINT_CONFIRMED' }
+    }
     if (!detail.value?.summary?.arriveTime) {
       await handlePlanAction('arrive', { silent: true, skipReload: true })
     }
@@ -776,7 +901,10 @@ async function handleConfirmAndAdvance() {
 
 function confirmAdvanceMessage() {
   if (detail.value?.summary?.startTime) {
-    return '确认完成本次门店服务吗？完成后订单会进入已完成状态，并用于后续服务分成统计；此操作不会发起退款或打款。'
+    return '确认完成本次门店服务吗？完成后订单会进入已完成状态，并用于后续服务分成统计；此操作不会发起退款或资金划拨。'
+  }
+  if (!hasConfirmedServiceForm.value) {
+    return '请确认服务确认单已经打印，且客户已在线下纸质单手写签名。确认后系统会记录纸质确认并开始服务。'
   }
   return `点击后将推进到下一状态：${confirmActionLabel.value}。是否继续？`
 }
@@ -873,6 +1001,22 @@ async function handleSaveServiceForm(options = {}) {
   } finally {
     savingServiceForm.value = false
   }
+}
+
+async function handlePrintServiceForm() {
+  if (!hasSavedServiceDetail.value) {
+    ElMessage.warning('请先保存服务确认单草稿')
+    return
+  }
+  if (canEditForm.value && dirty.value) {
+    const saved = await handleSaveServiceForm({ silent: true })
+    if (!saved) {
+      ElMessage.error('服务单未保存成功，暂不能打印')
+      return
+    }
+  }
+  await nextTick()
+  window.print()
 }
 
 function buildServiceFormMessage() {
@@ -1047,6 +1191,19 @@ async function handleCodeVerify() {
 }
 
 async function handleDirectDepositVerify() {
+  try {
+    await ElMessageBox.confirm(
+      '定金订单不用扫码或输码。确认后将记录为定金到店确认，并进入服务确认单流程。本操作不会调用真实核销接口，也不会生成券码核销记录。',
+      '确认直接核销？',
+      {
+        confirmButtonText: '确认直接核销',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    )
+  } catch {
+    return
+  }
   await verifyCurrentOrder(`DIRECT-DEPOSIT-${detail.value?.order?.id || route.params.id}`, 'DIRECT_DEPOSIT')
 }
 
@@ -1064,7 +1221,7 @@ async function verifyCurrentOrder(code, method) {
     ...response
   }
   verificationCode.value = response.verificationCode || code
-  ElMessage.success('核销成功，可以继续填写服务单')
+  ElMessage.success(method === 'DIRECT_DEPOSIT' ? '已确认到店，可以继续填写服务单' : '核销成功，可以继续填写服务单')
   await scrollToFormStart()
 }
 
@@ -1471,6 +1628,55 @@ onBeforeUnmount(() => {
 .side-list {
   display: grid;
   gap: 12px;
+}
+
+.process-steps {
+  display: grid;
+  gap: 8px;
+}
+
+.process-step {
+  position: relative;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px 8px 32px;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 13px;
+  border: 1px solid #e5edf4;
+}
+
+.process-step::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+
+.process-step.is-done {
+  color: #166534;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.process-step.is-done::before {
+  background: #16a34a;
+}
+
+.process-step.is-current {
+  color: #075985;
+  background: #f0f9ff;
+  border-color: #bae6fd;
+  font-weight: 700;
+}
+
+.process-step.is-current::before {
+  background: #0284c7;
 }
 
 .side-list__item {

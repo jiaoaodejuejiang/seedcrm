@@ -19,8 +19,10 @@ import com.seedcrm.crm.distributor.mapper.DistributorMapper;
 import com.seedcrm.crm.distributor.mapper.DistributorWithdrawMapper;
 import com.seedcrm.crm.distributor.service.DistributorService;
 import com.seedcrm.crm.order.entity.Order;
+import com.seedcrm.crm.order.entity.OrderActionRecord;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.enums.OrderType;
+import com.seedcrm.crm.order.mapper.OrderActionRecordMapper;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.planorder.entity.OrderRoleRecord;
@@ -41,6 +43,7 @@ import com.seedcrm.crm.wecom.mapper.WecomTouchLogMapper;
 import com.seedcrm.crm.wecom.service.WecomConsoleService;
 import com.seedcrm.crm.wecom.support.WecomBindingStateCodec;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueItemResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.AppointmentRecordResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CurrentRoleResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CustomerProfileResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CustomerSnapshotResponse;
@@ -49,6 +52,7 @@ import com.seedcrm.crm.workbench.dto.WorkbenchResponses.EcomBindingResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FinanceMonthlyStatResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FinanceOverviewResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FinanceTeamStatResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FlowTraceItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.OrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderWorkbenchResponse;
@@ -77,6 +81,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import javax.sql.DataSource;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -87,6 +94,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
 
     private final ClueMapper clueMapper;
     private final OrderMapper orderMapper;
+    private final OrderActionRecordMapper orderActionRecordMapper;
     private final PlanOrderMapper planOrderMapper;
     private final OrderRoleRecordMapper orderRoleRecordMapper;
     private final CustomerMapper customerMapper;
@@ -102,9 +110,11 @@ public class WorkbenchServiceImpl implements WorkbenchService {
     private final DistributorService distributorService;
     private final StaffDirectoryService staffDirectoryService;
     private final WecomConsoleService wecomConsoleService;
+    private final JdbcTemplate jdbcTemplate;
 
     public WorkbenchServiceImpl(ClueMapper clueMapper,
                                 OrderMapper orderMapper,
+                                OrderActionRecordMapper orderActionRecordMapper,
                                 PlanOrderMapper planOrderMapper,
                                 OrderRoleRecordMapper orderRoleRecordMapper,
                                 CustomerMapper customerMapper,
@@ -119,9 +129,11 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                                  WithdrawRecordMapper withdrawRecordMapper,
                                  DistributorService distributorService,
                                  StaffDirectoryService staffDirectoryService,
-                                 WecomConsoleService wecomConsoleService) {
+                                 WecomConsoleService wecomConsoleService,
+                                 DataSource dataSource) {
         this.clueMapper = clueMapper;
         this.orderMapper = orderMapper;
+        this.orderActionRecordMapper = orderActionRecordMapper;
         this.planOrderMapper = planOrderMapper;
         this.orderRoleRecordMapper = orderRoleRecordMapper;
         this.customerMapper = customerMapper;
@@ -137,6 +149,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         this.distributorService = distributorService;
         this.staffDirectoryService = staffDirectoryService;
         this.wecomConsoleService = wecomConsoleService;
+        this.jdbcTemplate = new JdbcTemplate(dataSource);
     }
 
     @Override
@@ -242,7 +255,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         if (!StringUtils.hasText(bindingUserPhone)) {
             throw new BusinessException("当前账号未维护手机号，无法生成专属企微活码，请联系管理员完善员工手机号");
         }
-        String storeName = resolveVisibleStoreName(order.getClueId() == null ? order.getId() : order.getClueId());
+        String storeName = resolveOrderStoreName(order);
         return wecomConsoleService.listLiveCodeConfigs().stream()
                 .filter(config -> config != null && config.getIsEnabled() != null && config.getIsEnabled() == 1)
                 .filter(config -> config.getPublishedAt() != null)
@@ -413,7 +426,43 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                         summary == null ? null : summary.getPlanOrderStatus(), customer),
                 buildCustomerSnapshot(customer, wecomRelation, ecomUsers.size()),
                 currentRoles,
-                roleRecordResponses);
+                roleRecordResponses,
+                loadOrderFlowTrace(order == null ? null : order.getId()));
+    }
+
+    private List<FlowTraceItemResponse> loadOrderFlowTrace(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return List.of();
+        }
+        try {
+            Long instanceId = jdbcTemplate.query("""
+                    SELECT id
+                    FROM system_flow_instance
+                    WHERE flow_code = 'ORDER_MAIN_FLOW'
+                      AND business_object = 'ORDER'
+                      AND business_id = ?
+                    LIMIT 1
+                    """, rs -> rs.next() ? rs.getLong("id") : null, orderId);
+            if (instanceId == null) {
+                return List.of();
+            }
+            return jdbcTemplate.query("""
+                    SELECT action_code, from_node_code, to_node_code, summary, actor_role_code, event_time
+                    FROM system_flow_event_log
+                    WHERE instance_id = ?
+                    ORDER BY event_time ASC, id ASC
+                    """, (rs, rowNum) -> {
+                return new FlowTraceItemResponse(
+                        rs.getString("action_code"),
+                        rs.getString("from_node_code"),
+                        rs.getString("to_node_code"),
+                        rs.getString("summary"),
+                        rs.getString("actor_role_code"),
+                        rs.getTimestamp("event_time") == null ? null : rs.getTimestamp("event_time").toLocalDateTime());
+            }, instanceId);
+        } catch (DataAccessException exception) {
+            return List.of();
+        }
     }
 
     @Override
@@ -582,17 +631,52 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         List<Long> customerIds = orders.stream().map(Order::getCustomerId).filter(Objects::nonNull).distinct().toList();
         Map<Long, Customer> customerMap = loadCustomers(customerIds);
         Map<Long, PlanOrder> planOrderByOrderId = loadPlanOrderByOrderId(orders.stream().map(Order::getId).toList());
+        Map<Long, List<AppointmentRecordResponse>> appointmentRecordsByOrderId =
+                loadAppointmentRecordsByOrderId(orders.stream().map(Order::getId).filter(Objects::nonNull).toList());
 
         return orders.stream()
                 .map(order -> {
                     Customer customer = order.getCustomerId() == null ? null : customerMap.get(order.getCustomerId());
                     PlanOrder planOrder = planOrderByOrderId.get(order.getId());
-                    return buildOrderResponse(order,
+                    OrderItemResponse response = buildOrderResponse(order,
                             planOrder == null ? null : planOrder.getId(),
                             planOrder == null ? null : planOrder.getStatus(),
                             customer);
+                    response.setAppointmentRecords(appointmentRecordsByOrderId.getOrDefault(order.getId(), List.of()));
+                    return response;
                 })
                 .toList();
+    }
+
+    private Map<Long, List<AppointmentRecordResponse>> loadAppointmentRecordsByOrderId(List<Long> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return Map.of();
+        }
+        List<OrderActionRecord> records = orderActionRecordMapper.selectList(Wrappers.<OrderActionRecord>lambdaQuery()
+                .in(OrderActionRecord::getOrderId, orderIds)
+                .in(OrderActionRecord::getActionType, List.of(
+                        "APPOINTMENT_CREATE",
+                        "APPOINTMENT_CHANGE",
+                        "APPOINTMENT_CANCEL"))
+                .orderByDesc(OrderActionRecord::getCreateTime)
+                .orderByDesc(OrderActionRecord::getId));
+        return records.stream()
+                .collect(Collectors.groupingBy(
+                        OrderActionRecord::getOrderId,
+                        LinkedHashMap::new,
+                        Collectors.mapping(this::buildAppointmentRecordResponse, Collectors.toList())));
+    }
+
+    private AppointmentRecordResponse buildAppointmentRecordResponse(OrderActionRecord record) {
+        return new AppointmentRecordResponse(
+                record.getActionType(),
+                record.getFromStatus(),
+                record.getToStatus(),
+                record.getOperatorUserId(),
+                staffDirectoryService.getUserName(record.getOperatorUserId()),
+                record.getRemark(),
+                record.getExtraJson(),
+                record.getCreateTime());
     }
 
     private OrderItemResponse buildOrderResponse(Order order, Long planOrderId, String planOrderStatus, Customer customer) {
@@ -608,7 +692,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 customer == null ? null : customer.getPhone(),
                 order.getSourceChannel(),
                 resolveProductSourceType(order.getSourceChannel(), null, null, order.getSourceId(), order.getClueId()),
-                resolveVisibleStoreName(order.getClueId() == null ? order.getId() : order.getClueId()),
+                resolveOrderStoreName(order),
                 scale(order.getAmount()),
                 scale(order.getDeposit()),
                 OrderType.toApiValue(order.getType()),
@@ -626,6 +710,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 order.getVerificationCode(),
                 order.getVerificationTime(),
                 order.getVerificationOperatorId(),
+                List.of(),
                 order.getCreateTime());
     }
 
@@ -905,6 +990,16 @@ public class WorkbenchServiceImpl implements WorkbenchService {
             case 1 -> "浦东门店";
             default -> "徐汇门店";
         };
+    }
+
+    private String resolveOrderStoreName(Order order) {
+        if (order == null) {
+            return null;
+        }
+        if (StringUtils.hasText(order.getAppointmentStoreName())) {
+            return order.getAppointmentStoreName().trim();
+        }
+        return resolveVisibleStoreName(order.getClueId() == null ? order.getId() : order.getClueId());
     }
 
     private boolean matchesWorkbenchOrderStatus(Order order, String normalizedStatus) {

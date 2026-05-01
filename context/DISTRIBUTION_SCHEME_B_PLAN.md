@@ -17,6 +17,7 @@
 - 不用手机号作为唯一幂等依据
 - 不将外部分销者默认映射为内部员工
 - 不让 API Controller 或 Scheduler 绕过统一入站服务直接写核心表
+- 预约排档记录只能作为动作日志 / 审计视图存在，不反向驱动主状态
 
 允许的受控入口：
 
@@ -24,6 +25,7 @@
 - 入站事务内创建或匹配 Customer
 - 入站事务内创建或更新 Order(paid)
 - 后续仍通过预约 / 排档 / 门店服务创建 PlanOrder
+- 约档 / 改档 / 取消预约动作追加记录，不重写旧排档主链路
 
 ---
 
@@ -80,6 +82,45 @@ Order 是外部分销成交在 SeedCRM 内的承接结果。
 - distribution 入库初始状态必须是 `paid`
 - `used` 只能由 SeedCRM 门店核销 / 服务履约流程推进
 - `cancelled | refund_pending | refunded` 只能记录外部状态变化和业务影响，不处理资金
+
+### 预约排档记录
+
+预约排档记录是 Order 下的动作留痕，不是新的核心业务模型。P0 优先复用 `order_action_record`，通过 `action_type` 和 `extra_json` 承载排档快照；如后续需要按门店 / 日期 / 操作人高频检索，P1 再建设只读投影表或查询索引。
+
+逻辑字段：
+
+- `order_id`：订单 ID
+- `customer_id`：客户 ID，查询展示时从 Order 关联
+- `plan_order_id`：服务单 ID，可为空；仅在已创建 PlanOrder 后用于关联展示
+- `source` / `source_channel`：订单来源
+- `external_partner_code` / `external_order_id`：外部来源订单标识，可为空
+- `action_type`：`APPOINTMENT_CREATE | APPOINTMENT_CHANGE | APPOINTMENT_CANCEL`
+- `from_status` / `to_status`：动作前后订单状态
+- `appointment_time_before` / `appointment_time_after`：动作前后预约时间
+- `store_id_before` / `store_id_after`：动作前后门店 ID，可为空
+- `store_code_before` / `store_code_after`：动作前后门店编码，可为空
+- `store_name_before` / `store_name_after`：动作前后门店名称
+- `operator_user_id` / `operator_role_code`：实际操作人和角色
+- `reason_type`：改档 / 取消原因字典，可为空
+- `remark`：人工备注
+- `source_entry`：操作入口，示例 `clues_scheduling | order_detail | system_compensation`
+- `trace_id` / `request_id`：接口追踪标识，可为空
+- `create_time`：记录产生时间
+- `extra_json`：兼容字段，用于保存客户端传入快照、历史缺口和后续扩展
+
+动作定义：
+
+- 约档：订单此前没有有效预约档期，客服在【客资中心 -> 顾客排档】首次写入预约门店和预约时间。结果是 Order 进入或保持 `APPOINTMENT`，但不在该动作中强制创建 PlanOrder。
+- 改档：订单已有有效预约档期，再次变更预约时间或预约门店。结果是 Order 仍为 `APPOINTMENT`，当前档期以 Order 最新值为准，历史改档记录保留。
+- 取消预约：订单已有有效预约档期，客服主动清空当前档期。结果是 Order 回到可预约状态，不删除历史约档 / 改档记录，不等同于取消订单、退款或外部订单取消。
+
+约束：
+
+- 同一动作在一个业务事务内更新 Order 当前档期并追加动作记录，事务失败时两者都不生效。
+- 只展示和追溯排档动作，不用记录回放或反向计算 Order 当前状态。
+- 已核销、服务中、已完成、已退款、已取消订单不允许通过旧排档入口改档或取消预约，仍按现有状态机控制。
+- 历史存量订单没有动作记录时，只展示当前预约状态，不做伪造历史。
+- 取消预约不触发外部退款，不触发分销佣金 / 提现 / 资金动作。
 
 ### 入站事件日志
 
@@ -413,14 +454,25 @@ Outbox 状态：
 ### 预约履约流程
 
 1. Order(paid) 进入顾客排档可预约池
-2. 客服按门店档期创建 PlanOrder
-3. 门店人员核销线上团购券 / 定金
-4. 客户确认服务单
-5. PlanOrder 状态进入 servicing
-6. 门店完成服务
-7. PlanOrder → finished
-8. Order → used
-9. Scheduler Outbox 回推履约状态
+2. 客服按门店档期约档，写入 Order 当前预约时间，并追加 `APPOINTMENT_CREATE` 记录
+3. 客服如需调整档期，继续走旧预约接口，追加 `APPOINTMENT_CHANGE` 记录
+4. 客服如需取消预约，走旧取消预约接口，追加 `APPOINTMENT_CANCEL` 记录
+5. 门店人员核销线上团购券 / 定金
+6. 客户确认服务单
+7. 后续仍按旧门店服务流程创建 / 推进 PlanOrder
+8. PlanOrder 状态进入 servicing
+9. 门店完成服务
+10. PlanOrder → finished
+11. Order → used
+12. Scheduler Outbox 回推履约状态
+
+排档记录与主链路关系：
+
+- Order 当前字段仍是排档主状态来源，排档记录只负责审计和展示历史。
+- PlanOrder 仍只能由预约 / 排档 / 门店服务流程创建，排档记录不直接创建 PlanOrder。
+- 订单动作记录是约档 / 改档 / 取消预约的 P0 留存来源，action_type 使用 `APPOINTMENT_CREATE | APPOINTMENT_CHANGE | APPOINTMENT_CANCEL`。
+- 流程旁路记录是系统流程运行态观察层，受 `workflow.system_flow_runtime.enabled` 控制；它可以同步呈现 `ORDER_APPOINTMENT` / `ORDER_APPOINTMENT_CANCEL` 等节点，但不能替代订单动作记录作为验收依据。
+- 改档动作 P0 可继续映射到既有 `ORDER_APPOINTMENT` 旁路节点；P1 如流程图需要更细，可补充独立 `ORDER_APPOINTMENT_CHANGE` 节点。
 
 ### 异常处理流程
 
@@ -565,9 +617,47 @@ tab：
 - 外部分销层级树
 - 外部资金退款操作
 
+### 顾客排档记录展示
+
+入口：
+
+- 【客资中心 -> 顾客排档】列表行内增加“排档记录”入口。
+- 订单详情 / 客户详情内的订单记录可折叠展示排档时间线，P1 扩展。
+- 门店日历仍以当前有效预约为准，历史改档不占用档位。
+
+列表增强：
+
+- 当前预约时间
+- 当前预约门店
+- 最近排档动作
+- 最近操作时间
+- 改档次数
+- 是否曾取消预约
+
+排档记录抽屉 / 弹窗字段：
+
+- 动作：约档 / 改档 / 取消预约
+- 操作时间
+- 操作人 / 角色
+- 原门店 / 新门店
+- 原预约时间 / 新预约时间
+- 原订单状态 / 新订单状态
+- 原因类型
+- 备注
+- 来源入口
+
+展示规则：
+
+- 时间线按 `create_time` 倒序，默认展示最近 20 条。
+- 无历史记录时显示“暂无排档记录”，仍展示订单当前预约状态。
+- 普通客服只能看自己有权限的订单记录；敏感字段沿用订单权限脱敏。
+- 记录只读，不提供从历史记录一键恢复档期，避免绕过旧排档校验。
+
 ---
 
-## 七、验收清单
+## 七、验收清单和优先级
+
+### 基础链路验收
 
 - distribution 已支付事件不创建 Clue
 - distribution 已支付事件能原子创建 / 匹配 Customer + Order(paid)
@@ -585,3 +675,24 @@ tab：
 - 履约状态回推失败不回滚本地事务
 - 异常数据可查看、可重试、可人工处理
 
+### 顾客排档记录 P0
+
+- 首次约档成功后，Order 当前预约时间更新，追加一条 `APPOINTMENT_CREATE` 记录，记录包含订单、客户、操作人、动作前后时间、门店、状态、备注和操作时间。
+- 已预约订单改档成功后，Order 当前预约时间更新为新档期，历史约档记录不被覆盖，追加一条 `APPOINTMENT_CHANGE` 记录。
+- 已预约订单取消预约成功后，Order 回到可预约状态，当前预约时间清空，追加一条 `APPOINTMENT_CANCEL` 记录。
+- 顾客排档列表能看到当前档期、最近排档动作、最近操作时间、改档次数和记录入口。
+- 排档记录抽屉能按时间线展示约档、改档、取消预约，字段能区分原值和新值。
+- 取消预约不等同于取消订单，不触发退款、佣金、提现、履约回推。
+- 排档记录不创建 PlanOrder，不改变 PlanOrder 创建、核销、服务确认、完成流程。
+- 旧订单没有排档历史时页面不报错，仍能正常预约、改档、取消预约。
+- `workflow.system_flow_runtime.enabled=false` 时排档记录仍完整；开启旁路后旁路记录失败不影响排档主事务。
+- 权限沿用订单查看 / 更新权限，越权用户不能查看或操作其他数据范围内的排档记录。
+
+### 顾客排档记录 P1
+
+- 增加排档记录独立筛选：门店、日期范围、操作人、动作类型、来源、是否分销订单。
+- 客户详情、订单详情、门店日历补充统一时间线视图。
+- 改档 / 取消预约原因字典配置化，关键场景要求必填原因。
+- 支持导出排档变更记录，用于客服质检和门店对账。
+- 如查询量增加，建设排档记录只读投影表或索引，不改变 Order / PlanOrder 主模型。
+- 流程旁路可增加独立 `ORDER_APPOINTMENT_CHANGE` 节点，用于区分约档与改档的流程观察。

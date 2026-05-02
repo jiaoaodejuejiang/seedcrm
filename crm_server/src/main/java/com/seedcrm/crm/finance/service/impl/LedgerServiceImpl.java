@@ -60,7 +60,7 @@ public class LedgerServiceImpl implements LedgerService {
 
         BigDecimal normalizedAmount = normalizeChangeAmount(amount, direction);
         BigDecimal balanceBefore = zeroIfNull(ledgerMapper.sumChangeAmountByAccountId(account.getId()));
-        if (direction == LedgerDirection.OUT) {
+        if (direction == LedgerDirection.OUT && bizType == LedgerBizType.WITHDRAW) {
             riskControlService.validateWithdrawAmountNotExceedBalance(normalizedAmount.abs(), balanceBefore);
         }
         BigDecimal balanceAfter = balanceBefore.add(normalizedAmount).setScale(2, RoundingMode.HALF_UP);

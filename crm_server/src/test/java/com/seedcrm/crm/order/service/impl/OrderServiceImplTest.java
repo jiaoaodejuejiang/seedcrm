@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,12 +31,15 @@ import com.seedcrm.crm.order.mapper.OrderActionRecordMapper;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.order.mapper.OrderRefundRecordMapper;
 import com.seedcrm.crm.order.service.OrderSettlementService;
+import com.seedcrm.crm.order.service.OrderVoucherVerificationGateway;
+import com.seedcrm.crm.order.service.OrderVoucherVerificationResult;
 import com.seedcrm.crm.order.support.ServiceFormVersionSupport;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.risk.service.DbLockService;
 import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
+import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import com.seedcrm.crm.systemflow.support.SystemFlowRuntimeBridge;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -78,6 +82,9 @@ class OrderServiceImplTest {
     private OrderSettlementService orderSettlementService;
 
     @Mock
+    private OrderVoucherVerificationGateway voucherVerificationGateway;
+
+    @Mock
     private OrderActionRecordMapper orderActionRecordMapper;
 
     @Mock
@@ -89,14 +96,22 @@ class OrderServiceImplTest {
     @Mock
     private SystemFlowRuntimeBridge systemFlowRuntimeBridge;
 
+    @Mock
+    private SystemConfigService systemConfigService;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
     void setUp() {
         orderService = new OrderServiceImpl(orderMapper, clueMapper, customerService, customerTagService,
                 planOrderMapper, distributorIncomeService, dbLockService, orderSettlementService,
-                orderActionRecordMapper, orderRefundRecordMapper, salaryDetailMapper, new ObjectMapper(),
-                systemFlowRuntimeBridge);
+                voucherVerificationGateway, orderActionRecordMapper, orderRefundRecordMapper, salaryDetailMapper,
+                new ObjectMapper(), systemConfigService, systemFlowRuntimeBridge);
+        lenient().when(systemConfigService.getBoolean("deposit.direct.enabled", true)).thenReturn(true);
+        lenient().when(systemConfigService.getString("amount.visibility.service_confirm_edit_roles", "ADMIN,FINANCE,PHOTO_SELECTOR"))
+                .thenReturn("ADMIN,FINANCE,PHOTO_SELECTOR");
+        lenient().when(voucherVerificationGateway.verify(any(Order.class), any(), any()))
+                .thenReturn(OrderVoucherVerificationResult.skipped());
     }
 
     @Test
@@ -592,6 +607,56 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void updateServiceDetailShouldPreserveAmountsWhenStoreManagerAttemptsAmountChange() throws Exception {
+        Order order = new Order();
+        order.setId(69L);
+        order.setCustomerId(269L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson("{\"serviceRequirement\":\"old\",\"serviceConfirmAmount\":1288.00,\"serviceTemplate\":{\"config\":{\"price\":99}}}");
+        when(orderMapper.selectById(69L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(269L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderServiceDetailDTO dto = new OrderServiceDetailDTO();
+        dto.setOrderId(69L);
+        dto.setServiceRequirement("updated");
+        dto.setServiceDetailJson("{\"serviceRequirement\":\"updated\",\"serviceConfirmAmount\":2888.00,\"serviceTemplate\":{\"config\":{\"price\":199}}}");
+
+        Order updated = orderService.updateServiceDetail(dto, "STORE_MANAGER");
+
+        JsonNode root = new ObjectMapper().readTree(updated.getServiceDetailJson());
+        assertThat(root.path("serviceRequirement").asText()).isEqualTo("updated");
+        assertThat(root.path("serviceConfirmAmount").decimalValue()).isEqualByComparingTo("1288.00");
+        assertThat(root.path("serviceTemplate").path("config").path("price").asInt()).isEqualTo(99);
+    }
+
+    @Test
+    void updateServiceDetailShouldAllowPhotoSelectorToChangeServiceConfirmAmount() throws Exception {
+        Order order = new Order();
+        order.setId(70L);
+        order.setCustomerId(270L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson("{\"serviceRequirement\":\"old\",\"serviceConfirmAmount\":1288.00,\"serviceTemplate\":{\"config\":{\"price\":99}}}");
+        when(orderMapper.selectById(70L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(270L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderServiceDetailDTO dto = new OrderServiceDetailDTO();
+        dto.setOrderId(70L);
+        dto.setServiceRequirement("updated");
+        dto.setServiceDetailJson("{\"serviceRequirement\":\"updated\",\"serviceConfirmAmount\":2888.00,\"serviceTemplate\":{\"config\":{\"price\":199}}}");
+
+        Order updated = orderService.updateServiceDetail(dto, "PHOTO_SELECTOR");
+
+        JsonNode root = new ObjectMapper().readTree(updated.getServiceDetailJson());
+        assertThat(root.path("serviceRequirement").asText()).isEqualTo("updated");
+        assertThat(root.path("serviceConfirmAmount").decimalValue()).isEqualByComparingTo("2888.00");
+        assertThat(root.path("serviceTemplate").path("config").path("price").asInt()).isEqualTo(199);
+    }
+
+    @Test
     void updateServiceDetailShouldPreservePrintAuditWhenPrintableContentUnchanged() throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         String originalDetail = printedServiceDetail(mapper, "same content", true);
@@ -718,6 +783,75 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void verifyVoucherShouldBlockLocalUpdateWhenExternalGatewayFails() {
+        Order order = new Order();
+        order.setId(84L);
+        order.setCustomerId(284L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setType(2);
+        order.setSourceChannel(SourceChannel.DOUYIN.name());
+        when(dbLockService.lockOrder(84L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(284L)).thenReturn(new Customer());
+        when(voucherVerificationGateway.verify(any(Order.class), any(), any()))
+                .thenThrow(new BusinessException("抖音核销失败，订单仍为待核销"));
+
+        OrderVoucherVerifyDTO dto = new OrderVoucherVerifyDTO();
+        dto.setOrderId(84L);
+        dto.setVerificationCode("DY-8801");
+        dto.setVerificationMethod("CODE");
+
+        assertThatThrownBy(() -> orderService.verifyVoucher(dto, 9001L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("抖音核销失败")
+                .hasMessageContaining("追踪编号");
+        verify(orderMapper, never()).updateById(any(Order.class));
+        ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
+        verify(orderActionRecordMapper).insert(recordCaptor.capture());
+        assertThat(recordCaptor.getValue().getActionType()).isEqualTo("VOUCHER_VERIFY_FAILED");
+        assertThat(recordCaptor.getValue().getFromStatus()).isEqualTo(OrderStatus.APPOINTMENT.name());
+        assertThat(recordCaptor.getValue().getToStatus()).isEqualTo(OrderStatus.APPOINTMENT.name());
+        assertThat(recordCaptor.getValue().getRemark()).contains("抖音核销失败");
+        assertThat(recordCaptor.getValue().getExtraJson())
+                .contains("\"providerCode\":\"DOUYIN_LAIKE\"")
+                .contains("\"externalVerified\":false")
+                .contains("\"traceId\":\"VFY-");
+    }
+
+    @Test
+    void verifyVoucherShouldRecordExternalProviderResultWhenGatewaySucceeds() throws Exception {
+        Order order = new Order();
+        order.setId(85L);
+        order.setCustomerId(285L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setType(2);
+        order.setSourceChannel(SourceChannel.DOUYIN.name());
+        when(dbLockService.lockOrder(85L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(285L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+        when(voucherVerificationGateway.verify(any(Order.class), any(), any()))
+                .thenReturn(new OrderVoucherVerificationResult(
+                        "DOUYIN_LAIKE", "MOCK", "VOUCHER_VERIFY:DOUYIN_LAIKE:85:DY-8802",
+                        "{\"success\":true}", true));
+
+        OrderVoucherVerifyDTO dto = new OrderVoucherVerifyDTO();
+        dto.setOrderId(85L);
+        dto.setVerificationCode("DY-8802");
+        dto.setVerificationMethod("CODE");
+
+        Order updated = orderService.verifyVoucher(dto, 9001L, "STORE_SERVICE");
+
+        assertThat(updated.getVerificationStatus()).isEqualTo("VERIFIED");
+        assertThat(updated.getVerificationCode()).isEqualTo("DY-8802");
+        ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
+        verify(orderActionRecordMapper).insert(recordCaptor.capture());
+        assertThat(recordCaptor.getValue().getActionType()).isEqualTo("EXTERNAL_VOUCHER_VERIFY");
+        JsonNode extra = new ObjectMapper().readTree(recordCaptor.getValue().getExtraJson());
+        assertThat(extra.path("providerCode").asText()).isEqualTo("DOUYIN_LAIKE");
+        assertThat(extra.path("executionMode").asText()).isEqualTo("MOCK");
+        assertThat(extra.path("externalVerified").asBoolean()).isTrue();
+    }
+
+    @Test
     void verifyVoucherShouldAllowDirectDepositWithoutSubmittedCode() {
         Order order = new Order();
         order.setId(82L);
@@ -736,6 +870,28 @@ class OrderServiceImplTest {
 
         assertThat(updated.getVerificationStatus()).isEqualTo("VERIFIED");
         assertThat(updated.getVerificationCode()).isEqualTo("DIRECT-DEPOSIT-82");
+        verify(voucherVerificationGateway, never()).verify(any(Order.class), any(), any());
+    }
+
+    @Test
+    void verifyVoucherShouldRejectDirectDepositWhenConfigDisabled() {
+        when(systemConfigService.getBoolean("deposit.direct.enabled", true)).thenReturn(false);
+        Order order = new Order();
+        order.setId(83L);
+        order.setCustomerId(283L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setType(1);
+        when(dbLockService.lockOrder(83L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(283L)).thenReturn(new Customer());
+
+        OrderVoucherVerifyDTO dto = new OrderVoucherVerifyDTO();
+        dto.setOrderId(83L);
+        dto.setVerificationMethod("DIRECT_DEPOSIT");
+
+        assertThatThrownBy(() -> orderService.verifyVoucher(dto, 9001L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("direct deposit verification is disabled");
+        verify(orderMapper, never()).updateById(any(Order.class));
     }
 
     private String printedServiceDetail(ObjectMapper mapper, String serviceRequirement, boolean confirmed) {

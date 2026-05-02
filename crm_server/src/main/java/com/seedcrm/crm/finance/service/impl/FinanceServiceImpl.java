@@ -88,8 +88,15 @@ public class FinanceServiceImpl implements FinanceService {
         if (salaryDetail.getUserId() == null || salaryDetail.getUserId() <= 0) {
             throw new BusinessException("salary detail userId is required");
         }
-        return ledgerService.record(AccountOwnerType.USER, salaryDetail.getUserId(), salaryDetail.getAmount(),
-                LedgerBizType.SALARY, salaryDetail.getId(), LedgerDirection.IN);
+        BigDecimal amount = salaryDetail.getAmount();
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) == 0) {
+            throw new BusinessException("salary detail amount is required");
+        }
+        LedgerDirection direction = amount.compareTo(BigDecimal.ZERO) < 0
+                ? LedgerDirection.OUT
+                : LedgerDirection.IN;
+        return ledgerService.record(AccountOwnerType.USER, salaryDetail.getUserId(), amount.abs(),
+                LedgerBizType.SALARY, salaryDetail.getId(), direction);
     }
 
     @Override

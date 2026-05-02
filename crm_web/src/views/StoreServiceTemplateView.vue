@@ -276,18 +276,50 @@
           <span>模板说明</span>
           <el-input v-model="templateForm.description" type="textarea" :rows="2" placeholder="请输入模板说明" />
         </label>
-        <label class="template-form__wide">
-          <span>模板配置 JSON</span>
-          <el-input v-model="templateForm.configJson" type="textarea" :rows="5" placeholder='{"sections":["基础信息","服务确认","纸质签名留位"]}' />
-        </label>
-        <label class="template-form__wide">
-          <span>设计器原始 Schema</span>
-          <el-input v-model="templateForm.rawSchemaJson" type="textarea" :rows="4" placeholder="第三方设计器导出的原始 JSON，可留空" />
-        </label>
-        <label class="template-form__wide">
-          <span>系统标准 Schema</span>
-          <el-input v-model="templateForm.normalizedSchemaJson" type="textarea" :rows="4" placeholder="平台字段模型 JSON；留空时使用模板配置 JSON" />
-        </label>
+        <div class="template-form__wide designer-import-panel">
+          <div>
+            <strong>第三方设计器导入</strong>
+            <span>支持 VForm 3、Formily、LowCode Engine、JSON Schema；系统会做白名单校验并生成标准 Schema。</span>
+          </div>
+          <div class="action-group">
+            <el-button plain @click="triggerImportSchema">导入设计器 JSON</el-button>
+            <el-button plain @click="validateTemplateSchema">校验字段</el-button>
+          </div>
+          <input ref="schemaImportInputRef" class="hidden-file-input" type="file" accept=".json,application/json" @change="handleImportSchemaFile" />
+        </div>
+        <div v-if="schemaImportReport" class="template-form__wide schema-import-report" :class="{ 'schema-import-report--blocked': schemaImportReport.blocked.length }">
+          <div class="schema-import-report__header">
+            <strong>导入预检</strong>
+            <el-tag :type="schemaImportReport.blocked.length ? 'danger' : 'success'" effect="plain">
+              {{ schemaImportReport.blocked.length ? '存在拦截项' : '可以保存草稿' }}
+            </el-tag>
+          </div>
+          <div class="schema-import-report__grid">
+            <span>识别类型：{{ schemaImportReport.engineLabel }}</span>
+            <span>字段数量：{{ schemaImportReport.fieldCount }}</span>
+            <span>组件数量：{{ schemaImportReport.componentCount }}</span>
+            <span>标准化版本：{{ schemaImportReport.version }}</span>
+          </div>
+          <p v-if="schemaImportReport.blocked.length">拦截内容：{{ schemaImportReport.blocked.join('、') }}</p>
+          <p v-else>已生成标准 Schema 预览；保存时后端会再次执行安全校验，草稿发布前不会影响门店正在使用的模板。</p>
+        </div>
+        <details class="template-form__wide template-advanced">
+          <summary>高级适配数据</summary>
+          <div class="template-advanced__body">
+            <label>
+              <span>模板配置 JSON</span>
+              <el-input v-model="templateForm.configJson" type="textarea" :rows="5" placeholder='{"sections":["基础信息","服务确认","纸质签名留位"]}' />
+            </label>
+            <label>
+              <span>设计器原始 Schema</span>
+              <el-input v-model="templateForm.rawSchemaJson" type="textarea" :rows="4" placeholder="第三方设计器导出的原始 JSON，可留空" />
+            </label>
+            <label>
+              <span>系统标准 Schema</span>
+              <el-input v-model="templateForm.normalizedSchemaJson" type="textarea" :rows="4" placeholder="平台字段模型 JSON；留空时系统自动生成" />
+            </label>
+          </div>
+        </details>
       </div>
       <template #footer>
         <el-button @click="templateDialogVisible = false">取消</el-button>
@@ -321,6 +353,8 @@ const savingTemplate = ref(false)
 const savingBinding = ref(false)
 const previewLoading = ref(false)
 const templateDialogVisible = ref(false)
+const schemaImportInputRef = ref(null)
+const schemaImportReport = ref(null)
 const templates = ref([])
 const bindings = ref([])
 const previewResult = ref(null)
@@ -401,6 +435,7 @@ function openTemplateEditor(row = null) {
     return
   }
   Object.assign(templateForm, createTemplateForm(row || {}))
+  schemaImportReport.value = buildSchemaImportReport(templateForm.rawSchemaJson || templateForm.normalizedSchemaJson)
   templateDialogVisible.value = true
 }
 
@@ -421,6 +456,11 @@ async function saveTemplateDraft() {
     ElMessage.warning('系统标准 Schema JSON 格式不正确')
     return
   }
+  const unsafe = findUnsafeSchemaText(templateForm.rawSchemaJson || templateForm.normalizedSchemaJson)
+  if (unsafe) {
+    ElMessage.warning(`Schema 包含不允许的内容：${unsafe}`)
+    return
+  }
   savingTemplate.value = true
   try {
     await saveServiceFormTemplateDraft({ ...templateForm })
@@ -430,6 +470,55 @@ async function saveTemplateDraft() {
   } finally {
     savingTemplate.value = false
   }
+}
+
+function triggerImportSchema() {
+  schemaImportInputRef.value?.click?.()
+}
+
+async function handleImportSchemaFile(event) {
+  const file = event?.target?.files?.[0]
+  if (!file) {
+    return
+  }
+  try {
+    const text = await file.text()
+    const parsed = JSON.parse(text)
+    const pretty = JSON.stringify(parsed, null, 2)
+    templateForm.rawSchemaJson = pretty
+    templateForm.normalizedSchemaJson = JSON.stringify(buildNormalizedSchemaPreview(parsed), null, 2)
+    schemaImportReport.value = buildSchemaImportReport(pretty)
+    ElMessage.success('设计器 JSON 已导入，请校验字段后保存草稿')
+  } catch (error) {
+    ElMessage.warning(`导入失败：${error.message || '文件不是有效 JSON'}`)
+  } finally {
+    if (event?.target) {
+      event.target.value = ''
+    }
+  }
+}
+
+function validateTemplateSchema() {
+  if (!isJsonLike(templateForm.configJson)) {
+    ElMessage.warning('模板配置 JSON 格式不正确')
+    return false
+  }
+  if (templateForm.rawSchemaJson && !isJsonLike(templateForm.rawSchemaJson)) {
+    ElMessage.warning('设计器原始 Schema JSON 格式不正确')
+    return false
+  }
+  if (templateForm.normalizedSchemaJson && !isJsonLike(templateForm.normalizedSchemaJson)) {
+    ElMessage.warning('系统标准 Schema JSON 格式不正确')
+    return false
+  }
+  const unsafe = findUnsafeSchemaText(templateForm.rawSchemaJson || templateForm.normalizedSchemaJson)
+  schemaImportReport.value = buildSchemaImportReport(templateForm.rawSchemaJson || templateForm.normalizedSchemaJson)
+  if (unsafe) {
+    ElMessage.warning(`Schema 包含不允许的内容：${unsafe}`)
+    return false
+  }
+  ElMessage.success('字段校验通过，保存时后端会再次执行白名单校验')
+  return true
 }
 
 async function publishTemplate(row) {
@@ -591,6 +680,145 @@ function isJsonLike(value) {
   }
 }
 
+function buildSchemaImportReport(value) {
+  if (!value || !String(value).trim()) {
+    return null
+  }
+  let schema
+  try {
+    schema = typeof value === 'string' ? JSON.parse(value) : value
+  } catch {
+    return {
+      engineLabel: engineLabel(templateForm.designerEngine),
+      fieldCount: 0,
+      componentCount: 0,
+      version: 'unknown',
+      blocked: ['JSON 格式不正确']
+    }
+  }
+  const stats = scanSchemaStats(schema)
+  const unsafe = findUnsafeSchemaText(JSON.stringify(schema))
+  return {
+    engineLabel: detectDesignerEngine(schema),
+    fieldCount: stats.fieldCount,
+    componentCount: stats.components.size,
+    version: resolveSchemaVersion(schema),
+    blocked: unsafe ? [unsafe] : []
+  }
+}
+
+function scanSchemaStats(node, key = '') {
+  const stats = { fieldCount: 0, components: new Set() }
+  walkSchema(node, key, stats)
+  return stats
+}
+
+function walkSchema(node, key, stats) {
+  if (Array.isArray(node)) {
+    node.forEach((item) => walkSchema(item, key, stats))
+    return
+  }
+  if (!node || typeof node !== 'object') {
+    return
+  }
+  Object.entries(node).forEach(([childKey, childValue]) => {
+    const normalizedKey = normalizeSchemaToken(childKey)
+    if (['field', 'fieldname', 'name', 'model', 'prop', 'key'].includes(normalizedKey) && typeof childValue === 'string' && childValue.trim()) {
+      stats.fieldCount += 1
+    }
+    if (['component', 'componentname', 'xcomponent', 'widget', 'control', 'type'].includes(normalizedKey) && typeof childValue === 'string' && childValue.trim()) {
+      stats.components.add(normalizeSchemaToken(childValue))
+    }
+    walkSchema(childValue, childKey, stats)
+  })
+}
+
+function detectDesignerEngine(schema) {
+  const text = JSON.stringify(schema || {}).toLowerCase()
+  if (text.includes('x-component') || text.includes('formily')) {
+    return 'Formily 适配'
+  }
+  if (text.includes('vform') || text.includes('widgetlist') || text.includes('formconfig')) {
+    return 'VForm 3 适配'
+  }
+  if (text.includes('lowcode') || text.includes('componentname')) {
+    return 'LowCode Engine 适配'
+  }
+  if (text.includes('"properties"') || text.includes('"jsonschema"')) {
+    return 'JSON Schema 适配'
+  }
+  return engineLabel(templateForm.designerEngine)
+}
+
+function engineLabel(value) {
+  return {
+    INTERNAL_SCHEMA: '系统轻量 Schema',
+    FORMILY: 'Formily 适配',
+    VFORM3: 'VForm 3 适配',
+    LOWCODE_ENGINE: 'LowCode Engine 适配',
+    JSON_SCHEMA: 'JSON Schema 适配'
+  }[value] || value || '未知设计器'
+}
+
+function normalizeSchemaToken(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function buildNormalizedSchemaPreview(schema) {
+  return {
+    schemaVersion: 'service-form-template.v1',
+    designerEngine: templateForm.designerEngine || 'INTERNAL_SCHEMA',
+    designerEngineVersion: resolveSchemaVersion(schema),
+    source: 'RAW_SCHEMA',
+    componentWhitelist: [
+      'input',
+      'textarea',
+      'select',
+      'radio',
+      'checkbox',
+      'datepicker',
+      'number',
+      'switch',
+      'table',
+      'upload',
+      'tabs',
+      'subform',
+      'card',
+      'text',
+      'divider',
+      'paperSignaturePlaceholder'
+    ],
+    schema
+  }
+}
+
+function resolveSchemaVersion(schema) {
+  if (!schema || typeof schema !== 'object') {
+    return 'unknown'
+  }
+  return schema.designerEngineVersion || schema.engineVersion || schema.version || schema.designer?.version || 'unknown'
+}
+
+function findUnsafeSchemaText(value) {
+  if (!value || !String(value).trim()) {
+    return ''
+  }
+  const text = String(value).toLowerCase()
+  const blocked = [
+    '<script',
+    'javascript:',
+    'iframe',
+    'webview',
+    'electronicsignature',
+    'electronic-signature',
+    'canvas-signature',
+    'canvassignature',
+    '"signature"',
+    '"html"'
+  ]
+  return blocked.find((item) => text.includes(item)) || ''
+}
+
 function ensureScopedStoreSelected() {
   if (!isAdmin.value && currentUser.value?.storeName) {
     bindingForm.storeName = currentUser.value.storeName
@@ -701,6 +929,95 @@ onMounted(loadAll)
   grid-column: 1 / -1;
 }
 
+.designer-import-panel {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #f8fbff;
+}
+
+.designer-import-panel div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.designer-import-panel strong {
+  color: #0f172a;
+}
+
+.designer-import-panel span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.schema-import-report {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 16px;
+  background: #f0fdf4;
+}
+
+.schema-import-report--blocked {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.schema-import-report__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.schema-import-report__header strong {
+  color: #0f172a;
+}
+
+.schema-import-report__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.schema-import-report p {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.template-advanced {
+  border: 1px solid #e5edf4;
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: #ffffff;
+}
+
+.template-advanced summary {
+  cursor: pointer;
+  color: #334155;
+  font-weight: 700;
+}
+
+.template-advanced__body {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
 .service-template-preview {
   min-height: 520px;
   border: 1px solid #e5edf4;
@@ -793,6 +1110,14 @@ onMounted(loadAll)
   }
 
   .template-form {
+    grid-template-columns: 1fr;
+  }
+
+  .designer-import-panel {
+    display: grid;
+  }
+
+  .schema-import-report__grid {
     grid-template-columns: 1fr;
   }
 }

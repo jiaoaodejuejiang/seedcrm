@@ -42,4 +42,6 @@ public interface OrderService extends IService<Order> {
     Order verifyVoucher(OrderVoucherVerifyDTO orderVoucherVerifyDTO, Long operatorUserId, String operatorRoleCode);
 
     Order updateServiceDetail(OrderServiceDetailDTO orderServiceDetailDTO);
+
+    Order updateServiceDetail(OrderServiceDetailDTO orderServiceDetailDTO, String operatorRoleCode);
 }

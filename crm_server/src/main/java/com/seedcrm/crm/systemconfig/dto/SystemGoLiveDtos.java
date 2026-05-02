@@ -61,6 +61,7 @@ public final class SystemGoLiveDtos {
         private String key;
         private String label;
         private String status;
+        private String severity;
         private String message;
     }
 

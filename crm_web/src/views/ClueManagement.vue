@@ -129,11 +129,31 @@
               <el-tag effect="plain">{{ formatClueOrderType(row.orderType) }}</el-tag>
             </template>
 
+            <template v-else-if="column.key === 'sourceChannel'">
+              {{ formatSourceChannel(row.sourceChannel) }}
+            </template>
+
             <template v-else-if="column.key === 'paymentStatus'">
               <el-tag :type="row.leadStage === 'DEPOSIT_PAID' ? 'success' : 'info'" effect="light">
                 {{ row.paymentStatusLabel }}
               </el-tag>
             </template>
+
+            <div
+              v-else-if="column.key === 'clueRecords'"
+              class="table-primary clue-record-summary"
+              role="button"
+              tabindex="0"
+              title="查看客资记录"
+              @click.stop="openDetailDrawer(row)"
+              @keydown.enter.stop="openDetailDrawer(row)"
+            >
+              <strong>
+                <el-tag v-if="row.clueRecords?.length" size="small" effect="plain">{{ latestClueRecordTypeLabel(row) }}</el-tag>
+                <span>{{ latestClueRecordSummary(row) }}</span>
+              </strong>
+              <span>{{ latestClueRecordMeta(row) }}</span>
+            </div>
 
             <div v-else-if="column.key === 'callStatus'" class="editable-cell">
               <span class="editable-cell__text">{{ formatCallStatus(row.callStatus) }}</span>
@@ -401,7 +421,7 @@
                 <p>线索编号：{{ detailRow.id }}</p>
                 <p>姓名：{{ displayName(detailRow) }}</p>
                 <p>电话：{{ detailRow.editPhone || '--' }}</p>
-                <p>来源形式：{{ formatProductSourceType(detailRow.productSourceType) }}</p>
+                <p>来源：{{ formatSourceChannel(detailRow.sourceChannel) }}</p>
                 <p>订单类型：{{ formatClueOrderType(detailRow.orderType) }}</p>
                 <p>付款状态：{{ detailRow.paymentStatusLabel }}</p>
               </article>
@@ -436,9 +456,11 @@
             <div v-if="detailRow.leadRecordItems.length" class="follow-record-list">
               <article v-for="record in detailRow.leadRecordItems" :key="record.id" class="follow-record-item">
                 <div class="follow-record-item__header">
-                  <strong>{{ record.title }}</strong>
                   <span>{{ formatDateTime(record.createdAt) }}</span>
+                  <el-tag size="small" effect="plain">{{ formatClueRecordType(record.recordType || record.title) }}</el-tag>
+                  <strong>{{ record.title }}</strong>
                 </div>
+                <p class="text-secondary">{{ clueRecordMetaText(record) }}</p>
                 <p>{{ record.content }}</p>
               </article>
             </div>
@@ -479,6 +501,7 @@ import { useTablePagination } from '../composables/useTablePagination'
 import { currentUser } from '../utils/auth'
 import {
   formatCallStatus,
+  formatChannel,
   formatDateTime,
   formatLeadStage,
   formatOrderStage,
@@ -512,8 +535,10 @@ let tableResizeObserver = null
 
 const COLUMN_PREFERENCE_KEY = 'seedcrm:clue-list-columns'
 const defaultColumnConfig = [
+  { key: 'sourceChannel', label: '来源', width: 112, visible: true, required: false },
   { key: 'orderType', label: '订单类型', width: 120, visible: true, required: false },
   { key: 'paymentStatus', label: '付款状态', width: 126, visible: true, required: false },
+  { key: 'clueRecords', label: '客资记录', width: 220, visible: true, required: false },
   { key: 'callStatus', label: '通话状态', width: 136, visible: true, required: false },
   { key: 'leadStage', label: '线索阶段', width: 144, visible: true, required: true },
   { key: 'followRecords', label: '跟进记录', width: 220, visible: true, required: false },
@@ -601,7 +626,7 @@ const leadStageOptions = [
   { label: '无效', value: 'INVALID' }
 ]
 
-const tagOptions = ['高意向', '团购', '表单', '已付款', '已加微信', '待再次沟通', '待到店', '复诊']
+const tagOptions = ['高意向', '团购', '定金', '已付款', '已加微信', '待再次沟通', '待到店', '复诊']
 
 function loadColumnPreferences() {
   try {
@@ -663,9 +688,9 @@ function resetColumnPreferences() {
 
 function sourceFilterLabel(value) {
   const labels = {
-    ALL: '全部产品',
+    ALL: '全部订单',
     GROUP_BUY: '团购',
-    FORM: '表单'
+    FORM: '定金'
   }
   return `${labels[value] || value} ${sourceFilterCounts.value[value] ?? 0}`
 }
@@ -838,6 +863,10 @@ function formatClueOrderType(value) {
   return '未关联'
 }
 
+function formatSourceChannel(value) {
+  return formatChannel(value)
+}
+
 function paymentStatusLabel(row) {
   if (normalize(row.leadStage) === 'DEPOSIT_PAID') {
     return '已付定金'
@@ -850,9 +879,24 @@ function paymentStatusLabel(row) {
 
 function buildLeadRecordItems(row, paidOrder) {
   const records = []
+  for (const item of row.clueRecords || []) {
+    records.push({
+      id: `clue-record-${item.id || item.recordKey || item.createdAt || records.length}`,
+      recordType: item.recordType || 'CLUE',
+      sourceChannel: item.sourceChannel || row.sourceChannel,
+      externalRecordId: item.externalRecordId || '',
+      externalOrderId: item.externalOrderId || '',
+      title: item.title || formatClueRecordType(item.recordType),
+      content: item.content || item.externalOrderId || item.externalRecordId || '接口同步客资记录',
+      createdAt: item.occurredAt || item.createdAt || row.createdAt
+    })
+  }
   if (paidOrder?.id || row.latestOrderId) {
     records.push({
       id: `order-${paidOrder?.id || row.latestOrderId}`,
+      recordType: 'ORDER',
+      sourceChannel: paidOrder?.sourceChannel || row.sourceChannel,
+      externalOrderId: paidOrder?.orderNo || paidOrder?.id || row.latestOrderId || '',
       title: '订单同步',
       content: `${formatClueOrderType(paidOrder?.type || row.latestOrderType)} / ${formatOrderStage(paidOrder?.statusCategory || paidOrder?.status || row.latestOrderStatus)}`,
       createdAt: paidOrder?.createTime || row.createdAt
@@ -861,6 +905,9 @@ function buildLeadRecordItems(row, paidOrder) {
   if (paidOrder?.appointmentTime) {
     records.push({
       id: `appointment-${paidOrder.id}`,
+      recordType: 'APPOINTMENT',
+      sourceChannel: paidOrder?.sourceChannel || row.sourceChannel,
+      externalOrderId: paidOrder?.orderNo || paidOrder.id || '',
       title: '预约排档',
       content: `预约时间：${formatDateTime(paidOrder.appointmentTime)}`,
       createdAt: paidOrder.appointmentTime
@@ -869,12 +916,45 @@ function buildLeadRecordItems(row, paidOrder) {
   for (const item of row.followRecords || []) {
     records.push({
       id: `follow-${item.id}`,
+      recordType: 'FOLLOW',
+      sourceChannel: row.sourceChannel,
       title: '跟进记录',
       content: item.content,
       createdAt: item.createdAt
     })
   }
   return records.sort((left, right) => parseDateValue(right.createdAt) - parseDateValue(left.createdAt))
+}
+
+function normalizeClueRecords(records = []) {
+  return [...(records || [])]
+    .map((item) => ({
+      ...item,
+      title: item?.title || formatClueRecordType(item?.recordType),
+      content: item?.content || item?.externalOrderId || item?.externalRecordId || '接口同步客资记录',
+      occurredAt: item?.occurredAt || item?.createdAt || ''
+    }))
+    .sort((left, right) => parseDateValue(right.occurredAt || right.createdAt) - parseDateValue(left.occurredAt || left.createdAt))
+}
+
+function formatClueRecordType(value) {
+  const normalized = normalize(value)
+  if (normalized === 'CLUE' || normalized === 'LEAD' || normalized.includes('留资')) {
+    return '留资'
+  }
+  if (normalized === 'ORDER') {
+    return '订单'
+  }
+  if (normalized === 'ACTION') {
+    return '动作'
+  }
+  if (normalized === 'FOLLOW') {
+    return '跟进'
+  }
+  if (normalized === 'APPOINTMENT' || normalized.includes('排档')) {
+    return '排档'
+  }
+  return '记录'
 }
 
 function findClueProfile(clueId) {
@@ -919,6 +999,7 @@ function buildClueRow(row) {
   } else {
     schedulingActionLabel = '查看'
   }
+  const clueRecords = normalizeClueRecords(row.clueRecords || [])
   return {
     ...row,
     latestOrderId,
@@ -931,11 +1012,12 @@ function buildClueRow(row) {
     leadStage: profile.leadStage,
     leadTags: [...(profile.leadTags || [])],
     followRecords: sortFollowRecords(profile.followRecords || []),
+    clueRecords,
     intendedStoreName: profile.intendedStoreName || row.storeName || '',
     assignedAt: row.currentOwnerId ? profile.assignedAt || row.createdAt : '',
     latestOrderStageLabel: orderStageLabel,
     paymentStatusLabel: paymentStatusLabel({ ...profile, latestOrderStatus }),
-    leadRecordItems: buildLeadRecordItems({ ...profile, ...row, latestOrderId, latestOrderStatus, latestOrderType }, paidOrder),
+    leadRecordItems: buildLeadRecordItems({ ...profile, ...row, clueRecords, latestOrderId, latestOrderStatus, latestOrderType }, paidOrder),
     isPaidCustomer: canViewScheduling,
     paidOrderId: canViewScheduling ? latestOrderId : null,
     paidOrderAppointmentTime,
@@ -949,6 +1031,38 @@ function displayName(row) {
 
 function latestFollowRecord(row) {
   return row.followRecords?.[0]?.content || '暂无跟进记录'
+}
+
+function latestClueRecordSummary(row) {
+  const record = row.clueRecords?.[0]
+  return record ? record.title : '暂无客资记录'
+}
+
+function latestClueRecordTypeLabel(row) {
+  return formatClueRecordType(row.clueRecords?.[0]?.recordType || row.clueRecords?.[0]?.title)
+}
+
+function latestClueRecordMeta(row) {
+  const records = row.clueRecords || []
+  if (!records.length) {
+    return '接口记录 0 条'
+  }
+  const latest = records[0]
+  return `共 ${records.length} 条 / ${formatDateTime(latest.occurredAt || latest.createdAt)}`
+}
+
+function clueRecordMetaText(record) {
+  const parts = []
+  if (record?.sourceChannel) {
+    parts.push(`来源：${formatSourceChannel(record.sourceChannel)}`)
+  }
+  if (record?.externalOrderId) {
+    parts.push(`订单：${record.externalOrderId}`)
+  }
+  if (record?.externalRecordId) {
+    parts.push(`外部ID：${record.externalRecordId}`)
+  }
+  return parts.length ? parts.join(' / ') : '系统记录'
 }
 
 function previewLeadTags(tags = []) {
@@ -1017,9 +1131,18 @@ function canShowMoreActions(row) {
 }
 
 function saveCellEdit(row, field, currentValue, patchKey = field) {
+  const nextValue = getCellDraft(row.id, field, currentValue)
   handleInlineUpdate(row, {
-    [patchKey]: getCellDraft(row.id, field, currentValue)
+    [patchKey]: nextValue
   })
+  if (patchKey === 'leadStage' && normalize(nextValue) === 'DEPOSIT_PAID') {
+    if (row.paidOrderId) {
+      ElMessage.success('已标记预付定金，正在进入预约排档')
+      goToScheduling(row)
+      return
+    }
+    ElMessage.warning('已标记预付定金；当前线索尚未匹配到已付款订单，暂不能进入预约排档')
+  }
 }
 
 function applyFilters() {
@@ -1122,7 +1245,6 @@ async function loadClues() {
     ])
     clues.value = clueResult.status === 'fulfilled' ? clueResult.value : []
     paidOrders.value = orderResult.status === 'fulfilled' ? orderResult.value : []
-    pagination.reset()
   } catch {
     clues.value = []
     paidOrders.value = []
@@ -1294,3 +1416,15 @@ watch(
   updateFloatingTableScrollbar
 )
 </script>
+
+<style scoped>
+.clue-record-summary {
+  cursor: pointer;
+}
+
+.clue-record-summary strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+</style>

@@ -47,7 +47,7 @@
       <el-table v-if="canDisplayTable" :data="dailyRows" stripe>
         <el-table-column label="日期" min-width="160" prop="date" />
         <el-table-column label="收入笔数" width="120" prop="count" />
-        <el-table-column label="订单金额" width="140">
+        <el-table-column v-if="canViewOrderAmounts" label="订单金额" width="140">
           <template #default="{ row }">
             {{ formatMoney(row.orderAmount) }}
           </template>
@@ -124,7 +124,7 @@
             {{ formatRoleCode(row.roleCode) }}
           </template>
         </el-table-column>
-        <el-table-column label="订单金额" width="140">
+        <el-table-column v-if="canViewOrderAmounts" label="订单金额" width="140">
           <template #default="{ row }">
             {{ formatMoney(row.orderAmount) }}
           </template>
@@ -149,7 +149,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { fetchSalaryBalance, fetchSalaryDetails, fetchSalaryWithdrawable } from '../api/salary'
 import { fetchStaffOptions } from '../api/workbench'
-import { currentUser } from '../utils/auth'
+import { canViewBusinessAmounts, currentUser } from '../utils/auth'
 import { formatDateTime, formatMoney, formatRoleCode } from '../utils/format'
 
 const staffOptions = ref([])
@@ -164,6 +164,7 @@ const detailRows = ref([])
 
 const roleCode = computed(() => String(currentUser.value?.roleCode || '').toUpperCase())
 const isFinanceOperator = computed(() => ['ADMIN', 'FINANCE'].includes(roleCode.value))
+const canViewOrderAmounts = computed(() => canViewBusinessAmounts())
 const canViewTeamSalary = computed(() => ['CLUE_MANAGER', 'STORE_MANAGER'].includes(roleCode.value))
 const salaryScopeTabs = computed(() => {
   if (isFinanceOperator.value) {

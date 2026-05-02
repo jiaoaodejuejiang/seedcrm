@@ -9,6 +9,7 @@
           <el-button @click="loadActiveQueue">刷新当前页</el-button>
           <el-button v-if="canUpdateConfig && activeTab === 'config'" type="primary" @click="saveConfig">保存配置</el-button>
           <el-button v-if="canUpdateConfig && activeTab === 'config'" :loading="testing" @click="testConfig">dry-run 测试入站映射（不入库）</el-button>
+          <el-button v-if="canUpdateConfig && activeTab === 'config'" :loading="testingVoucher" plain @click="testVoucherConfig">测试分销券核销配置（模拟）</el-button>
           <el-button v-if="canProcessQueues && activeTab === 'reconcile'" :loading="processingStatusCheck" type="warning" plain @click="handleStatusCheck">执行真实状态回查</el-button>
           <el-button v-if="canProcessQueues && activeTab === 'reconcile'" :loading="processingReconcile" type="warning" plain @click="handleReconcilePull">执行真实对账拉取</el-button>
         </div>
@@ -71,6 +72,11 @@
                 <el-button class="copy-mini" link type="primary" @click="copyText(reconcilePullUrl, '对账拉取地址')">复制</el-button>
               </article>
               <article>
+                <span>门店核销调用地址</span>
+                <strong>{{ voucherVerifyUrl }}</strong>
+                <el-button class="copy-mini" link type="primary" @click="copyText(voucherVerifyUrl, '门店核销调用地址')">复制</el-button>
+              </article>
+              <article>
                 <span>OpenAPI JSON</span>
                 <strong>{{ openApiDocsUrl }}</strong>
                 <el-button class="copy-mini" link type="primary" @click="copyText(openApiDocsUrl, 'OpenAPI JSON 地址')">复制</el-button>
@@ -85,6 +91,13 @@
               </article>
             </div>
           </div>
+          <el-alert
+            class="queue-alert"
+            :type="distributionVoucherAlertType"
+            show-icon
+            :closable="false"
+            :title="distributionVoucherReadiness.message"
+          />
           <div class="form-grid">
             <div class="full-span form-group-title">应用身份</div>
             <label>
@@ -108,6 +121,11 @@
             <label>
               <span>AppSecret</span>
               <el-input v-model="config.appSecret" :disabled="!canUpdateConfig" type="password" show-password placeholder="验签与回推签名密钥" />
+            </label>
+            <label class="full-span">
+              <span>外部分销系统域名</span>
+              <el-input v-model="config.baseUrl" :disabled="!canUpdateConfig" placeholder="https://partner.example.com" />
+              <small>门店扫码/输码核销分销团购券时，本系统会向该域名提交券码核销请求；不是本系统对外入站地址。</small>
             </label>
 
             <div class="full-span form-group-title">接口地址</div>
@@ -137,6 +155,15 @@
             <label>
               <span>对账拉取路径</span>
               <el-input v-model="config.reconciliationPullPath" :disabled="!canUpdateConfig" placeholder="/open/distribution/orders/reconcile" />
+            </label>
+            <label>
+              <span>门店核销调用路径</span>
+              <el-input v-model="config.voucherVerifyPath" :disabled="!canUpdateConfig" placeholder="/open/distribution/vouchers/verify" />
+            </label>
+            <label>
+              <span>券码字段</span>
+              <el-input v-model="config.verifyCodeField" :disabled="!canUpdateConfig" placeholder="voucherCode" />
+              <small>示例请求字段：{ "{{ config.verifyCodeField || 'voucherCode' }}": "券码" }。</small>
             </label>
             <label class="full-span">
               <span>状态映射</span>
@@ -185,6 +212,10 @@
             <article>
               <span>对账拉取</span>
               <strong>{{ config.reconciliationPullPath || 'MOCK 模式使用本地测试数据，LIVE 模式需配置路径' }}</strong>
+            </article>
+            <article>
+              <span>团购券核销</span>
+              <strong>{{ config.voucherVerifyPath || 'LIVE 模式必须配置券核销路径和券码字段' }}</strong>
             </article>
           </div>
         </el-tab-pane>
@@ -802,7 +833,8 @@ import {
   processSchedulerOutbox,
   retryDistributionException,
   retrySchedulerOutboxEvent,
-  saveIntegrationProvider
+  saveIntegrationProvider,
+  testIntegrationProvider
 } from '../api/scheduler'
 import { formatDateTime } from '../utils/format'
 import { currentUser } from '../utils/auth'
@@ -846,6 +878,7 @@ const DEFAULT_ORDER_TYPE_MAPPING = JSON.stringify(
 )
 const activeTab = ref(resolveInitialTab())
 const testing = ref(false)
+const testingVoucher = ref(false)
 const outboxLoading = ref(false)
 const exceptionLoading = ref(false)
 const reconciliationHistoryLoading = ref(false)
@@ -882,6 +915,7 @@ const state = reactive(loadSystemConsoleState())
 const config = reactive({
   enabled: state.distributionApi?.enabled ?? 1,
   executionMode: state.distributionApi?.executionMode || 'MOCK',
+  baseUrl: state.distributionApi?.baseUrl || '',
   appId: state.distributionApi?.appId || '',
   appSecret: state.distributionApi?.appSecret || '',
   authMode: state.distributionApi?.authMode || 'SIGN_TOKEN',
@@ -893,6 +927,8 @@ const config = reactive({
     '',
   statusQueryPath: state.distributionApi?.statusQueryPath || '/open/distribution/orders/status',
   reconciliationPullPath: state.distributionApi?.reconciliationPullPath || '/open/distribution/orders/reconcile',
+  voucherVerifyPath: state.distributionApi?.voucherVerifyPath || '/open/distribution/vouchers/verify',
+  verifyCodeField: state.distributionApi?.verifyCodeField || 'voucherCode',
   statusMapping:
     state.distributionApi?.statusMapping ||
     'paid=distribution.order.paid,cancelled=distribution.order.cancelled,refund_pending=distribution.order.refund_pending,refunded=distribution.order.refunded',
@@ -900,6 +936,7 @@ const config = reactive({
   rateLimitPerMinute: parseIntegerConfig(state.distributionApi?.rateLimitPerMinute, state.distributionApi?.rateLimit, 60),
   cacheTtlSeconds: parseIntegerConfig(state.distributionApi?.cacheTtlSeconds, state.distributionApi?.cachePolicy, 30),
   secretConfigured: Boolean(state.distributionApi?.secretConfigured),
+  lastTestStatus: state.distributionApi?.lastTestStatus || '',
   fields: state.distributionApi?.fields || [
     { fieldName: 'eventType', source: '固定 distribution.order.paid', description: '只有已支付订单允许创建或匹配 Customer + Order(paid)', required: true },
     { fieldName: 'eventId', source: '外部分销事件 ID', description: '用于日志追踪与重复事件识别', required: true },
@@ -917,6 +954,7 @@ const swaggerUiUrl = computed(() => buildSystemUrl(state, 'api', '/swagger-ui.ht
 const openApiDocsUrl = computed(() => buildSystemUrl(state, 'api', '/v3/api-docs/distribution-open-api'))
 const statusQueryUrl = computed(() => buildSystemUrl(state, 'api', config.statusQueryPath))
 const reconcilePullUrl = computed(() => buildSystemUrl(state, 'api', config.reconciliationPullPath))
+const voucherVerifyUrl = computed(() => buildExternalUrl(config.baseUrl, config.voucherVerifyPath) || '待配置外部分销系统域名')
 const userGuideUrl = '/docs/distribution-user-guide.html'
 const integrationGuideUrl = '/docs/distribution-api-integration-guide.html'
 const deploymentGuideUrl = '/docs/deployment-runbook.html'
@@ -925,14 +963,18 @@ const statusAndReconcileTarget = computed(() => {
   const reconcile = config.reconciliationPullPath ? reconcilePullUrl.value : '对账拉取未配置'
   return `${status} / ${reconcile}`
 })
-const fallbackGoLiveChecks = computed(() => [
-  { label: apiBaseUrl.value !== '--' ? 'API 域名已配置' : 'API 域名待配置', ok: apiBaseUrl.value !== '--' },
-  { label: config.executionMode === 'LIVE' ? '真实模式' : '模拟模式', ok: config.executionMode === 'LIVE' },
-  { label: config.secretConfigured || String(config.appSecret || '').trim() ? '密钥已配置' : '密钥待配置', ok: config.secretConfigured || String(config.appSecret || '').trim() },
-  { label: String(config.fulfillmentCallbackUrl || '').trim() ? '回推目标已配置' : '回推目标待配置', ok: String(config.fulfillmentCallbackUrl || '').trim() },
-  { label: config.statusQueryPath && config.reconciliationPullPath ? '回查对账路径已配置' : '回查对账路径待配置', ok: Boolean(config.statusQueryPath && config.reconciliationPullPath) },
-  { label: idempotencyHealth.value?.healthy ? '防重复健康' : '防重复待检查', ok: Boolean(idempotencyHealth.value?.healthy) }
-])
+const fallbackGoLiveChecks = computed(() => {
+  const voucherReady = resolveDistributionVoucherReadiness(config)
+  return [
+    { label: apiBaseUrl.value !== '--' ? 'API 域名已配置' : 'API 域名待配置', ok: apiBaseUrl.value !== '--' },
+    { label: config.executionMode === 'LIVE' ? '真实模式' : '模拟模式', ok: config.executionMode === 'LIVE' },
+    { label: config.secretConfigured || String(config.appSecret || '').trim() ? '密钥已配置' : '密钥待配置', ok: config.secretConfigured || String(config.appSecret || '').trim() },
+    { label: String(config.fulfillmentCallbackUrl || '').trim() ? '回推目标已配置' : '回推目标待配置', ok: String(config.fulfillmentCallbackUrl || '').trim() },
+    { label: config.statusQueryPath && config.reconciliationPullPath ? '回查对账路径已配置' : '回查对账路径待配置', ok: Boolean(config.statusQueryPath && config.reconciliationPullPath) },
+    { label: voucherReady.label, ok: voucherReady.type === 'success' },
+    { label: idempotencyHealth.value?.healthy ? '防重复健康' : '防重复待检查', ok: Boolean(idempotencyHealth.value?.healthy) }
+  ]
+})
 const goLiveChecks = computed(() => {
   if (goLiveReadiness.value?.checks?.length) {
     return goLiveReadiness.value.checks.map((item) => ({
@@ -945,6 +987,64 @@ const goLiveChecks = computed(() => {
   }
   return fallbackGoLiveChecks.value
 })
+const distributionVoucherReadiness = computed(() => resolveDistributionVoucherReadiness(config))
+const distributionVoucherAlertType = computed(() => (distributionVoucherReadiness.value.type === 'error' ? 'error' : distributionVoucherReadiness.value.type))
+
+function resolveDistributionVoucherReadiness(target) {
+  if (!Number(target.enabled)) {
+    return {
+      type: 'warning',
+      label: '分销券核销未启用',
+      message: '分销接口未启用，门店端分销团购券核销会被阻断，不会自动推进服务确认单。'
+    }
+  }
+  if (String(target.executionMode || '').toUpperCase() !== 'LIVE') {
+    return {
+      type: 'warning',
+      label: '分销券核销仍为模拟',
+      message: '当前为 MOCK 联调模式，不代表真实分销券已核销；正式上线前必须切换 LIVE 并完成连接测试。'
+    }
+  }
+  const missing = []
+  if (!String(target.baseUrl || '').trim()) {
+    missing.push('外部分销系统域名')
+  }
+  if (!String(target.voucherVerifyPath || '').trim()) {
+    missing.push('券核销路径')
+  }
+  if (!String(target.verifyCodeField || '').trim()) {
+    missing.push('券码字段')
+  }
+  if (!target.secretConfigured && !String(target.appSecret || '').trim()) {
+    missing.push('签名密钥')
+  }
+  if (missing.length) {
+    return {
+      type: 'error',
+      label: '分销券核销缺少配置',
+      message: `缺少 ${missing.join('、')}；门店端分销团购券核销会被阻断，不会自动推进服务确认单。`
+    }
+  }
+  if (target.lastTestStatus && ['FAIL', 'FAILED', 'ERROR'].includes(String(target.lastTestStatus).toUpperCase())) {
+    return {
+      type: 'error',
+      label: '分销券核销测试失败',
+      message: '最近一次分销连接或核销配置测试失败，请在联调工作台修正后重试。'
+    }
+  }
+  if (String(target.lastTestStatus || '').toUpperCase() !== 'SUCCESS') {
+    return {
+      type: 'warning',
+      label: '分销券核销待测试',
+      message: '请先完成分销连接测试；测试通过前，门店端分销团购券核销会被阻断。'
+    }
+  }
+  return {
+    type: 'success',
+    label: '分销券核销已就绪',
+    message: '分销券核销配置已就绪；门店端只有外部分销系统返回成功后才会进入服务确认单流程。'
+  }
+}
 const currentRoleCode = computed(() => String(currentUser.value?.roleCode || '').trim().toUpperCase())
 const canUpdateConfig = computed(() => ['ADMIN', 'INTEGRATION_ADMIN'].includes(currentRoleCode.value))
 const canTriggerQueues = computed(() => ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'].includes(currentRoleCode.value))
@@ -1248,16 +1348,20 @@ async function loadBackendProviderConfig() {
     Object.assign(config, {
       enabled: provider.enabled ?? config.enabled,
       executionMode: provider.executionMode || config.executionMode,
+      baseUrl: provider.baseUrl || config.baseUrl,
       appId: provider.appId || config.appId,
       authMode: provider.authType || config.authMode,
       eventIngestPath: provider.endpointPath || config.eventIngestPath,
       fulfillmentCallbackUrl: provider.callbackUrl || config.fulfillmentCallbackUrl,
       statusQueryPath: provider.statusQueryPath || config.statusQueryPath,
       reconciliationPullPath: provider.reconciliationPullPath || config.reconciliationPullPath,
+      voucherVerifyPath: provider.voucherVerifyPath || config.voucherVerifyPath,
+      verifyCodeField: provider.verifyCodeField || config.verifyCodeField,
       statusMapping: provider.statusMapping || config.statusMapping,
       rateLimitPerMinute: parseIntegerConfig(provider.rateLimitPerMinute, config.rateLimitPerMinute, 60),
       cacheTtlSeconds: parseIntegerConfig(provider.cacheTtlSeconds, config.cacheTtlSeconds, 30),
-      secretConfigured: Boolean(provider.clientSecretConfigured || provider.clientSecretMasked)
+      secretConfigured: Boolean(provider.clientSecretConfigured || provider.clientSecretMasked),
+      lastTestStatus: provider.lastTestStatus || config.lastTestStatus
     })
   } catch (error) {
     // The page can still work with local draft settings when the user has no provider permission.
@@ -1310,11 +1414,14 @@ async function saveConfig() {
     moduleCode: 'SCHEDULER',
     executionMode: config.executionMode,
     authType: config.authMode,
+    baseUrl: config.baseUrl,
     appId: config.appId,
     clientSecret: config.appSecret,
     endpointPath: config.eventIngestPath,
     statusQueryPath: config.statusQueryPath,
     reconciliationPullPath: config.reconciliationPullPath,
+    voucherVerifyPath: config.voucherVerifyPath,
+    verifyCodeField: config.verifyCodeField,
     statusMapping: config.statusMapping,
     rateLimitPerMinute: config.rateLimitPerMinute,
     cacheTtlSeconds: config.cacheTtlSeconds,
@@ -1338,11 +1445,20 @@ function validateLiveConfig() {
   if (!String(config.fulfillmentCallbackUrl || '').trim()) {
     issues.push('外部分销系统履约回推目标')
   }
+  if (!String(config.baseUrl || '').trim()) {
+    issues.push('外部分销系统域名')
+  }
   if (!String(config.statusQueryPath || '').trim()) {
     issues.push('状态回查路径')
   }
   if (!String(config.reconciliationPullPath || '').trim()) {
     issues.push('对账拉取路径')
+  }
+  if (!String(config.voucherVerifyPath || '').trim()) {
+    issues.push('券核销路径')
+  }
+  if (!String(config.verifyCodeField || '').trim()) {
+    issues.push('券码字段')
   }
   if (!config.secretConfigured && !String(config.appSecret || '').trim()) {
     issues.push('签名密钥 AppSecret')
@@ -1351,6 +1467,18 @@ function validateLiveConfig() {
     issues.push('AppId')
   }
   return issues
+}
+
+function buildExternalUrl(baseUrl, endpointPath) {
+  const base = String(baseUrl || '').trim()
+  const path = String(endpointPath || '').trim()
+  if (!base || !path) {
+    return ''
+  }
+  if (/^https?:\/\//i.test(path)) {
+    return path
+  }
+  return `${base.replace(/\/+$/, '')}${path.startsWith('/') ? path : `/${path}`}`
 }
 
 function normalizeOrderTypeMappingJson(value) {
@@ -1450,6 +1578,39 @@ async function testConfig() {
     ElMessage.success('分销入站 dry-run 测试完成，未写入业务表')
   } finally {
     testing.value = false
+  }
+}
+
+async function testVoucherConfig() {
+  if (!String(config.voucherVerifyPath || '').trim() || !String(config.verifyCodeField || '').trim()) {
+    ElMessage.warning('请先填写门店核销调用路径和券码字段')
+    return
+  }
+  testingVoucher.value = true
+  try {
+    const result = await testIntegrationProvider({
+      providerCode: 'DISTRIBUTION',
+      providerName: '外部分销系统',
+      moduleCode: 'SCHEDULER',
+      executionMode: config.executionMode,
+      authType: config.authMode,
+      baseUrl: config.baseUrl,
+      appId: config.appId,
+      clientSecret: config.appSecret,
+      endpointPath: config.eventIngestPath,
+      statusQueryPath: config.statusQueryPath,
+      reconciliationPullPath: config.reconciliationPullPath,
+      voucherVerifyPath: config.voucherVerifyPath,
+      verifyCodeField: config.verifyCodeField,
+      callbackUrl: config.fulfillmentCallbackUrl,
+      enabled: config.enabled
+    })
+    config.lastTestStatus = result?.lastTestStatus || 'SUCCESS'
+    ElMessage.success('分销券核销配置模拟检查通过；真实核销仍以门店核销时外部分销系统返回为准')
+    await loadBackendProviderConfig()
+    await loadGoLiveReadiness()
+  } finally {
+    testingVoucher.value = false
   }
 }
 

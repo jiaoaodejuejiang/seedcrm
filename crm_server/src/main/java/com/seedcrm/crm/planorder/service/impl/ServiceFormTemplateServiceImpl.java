@@ -1,6 +1,9 @@
 package com.seedcrm.crm.planorder.service.impl;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.planorder.dto.ServiceFormTemplateDtos;
@@ -10,8 +13,10 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +29,121 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
     private static final String STATUS_PUBLISHED = "PUBLISHED";
     private static final String STATUS_DISABLED = "DISABLED";
     private static final String STATUS_ARCHIVED = "ARCHIVED";
+    private static final String SCHEMA_VERSION = "service-form-template.v1";
+    private static final int MAX_SCHEMA_JSON_LENGTH = 200_000;
+    private static final Set<String> SUPPORTED_DESIGNER_ENGINES = Set.of(
+            "INTERNAL_SCHEMA",
+            "FORMILY",
+            "VFORM3",
+            "LOWCODE_ENGINE",
+            "JSON_SCHEMA");
+    private static final Set<String> ALLOWED_COMPONENTS = Set.of(
+            "input",
+            "elinput",
+            "textarea",
+            "eltextarea",
+            "number",
+            "inputnumber",
+            "elinputnumber",
+            "select",
+            "elselect",
+            "radio",
+            "elradio",
+            "checkbox",
+            "elcheckbox",
+            "datepicker",
+            "eldatepicker",
+            "timepicker",
+            "eltimepicker",
+            "switch",
+            "elswitch",
+            "slider",
+            "elslider",
+            "rate",
+            "elrate",
+            "cascader",
+            "elcascader",
+            "treeselect",
+            "eltreeselect",
+            "text",
+            "statictext",
+            "paragraph",
+            "title",
+            "description",
+            "alert",
+            "divider",
+            "space",
+            "flex",
+            "card",
+            "panel",
+            "group",
+            "collapse",
+            "collapsepanel",
+            "tabs",
+            "tab",
+            "tabpane",
+            "form",
+            "formitem",
+            "formgrid",
+            "formlayout",
+            "grid",
+            "gridrow",
+            "gridcol",
+            "row",
+            "col",
+            "table",
+            "subform",
+            "upload",
+            "fileupload",
+            "imageupload",
+            "elupload",
+            "daterange",
+            "datepickerange",
+            "daterangepicker",
+            "timerangepicker",
+            "papersignatureplaceholder",
+            "signatureplaceholder",
+            "handwrittensignatureplaceholder",
+            "array",
+            "object",
+            "string",
+            "void",
+            "integer",
+            "null",
+            "boolean",
+            "date",
+            "time",
+            "datetime");
+    private static final Set<String> BLOCKED_COMPONENTS = Set.of(
+            "signature",
+            "esign",
+            "electronicsignature",
+            "canvassignature",
+            "html",
+            "iframe",
+            "script",
+            "webview");
+    private static final Set<String> COMPONENT_FIELD_NAMES = Set.of(
+            "component",
+            "componentname",
+            "xcomponent",
+            "widget",
+            "control",
+            "type");
+    private static final Set<String> BLOCKED_FIELD_NAMES = Set.of(
+            "onclick",
+            "onload",
+            "onerror",
+            "onmouseover",
+            "onmouseenter",
+            "onmouseleave",
+            "onchange",
+            "onsubmit",
+            "onfocus",
+            "onblur",
+            "oninput",
+            "onkeydown",
+            "onkeyup");
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final JdbcTemplate jdbcTemplate;
@@ -297,20 +417,29 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
                 || !StringUtils.hasText(request.getTitle())) {
             throw new BusinessException("模板编码、模板名称和表单标题不能为空");
         }
+        normalizeDesignerEngine(request.getDesignerEngine());
         if (StringUtils.hasText(request.getConfigJson())) {
-            validateJson(request.getConfigJson(), "模板配置 JSON 格式不正确");
+            validateSchemaJson(request.getConfigJson(), "模板配置 JSON 格式不正确");
         }
         if (StringUtils.hasText(request.getRawSchemaJson())) {
-            validateJson(request.getRawSchemaJson(), "设计器原始 Schema JSON 格式不正确");
+            validateSchemaJson(request.getRawSchemaJson(), "设计器原始 Schema JSON 格式不正确");
         }
         if (StringUtils.hasText(request.getNormalizedSchemaJson())) {
-            validateJson(request.getNormalizedSchemaJson(), "系统标准 Schema JSON 格式不正确");
+            validateSchemaJson(request.getNormalizedSchemaJson(), "系统标准 Schema JSON 格式不正确");
         }
     }
 
-    private void validateJson(String value, String message) {
+    private void validateSchemaJson(String value, String message) {
+        JsonNode root = parseJson(value, message);
+        validateSchemaSafety(root);
+    }
+
+    private JsonNode parseJson(String value, String message) {
+        if (value != null && value.length() > MAX_SCHEMA_JSON_LENGTH) {
+            throw new BusinessException("服务单设计器 Schema 过大，请拆分模板或减少内嵌数据");
+        }
         try {
-            OBJECT_MAPPER.readTree(value);
+            return OBJECT_MAPPER.readTree(value);
         } catch (Exception ex) {
             throw new BusinessException(message);
         }
@@ -513,10 +642,10 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
 
     private String normalizeDesignerEngine(String value) {
         String normalized = StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : "INTERNAL_SCHEMA";
-        return switch (normalized) {
-            case "INTERNAL_SCHEMA", "FORMILY", "VFORM3", "LOWCODE_ENGINE", "JSON_SCHEMA" -> normalized;
-            default -> "INTERNAL_SCHEMA";
-        };
+        if (!SUPPORTED_DESIGNER_ENGINES.contains(normalized)) {
+            throw new BusinessException("不支持的服务单设计器引擎：" + normalized);
+        }
+        return normalized;
     }
 
     private String normalizeSchemaJson(String value) {
@@ -527,10 +656,168 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
     }
 
     private String normalizeNormalizedSchemaJson(ServiceFormTemplateDtos.SaveTemplateRequest request) {
+        String designerEngine = normalizeDesignerEngine(request.getDesignerEngine());
+        String sourceType = "CONFIG_JSON";
+        String sourceJson = normalizeConfigJson(request.getConfigJson());
         if (StringUtils.hasText(request.getNormalizedSchemaJson())) {
-            return request.getNormalizedSchemaJson().trim();
+            sourceType = "NORMALIZED_SCHEMA";
+            sourceJson = request.getNormalizedSchemaJson().trim();
+        } else if (StringUtils.hasText(request.getRawSchemaJson())) {
+            sourceType = "RAW_SCHEMA";
+            sourceJson = request.getRawSchemaJson().trim();
         }
-        return normalizeConfigJson(request.getConfigJson());
+        JsonNode schema = parseJson(sourceJson, "系统标准 Schema JSON 格式不正确");
+        validateSchemaSafety(schema);
+        ObjectNode normalized = isNormalizedEnvelope(schema)
+                ? ((ObjectNode) schema).deepCopy()
+                : buildNormalizedSchemaEnvelope(designerEngine, sourceType, schema);
+        if (!StringUtils.hasText(normalized.path("schemaVersion").asText(null))) {
+            normalized.put("schemaVersion", SCHEMA_VERSION);
+        }
+        if (!StringUtils.hasText(normalized.path("designerEngine").asText(null))) {
+            normalized.put("designerEngine", designerEngine);
+        }
+        if (!StringUtils.hasText(normalized.path("designerEngineVersion").asText(null))) {
+            normalized.put("designerEngineVersion", resolveDesignerEngineVersion(schema));
+        }
+        if (!normalized.has("componentWhitelist")) {
+            normalized.set("componentWhitelist", componentWhitelistNode());
+        }
+        return normalized.toString();
+    }
+
+    private boolean isNormalizedEnvelope(JsonNode schema) {
+        return schema != null
+                && schema.isObject()
+                && schema.has("schemaVersion")
+                && schema.has("schema");
+    }
+
+    private ObjectNode buildNormalizedSchemaEnvelope(String designerEngine, String sourceType, JsonNode schema) {
+        ObjectNode normalized = OBJECT_MAPPER.createObjectNode();
+        normalized.put("schemaVersion", SCHEMA_VERSION);
+        normalized.put("designerEngine", designerEngine);
+        normalized.put("designerEngineVersion", resolveDesignerEngineVersion(schema));
+        normalized.put("source", sourceType);
+        normalized.set("componentWhitelist", componentWhitelistNode());
+        normalized.set("schema", schema);
+        return normalized;
+    }
+
+    private ArrayNode componentWhitelistNode() {
+        ArrayNode array = OBJECT_MAPPER.createArrayNode();
+        ALLOWED_COMPONENTS.stream()
+                .sorted()
+                .forEach(array::add);
+        return array;
+    }
+
+    private String resolveDesignerEngineVersion(JsonNode schema) {
+        String version = firstNonBlank(
+                text(schema, "designerEngineVersion"),
+                text(schema, "engineVersion"),
+                text(schema, "version"),
+                text(schema.path("designer"), "version"));
+        return StringUtils.hasText(version) ? version : "unknown";
+    }
+
+    private void validateSchemaSafety(JsonNode node) {
+        validateSchemaSafety(node, null);
+    }
+
+    private void validateSchemaSafety(JsonNode node, String fieldName) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return;
+        }
+        if (node.isTextual()) {
+            validateSafeText(fieldName, node.asText());
+            validateComponentValue(fieldName, node.asText());
+            return;
+        }
+        if (node.isArray()) {
+            for (JsonNode child : node) {
+                validateSchemaSafety(child, fieldName);
+            }
+            return;
+        }
+        if (!node.isObject()) {
+            return;
+        }
+        Iterator<String> names = node.fieldNames();
+        while (names.hasNext()) {
+            String childName = names.next();
+            validateSafeFieldName(childName);
+            validateSchemaSafety(node.path(childName), childName);
+        }
+    }
+
+    private void validateSafeFieldName(String fieldName) {
+        String normalized = normalizeIdentifier(fieldName);
+        if (normalized.contains("script")
+                || BLOCKED_FIELD_NAMES.contains(normalized)
+                || normalized.contains("innerhtml")
+                || normalized.contains("dangerouslysetinnerhtml")
+                || normalized.contains("srcdoc")) {
+            throw new BusinessException("服务单设计器 Schema 含有不安全字段：" + fieldName);
+        }
+    }
+
+    private void validateSafeText(String fieldName, String value) {
+        if (!StringUtils.hasText(value)) {
+            return;
+        }
+        String normalized = value.toLowerCase(Locale.ROOT);
+        if (normalized.contains("<script")
+                || normalized.contains("javascript:")
+                || normalized.contains("onerror=")
+                || normalized.contains("onload=")
+                || normalized.contains("eval(")
+                || normalized.contains("new function")
+                || normalized.contains("function(")) {
+            throw new BusinessException("服务单设计器 Schema 含有不安全内容：" + firstNonBlank(fieldName, "text"));
+        }
+    }
+
+    private void validateComponentValue(String fieldName, String value) {
+        if (!StringUtils.hasText(fieldName) || !StringUtils.hasText(value)) {
+            return;
+        }
+        String normalizedField = normalizeIdentifier(fieldName);
+        if (!COMPONENT_FIELD_NAMES.contains(normalizedField)) {
+            return;
+        }
+        String normalizedValue = normalizeIdentifier(value);
+        if (BLOCKED_COMPONENTS.contains(normalizedValue)) {
+            throw new BusinessException("服务单设计器 Schema 含有不允许的组件：" + value);
+        }
+        String trimmed = value.trim();
+        if (trimmed.contains(".") || normalizedValue.length() > 48) {
+            return;
+        }
+        if (!ALLOWED_COMPONENTS.contains(normalizedValue)) {
+            throw new BusinessException("服务单设计器组件不在白名单中：" + value);
+        }
+    }
+
+    private String text(JsonNode node, String fieldName) {
+        JsonNode value = node == null ? null : node.path(fieldName);
+        return value == null || value.isMissingNode() || value.isNull() ? null : value.asText();
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private String normalizeIdentifier(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
     }
 
     private String trimToNull(String value) {

@@ -27,7 +27,9 @@ http.interceptors.response.use(
       }
 
       const message = payload.message || '请求失败'
-      ElMessage.error(message)
+      if (!response.config?.silentError) {
+        ElMessage.error(message)
+      }
       return Promise.reject(new Error(message))
     }
 
@@ -42,7 +44,9 @@ http.interceptors.response.use(
     }
 
     const message = error.response?.data?.message || error.response?.data?.error || error.message || '网络请求失败'
-    ElMessage.error(message)
+    if (!error.config?.silentError) {
+      ElMessage.error(message)
+    }
     return Promise.reject(error)
   }
 )

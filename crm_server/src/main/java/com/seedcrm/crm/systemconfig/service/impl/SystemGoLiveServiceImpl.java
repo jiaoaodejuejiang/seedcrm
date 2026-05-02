@@ -8,9 +8,14 @@ import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import com.seedcrm.crm.systemconfig.service.SystemGoLiveService;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +42,7 @@ public class SystemGoLiveServiceImpl implements SystemGoLiveService {
             table("customer_ecom_user", "会员身份"),
             table("customer", "客户"),
             table("clue", "客资"),
+            table("clue_record", "客资记录"),
             table("salary_detail", "薪酬明细"),
             table("salary_settlement", "薪酬结算"),
             table("distributor_income_detail", "分销收入"),
@@ -67,10 +73,19 @@ public class SystemGoLiveServiceImpl implements SystemGoLiveService {
 
     private final JdbcTemplate jdbcTemplate;
     private final SystemConfigService systemConfigService;
+    private final Environment environment;
 
-    public SystemGoLiveServiceImpl(JdbcTemplate jdbcTemplate, SystemConfigService systemConfigService) {
+    @Autowired
+    public SystemGoLiveServiceImpl(JdbcTemplate jdbcTemplate,
+                                   SystemConfigService systemConfigService,
+                                   Environment environment) {
         this.jdbcTemplate = jdbcTemplate;
         this.systemConfigService = systemConfigService;
+        this.environment = environment;
+    }
+
+    public SystemGoLiveServiceImpl(JdbcTemplate jdbcTemplate, SystemConfigService systemConfigService) {
+        this(jdbcTemplate, systemConfigService, null);
     }
 
     @Override
@@ -79,7 +94,7 @@ public class SystemGoLiveServiceImpl implements SystemGoLiveService {
         SystemConfigDtos.DomainSettingsResponse domainSettings = systemConfigService.getDomainSettings();
         SystemGoLiveDtos.SummaryResponse response = new SystemGoLiveDtos.SummaryResponse();
         response.setEnvironmentMode(environmentMode);
-        response.setSafeToClearTestData(isNonProductionEnvironment(environmentMode));
+        response.setSafeToClearTestData(isDestructiveClearAllowed(environmentMode));
         response.setDomainSettings(domainSettings);
         response.setCheckedAt(LocalDateTime.now());
         response.setTableCounts(allClearTargets().stream().map(this::countTable).toList());
@@ -147,6 +162,9 @@ public class SystemGoLiveServiceImpl implements SystemGoLiveService {
         }
 
         boolean dryRun = Boolean.TRUE.equals(request.getDryRun());
+        if (!dryRun && !isDestructiveClearAllowed(environmentMode)) {
+            throw new BusinessException("destructive clear is disabled, set SEEDCRM_ALLOW_CLEAR_TEST_DATA=true only in a verified test environment");
+        }
         List<TableTarget> targets = new ArrayList<>();
         targets.addAll(BUSINESS_DATA_TABLES);
         targets.addAll(QUEUE_DATA_TABLES);
@@ -181,11 +199,16 @@ public class SystemGoLiveServiceImpl implements SystemGoLiveService {
                 "后台页面、扫码服务单会使用系统域名拼接。"));
         items.add(readiness("SCHEDULER_JOBS", "调度任务", tableCount("scheduler_job") > 0,
                 "上线前建议先用 dry-run 预检，再启用真实调度。"));
-        items.add(readiness("DISTRIBUTION_PROVIDER", "分销接入配置", integrationProviderCount("DISTRIBUTION") > 0,
-                "方案 B 需要分销 Provider、签名、状态映射和对账路径配置。"));
-        items.add(readiness("DOUYIN_PROVIDER", "抖音接入配置", integrationProviderCount("DOUYIN_LAIKE") > 0,
-                "抖音 auth_code 有时效，上线前请重新测试授权与定时拉取。"));
+        items.add(providerReadiness("DISTRIBUTION_PROVIDER", "分销券核销配置", "DISTRIBUTION"));
+        items.add(providerReadiness("DOUYIN_PROVIDER", "抖音券核销配置", "DOUYIN_LAIKE"));
+        items.add(readiness("CLEAR_PROTECTION", "清理硬保护", isDestructiveClearAllowed(environmentMode),
+                "真实清理测试数据需要非 PROD 环境，且显式设置 SEEDCRM_ALLOW_CLEAR_TEST_DATA=true。"));
         return items;
+    }
+
+    private SystemGoLiveDtos.ReadinessItemResponse providerReadiness(String key, String label, String providerCode) {
+        ProviderReadiness readiness = integrationProviderReadiness(providerCode);
+        return readiness(key, label, readiness.ok(), readiness.message());
     }
 
     private SystemGoLiveDtos.ReadinessItemResponse readiness(String key, String label, boolean ok, String message) {
@@ -193,6 +216,7 @@ public class SystemGoLiveServiceImpl implements SystemGoLiveService {
         item.setKey(key);
         item.setLabel(label);
         item.setStatus(ok ? "PASS" : "WARN");
+        item.setSeverity(ok ? "PASS" : "BLOCKER");
         item.setMessage(message);
         return item;
     }
@@ -207,6 +231,9 @@ public class SystemGoLiveServiceImpl implements SystemGoLiveService {
         }
         if (!"PROD".equals(environmentMode)) {
             warnings.add("当前非正式环境，允许 dry-run 与清理测试数据；切换 PROD 前请完成接口真实联调。");
+        }
+        if (!isDestructiveClearAllowed(environmentMode)) {
+            warnings.add("真实清理测试数据已被服务端硬保护阻断；如需在测试环境清理，请确认非生产库后显式设置 SEEDCRM_ALLOW_CLEAR_TEST_DATA=true。");
         }
         return warnings;
     }
@@ -267,6 +294,98 @@ public class SystemGoLiveServiceImpl implements SystemGoLiveService {
             return count == null ? 0 : count;
         } catch (DataAccessException exception) {
             return 0;
+        }
+    }
+
+    private ProviderReadiness integrationProviderReadiness(String providerCode) {
+        try {
+            Map<String, Object> provider = jdbcTemplate.queryForMap("""
+                    SELECT provider_code, enabled, execution_mode, base_url, voucher_verify_path, verify_code_field,
+                           auth_status, access_token, refresh_token, token_expires_at, refresh_token_expires_at,
+                           last_test_status
+                    FROM integration_provider_config
+                    WHERE provider_code = ?
+                    LIMIT 1
+                    """, providerCode);
+            List<String> missing = new ArrayList<>();
+            if (!isEnabled(provider.get("enabled"))) {
+                missing.add("接口未启用");
+            }
+            if (!"LIVE".equals(normalizeValue(provider.get("execution_mode")))) {
+                missing.add("运行模式不是 LIVE");
+            }
+            if (!StringUtils.hasText(asString(provider.get("base_url")))) {
+                missing.add("开放平台域名");
+            }
+            if (!StringUtils.hasText(asString(provider.get("voucher_verify_path")))) {
+                missing.add("券核销接口路径");
+            }
+            if (!StringUtils.hasText(asString(provider.get("verify_code_field")))) {
+                missing.add("券码字段名");
+            }
+            if (!"SUCCESS".equals(normalizeValue(provider.get("last_test_status")))) {
+                missing.add("最近连接/核销配置测试未通过");
+            }
+            if ("DOUYIN_LAIKE".equals(providerCode) && !hasUsableDouyinAuthorization(provider)) {
+                missing.add("抖音授权 Token 不可用或已过期");
+            }
+            if (missing.isEmpty()) {
+                return new ProviderReadiness(true, providerCode + " 已切到 LIVE，券核销配置和最近测试均已通过。");
+            }
+            return new ProviderReadiness(false, providerCode + " 未就绪：" + String.join("、", missing)
+                    + "；真实团购核销会被阻断，订单不会进入服务确认单。");
+        } catch (EmptyResultDataAccessException exception) {
+            return new ProviderReadiness(false, providerCode + " 未配置，真实团购核销会被阻断。");
+        } catch (DataAccessException exception) {
+            return new ProviderReadiness(false, providerCode + " 配置表不可用，无法完成上线预检。");
+        }
+    }
+
+    private boolean hasUsableDouyinAuthorization(Map<String, Object> provider) {
+        String authStatus = normalizeValue(provider.get("auth_status"));
+        if (!List.of("AUTHORIZED", "CONNECTED").contains(authStatus)) {
+            return false;
+        }
+        LocalDateTime tokenExpiresAt = asLocalDateTime(provider.get("token_expires_at"));
+        if (StringUtils.hasText(asString(provider.get("access_token")))
+                && tokenExpiresAt != null
+                && tokenExpiresAt.isAfter(LocalDateTime.now().plusMinutes(5))) {
+            return true;
+        }
+        LocalDateTime refreshExpiresAt = asLocalDateTime(provider.get("refresh_token_expires_at"));
+        return StringUtils.hasText(asString(provider.get("refresh_token")))
+                && (refreshExpiresAt == null || refreshExpiresAt.isAfter(LocalDateTime.now().plusMinutes(5)));
+    }
+
+    private boolean isEnabled(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue() == 1;
+        }
+        return "1".equals(asString(value)) || "true".equalsIgnoreCase(asString(value));
+    }
+
+    private String normalizeValue(Object value) {
+        return StringUtils.hasText(asString(value)) ? asString(value).trim().toUpperCase(Locale.ROOT) : "";
+    }
+
+    private String asString(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private LocalDateTime asLocalDateTime(Object value) {
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime;
+        }
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toLocalDateTime();
+        }
+        if (!StringUtils.hasText(asString(value))) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(asString(value).replace(' ', 'T'));
+        } catch (RuntimeException exception) {
+            return null;
         }
     }
 
@@ -370,6 +489,29 @@ public class SystemGoLiveServiceImpl implements SystemGoLiveService {
         return !"PROD".equals(normalizeEnvironment(environmentMode));
     }
 
+    private boolean isDestructiveClearAllowed(String environmentMode) {
+        return isNonProductionEnvironment(environmentMode)
+                && !isProdProfileActive()
+                && isClearFlagEnabled();
+    }
+
+    private boolean isProdProfileActive() {
+        if (environment == null) {
+            return false;
+        }
+        return Arrays.stream(environment.getActiveProfiles())
+                .anyMatch(profile -> "prod".equalsIgnoreCase(profile));
+    }
+
+    private boolean isClearFlagEnabled() {
+        if (environment == null) {
+            return true;
+        }
+        return Boolean.parseBoolean(environment.getProperty(
+                "seedcrm.go-live.allow-destructive-clear-test-data",
+                "false"));
+    }
+
     private void requireConfirmText(String actual, String expected) {
         if (!expected.equals(StringUtils.hasText(actual) ? actual.trim() : "")) {
             throw new BusinessException("confirmText must be " + expected);
@@ -404,5 +546,8 @@ public class SystemGoLiveServiceImpl implements SystemGoLiveService {
     }
 
     private record TableTarget(String tableName, String category) {
+    }
+
+    private record ProviderReadiness(boolean ok, String message) {
     }
 }

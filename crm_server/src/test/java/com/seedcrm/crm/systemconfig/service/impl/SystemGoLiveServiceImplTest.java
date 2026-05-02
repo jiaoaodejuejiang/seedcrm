@@ -14,6 +14,7 @@ import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class SystemGoLiveServiceImplTest {
@@ -79,6 +80,36 @@ class SystemGoLiveServiceImplTest {
     }
 
     @Test
+    void clearTestDataShouldRequireExplicitAllowFlagForRealDelete() {
+        Environment environment = Mockito.mock(Environment.class);
+        when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
+        when(environment.getProperty("seedcrm.go-live.allow-destructive-clear-test-data", "false")).thenReturn("false");
+        SystemGoLiveServiceImpl guardedService = new SystemGoLiveServiceImpl(jdbcTemplate, systemConfigService, environment);
+        SystemGoLiveDtos.ClearTestDataRequest request = new SystemGoLiveDtos.ClearTestDataRequest();
+        request.setConfirmText("CLEAR_TEST_DATA");
+        request.setDryRun(false);
+
+        assertThatThrownBy(() -> guardedService.clearTestData(request, context()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("destructive clear is disabled");
+    }
+
+    @Test
+    void clearTestDataShouldRejectProdProfileEvenWhenAllowFlagIsEnabled() {
+        Environment environment = Mockito.mock(Environment.class);
+        when(environment.getActiveProfiles()).thenReturn(new String[] {"prod"});
+        when(environment.getProperty("seedcrm.go-live.allow-destructive-clear-test-data", "false")).thenReturn("true");
+        SystemGoLiveServiceImpl guardedService = new SystemGoLiveServiceImpl(jdbcTemplate, systemConfigService, environment);
+        SystemGoLiveDtos.ClearTestDataRequest request = new SystemGoLiveDtos.ClearTestDataRequest();
+        request.setConfirmText("CLEAR_TEST_DATA");
+        request.setDryRun(false);
+
+        assertThatThrownBy(() -> guardedService.clearTestData(request, context()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("destructive clear is disabled");
+    }
+
+    @Test
     void initializeShouldRequireProdConfirmText() {
         SystemGoLiveDtos.InitializeRequest request = new SystemGoLiveDtos.InitializeRequest();
         request.setTargetEnvironment("PROD");
@@ -87,6 +118,48 @@ class SystemGoLiveServiceImplTest {
         assertThatThrownBy(() -> service.initialize(request, context()))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("INIT_PROD_SYSTEM");
+    }
+
+    @Test
+    void summaryShouldWarnWhenProviderIsOnlyMockSeedConfig() {
+        jdbcTemplate.update("""
+                INSERT INTO integration_provider_config(
+                    provider_code, enabled, execution_mode, base_url, voucher_verify_path, verify_code_field,
+                    auth_status, access_token, token_expires_at, last_test_status
+                )
+                VALUES ('DOUYIN_LAIKE', 1, 'MOCK', 'https://api.oceanengine.com', '/verify', 'encrypted_codes',
+                        'MOCK', NULL, NULL, 'SUCCESS')
+                """);
+
+        SystemGoLiveDtos.SummaryResponse response = service.summary();
+
+        assertThat(response.getReadinessItems())
+                .anySatisfy(item -> {
+                    assertThat(item.getKey()).isEqualTo("DOUYIN_PROVIDER");
+                    assertThat(item.getStatus()).isEqualTo("WARN");
+                    assertThat(item.getMessage()).contains("运行模式不是 LIVE");
+                });
+    }
+
+    @Test
+    void summaryShouldPassWhenDouyinVoucherProviderIsLiveAndAuthorized() {
+        jdbcTemplate.update("""
+                INSERT INTO integration_provider_config(
+                    provider_code, enabled, execution_mode, base_url, voucher_verify_path, verify_code_field,
+                    auth_status, access_token, token_expires_at, last_test_status
+                )
+                VALUES ('DOUYIN_LAIKE', 1, 'LIVE', 'https://api.oceanengine.com',
+                        '/goodlife/v1/fulfilment/certificate/verify/', 'encrypted_codes',
+                        'AUTHORIZED', 'token', DATEADD('DAY', 1, CURRENT_TIMESTAMP), 'SUCCESS')
+                """);
+
+        SystemGoLiveDtos.SummaryResponse response = service.summary();
+
+        assertThat(response.getReadinessItems())
+                .anySatisfy(item -> {
+                    assertThat(item.getKey()).isEqualTo("DOUYIN_PROVIDER");
+                    assertThat(item.getStatus()).isEqualTo("PASS");
+                });
     }
 
     private DataSource dataSource() {
@@ -128,15 +201,33 @@ class SystemGoLiveServiceImplTest {
                 """);
         jdbcTemplate.execute("CREATE TABLE order_info (id BIGINT PRIMARY KEY, order_no VARCHAR(64))");
         jdbcTemplate.execute("CREATE TABLE scheduler_outbox_event (id BIGINT PRIMARY KEY, event_type VARCHAR(64))");
+        jdbcTemplate.execute("CREATE TABLE scheduler_job (id BIGINT PRIMARY KEY, job_code VARCHAR(64))");
+        jdbcTemplate.execute("""
+                CREATE TABLE integration_provider_config (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    provider_code VARCHAR(64),
+                    enabled TINYINT,
+                    execution_mode VARCHAR(32),
+                    base_url VARCHAR(500),
+                    voucher_verify_path VARCHAR(500),
+                    verify_code_field VARCHAR(128),
+                    auth_status VARCHAR(64),
+                    access_token VARCHAR(500),
+                    refresh_token VARCHAR(500),
+                    token_expires_at TIMESTAMP,
+                    refresh_token_expires_at TIMESTAMP,
+                    last_test_status VARCHAR(64)
+                )
+                """);
     }
 
     private SystemConfigDtos.DomainSettingsResponse domainSettings() {
         SystemConfigDtos.DomainSettingsResponse response = new SystemConfigDtos.DomainSettingsResponse();
-        response.setSystemBaseUrl("http://127.0.0.1:4173");
-        response.setApiBaseUrl("http://127.0.0.1:8080");
-        response.setEventIngestUrl("http://127.0.0.1:8080/open/distribution/events");
-        response.setSwaggerUiUrl("http://127.0.0.1:8080/swagger-ui.html");
-        response.setOpenApiDocsUrl("http://127.0.0.1:8080/v3/api-docs/distribution-open-api");
+        response.setSystemBaseUrl("http://127.0.0.1:8003");
+        response.setApiBaseUrl("http://127.0.0.1:8004");
+        response.setEventIngestUrl("http://127.0.0.1:8004/open/distribution/events");
+        response.setSwaggerUiUrl("http://127.0.0.1:8004/swagger-ui.html");
+        response.setOpenApiDocsUrl("http://127.0.0.1:8004/v3/api-docs/distribution-open-api");
         return response;
     }
 

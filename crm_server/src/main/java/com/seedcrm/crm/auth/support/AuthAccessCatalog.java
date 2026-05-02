@@ -17,10 +17,10 @@ public final class AuthAccessCatalog {
 
     private static final List<MenuSeed> MENU_SEEDS = List.of(
             menu(1, "客资中心", "客资列表", "/clues", "CLUE", "clue:view", "ADMIN", "CLUE_MANAGER", "ONLINE_CUSTOMER_SERVICE"),
-            menu(2, "客资中心", "顾客排档", "/clues/scheduling", "ORDER", "order:view", "ADMIN", "CLUE_MANAGER", "ONLINE_CUSTOMER_SERVICE"),
-            menu(3, "客资中心 / 客资管理", "自动分配", "/clue-management/auto-assign", "CLUE", "clue:assign", "ADMIN", "CLUE_MANAGER"),
+            menu(2, "门店服务", "顾客排档", "/clues/scheduling", "ORDER", "order:view", "ADMIN", "CLUE_MANAGER", "ONLINE_CUSTOMER_SERVICE"),
+            menu(3, "客资中心 / 客资管理", "客资配置", "/clue-management/auto-assign", "CLUE", "clue:assign", "ADMIN", "CLUE_MANAGER"),
             menu(4, "客资中心 / 客资管理", "值班客服", "/clue-management/duty-cs", "CLUE", "clue:update", "ADMIN", "CLUE_MANAGER"),
-            menu(5, "客资中心 / 客资管理", "门店档期", "/clue-management/store-schedules", "CLUE", "clue:update", "ADMIN", "CLUE_MANAGER"),
+            menu(5, "门店服务", "门店档期", "/store-service/schedules", "PLANORDER", "planorder:update", "ADMIN", "STORE_MANAGER"),
             menu(6, "门店服务", "订单列表", "/store-service/orders", "ORDER", "order:view", "ADMIN", "STORE_SERVICE", "STORE_MANAGER", "PHOTOGRAPHER", "MAKEUP_ARTIST", "PHOTO_SELECTOR"),
             menu(7, "门店服务", "服务单设计", "/store-service/service-design", "PLANORDER", "planorder:update", "ADMIN", "STORE_MANAGER"),
             menu(8, "门店服务", "人员管理", "/store-service/personnel", "SYSTEM", "system:user:update", "ADMIN", "STORE_MANAGER"),

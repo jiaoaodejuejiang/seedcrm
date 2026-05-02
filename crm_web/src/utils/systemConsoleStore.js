@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'seedcrm.system-console'
-const SYSTEM_CONSOLE_SCHEMA_VERSION = 2
+const SYSTEM_CONSOLE_SCHEMA_VERSION = 3
 const SELF_SALARY_ROLE_CODES = [
   'ADMIN',
   'FINANCE',
@@ -14,8 +14,8 @@ const SELF_SALARY_ROLE_CODES = [
 ]
 
 const DEFAULT_DOMAIN_SETTINGS = {
-  systemBaseUrl: 'http://127.0.0.1:4173',
-  apiBaseUrl: 'http://127.0.0.1:8080'
+  systemBaseUrl: 'http://127.0.0.1:8003',
+  apiBaseUrl: 'http://127.0.0.1:8004'
 }
 
 const DEFAULT_DICTIONARIES = [
@@ -24,7 +24,7 @@ const DEFAULT_DICTIONARIES = [
   { id: 3, dictType: 'clue_channel', itemCode: 'DOUYIN', itemLabel: '抖音', sortOrder: 10, isEnabled: 1 },
   { id: 4, dictType: 'clue_channel', itemCode: 'DISTRIBUTOR', itemLabel: '分销', sortOrder: 20, isEnabled: 1 },
   { id: 5, dictType: 'product_source_type', itemCode: 'GROUP_BUY', itemLabel: '团购', sortOrder: 10, isEnabled: 1 },
-  { id: 6, dictType: 'product_source_type', itemCode: 'FORM', itemLabel: '表单', sortOrder: 20, isEnabled: 1 },
+  { id: 6, dictType: 'product_source_type', itemCode: 'FORM', itemLabel: '定金', sortOrder: 20, isEnabled: 1 },
   { id: 7, dictType: 'order_status', itemCode: 'CREATED', itemLabel: '待付款', sortOrder: 30, isEnabled: 1 },
   { id: 8, dictType: 'order_status', itemCode: 'PAID', itemLabel: '已付款', sortOrder: 40, isEnabled: 1 },
   { id: 9, dictType: 'order_status', itemCode: 'PAID_DEPOSIT', itemLabel: '已付定金', sortOrder: 50, isEnabled: 1 },
@@ -155,10 +155,10 @@ const DEFAULT_STATE = {
   clueConsoleProfiles: [],
   menuConfigs: [
     { id: 1, menuGroup: '客资中心', menuName: '客资列表', routePath: '/clues', roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE'], moduleCode: 'CLUE', isEnabled: 1 },
-    { id: 2, menuGroup: '客资中心', menuName: '顾客排档', routePath: '/clues/scheduling', roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE'], moduleCode: 'ORDER', isEnabled: 1 },
-    { id: 3, menuGroup: '客资中心 / 客资管理', menuName: '自动分配', routePath: '/clue-management/auto-assign', roleCodes: ['ADMIN', 'CLUE_MANAGER'], moduleCode: 'CLUE', isEnabled: 1 },
+    { id: 2, menuGroup: '门店服务', menuName: '顾客排档', routePath: '/clues/scheduling', roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE'], moduleCode: 'ORDER', isEnabled: 1 },
+    { id: 3, menuGroup: '客资中心 / 客资管理', menuName: '客资配置', routePath: '/clue-management/auto-assign', roleCodes: ['ADMIN', 'CLUE_MANAGER'], moduleCode: 'CLUE', isEnabled: 1 },
     { id: 4, menuGroup: '客资中心 / 客资管理', menuName: '值班客服', routePath: '/clue-management/duty-cs', roleCodes: ['ADMIN', 'CLUE_MANAGER'], moduleCode: 'CLUE', isEnabled: 1 },
-    { id: 5, menuGroup: '客资中心 / 客资管理', menuName: '门店档期', routePath: '/clue-management/store-schedules', roleCodes: ['ADMIN', 'CLUE_MANAGER'], moduleCode: 'CLUE', isEnabled: 1 },
+    { id: 5, menuGroup: '门店服务', menuName: '门店档期', routePath: '/store-service/schedules', roleCodes: ['ADMIN', 'STORE_MANAGER'], moduleCode: 'PLANORDER', isEnabled: 1 },
     { id: 6, menuGroup: '门店服务', menuName: '订单列表', routePath: '/store-service/orders', roleCodes: ['ADMIN', 'STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR'], moduleCode: 'ORDER', isEnabled: 1 },
     { id: 7, menuGroup: '门店服务', menuName: '服务单设计', routePath: '/store-service/service-design', roleCodes: ['ADMIN', 'STORE_MANAGER'], moduleCode: 'PLANORDER', isEnabled: 1 },
     { id: 8, menuGroup: '门店服务', menuName: '人员管理', routePath: '/store-service/personnel', roleCodes: ['ADMIN', 'STORE_MANAGER'], moduleCode: 'SYSTEM', isEnabled: 1 },
@@ -262,8 +262,8 @@ const DEFAULT_STATE = {
     { id: 3, storeName: '徐汇门店', templateId: 3, effectiveFrom: '2026-04-01', allowOverride: 1, enabled: 1 }
   ],
   thirdPartyApis: [
-    { id: 1, apiName: '客资中心抖音拉取', moduleCode: 'CLUE', baseUrl: 'https://open.douyin.example/api/v1/leads', method: 'GET', authType: 'Bearer Token', enabled: 1, syncMode: '增量同步', scheduleJobCode: 'DOUYIN_CLUE_INCREMENTAL' },
-    { id: 2, apiName: '客资中心表单拉取', moduleCode: 'CLUE', baseUrl: 'https://marketing.example.com/open/forms/leads', method: 'GET', authType: 'App Secret', enabled: 1, syncMode: '增量同步', scheduleJobCode: 'FORM_CLUE_INCREMENTAL' }
+    { id: 1, apiName: '客资中心抖音拉取', moduleCode: 'CLUE', baseUrl: 'https://api.oceanengine.com/open_api/2/tools/clue/life/get/', method: 'POST', authType: 'Access-Token', enabled: 1, syncMode: '增量同步', scheduleJobCode: 'DOUYIN_CLUE_INCREMENTAL' },
+    { id: 2, apiName: '分销订单入站', moduleCode: 'ORDER', baseUrl: '/open/distribution/events', method: 'POST', authType: '签名', enabled: 1, syncMode: '事件入站', scheduleJobCode: 'DISTRIBUTION_OUTBOX_PROCESS' }
   ],
   callbackApis: [
     {
@@ -387,8 +387,35 @@ function migrateSystemConsoleState(state) {
     if (item?.routePath === '/clues/payments') {
       return {
         ...item,
+        menuGroup: '门店服务',
         menuName: '顾客排档',
         routePath: '/clues/scheduling'
+      }
+    }
+    if (item?.routePath === '/clues/scheduling') {
+      return {
+        ...item,
+        menuGroup: '门店服务',
+        menuName: '顾客排档',
+        moduleCode: 'ORDER'
+      }
+    }
+    if (item?.routePath === '/clue-management/auto-assign') {
+      return {
+        ...item,
+        menuGroup: '客资中心 / 客资管理',
+        menuName: '客资配置',
+        moduleCode: 'CLUE'
+      }
+    }
+    if (item?.routePath === '/clue-management/store-schedules') {
+      return {
+        ...item,
+        menuGroup: '门店服务',
+        menuName: '门店档期',
+        routePath: '/store-service/schedules',
+        roleCodes: ['ADMIN', 'STORE_MANAGER'],
+        moduleCode: 'PLANORDER'
       }
     }
     if (item?.routePath === '/finance/salary-center') {
@@ -424,6 +451,31 @@ function migrateSystemConsoleState(state) {
     }
     return item
   })
+  const normalizedDictionaries = (state?.dictionaries || []).map((item) => {
+    if (item?.dictType === 'product_source_type' && item?.itemCode === 'FORM') {
+      return {
+        ...item,
+        itemLabel: '定金'
+      }
+    }
+    return item
+  })
+  const normalizedThirdPartyApis = (state?.thirdPartyApis || []).map((item) => {
+    if (String(item?.apiName || '').includes('表单拉取') || item?.scheduleJobCode === 'FORM_CLUE_INCREMENTAL') {
+      return {
+        ...item,
+        apiName: '分销订单入站',
+        moduleCode: 'ORDER',
+        baseUrl: '/open/distribution/events',
+        method: 'POST',
+        authType: '签名',
+        enabled: 1,
+        syncMode: '事件入站',
+        scheduleJobCode: 'DISTRIBUTION_OUTBOX_PROCESS'
+      }
+    }
+    return item
+  })
 
   nextState.domainSettings = {
     ...(defaults.domainSettings || {}),
@@ -450,7 +502,7 @@ function migrateSystemConsoleState(state) {
     })
   }
   nextState.permissionBaselineVersion = SYSTEM_CONSOLE_SCHEMA_VERSION
-  nextState.dictionaries = mergeCollectionByKey(state?.dictionaries, defaults.dictionaries, (item) => `${item?.dictType || ''}:${item?.itemCode || ''}`)
+  nextState.dictionaries = mergeCollectionByKey(normalizedDictionaries, defaults.dictionaries, (item) => `${item?.dictType || ''}:${item?.itemCode || ''}`)
   nextState.parameters = mergeCollectionByKey(state?.parameters, defaults.parameters, (item) => item?.paramKey || item?.id)
   nextState.wecomLiveCodeConfigs = mergeCollectionByKey(state?.wecomLiveCodeConfigs, defaults.wecomLiveCodeConfigs, (item) => item?.id)
   nextState.wecomCustomerPortraits = mergeCollectionByKey(state?.wecomCustomerPortraits, defaults.wecomCustomerPortraits, (item) => item?.id)
@@ -464,6 +516,7 @@ function migrateSystemConsoleState(state) {
   nextState.distributorConfigs = mergeCollectionByKey(state?.distributorConfigs, defaults.distributorConfigs, (item) => item?.configName || item?.id)
   nextState.serviceFormTemplates = mergeCollectionByKey(state?.serviceFormTemplates, defaults.serviceFormTemplates, (item) => item?.templateCode || item?.id)
   nextState.serviceFormBindings = mergeCollectionByKey(state?.serviceFormBindings, defaults.serviceFormBindings, (item) => item?.storeName || item?.id)
+  nextState.thirdPartyApis = mergeCollectionByKey(normalizedThirdPartyApis, defaults.thirdPartyApis, (item) => item?.scheduleJobCode || item?.apiName || item?.id)
   nextState.paymentSettings = {
     ...(defaults.paymentSettings || {}),
     ...(state?.paymentSettings || {}),

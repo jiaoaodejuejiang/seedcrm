@@ -212,11 +212,11 @@
             </label>
             <label>
               <span>令牌地址</span>
-              <el-input v-model="thirdPartyForm.tokenUrl" placeholder="如 https://open.douyin.com/oauth/client_token/" />
+              <el-input v-model="thirdPartyForm.tokenUrl" placeholder="如 https://api.oceanengine.com/open_api/oauth2/access_token/" />
             </label>
             <label>
               <span>接口路径</span>
-              <el-input v-model="thirdPartyForm.endpointPath" placeholder="如 /goodlife/v1/open_api/crm/clue/query/" />
+              <el-input v-model="thirdPartyForm.endpointPath" placeholder="如 /open_api/2/tools/clue/life/get/" />
             </label>
             <label>
               <span>客户端 Key</span>
@@ -1182,11 +1182,11 @@ function createThirdPartyForm() {
     providerName: '抖音来客线索',
     moduleCode: 'CLUE',
     executionMode: 'MOCK',
-    authType: 'CLIENT_TOKEN',
+    authType: 'AUTH_CODE',
     appId: '',
-    baseUrl: '',
-    tokenUrl: '',
-    endpointPath: '/goodlife/v1/open_api/crm/clue/query/',
+    baseUrl: 'https://api.oceanengine.com',
+    tokenUrl: 'https://api.oceanengine.com/open_api/oauth2/access_token/',
+    endpointPath: '/open_api/2/tools/clue/life/get/',
     clientKey: '',
     clientSecret: '',
     clientSecretMasked: '',

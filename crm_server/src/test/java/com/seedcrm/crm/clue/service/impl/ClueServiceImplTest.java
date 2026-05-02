@@ -2,11 +2,13 @@ package com.seedcrm.crm.clue.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.enums.SourceChannel;
+import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.DedupConfigResponse;
 import com.seedcrm.crm.clue.management.service.ClueManagementService;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.distributor.service.DistributorService;
@@ -46,7 +48,8 @@ class ClueServiceImplTest {
         when(clueManagementService.autoAssignIfEnabled(any(Clue.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Clue request = new Clue();
-        request.setPhone("13800138000");
+        request.setPhone("+86 138-0013-8000");
+        request.setWechat(" DouYin_User ");
         request.setSource("distribution");
         request.setSourceChannel("distribution");
 
@@ -54,6 +57,8 @@ class ClueServiceImplTest {
 
         assertThat(created.getSourceChannel()).isEqualTo(SourceChannel.DISTRIBUTOR.name());
         assertThat(created.getSource()).isEqualTo("distribution");
+        assertThat(created.getPhone()).isEqualTo("13800138000");
+        assertThat(created.getWechat()).isEqualTo("douyin_user");
         assertThat(created.getRawData()).isEqualTo("{}");
     }
 
@@ -116,5 +121,47 @@ class ClueServiceImplTest {
         assertThat(created.getCurrentOwnerId()).isEqualTo(1001L);
         assertThat(created.getStatus()).isEqualTo("assigned");
         verify(clueManagementService).autoAssignIfEnabled(any(Clue.class));
+    }
+
+    @Test
+    void addClueShouldMergeSameCustomerWithinDedupWindow() {
+        when(clueManagementService.getDedupConfig()).thenReturn(new DedupConfigResponse(1, 90, null));
+        Clue existing = new Clue();
+        existing.setId(10L);
+        existing.setPhone("13800138099");
+        existing.setSourceChannel("DOUYIN");
+        existing.setCreatedAt(LocalDateTime.now().minusDays(2));
+        when(clueMapper.selectOne(any())).thenReturn(existing);
+
+        Clue request = new Clue();
+        request.setPhone("13800138099");
+        request.setName("新留资");
+        request.setSourceChannel("DOUYIN");
+
+        Clue merged = clueService.addClue(request);
+
+        assertThat(merged.getId()).isEqualTo(10L);
+        assertThat(merged.getName()).isEqualTo("新留资");
+        verify(clueMapper, never()).insert(any(Clue.class));
+        verify(clueManagementService, never()).autoAssignIfEnabled(any(Clue.class));
+    }
+
+    @Test
+    void addClueShouldKeepIdentityGuardWhenDedupDisabled() {
+        when(clueManagementService.getDedupConfig()).thenReturn(new DedupConfigResponse(0, 90, null));
+        Clue existing = new Clue();
+        existing.setId(11L);
+        existing.setPhone("13800138100");
+        when(clueMapper.selectOne(any())).thenReturn(existing);
+
+        Clue request = new Clue();
+        request.setPhone("13800138100");
+        request.setSourceChannel("DOUYIN");
+
+        Clue merged = clueService.addClue(request);
+
+        assertThat(merged.getId()).isEqualTo(11L);
+        verify(clueMapper, never()).insert(any(Clue.class));
+        verify(clueManagementService, never()).autoAssignIfEnabled(any(Clue.class));
     }
 }

@@ -15,9 +15,14 @@ public class SchedulerIntegrationSchemaInitializer {
 
     private static final String DOUYIN_PROVIDER_CODE = "DOUYIN_LAIKE";
     private static final String DOUYIN_PROVIDER_NAME = "抖音来客";
-    private static final String DOUYIN_BASE_URL = "https://open.douyin.com";
-    private static final String DOUYIN_TOKEN_URL = "https://open.douyin.com/oauth/access_token/";
-    private static final String DOUYIN_CLUE_ENDPOINT = "/goodlife/v1/clue/douyin/list/";
+    private static final String DOUYIN_BASE_URL = "https://api.oceanengine.com";
+    private static final String DOUYIN_TOKEN_URL = "https://api.oceanengine.com/open_api/oauth2/access_token/";
+    private static final String DOUYIN_CLUE_ENDPOINT = "/open_api/2/tools/clue/life/get/";
+    private static final String LEGACY_DOUYIN_BASE_URL = "https://open.douyin.com";
+    private static final String LEGACY_DOUYIN_TOKEN_URL = "https://open.douyin.com/oauth/access_token/";
+    private static final String LEGACY_DOUYIN_CLIENT_TOKEN_URL = "https://open.douyin.com/oauth/client_token/";
+    private static final String LEGACY_DOUYIN_CLUE_ENDPOINT = "/goodlife/v1/clue/douyin/list/";
+    private static final String LEGACY_DOUYIN_LIFE_CLUE_ENDPOINT = "/goodlife/v1/open_api/crm/clue/query/";
     private static final String DOUYIN_VOUCHER_PREPARE_PATH = "/goodlife/v1/fulfilment/certificate/prepare/";
     private static final String DOUYIN_VOUCHER_VERIFY_PATH = "/goodlife/v1/fulfilment/certificate/verify/";
     private static final String DOUYIN_VOUCHER_CANCEL_PATH = "/goodlife/v1/fulfilment/certificate/cancel/";
@@ -33,6 +38,8 @@ public class SchedulerIntegrationSchemaInitializer {
     private static final String DISTRIBUTION_EVENT_ENDPOINT = "/open/distribution/events";
     private static final String DISTRIBUTION_STATUS_QUERY_PATH = "/open/distribution/orders/status";
     private static final String DISTRIBUTION_RECONCILIATION_PULL_PATH = "/open/distribution/orders/reconcile";
+    private static final String DISTRIBUTION_VOUCHER_VERIFY_PATH = "/open/distribution/vouchers/verify";
+    private static final String DISTRIBUTION_VERIFY_CODE_FIELD = "voucherCode";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -445,9 +452,18 @@ public class SchedulerIntegrationSchemaInitializer {
                         module_code = COALESCE(module_code, 'CLUE'),
                         execution_mode = COALESCE(execution_mode, 'MOCK'),
                         auth_type = 'AUTH_CODE',
-                        base_url = COALESCE(base_url, ?),
-                        token_url = COALESCE(token_url, ?),
-                        endpoint_path = COALESCE(endpoint_path, ?),
+                        base_url = CASE
+                            WHEN base_url IS NULL OR base_url = '' OR base_url = ? THEN ?
+                            ELSE base_url
+                        END,
+                        token_url = CASE
+                            WHEN token_url IS NULL OR token_url = '' OR token_url IN (?, ?) THEN ?
+                            ELSE token_url
+                        END,
+                        endpoint_path = CASE
+                            WHEN endpoint_path IS NULL OR endpoint_path = '' OR endpoint_path IN (?, ?) THEN ?
+                            ELSE endpoint_path
+                        END,
                         voucher_prepare_path = COALESCE(voucher_prepare_path, ?),
                         voucher_verify_path = COALESCE(voucher_verify_path, ?),
                         voucher_cancel_path = COALESCE(voucher_cancel_path, ?),
@@ -471,8 +487,13 @@ public class SchedulerIntegrationSchemaInitializer {
                     WHERE provider_code = ?
                     """,
                     DOUYIN_PROVIDER_NAME,
+                    LEGACY_DOUYIN_BASE_URL,
                     DOUYIN_BASE_URL,
+                    LEGACY_DOUYIN_TOKEN_URL,
+                    LEGACY_DOUYIN_CLIENT_TOKEN_URL,
                     DOUYIN_TOKEN_URL,
+                    LEGACY_DOUYIN_CLUE_ENDPOINT,
+                    LEGACY_DOUYIN_LIFE_CLUE_ENDPOINT,
                     DOUYIN_CLUE_ENDPOINT,
                     DOUYIN_VOUCHER_PREPARE_PATH,
                     DOUYIN_VOUCHER_VERIFY_PATH,
@@ -532,14 +553,16 @@ public class SchedulerIntegrationSchemaInitializer {
                         module_code = 'SCHEDULER',
                         execution_mode = COALESCE(NULLIF(execution_mode, ''), 'MOCK'),
                         auth_type = COALESCE(NULLIF(auth_type, ''), 'HMAC_SHA256'),
-                        endpoint_path = ?,
-                        status_query_path = COALESCE(status_query_path, ?),
-                        reconciliation_pull_path = COALESCE(reconciliation_pull_path, ?),
-                        status_mapping = COALESCE(status_mapping, 'paid=distribution.order.paid,cancelled=distribution.order.cancelled,refund_pending=distribution.order.refund_pending,refunded=distribution.order.refunded'),
+                        endpoint_path = COALESCE(NULLIF(endpoint_path, ''), ?),
+                        status_query_path = COALESCE(NULLIF(status_query_path, ''), ?),
+                        reconciliation_pull_path = COALESCE(NULLIF(reconciliation_pull_path, ''), ?),
+                        voucher_verify_path = COALESCE(NULLIF(voucher_verify_path, ''), ?),
+                        verify_code_field = COALESCE(NULLIF(verify_code_field, ''), ?),
+                        status_mapping = COALESCE(NULLIF(status_mapping, ''), 'paid=distribution.order.paid,cancelled=distribution.order.cancelled,refund_pending=distribution.order.refund_pending,refunded=distribution.order.refunded'),
                         rate_limit_per_minute = COALESCE(rate_limit_per_minute, 60),
                         cache_ttl_seconds = COALESCE(cache_ttl_seconds, 30),
                         enabled = COALESCE(enabled, 1),
-                        remark = ?,
+                        remark = COALESCE(NULLIF(remark, ''), ?),
                         updated_at = ?
                     WHERE provider_code = ?
                     """,
@@ -547,6 +570,8 @@ public class SchedulerIntegrationSchemaInitializer {
                     DISTRIBUTION_EVENT_ENDPOINT,
                     DISTRIBUTION_STATUS_QUERY_PATH,
                     DISTRIBUTION_RECONCILIATION_PULL_PATH,
+                    DISTRIBUTION_VOUCHER_VERIFY_PATH,
+                    DISTRIBUTION_VERIFY_CODE_FIELD,
                     "SeedCRM 方案B：只承接外部分销已支付订单，匹配/创建 Customer 并创建 Order(paid)，不进入 Clue，资金流由外部系统处理",
                     now,
                     DISTRIBUTION_PROVIDER_CODE);
@@ -555,12 +580,13 @@ public class SchedulerIntegrationSchemaInitializer {
         jdbcTemplate.update("""
                 INSERT INTO integration_provider_config(
                     provider_code, provider_name, module_code, execution_mode, auth_type,
-                    endpoint_path, status_query_path, reconciliation_pull_path, status_mapping,
+                    endpoint_path, status_query_path, reconciliation_pull_path,
+                    voucher_verify_path, verify_code_field, status_mapping,
                     page_size, pull_window_minutes, overlap_minutes, request_timeout_ms,
                     rate_limit_per_minute, cache_ttl_seconds,
                     enabled, remark, auth_status, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 DISTRIBUTION_PROVIDER_CODE,
                 DISTRIBUTION_PROVIDER_NAME,
@@ -570,6 +596,8 @@ public class SchedulerIntegrationSchemaInitializer {
                 DISTRIBUTION_EVENT_ENDPOINT,
                 DISTRIBUTION_STATUS_QUERY_PATH,
                 DISTRIBUTION_RECONCILIATION_PULL_PATH,
+                DISTRIBUTION_VOUCHER_VERIFY_PATH,
+                DISTRIBUTION_VERIFY_CODE_FIELD,
                 "paid=distribution.order.paid,cancelled=distribution.order.cancelled,refund_pending=distribution.order.refund_pending,refunded=distribution.order.refunded",
                 30,
                 60,

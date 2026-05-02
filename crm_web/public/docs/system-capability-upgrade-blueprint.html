@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM 系统能力升级蓝图与 P0 落地计划</title>
+  <style>
+    body { margin: 0; background: #f6f8fb; color: #172033; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; line-height: 1.75; }
+    main { max-width: 1160px; margin: 0 auto; padding: 34px 22px 72px; }
+    header, section { margin-top: 18px; padding: 24px; border: 1px solid #e5eaf3; border-radius: 22px; background: #fff; box-shadow: 0 18px 45px rgba(23, 32, 51, .06); }
+    h1, h2, h3 { margin: 0; line-height: 1.35; }
+    h1 { font-size: 30px; }
+    h2 { margin-bottom: 12px; font-size: 22px; }
+    h3 { margin-top: 16px; font-size: 17px; }
+    p { margin: 8px 0 0; color: #64748b; }
+    ul, ol { margin: 10px 0 0; padding-left: 22px; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    code { color: #0f766e; }
+    pre { overflow: auto; padding: 14px; border-radius: 14px; background: #101827; color: #e5edf8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5eaf3; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    .badge { display: inline-block; margin: 10px 8px 0 0; padding: 5px 10px; border-radius: 999px; background: #e8f4ff; color: #075985; font-size: 12px; font-weight: 700; }
+    .ok { border-left: 4px solid #10b981; }
+    .warn { border-left: 4px solid #f59e0b; }
+    .danger { border-left: 4px solid #ef4444; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SeedCRM 系统能力升级蓝图与 P0 落地计划</h1>
+    <p>目标：后续业务变化优先通过系统配置、权限策略、接口适配、流程规则、表单模板完成；确需代码增强时，优先增强系统能力，而不是把单次业务需求写死。</p>
+    <span class="badge">约束优先</span>
+    <span class="badge">主链路不变</span>
+    <span class="badge">配置化优先</span>
+    <span class="badge">工作人员体验优先</span>
+  </header>
+
+  <section class="danger">
+    <h2>1. 不可突破的业务边界</h2>
+    <ul>
+      <li>标准链路固定为 <code>Clue → Customer → Order → PlanOrder</code>。</li>
+      <li>分销方案 B 固定为 <code>ExternalDistributionPaidOrder → Customer → Order(paid) → PlanOrder</code>。</li>
+      <li>distribution 已支付订单不进入 Clue，不参与客资公海、自动分配、线索转化率统计。</li>
+      <li>外部系统不得直接创建 Customer / Order / PlanOrder，必须通过受控 Open API / Scheduler 复用入站服务。</li>
+      <li>Scheduler 不得绕过入站服务直接写 Customer / Order / PlanOrder。</li>
+      <li>SeedCRM 不承接外部分销佣金、提现、退款资金流，只承接已支付数据、预约排档、门店履约、状态回推。</li>
+      <li>权限必须覆盖 RBAC、ABAC、字段脱敏、partner 数据范围；raw_data 默认脱敏。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>2. 成熟系统参考，但不重复造轮子</h2>
+    <table>
+      <thead><tr><th>参考对象</th><th>可借鉴能力</th><th>SeedCRM 的取舍</th></tr></thead>
+      <tbody>
+        <tr><td>RuoYi</td><td>菜单、角色、部门、字典、参数、日志、数据权限。</td><td>借鉴后台基础设施，不直接照搬代码生成式业务开发。</td></tr>
+        <tr><td>芋道 / ruoyi-vue-pro</td><td>权限、工作流、动态表单、系统配置、审计、低代码思想。</td><td>学习配置治理和流程治理，但主链路约束必须由代码和数据库兜底。</td></tr>
+        <tr><td>Flowable</td><td>BPMN 流程、用户任务、流程实例、历史追踪。</td><td>当前先做轻量状态机和节点动作，不急着引入重型 BPMN 引擎。</td></tr>
+        <tr><td>Element Plus</td><td>表格、表单、布局、抽屉、弹窗等稳定后台组件。</td><td>统一 SeedCRM 列表、表单、详情、危险操作体验规范。</td></tr>
+      </tbody>
+    </table>
+    <p>参考资料：<a href="https://doc.ruoyi.vip/" target="_blank">RuoYi 文档</a>、<a href="https://doc.iocoder.cn/feature/" target="_blank">芋道功能列表</a>、<a href="https://www.flowable.com/open-source/docs/bpmn/ch07a-BPMN-Introduction" target="_blank">Flowable BPMN Introduction</a>、<a href="https://element-plus.org/zh-CN/component/table.html" target="_blank">Element Plus Table</a>、<a href="https://element-plus.org/en-US/component/form" target="_blank">Element Plus Form</a>。</p>
+  </section>
+
+  <section>
+    <h2>3. 系统能力分层</h2>
+    <table>
+      <thead><tr><th>层级</th><th>能力</th><th>目标</th></tr></thead>
+      <tbody>
+        <tr><td>基础治理层</td><td>字典、参数、配置版本、审计、导入导出、环境保护。</td><td>把状态、来源、字段显示、危险开关统一管理。</td></tr>
+        <tr><td>权限策略层</td><td>菜单、按钮、接口、数据范围、字段脱敏、partner 范围。</td><td>让权限配置可视、可测、可回归。</td></tr>
+        <tr><td>接口适配层</td><td>Provider、签名、字段映射、状态映射、dry-run、回调日志、异常队列。</td><td>新增渠道优先配置接入，不写散落业务逻辑。</td></tr>
+        <tr><td>调度与队列层</td><td>任务模板、执行模式、频率、重试、Outbox、对账、状态回查。</td><td>调度只做同步、补偿、重放和回推，不越权写核心表。</td></tr>
+        <tr><td>流程与规则层</td><td>轻量状态机、节点动作、表单模板、规则试算、命中日志。</td><td>流程可配置，但真实状态变更仍调用受控服务。</td></tr>
+        <tr><td>工作人员体验层</td><td>今日待办、统一列表、统一表单、状态下一步、配置防误触。</td><td>让员工少理解系统结构，多按任务完成工作。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="ok">
+    <h2>4. P0 数据结构</h2>
+    <p>P0 不新增核心业务模型，只新增或增强系统能力模型。</p>
+    <table>
+      <thead><tr><th>模型</th><th>关键字段</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td><code>system_dictionary</code></td><td>dict_code、dict_name、scope、enabled、description</td><td>统一来源、状态、角色、异常类型、字段分组。</td></tr>
+        <tr><td><code>system_dictionary_item</code></td><td>dict_code、item_value、display_name、sort_no、style_token、enabled</td><td>编码和值的中文展示、排序和状态色。</td></tr>
+        <tr><td><code>system_config_version</code></td><td>config_key、before_value、after_value、version_no、operator、change_reason</td><td>配置版本、审计、回滚依据。</td></tr>
+        <tr><td><code>permission_policy_template</code></td><td>policy_code、module、action、data_scope、field_scope、condition_json</td><td>统一 RBAC/ABAC/字段脱敏策略模板。</td></tr>
+        <tr><td><code>integration_provider_adapter</code></td><td>provider_code、provider_type、execution_mode、auth_config、mapping_config、rate_limit</td><td>抖音、分销、企微等 Provider 统一接入。</td></tr>
+        <tr><td><code>integration_mapping_version</code></td><td>provider_code、mapping_type、mapping_json、version_no、status</td><td>字段映射、状态映射、订单类型映射版本化。</td></tr>
+        <tr><td><code>workflow_definition</code></td><td>flow_code、flow_name、bind_module、version_no、status</td><td>轻量流程定义，不替代核心状态。</td></tr>
+        <tr><td><code>workflow_node_definition</code></td><td>flow_code、node_code、node_name、action_code、form_template_id、permission_code</td><td>流程节点、动作、表单、权限绑定。</td></tr>
+        <tr><td><code>rule_definition</code></td><td>rule_code、rule_type、condition_json、action_json、version_no、status</td><td>分配、薪酬、标签、异常分级等规则定义。</td></tr>
+        <tr><td><code>operation_experience_profile</code></td><td>page_code、list_schema、filter_schema、action_schema、empty_state_json</td><td>统一列表、筛选、操作列和空状态配置。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>5. P0 接口定义</h2>
+    <table>
+      <thead><tr><th>接口</th><th>方法</th><th>目标</th><th>约束</th></tr></thead>
+      <tbody>
+        <tr><td><code>/system/dictionaries</code></td><td>GET / POST / PUT</td><td>字典分组和字典项维护。</td><td>必须有审计；生产关键字典修改需确认。</td></tr>
+        <tr><td><code>/system/configs/versions</code></td><td>GET</td><td>查看配置版本和差异。</td><td>敏感值脱敏。</td></tr>
+        <tr><td><code>/system/configs/rollback</code></td><td>POST</td><td>回滚配置到指定版本。</td><td>高风险配置需要二次确认和权限。</td></tr>
+        <tr><td><code>/permission/policies/preview</code></td><td>POST</td><td>预览角色能看哪些菜单、按钮、数据和字段。</td><td>不落库，用于配置前验证。</td></tr>
+        <tr><td><code>/integration/providers/validate</code></td><td>POST</td><td>Provider 配置预检。</td><td>默认 dry-run，不调用真实写入接口。</td></tr>
+        <tr><td><code>/integration/mappings/dry-run</code></td><td>POST</td><td>字段映射、状态映射、幂等匹配预览。</td><td>不得写 Customer / Order / PlanOrder。</td></tr>
+        <tr><td><code>/scheduler/jobs/dry-run</code></td><td>POST</td><td>调度任务预检。</td><td>真实执行前必须先 dry-run。</td></tr>
+        <tr><td><code>/workflow/definitions/simulate</code></td><td>POST</td><td>流程路径和节点权限模拟。</td><td>只模拟，不改变业务状态。</td></tr>
+        <tr><td><code>/rules/simulate</code></td><td>POST</td><td>规则试算，返回命中条件和结果。</td><td>不落库，保留试算日志。</td></tr>
+        <tr><td><code>/workbench/todos</code></td><td>GET</td><td>今日待办聚合。</td><td>按 RBAC/ABAC 返回可处理事项。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>6. P0 权限规则</h2>
+    <ul>
+      <li><code>admin</code>：可维护系统字典、配置版本、权限策略、Provider、调度、流程定义，但生产危险操作仍需要确认和审计。</li>
+      <li><code>integration_admin</code>：可配置渠道、签名、字段映射、状态映射、调度策略，不可直接修改核心业务数据。</li>
+      <li><code>integration_operator</code>：可查看日志、异常、重试结果，可发起受控重试，不可修改 Provider 密钥和核心数据。</li>
+      <li><code>clue_manager</code>：可配置客资分配规则、值班客服、客资范围，不可处理 distribution paid order 进入 Clue。</li>
+      <li><code>store_service</code>：只能处理门店范围内 Order / PlanOrder / 服务单，不可查看外部 raw_data 完整内容。</li>
+      <li><code>finance</code>：可查看 finished 后内部门店薪酬和结算，不承接外部分销佣金、提现、退款资金流。</li>
+      <li><code>private_domain_service</code>：可查看绑定客户、会员视角、企微关系和标签，不可直接创建 Customer / Order。</li>
+      <li><code>partner_app</code>：非后台角色，仅能访问自身 <code>partner_code</code> 范围 Open API。</li>
+    </ul>
+    <p>每个接口都必须经过 RBAC；每个列表、详情、导出、raw_data 查看都必须经过 ABAC 和字段脱敏。</p>
+  </section>
+
+  <section>
+    <h2>7. P0 流程</h2>
+    <h3>新增业务需求处理流程</h3>
+    <ol>
+      <li>先判断是否影响核心链路：Clue、Customer、Order、PlanOrder。</li>
+      <li>如果不影响核心链路，优先映射到字典、配置、权限、表单、流程、规则、Provider。</li>
+      <li>如果系统能力不足，先增强系统能力，再承接业务需求。</li>
+      <li>所有接口联调先 dry-run，再 MOCK，再 LIVE。</li>
+      <li>所有高风险操作必须有环境条、影响预览、二次确认、审计日志、回滚方案。</li>
+    </ol>
+
+    <h3>外部渠道接入流程</h3>
+    <ol>
+      <li>创建 Provider 配置，配置签名、限流、回调路径、执行模式。</li>
+      <li>配置字段映射、状态映射、订单类型映射。</li>
+      <li>用 dry-run 预览 Customer 匹配、Order 幂等、字段落点。</li>
+      <li>通过 MOCK 模式完成异常队列、重试、对账、回推闭环。</li>
+      <li>LIVE 模式只能通过统一入站服务进入主链路。</li>
+    </ol>
+
+    <h3>工作人员操作流程</h3>
+    <ol>
+      <li>进入今日待办，不要求员工理解全部菜单结构。</li>
+      <li>按待办进入客资、订单、排档、服务单、异常队列。</li>
+      <li>页面展示当前状态、阻塞原因、下一步主操作。</li>
+      <li>危险操作进入抽屉或弹窗，显示影响范围和确认词。</li>
+      <li>操作完成后提示下一步，而不是只显示“成功”。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>8. 统一体验规范</h2>
+    <table>
+      <thead><tr><th>场景</th><th>规范</th></tr></thead>
+      <tbody>
+        <tr><td>列表页</td><td>状态快捷筛选 + 高级筛选 + 列设置 + 分页 + 固定操作列 + 最后刷新时间。</td></tr>
+        <tr><td>表格操作</td><td>一行一个主操作，次操作收进“更多”，危险操作固定在底部并用红色。</td></tr>
+        <tr><td>编辑</td><td>低风险字段可行内编辑；会改变业务阶段、归属、流程的操作必须抽屉确认。</td></tr>
+        <tr><td>配置页</td><td>顶部显示当前环境、运行模式、最近修改人、最近修改时间；保存前显示差异摘要。</td></tr>
+        <tr><td>调度页</td><td>预检和真实执行视觉分离，真实执行必须 warning / danger，且需要影响范围。</td></tr>
+        <tr><td>空状态</td><td>不要只显示暂无数据，要给下一步入口，例如“去联调工作台验证接口”。</td></tr>
+        <tr><td>错误提示</td><td>包含问题是什么、数据是否已写入、下一步去哪处理。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="warn">
+    <h2>9. 落地顺序</h2>
+    <ol>
+      <li><strong>P0-1：统一字典中心。</strong>先覆盖来源、状态、会员角色、异常类型、字段脱敏、tab 分组。</li>
+      <li><strong>P0-2：权限策略预览。</strong>角色选择后可看到菜单、按钮、接口、数据范围、字段范围。</li>
+      <li><strong>P0-3：配置版本和回滚。</strong>所有高风险配置保存前有差异，保存后可追踪，可回滚。</li>
+      <li><strong>P0-4：Provider 接入标准化。</strong>抖音、分销、企微共用 Provider + Mapping + DryRun 模式。</li>
+      <li><strong>P0-5：调度安全增强。</strong>任务模板、dry-run、真实执行确认、日志、重试、Outbox 统一。</li>
+      <li><strong>P0-6：今日待办工作台。</strong>先聚合高频任务，不大改原业务页面。</li>
+      <li><strong>P1：轻量流程和规则试算。</strong>服务单、异常处理、薪酬、分配、标签逐步规则化。</li>
+      <li><strong>P1：通用动态表单。</strong>从服务单模板扩展，不先做全量低代码。</li>
+    </ol>
+  </section>
+
+  <section class="danger">
+    <h2>10. 验收门禁</h2>
+    <ul>
+      <li>新增来源不改代码即可完成展示、筛选、状态中文化和字段脱敏。</li>
+      <li>新增外部渠道能通过 Provider 配置 + Mapping dry-run 完成联调预览。</li>
+      <li>任一真实调度执行前必须有 dry-run 记录和影响范围。</li>
+      <li>权限策略能预览角色可见菜单、按钮、接口、数据范围、字段范围。</li>
+      <li>所有配置变更都有版本、差异、操作者、原因和回滚能力。</li>
+      <li>分销 paid order 永远不进入 Clue，且 Scheduler 不直接写核心表。</li>
+      <li>工作人员能从今日待办完成主要任务，不必须记住复杂菜单路径。</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

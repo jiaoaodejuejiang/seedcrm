@@ -29,6 +29,8 @@ import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.order.mapper.OrderRefundRecordMapper;
 import com.seedcrm.crm.order.service.OrderSettlementService;
 import com.seedcrm.crm.order.service.OrderService;
+import com.seedcrm.crm.order.service.OrderVoucherVerificationGateway;
+import com.seedcrm.crm.order.service.OrderVoucherVerificationResult;
 import com.seedcrm.crm.order.support.OrderAmountMaskingSupport;
 import com.seedcrm.crm.order.support.ServiceFormVersionSupport;
 import com.seedcrm.crm.order.util.OrderNoGenerator;
@@ -38,6 +40,7 @@ import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.risk.service.DbLockService;
 import com.seedcrm.crm.salary.entity.SalaryDetail;
 import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
+import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import com.seedcrm.crm.systemflow.support.SystemFlowRuntimeBridge;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -53,9 +56,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 @Slf4j
@@ -64,6 +72,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     private static final String REFUND_SCENE_STORE_SERVICE = "STORE_SERVICE";
     private static final String REFUND_SCENE_FINANCE_PAYMENT = "FINANCE_VERIFIED_PAYMENT";
+    private static final String CONFIG_DEPOSIT_DIRECT_ENABLED = "deposit.direct.enabled";
+    private static final String CONFIG_SERVICE_AMOUNT_EDIT_ROLES = "amount.visibility.service_confirm_edit_roles";
+    private static final String DEFAULT_SERVICE_AMOUNT_EDIT_ROLES = "ADMIN,FINANCE,PHOTO_SELECTOR";
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter ACTION_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final Set<String> ACTIVE_APPOINTMENT_ACTIONS = Set.of(
@@ -97,11 +108,14 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final DistributorIncomeService distributorIncomeService;
     private final DbLockService dbLockService;
     private final OrderSettlementService orderSettlementService;
+    private final OrderVoucherVerificationGateway voucherVerificationGateway;
     private final OrderActionRecordMapper orderActionRecordMapper;
     private final OrderRefundRecordMapper orderRefundRecordMapper;
     private final SalaryDetailMapper salaryDetailMapper;
     private final ObjectMapper objectMapper;
+    private final SystemConfigService systemConfigService;
     private final SystemFlowRuntimeBridge systemFlowRuntimeBridge;
+    private final TransactionTemplate voucherAuditTransactionTemplate;
 
     public OrderServiceImpl(OrderMapper orderMapper,
                             ClueMapper clueMapper,
@@ -111,11 +125,35 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                             DistributorIncomeService distributorIncomeService,
                             DbLockService dbLockService,
                             OrderSettlementService orderSettlementService,
+                            OrderVoucherVerificationGateway voucherVerificationGateway,
                             OrderActionRecordMapper orderActionRecordMapper,
                             OrderRefundRecordMapper orderRefundRecordMapper,
                             SalaryDetailMapper salaryDetailMapper,
                             ObjectMapper objectMapper,
+                            SystemConfigService systemConfigService,
                             SystemFlowRuntimeBridge systemFlowRuntimeBridge) {
+        this(orderMapper, clueMapper, customerService, customerTagService, planOrderMapper, distributorIncomeService,
+                dbLockService, orderSettlementService, voucherVerificationGateway, orderActionRecordMapper,
+                orderRefundRecordMapper, salaryDetailMapper, objectMapper, systemConfigService, systemFlowRuntimeBridge, null);
+    }
+
+    @Autowired
+    public OrderServiceImpl(OrderMapper orderMapper,
+                            ClueMapper clueMapper,
+                            CustomerService customerService,
+                            CustomerTagService customerTagService,
+                            PlanOrderMapper planOrderMapper,
+                            DistributorIncomeService distributorIncomeService,
+                            DbLockService dbLockService,
+                            OrderSettlementService orderSettlementService,
+                            OrderVoucherVerificationGateway voucherVerificationGateway,
+                            OrderActionRecordMapper orderActionRecordMapper,
+                            OrderRefundRecordMapper orderRefundRecordMapper,
+                            SalaryDetailMapper salaryDetailMapper,
+                            ObjectMapper objectMapper,
+                            SystemConfigService systemConfigService,
+                            SystemFlowRuntimeBridge systemFlowRuntimeBridge,
+                            PlatformTransactionManager transactionManager) {
         this.orderMapper = orderMapper;
         this.clueMapper = clueMapper;
         this.customerService = customerService;
@@ -124,11 +162,17 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         this.distributorIncomeService = distributorIncomeService;
         this.dbLockService = dbLockService;
         this.orderSettlementService = orderSettlementService;
+        this.voucherVerificationGateway = voucherVerificationGateway;
         this.orderActionRecordMapper = orderActionRecordMapper;
         this.orderRefundRecordMapper = orderRefundRecordMapper;
         this.salaryDetailMapper = salaryDetailMapper;
         this.objectMapper = objectMapper;
+        this.systemConfigService = systemConfigService;
         this.systemFlowRuntimeBridge = systemFlowRuntimeBridge;
+        this.voucherAuditTransactionTemplate = transactionManager == null ? null : new TransactionTemplate(transactionManager);
+        if (this.voucherAuditTransactionTemplate != null) {
+            this.voucherAuditTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        }
     }
 
     @Override
@@ -411,6 +455,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
         String verificationMethod = normalizeVerificationMethod(orderVoucherVerifyDTO.getVerificationMethod());
         if (isDirectDepositVerification(verificationMethod)
+                && !systemConfigService.getBoolean(CONFIG_DEPOSIT_DIRECT_ENABLED, true)) {
+            throw new BusinessException("direct deposit verification is disabled");
+        }
+        if (isDirectDepositVerification(verificationMethod)
                 && (order.getType() == null || order.getType() != OrderType.DEPOSIT.getCode())) {
             throw new BusinessException("only deposit orders can use direct deposit verification");
         }
@@ -422,6 +470,19 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             }
             return order;
         }
+        OrderVoucherVerificationResult verificationResult;
+        if (isDirectDepositVerification(verificationMethod)) {
+            verificationResult = OrderVoucherVerificationResult.skipped();
+        } else {
+            try {
+                verificationResult = voucherVerificationGateway.verify(order, verificationCode, verificationMethod);
+            } catch (BusinessException exception) {
+                String traceId = buildVoucherFailureTraceId();
+                recordVoucherVerificationFailure(order, currentStatus, verificationMethod, verificationCode,
+                        operatorUserId, exception, traceId);
+                throw new BusinessException(appendTraceId(exception.getMessage(), traceId));
+            }
+        }
 
         order.setVerificationStatus("VERIFIED");
         order.setVerificationMethod(verificationMethod);
@@ -432,20 +493,28 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (orderMapper.updateById(order) <= 0) {
             throw new BusinessException("failed to verify order");
         }
+        String actionType = resolveVoucherActionType(verificationMethod, verificationResult);
         recordOrderAction(order.getId(),
-                isDirectDepositVerification(verificationMethod) ? "DIRECT_DEPOSIT_VERIFY" : "VOUCHER_VERIFY",
+                actionType,
                 currentStatus.name(), currentStatus.name(),
-                operatorUserId, verificationCode);
+                operatorUserId, verificationCode,
+                buildVoucherVerificationActionExtra(verificationMethod, verificationResult));
         refreshCustomerLifecycle(order.getCustomerId());
         systemFlowRuntimeBridge.recordOrderAction(order, "APPOINTMENT", "ORDER_VERIFY",
                 operatorUserId, operatorRoleCode,
-                isDirectDepositVerification(verificationMethod) ? "定金免码确认" : "券码核销");
+                resolveVoucherFlowSummary(verificationMethod, verificationResult));
         return order;
     }
 
     @Override
     @Transactional
     public Order updateServiceDetail(OrderServiceDetailDTO orderServiceDetailDTO) {
+        return updateServiceDetail(orderServiceDetailDTO, null);
+    }
+
+    @Override
+    @Transactional
+    public Order updateServiceDetail(OrderServiceDetailDTO orderServiceDetailDTO, String operatorRoleCode) {
         validateOrderId(orderServiceDetailDTO == null ? null : orderServiceDetailDTO.getOrderId());
         Order order = getOrderById(orderServiceDetailDTO.getOrderId());
         ensureOrderCustomerBound(order);
@@ -455,7 +524,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setRemark(StringUtils.hasText(orderServiceDetailDTO.getServiceRequirement())
                 ? orderServiceDetailDTO.getServiceRequirement().trim()
                 : null);
-        order.setServiceDetailJson(normalizeServiceDetailJson(orderServiceDetailDTO, order.getServiceDetailJson()));
+        order.setServiceDetailJson(normalizeServiceDetailJson(
+                orderServiceDetailDTO,
+                order.getServiceDetailJson(),
+                operatorRoleCode));
         order.setUpdateTime(LocalDateTime.now());
         if (orderMapper.updateById(order) <= 0) {
             throw new BusinessException("failed to update order service detail");
@@ -464,8 +536,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         return order;
     }
 
-    private String normalizeServiceDetailJson(OrderServiceDetailDTO orderServiceDetailDTO, String originalServiceDetailJson) {
+    private String normalizeServiceDetailJson(OrderServiceDetailDTO orderServiceDetailDTO,
+                                              String originalServiceDetailJson,
+                                              String operatorRoleCode) {
         ObjectNode root = createServiceDetailRoot(orderServiceDetailDTO == null ? null : orderServiceDetailDTO.getServiceDetailJson());
+        if (StringUtils.hasText(operatorRoleCode) && !canEditServiceAmounts(operatorRoleCode)) {
+            root.put(OrderAmountMaskingSupport.MASK_MARKER, true);
+        }
         OrderAmountMaskingSupport.restoreMaskedAmountFields(root, originalServiceDetailJson, objectMapper);
         ObjectNode templateSnapshot = buildServiceTemplateSnapshot(orderServiceDetailDTO);
         if (templateSnapshot != null && !templateSnapshot.isEmpty()) {
@@ -480,6 +557,33 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         } catch (Exception exception) {
             throw new BusinessException("服务确认单保存失败，请检查表单内容");
         }
+    }
+
+    private boolean canEditServiceAmounts(String operatorRoleCode) {
+        if (!StringUtils.hasText(operatorRoleCode)) {
+            return true;
+        }
+        String roleCode = operatorRoleCode.trim().toUpperCase(Locale.ROOT);
+        Set<String> roles = parseRoleCodes(systemConfigService.getString(
+                CONFIG_SERVICE_AMOUNT_EDIT_ROLES,
+                DEFAULT_SERVICE_AMOUNT_EDIT_ROLES));
+        if (roles.isEmpty()) {
+            roles = parseRoleCodes(DEFAULT_SERVICE_AMOUNT_EDIT_ROLES);
+        }
+        return roles.contains(roleCode);
+    }
+
+    private Set<String> parseRoleCodes(String roleCodes) {
+        if (!StringUtils.hasText(roleCodes)) {
+            return Set.of();
+        }
+        Set<String> result = new LinkedHashSet<>();
+        for (String item : roleCodes.split("[,，\\s]+")) {
+            if (StringUtils.hasText(item)) {
+                result.add(item.trim().toUpperCase(Locale.ROOT));
+            }
+        }
+        return result;
     }
 
     private ObjectNode createServiceDetailRoot(String serviceDetailJson) {
@@ -954,6 +1058,139 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     private boolean isDirectDepositVerification(String verificationMethod) {
         return "DIRECT_DEPOSIT".equalsIgnoreCase(verificationMethod);
+    }
+
+    private String resolveVoucherActionType(String verificationMethod, OrderVoucherVerificationResult verificationResult) {
+        if (isDirectDepositVerification(verificationMethod)) {
+            return "DIRECT_DEPOSIT_VERIFY";
+        }
+        if (verificationResult != null && verificationResult.externalVerified()) {
+            return "EXTERNAL_VOUCHER_VERIFY";
+        }
+        return "VOUCHER_VERIFY";
+    }
+
+    private String resolveVoucherFlowSummary(String verificationMethod, OrderVoucherVerificationResult verificationResult) {
+        if (isDirectDepositVerification(verificationMethod)) {
+            return "定金免码确认";
+        }
+        if (verificationResult != null && verificationResult.externalVerified()
+                && StringUtils.hasText(verificationResult.providerCode())) {
+            return "券码核销：" + verificationResult.providerCode();
+        }
+        return "券码核销";
+    }
+
+    private String buildVoucherVerificationActionExtra(String verificationMethod,
+                                                       OrderVoucherVerificationResult verificationResult) {
+        if (verificationResult == null) {
+            return null;
+        }
+        return "{"
+                + "\"verificationMethod\":" + jsonString(verificationMethod)
+                + ",\"providerCode\":" + jsonString(verificationResult.providerCode())
+                + ",\"executionMode\":" + jsonString(verificationResult.executionMode())
+                + ",\"idempotencyKey\":" + jsonString(verificationResult.idempotencyKey())
+                + ",\"externalVerified\":" + verificationResult.externalVerified()
+                + ",\"responsePayload\":" + jsonString(verificationResult.responsePayload())
+                + "}";
+    }
+
+    private void recordVoucherVerificationFailure(Order order,
+                                                  OrderStatus currentStatus,
+                                                  String verificationMethod,
+                                                  String verificationCode,
+                                                  Long operatorUserId,
+                                                  BusinessException exception,
+                                                  String traceId) {
+        if (order == null || order.getId() == null) {
+            return;
+        }
+        Runnable recorder = () -> recordOrderAction(order.getId(),
+                "VOUCHER_VERIFY_FAILED",
+                currentStatus == null ? null : currentStatus.name(),
+                currentStatus == null ? null : currentStatus.name(),
+                operatorUserId,
+                "券码核销失败：" + safeBusinessMessage(exception.getMessage()),
+                buildVoucherVerificationFailureExtra(order, verificationMethod, verificationCode, exception, traceId));
+        try {
+            if (voucherAuditTransactionTemplate == null) {
+                recorder.run();
+            } else {
+                voucherAuditTransactionTemplate.executeWithoutResult(status -> recorder.run());
+            }
+        } catch (Exception auditException) {
+            log.warn("failed to record voucher verification failure, orderId={}, traceId={}",
+                    order.getId(), traceId, auditException);
+        }
+    }
+
+    private String buildVoucherVerificationFailureExtra(Order order,
+                                                        String verificationMethod,
+                                                        String verificationCode,
+                                                        BusinessException exception,
+                                                        String traceId) {
+        String providerCode = resolveVoucherProviderCode(order);
+        return "{"
+                + "\"traceId\":" + jsonString(traceId)
+                + ",\"verificationMethod\":" + jsonString(verificationMethod)
+                + ",\"providerCode\":" + jsonString(providerCode)
+                + ",\"executionMode\":\"FAILED_BEFORE_LOCAL_UPDATE\""
+                + ",\"idempotencyKey\":" + jsonString(buildVoucherFailureIdempotencyKey(providerCode, order, verificationCode))
+                + ",\"externalVerified\":false"
+                + ",\"failureReason\":" + jsonString(safeBusinessMessage(exception.getMessage()))
+                + "}";
+    }
+
+    private String resolveVoucherProviderCode(Order order) {
+        if (order == null) {
+            return "UNKNOWN";
+        }
+        if (StringUtils.hasText(order.getExternalPartnerCode())) {
+            return order.getExternalPartnerCode().trim().toUpperCase(Locale.ROOT);
+        }
+        String sourceChannel = SourceChannel.resolveCode(order.getSourceChannel(), order.getSource());
+        if (SourceChannel.DISTRIBUTOR.name().equals(sourceChannel)) {
+            return "DISTRIBUTION";
+        }
+        if (SourceChannel.DOUYIN.name().equals(sourceChannel)) {
+            return "DOUYIN_LAIKE";
+        }
+        return StringUtils.hasText(sourceChannel) ? sourceChannel : "UNKNOWN";
+    }
+
+    private String buildVoucherFailureIdempotencyKey(String providerCode, Order order, String verificationCode) {
+        return "VOUCHER_VERIFY:" + firstNonBlank(providerCode, "UNKNOWN") + ":" + order.getId() + ":" + verificationCode;
+    }
+
+    private String buildVoucherFailureTraceId() {
+        return "VFY-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase(Locale.ROOT);
+    }
+
+    private String appendTraceId(String message, String traceId) {
+        String cleanMessage = safeBusinessMessage(message);
+        if (!StringUtils.hasText(traceId) || cleanMessage.contains(traceId)) {
+            return cleanMessage;
+        }
+        return cleanMessage + "（追踪编号：" + traceId + "）";
+    }
+
+    private String safeBusinessMessage(String message) {
+        String clean = StringUtils.hasText(message) ? message.trim() : "未知错误";
+        clean = clean.replaceAll("(?i)(access_token|refresh_token|client_secret|auth_code|token)=([^\\s&]+)", "$1=****");
+        return clean.length() > 240 ? clean.substring(0, 240) : clean;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     private void inheritSource(Order order, Clue clue, Customer customer) {

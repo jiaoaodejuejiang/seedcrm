@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 public class ClueTableInitializer {
 
     private static final String TABLE_NAME = "clue";
+    private static final String INDEX_SOURCE_CREATED = "idx_clue_source_created";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -31,6 +32,8 @@ public class ClueTableInitializer {
         ensureMissingColumns();
         ensureUniqueIndex("uk_clue_phone", "phone");
         ensureUniqueIndex("uk_clue_wechat", "wechat");
+        ensureIndex(INDEX_SOURCE_CREATED, "ALTER TABLE " + TABLE_NAME
+                + " ADD INDEX " + INDEX_SOURCE_CREATED + " (source_channel, created_at, id)");
     }
 
     private boolean tableExists() {
@@ -77,6 +80,20 @@ public class ClueTableInitializer {
         }
     }
 
+    private void ensureIndex(String indexName, String sql) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = ?
+                  AND INDEX_NAME = ?
+                """, Integer.class, TABLE_NAME, indexName);
+        if (count == null || count == 0) {
+            jdbcTemplate.execute(sql);
+            log.info("added index {} on {}", indexName, TABLE_NAME);
+        }
+    }
+
     private String createTableSql() {
         return """
                 CREATE TABLE clue (
@@ -94,7 +111,8 @@ public class ClueTableInitializer {
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     UNIQUE KEY uk_clue_phone (phone),
-                    UNIQUE KEY uk_clue_wechat (wechat)
+                    UNIQUE KEY uk_clue_wechat (wechat),
+                    KEY idx_clue_source_created (source_channel, created_at, id)
                 )
                 """;
     }

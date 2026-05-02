@@ -51,6 +51,7 @@ docker compose logs -f frontend</code></pre>
         <tr><td><code>SEEDCRM_API_BASE_URL</code></td><td>API 域名，用于分销入站、企微/抖音/支付回调、Swagger/OpenAPI。</td></tr>
         <tr><td><code>SEEDCRM_OPENAPI_ENABLED</code></td><td>正式环境建议 <code>false</code>，需要联调时短期开启。</td></tr>
         <tr><td><code>SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN</code></td><td>正式环境必须 <code>false</code>。</td></tr>
+        <tr><td><code>SEEDCRM_ALLOW_CLEAR_TEST_DATA</code></td><td>默认 <code>false</code>。只在确认是测试库、完成备份且需要真实清理时临时改为 <code>true</code>。</td></tr>
       </tbody>
     </table>
   </section>
@@ -61,7 +62,7 @@ docker compose logs -f frontend</code></pre>
       <li>管理员进入 <strong>系统设置 / 基础配置 / 上线工具</strong>。</li>
       <li>先看上线预检，确认 API 域名、系统域名、调度任务、分销配置、抖音配置。</li>
       <li>测试/预发初始化确认词：<code>INIT_SYSTEM</code>；正式环境确认词：<code>INIT_PROD_SYSTEM</code>。</li>
-      <li>清理测试数据先 dry-run，真实清理必须输入 <code>CLEAR_TEST_DATA</code>，PROD 环境后端会阻断。</li>
+      <li>清理测试数据先 dry-run，真实清理必须输入 <code>CLEAR_TEST_DATA</code>，并显式开启 <code>SEEDCRM_ALLOW_CLEAR_TEST_DATA=true</code>；PROD 环境后端会阻断。</li>
     </ol>
   </section>
 

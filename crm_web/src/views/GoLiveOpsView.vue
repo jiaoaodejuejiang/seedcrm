@@ -11,7 +11,11 @@
       </article>
       <article class="summary-pill">
         <span>清理保护</span>
-        <strong>{{ summary.safeToClearTestData ? '允许测试清理' : '正式环境阻断' }}</strong>
+        <strong>{{ summary.safeToClearTestData ? '允许真实清理' : '真实清理阻断' }}</strong>
+      </article>
+      <article class="summary-pill">
+        <span>上线结论</span>
+        <strong>{{ readinessConclusion }}</strong>
       </article>
     </section>
 
@@ -21,6 +25,8 @@
           <h3>上线工具</h3>
         </div>
         <div class="action-group">
+          <el-button plain @click="openDoc('/docs/deployment-runbook.html')">快速部署手册</el-button>
+          <el-button plain @click="openDoc('/docs/baota-panel-docker-deployment.html')">宝塔部署说明</el-button>
           <el-button :loading="loading" @click="loadSummary">刷新预检</el-button>
         </div>
       </div>
@@ -60,6 +66,10 @@
               </el-select>
             </label>
             <label>
+              <span>当前服务器环境</span>
+              <span class="readonly-prefix">{{ summary.environmentMode || '--' }}</span>
+            </label>
+            <label>
               <span>系统基础域名</span>
               <el-input v-model="initForm.systemBaseUrl" placeholder="https://crm.example.com" />
             </label>
@@ -87,11 +97,18 @@
         </el-tab-pane>
 
         <el-tab-pane label="清理测试数据" name="clear">
+          <el-alert
+            class="queue-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            title="真实清理默认被服务端硬保护阻断。必须先预览，确认非生产库，并显式开启 SEEDCRM_ALLOW_CLEAR_TEST_DATA=true 后才可执行。"
+          />
           <div class="clear-toolbar">
             <el-checkbox v-model="clearForm.dryRun">只预览，不删除</el-checkbox>
             <el-checkbox v-model="clearForm.includeOperationalLogs">同时清理操作日志</el-checkbox>
             <el-input v-model="clearForm.confirmText" class="confirm-input" placeholder="输入 CLEAR_TEST_DATA" />
-            <el-button type="danger" :disabled="!summary.safeToClearTestData" :loading="operating" @click="handleClear">
+            <el-button :type="clearForm.dryRun ? 'default' : 'danger'" :disabled="!canSubmitClear" :loading="operating" @click="handleClear">
               {{ clearForm.dryRun ? '预览清理' : '执行清理' }}
             </el-button>
           </div>
@@ -126,7 +143,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { clearGoLiveTestData, fetchGoLiveSummary, initializeGoLive } from '../api/systemConfig'
 
@@ -135,6 +152,7 @@ const operating = ref(false)
 const activeTab = ref('summary')
 const summary = reactive({})
 const lastOperation = reactive({})
+const clearPreviewSignature = ref('')
 
 const initForm = reactive({
   targetEnvironment: 'TEST',
@@ -152,8 +170,29 @@ const clearForm = reactive({
 })
 
 const initConfirmText = computed(() => (initForm.targetEnvironment === 'PROD' ? 'INIT_PROD_SYSTEM' : 'INIT_SYSTEM'))
+const canSubmitClear = computed(() => clearForm.dryRun || summary.safeToClearTestData)
+const currentClearSignature = computed(() => JSON.stringify({
+  includeOperationalLogs: clearForm.includeOperationalLogs
+}))
+const lastClearPreviewValid = computed(() => (
+  lastOperation.operation === 'CLEAR_TEST_DATA'
+  && lastOperation.dryRun
+  && clearPreviewSignature.value === currentClearSignature.value
+))
+const readinessConclusion = computed(() => {
+  const items = summary.readinessItems || []
+  const hasWarn = items.some((item) => item.status !== 'PASS')
+  if (!summary.domainSettings?.apiBaseUrl || !summary.domainSettings?.systemBaseUrl) {
+    return '不可上线'
+  }
+  return hasWarn ? '待处理' : '可上线'
+})
 
 onMounted(loadSummary)
+
+watch(() => clearForm.includeOperationalLogs, () => {
+  clearPreviewSignature.value = ''
+})
 
 async function loadSummary() {
   loading.value = true
@@ -168,7 +207,21 @@ async function loadSummary() {
   }
 }
 
+function openDoc(path) {
+  window.open(path, '_blank', 'noopener,noreferrer')
+}
+
 async function handleInitialize() {
+  const isProd = initForm.targetEnvironment === 'PROD'
+  await ElMessageBox.confirm(
+    `当前服务器环境：${summary.environmentMode || '--'}；目标环境：${initForm.targetEnvironment}。本操作会写入域名、环境模式，并可能影响集成模式或调度状态。`,
+    isProd ? '确认初始化正式环境' : '确认执行上线初始化',
+    {
+      type: isProd ? 'error' : 'warning',
+      confirmButtonText: isProd ? '确认初始化 PROD' : '确认初始化',
+      cancelButtonText: '取消'
+    }
+  )
   operating.value = true
   try {
     const result = await initializeGoLive({ ...initForm })
@@ -181,8 +234,12 @@ async function handleInitialize() {
 }
 
 async function handleClear() {
+  if (!clearForm.dryRun && !lastClearPreviewValid.value) {
+    ElMessage.warning('请先按当前清理范围执行一次“预览清理”，确认命中范围后再执行真实清理。')
+    return
+  }
   if (!clearForm.dryRun) {
-    await ElMessageBox.confirm('该操作会删除测试业务数据和队列数据，请确认当前不是正式环境。', '确认清理测试数据', {
+    await ElMessageBox.confirm(`当前环境：${summary.environmentMode || '--'}。将清理业务数据、队列数据${clearForm.includeOperationalLogs ? '和操作日志' : ''}；上次预览命中 ${lastOperation.tables?.length || 0} 个表。`, '确认清理测试数据', {
       type: 'warning',
       confirmButtonText: '确认清理',
       cancelButtonText: '取消'
@@ -192,6 +249,7 @@ async function handleClear() {
   try {
     const result = await clearGoLiveTestData({ ...clearForm })
     Object.assign(lastOperation, result || {})
+    clearPreviewSignature.value = result?.dryRun ? currentClearSignature.value : ''
     ElMessage.success(clearForm.dryRun ? '清理预览已生成' : '测试数据已清理')
     await loadSummary()
   } finally {

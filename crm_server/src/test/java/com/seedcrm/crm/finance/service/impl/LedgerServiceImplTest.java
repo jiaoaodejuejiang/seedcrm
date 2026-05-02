@@ -79,4 +79,27 @@ class LedgerServiceImplTest {
         verify(accountService, never()).lockAccount(any());
         verify(ledgerMapper, never()).insert(any(Ledger.class));
     }
+
+    @Test
+    void recordShouldAllowSalaryReversalOutLedgerWithoutWithdrawRiskCheck() {
+        Account account = new Account();
+        account.setId(19L);
+        when(accountService.getOrCreateAccount(AccountOwnerType.USER, 17L)).thenReturn(account);
+        when(accountService.lockAccount(19L)).thenReturn(account);
+        when(ledgerMapper.selectByAccountAndBiz(19L, LedgerBizType.SALARY.name(), 188L)).thenReturn(null, null);
+        when(ledgerMapper.sumChangeAmountByAccountId(19L)).thenReturn(new BigDecimal("10.00"));
+        when(ledgerMapper.insert(any(Ledger.class))).thenAnswer(invocation -> {
+            Ledger ledger = invocation.getArgument(0);
+            ledger.setId(202L);
+            return 1;
+        });
+
+        Ledger ledger = ledgerService.record(AccountOwnerType.USER, 17L, new BigDecimal("25.00"),
+                LedgerBizType.SALARY, 188L, LedgerDirection.OUT);
+
+        assertThat(ledger.getChangeAmount()).isEqualByComparingTo("-25.00");
+        assertThat(ledger.getBalanceAfter()).isEqualByComparingTo("-15.00");
+        assertThat(ledger.getDirection()).isEqualTo(LedgerDirection.OUT.name());
+        verify(riskControlService, never()).validateWithdrawAmountNotExceedBalance(any(), any());
+    }
 }

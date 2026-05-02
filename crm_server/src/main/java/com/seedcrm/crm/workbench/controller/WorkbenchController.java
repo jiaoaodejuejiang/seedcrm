@@ -9,6 +9,7 @@ import com.seedcrm.crm.permission.support.OrderPermissionGuard;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
 import com.seedcrm.crm.permission.support.PlanOrderPermissionGuard;
+import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CustomerProfileResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.DistributorBoardItemResponse;
@@ -20,7 +21,9 @@ import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StaffRoleOptionResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StoreLiveCodePreviewResponse;
 import com.seedcrm.crm.workbench.service.WorkbenchService;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,6 +36,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/workbench")
 public class WorkbenchController {
 
+    private static final String CONFIG_STORE_AMOUNT_HIDDEN = "amount.visibility.store_staff_hidden";
+    private static final String CONFIG_STORE_AMOUNT_HIDDEN_ROLES = "amount.visibility.store_staff_hidden_roles";
+    private static final String CONFIG_SERVICE_AMOUNT_HIDDEN_ROLES = "amount.visibility.service_confirm_hidden_roles";
+    private static final String DEFAULT_STORE_AMOUNT_HIDDEN_ROLES =
+            "STORE_SERVICE,STORE_MANAGER,PHOTOGRAPHER,MAKEUP_ARTIST,PHOTO_SELECTOR";
+    private static final String DEFAULT_SERVICE_AMOUNT_HIDDEN_ROLES =
+            "STORE_SERVICE,PHOTOGRAPHER,MAKEUP_ARTIST";
     private static final Set<String> STORE_AMOUNT_RESTRICTED_ROLES = Set.of(
             "STORE_SERVICE",
             "STORE_MANAGER",
@@ -47,6 +57,7 @@ public class WorkbenchController {
     private final OrderPermissionGuard orderPermissionGuard;
     private final PlanOrderPermissionGuard planOrderPermissionGuard;
     private final ObjectMapper objectMapper;
+    private final SystemConfigService systemConfigService;
 
     public WorkbenchController(WorkbenchService workbenchService,
                                PermissionRequestContextResolver permissionRequestContextResolver,
@@ -54,7 +65,8 @@ public class WorkbenchController {
                                CustomerPermissionGuard customerPermissionGuard,
                                OrderPermissionGuard orderPermissionGuard,
                                PlanOrderPermissionGuard planOrderPermissionGuard,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               SystemConfigService systemConfigService) {
         this.workbenchService = workbenchService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
         this.cluePermissionGuard = cluePermissionGuard;
@@ -62,6 +74,7 @@ public class WorkbenchController {
         this.orderPermissionGuard = orderPermissionGuard;
         this.planOrderPermissionGuard = planOrderPermissionGuard;
         this.objectMapper = objectMapper;
+        this.systemConfigService = systemConfigService;
     }
 
     @GetMapping("/clues")
@@ -130,7 +143,7 @@ public class WorkbenchController {
     }
 
     private void maskPlanOrderWorkbenchAmountsIfNeeded(PlanOrderWorkbenchResponse response, PermissionRequestContext context) {
-        if (response == null || !shouldMaskAmounts(context)) {
+        if (response == null || (!shouldMaskBusinessAmounts(context) && !shouldMaskServiceAmounts(context))) {
             return;
         }
         maskPlanOrderAmountsIfNeeded(response.getSummary(), context);
@@ -138,24 +151,46 @@ public class WorkbenchController {
     }
 
     private void maskPlanOrderAmountsIfNeeded(PlanOrderItemResponse response, PermissionRequestContext context) {
-        if (response != null && shouldMaskAmounts(context)) {
+        if (response != null && shouldMaskBusinessAmounts(context)) {
             response.setAmount(null);
         }
     }
 
     private void maskOrderAmountsIfNeeded(OrderItemResponse response, PermissionRequestContext context) {
-        if (response != null && shouldMaskAmounts(context)) {
+        if (response != null && shouldMaskBusinessAmounts(context)) {
             response.setAmount(null);
             response.setDeposit(null);
+        }
+        if (response != null && shouldMaskServiceAmounts(context)) {
             response.setServiceDetailJson(OrderAmountMaskingSupport.maskServiceDetailJson(
                     response.getServiceDetailJson(), objectMapper));
         }
     }
 
-    private boolean shouldMaskAmounts(PermissionRequestContext context) {
+    private boolean shouldMaskBusinessAmounts(PermissionRequestContext context) {
         return context != null
+                && systemConfigService.getBoolean(CONFIG_STORE_AMOUNT_HIDDEN, true)
                 && context.getRoleCode() != null
-                && STORE_AMOUNT_RESTRICTED_ROLES.contains(context.getRoleCode().trim().toUpperCase());
+                && configuredRoles(CONFIG_STORE_AMOUNT_HIDDEN_ROLES, DEFAULT_STORE_AMOUNT_HIDDEN_ROLES, STORE_AMOUNT_RESTRICTED_ROLES)
+                .contains(context.getRoleCode().trim().toUpperCase(Locale.ROOT));
+    }
+
+    private boolean shouldMaskServiceAmounts(PermissionRequestContext context) {
+        return context != null
+                && systemConfigService.getBoolean(CONFIG_STORE_AMOUNT_HIDDEN, true)
+                && context.getRoleCode() != null
+                && configuredRoles(CONFIG_SERVICE_AMOUNT_HIDDEN_ROLES, DEFAULT_SERVICE_AMOUNT_HIDDEN_ROLES,
+                Set.of("STORE_SERVICE", "PHOTOGRAPHER", "MAKEUP_ARTIST"))
+                .contains(context.getRoleCode().trim().toUpperCase(Locale.ROOT));
+    }
+
+    private Set<String> configuredRoles(String key, String defaultRoles, Set<String> fallbackRoles) {
+        String configuredRoles = systemConfigService.getString(key, defaultRoles);
+        Set<String> roles = Arrays.stream(configuredRoles.split("[,，\\s]+"))
+                .map(role -> role.trim().toUpperCase(Locale.ROOT))
+                .filter(role -> !role.isBlank())
+                .collect(Collectors.toSet());
+        return roles.isEmpty() ? fallbackRoles : roles;
     }
 
     @GetMapping("/customers/{customerId}")
@@ -169,7 +204,8 @@ public class WorkbenchController {
     }
 
     private void maskCustomerProfileAmountsIfNeeded(CustomerProfileResponse response, PermissionRequestContext context) {
-        if (response == null || !shouldMaskAmounts(context) || response.getOrderHistory() == null) {
+        if (response == null || response.getOrderHistory() == null
+                || (!shouldMaskBusinessAmounts(context) && !shouldMaskServiceAmounts(context))) {
             return;
         }
         response.getOrderHistory().forEach(order -> maskOrderAmountsIfNeeded(order, context));

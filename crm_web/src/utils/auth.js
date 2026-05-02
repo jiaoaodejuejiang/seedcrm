@@ -7,7 +7,7 @@ const STORAGE_KEY = 'seedcrm.auth-token'
 const accessibleRoutes = [
   { path: '/clues', moduleCode: 'CLUE' },
   { path: '/clues/scheduling', moduleCode: 'ORDER', roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE'] },
-  { path: '/clue-management/store-schedules', moduleCode: 'CLUE', roleCodes: ['ADMIN', 'CLUE_MANAGER'] },
+  { path: '/store-service/schedules', moduleCode: 'PLANORDER', roleCodes: ['ADMIN', 'STORE_MANAGER'] },
   { path: '/clue-management/auto-assign', moduleCode: 'CLUE', roleCodes: ['CLUE_MANAGER', 'ADMIN'] },
   {
     path: '/store-service/orders',
@@ -224,6 +224,14 @@ export function hasAccess(moduleCode, roleCodes = []) {
   return hasModule(moduleCode) && hasRole(roleCodes)
 }
 
+export function canViewBusinessAmounts(roleCode = authState.currentUser?.roleCode) {
+  return ['ADMIN', 'FINANCE'].includes(normalizeRoleCode(roleCode))
+}
+
+export function canViewServiceAmounts(roleCode = authState.currentUser?.roleCode) {
+  return ['ADMIN', 'FINANCE', 'STORE_MANAGER', 'PHOTO_SELECTOR'].includes(normalizeRoleCode(roleCode))
+}
+
 export function hasRouteAccess(path, moduleCode, roleCodes = []) {
   if (!hasAccess(moduleCode, roleCodes)) {
     return false
@@ -355,7 +363,11 @@ function getConfiguredMenuConfigs() {
 }
 
 function getCurrentRoleCode() {
-  return String(authState.currentUser?.roleCode || '').trim().toUpperCase()
+  return normalizeRoleCode(authState.currentUser?.roleCode)
+}
+
+function normalizeRoleCode(value) {
+  return String(value || '').trim().toUpperCase()
 }
 
 function getBackendMenuRoutes() {

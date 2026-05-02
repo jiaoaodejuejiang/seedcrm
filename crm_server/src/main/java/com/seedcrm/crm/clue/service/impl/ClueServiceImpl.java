@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.seedcrm.crm.clue.enums.SourceChannel;
 import com.seedcrm.crm.clue.entity.Clue;
+import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.DedupConfigResponse;
 import com.seedcrm.crm.clue.management.service.ClueManagementService;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.clue.service.ClueService;
@@ -41,15 +42,22 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
             throw new IllegalArgumentException("phone or wechat is required");
         }
 
-        Clue existingClue = findExistingClue(clue.getPhone(), clue.getWechat());
+        String sourceChannel = SourceChannel.resolveCode(clue.getSourceChannel(), clue.getSource());
+        clue.setPhone(normalizePhone(clue.getPhone()));
+        clue.setWechat(normalizeWechat(clue.getWechat()));
+        if (!StringUtils.hasText(clue.getPhone()) && !StringUtils.hasText(clue.getWechat())) {
+            throw new IllegalArgumentException("phone or wechat is required");
+        }
+        clue.setSourceChannel(sourceChannel);
+        clue.setSource(SourceChannel.resolveLegacySource(sourceChannel, clue.getSource()));
+
+        DedupConfigResponse dedupConfig = resolveDedupConfig();
+        Clue existingClue = findExistingClue(clue.getPhone(), clue.getWechat(), sourceChannel, dedupConfig);
         if (existingClue != null) {
             return syncExistingClue(existingClue, clue);
         }
 
         LocalDateTime now = LocalDateTime.now();
-        String sourceChannel = SourceChannel.resolveCode(clue.getSourceChannel(), clue.getSource());
-        clue.setSourceChannel(sourceChannel);
-        clue.setSource(SourceChannel.resolveLegacySource(sourceChannel, clue.getSource()));
         clue.setRawData(defaultRawData(clue.getRawData()));
         clue.setStatus("new");
         clue.setIsPublic(1);
@@ -138,17 +146,53 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
         return clueManagementService.autoAssignIfEnabled(clue);
     }
 
-    private Clue findExistingClue(String phone, String wechat) {
+    private Clue findExistingClue(String phone, String wechat, String sourceChannel, DedupConfigResponse dedupConfig) {
+        if (dedupConfig != null && dedupConfig.getEnabled() != null && dedupConfig.getEnabled() == 1) {
+            Clue windowMatchedClue = findExistingClueByIdentity(
+                    phone,
+                    wechat,
+                    sourceChannel,
+                    LocalDateTime.now().minusDays(resolveDedupWindowDays(dedupConfig)));
+            if (windowMatchedClue != null) {
+                return windowMatchedClue;
+            }
+        }
+        // The database still protects phone/wechat as customer identity. This fallback preserves old behavior
+        // and prevents duplicate-key failures when a historical customer comes back outside the configured window.
+        return findExistingClueByIdentity(phone, wechat, null, null);
+    }
+
+    private Clue findExistingClueByIdentity(String phone, String wechat, String sourceChannel, LocalDateTime dedupThreshold) {
         Clue phoneClue = null;
         Clue wechatClue = null;
 
         if (StringUtils.hasText(phone)) {
-            phoneClue = clueMapper.selectOne(
-                    Wrappers.<Clue>lambdaQuery().eq(Clue::getPhone, phone).last("LIMIT 1"));
+            LambdaQueryWrapper<Clue> query = Wrappers.<Clue>lambdaQuery()
+                    .eq(Clue::getPhone, normalizePhone(phone));
+            if (StringUtils.hasText(sourceChannel)) {
+                query.eq(Clue::getSourceChannel, sourceChannel);
+            }
+            if (dedupThreshold != null) {
+                query.ge(Clue::getCreatedAt, dedupThreshold);
+            }
+            phoneClue = clueMapper.selectOne(query
+                    .orderByDesc(Clue::getCreatedAt)
+                    .orderByDesc(Clue::getId)
+                    .last("LIMIT 1"));
         }
         if (StringUtils.hasText(wechat)) {
-            wechatClue = clueMapper.selectOne(
-                    Wrappers.<Clue>lambdaQuery().eq(Clue::getWechat, wechat).last("LIMIT 1"));
+            LambdaQueryWrapper<Clue> query = Wrappers.<Clue>lambdaQuery()
+                    .eq(Clue::getWechat, normalizeWechat(wechat));
+            if (StringUtils.hasText(sourceChannel)) {
+                query.eq(Clue::getSourceChannel, sourceChannel);
+            }
+            if (dedupThreshold != null) {
+                query.ge(Clue::getCreatedAt, dedupThreshold);
+            }
+            wechatClue = clueMapper.selectOne(query
+                    .orderByDesc(Clue::getCreatedAt)
+                    .orderByDesc(Clue::getId)
+                    .last("LIMIT 1"));
         }
 
         if (phoneClue != null && wechatClue != null && !phoneClue.getId().equals(wechatClue.getId())) {
@@ -158,6 +202,26 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
         return phoneClue != null ? phoneClue : wechatClue;
     }
 
+    private DedupConfigResponse resolveDedupConfig() {
+        try {
+            DedupConfigResponse config = clueManagementService.getDedupConfig();
+            if (config != null) {
+                return config;
+            }
+        } catch (RuntimeException ignored) {
+            // Keep clue intake available if the optional config lookup is temporarily unavailable.
+        }
+        return new DedupConfigResponse(1, 90, null);
+    }
+
+    private int resolveDedupWindowDays(DedupConfigResponse dedupConfig) {
+        Integer windowDays = dedupConfig == null ? null : dedupConfig.getWindowDays();
+        if (windowDays == null) {
+            return 90;
+        }
+        return Math.max(1, Math.min(windowDays, 3650));
+    }
+
     private Clue syncExistingClue(Clue existingClue, Clue incomingClue) {
         boolean changed = false;
         if (!StringUtils.hasText(existingClue.getName()) && StringUtils.hasText(incomingClue.getName())) {
@@ -165,7 +229,7 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
             changed = true;
         }
         if (!StringUtils.hasText(existingClue.getWechat()) && StringUtils.hasText(incomingClue.getWechat())) {
-            existingClue.setWechat(incomingClue.getWechat().trim());
+            existingClue.setWechat(normalizeWechat(incomingClue.getWechat()));
             changed = true;
         }
         if (!StringUtils.hasText(existingClue.getSourceChannel()) && StringUtils.hasText(incomingClue.getSourceChannel())) {
@@ -193,5 +257,24 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
 
     private String defaultRawData(String rawData) {
         return StringUtils.hasText(rawData) ? rawData.trim() : "{}";
+    }
+
+    private String normalizePhone(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim()
+                .replaceAll("[\\s\\-()（）]", "")
+                .replaceAll("^\\+86", "")
+                .replaceAll("^0086", "");
+        String digits = normalized.replaceAll("\\D", "");
+        if (digits.startsWith("86") && digits.length() == 13) {
+            digits = digits.substring(2);
+        }
+        return digits;
+    }
+
+    private String normalizeWechat(String value) {
+        return StringUtils.hasText(value) ? value.trim().toLowerCase() : null;
     }
 }

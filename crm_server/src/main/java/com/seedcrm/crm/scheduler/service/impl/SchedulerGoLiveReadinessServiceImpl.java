@@ -81,6 +81,8 @@ public class SchedulerGoLiveReadinessServiceImpl implements SchedulerGoLiveReadi
         checks.add(checkProviderCallback(provider));
         checks.add(checkProviderStatusPath(provider));
         checks.add(checkProviderReconcilePath(provider));
+        checks.add(checkProviderVoucherVerifyPath(provider));
+        checks.add(checkProviderVerifyCodeField(provider));
         checks.add(checkIdempotency(health));
         checks.add(checkOpenApiProductionGuard());
         checks.add(checkLocalTokenBypassGuard());
@@ -150,8 +152,8 @@ public class SchedulerGoLiveReadinessServiceImpl implements SchedulerGoLiveReadi
                     "请确认后启用分销接口配置");
         }
         if (!"LIVE".equals(normalize(provider.getExecutionMode()))) {
-            return check("PROVIDER_CONFIG", "分销接口配置", "WARN", "WARNING", provider.getExecutionMode(), "LIVE",
-                    "MOCK 模式只能用于联调，不能承接正式外部分销订单",
+            return check("PROVIDER_CONFIG", "分销接口配置", "FAIL", "BLOCKER", provider.getExecutionMode(), "LIVE",
+                    "MOCK 模式只能用于联调，正式分销团购券必须调用外部分销核销接口",
                     "联调通过后再受控切换为 LIVE 模式");
         }
         return check("PROVIDER_CONFIG", "分销接口配置", "PASS", "INFO", "LIVE", "LIVE",
@@ -200,6 +202,24 @@ public class SchedulerGoLiveReadinessServiceImpl implements SchedulerGoLiveReadi
                 provider == null ? null : provider.getReconciliationPullPath(),
                 "/open/distribution/orders/reconcile",
                 "对账拉取只读取外部记录，如需改变订单状态必须转成入站事件重放");
+    }
+
+    private ReadinessCheck checkProviderVoucherVerifyPath(IntegrationProviderConfig provider) {
+        return checkProviderPath(
+                "VOUCHER_VERIFY_PATH",
+                "分销券核销路径",
+                provider == null ? null : provider.getVoucherVerifyPath(),
+                "/open/distribution/vouchers/verify",
+                "门店端分销团购券只有外部核销成功后才允许进入服务确认单");
+    }
+
+    private ReadinessCheck checkProviderVerifyCodeField(IntegrationProviderConfig provider) {
+        return checkProviderPath(
+                "VOUCHER_VERIFY_CODE_FIELD",
+                "分销券码字段",
+                provider == null ? null : provider.getVerifyCodeField(),
+                "voucherCode",
+                "券码字段用于组装外部分销核销请求，缺失时门店核销会被阻断");
     }
 
     private ReadinessCheck checkProviderPath(String code, String title, String value, String expected, String impact) {

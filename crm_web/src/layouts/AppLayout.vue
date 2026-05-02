@@ -169,6 +169,9 @@ const icon = (component) => markRaw(component)
 const storeRoleCodes = ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR', 'ADMIN']
 const integrationViewRoleCodes = ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR']
 const integrationConfigRoleCodes = ['ADMIN', 'INTEGRATION_ADMIN']
+const routeLabelOverrides = {
+  '/clue-management/auto-assign': '客资配置'
+}
 
 const navGroups = [
   {
@@ -181,15 +184,7 @@ const navGroups = [
         label: '业务工作台',
         icon: icon(Operation),
         items: [
-          { key: 'clues', to: '/clues', label: '客资列表', icon: icon(Files), moduleCode: 'CLUE' },
-          {
-            key: 'paid-orders',
-            to: '/clues/scheduling',
-            label: '顾客排档',
-            icon: icon(Calendar),
-            moduleCode: 'ORDER',
-            roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE']
-          }
+          { key: 'clues', to: '/clues', label: '客资列表', icon: icon(Files), moduleCode: 'CLUE' }
         ]
       },
       {
@@ -200,7 +195,7 @@ const navGroups = [
           {
             key: 'clue-auto-assign',
             to: '/clue-management/auto-assign',
-            label: '自动分配',
+            label: '客资配置',
             icon: icon(Connection),
             moduleCode: 'CLUE',
             roleCodes: ['CLUE_MANAGER', 'ADMIN']
@@ -222,6 +217,14 @@ const navGroups = [
     label: '门店服务',
     icon: icon(Shop),
     items: [
+      {
+        key: 'paid-orders',
+        to: '/clues/scheduling',
+        label: '顾客排档',
+        icon: icon(Calendar),
+        moduleCode: 'ORDER',
+        roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE']
+      },
       {
         key: 'store-service-orders',
         to: '/store-service/orders',
@@ -534,7 +537,7 @@ const routeTitleMap = {
   login: '登录',
   clues: '客资列表',
   'clues-scheduling': '顾客排档',
-  'clue-auto-assign': '自动分配',
+  'clue-auto-assign': '客资配置',
   'duty-customer-service': '值班客服',
   'store-schedules': '门店档期',
   'store-service-orders': '订单列表',
@@ -580,10 +583,10 @@ const routeTitleMap = {
 
 const routeSectionMap = {
   clues: '客资中心',
-  'clues-scheduling': '客资中心',
+  'clues-scheduling': '门店服务',
   'clue-auto-assign': '客资中心 / 客资管理',
   'duty-customer-service': '客资中心 / 客资管理',
-  'store-schedules': '客资中心 / 客资管理',
+  'store-schedules': '门店服务',
   'store-service-orders': '门店服务',
   'store-service-design': '门店服务',
   'store-service-personnel': '门店服务',
@@ -664,7 +667,7 @@ const menuConfigByRoute = computed(() => {
 const activeGroup = computed(() => visibleGroups.value.find((group) => groupHasActive(group)) || visibleGroups.value[0] || null)
 const currentRoleLabel = computed(() => formatRoleCode(currentUser.value?.roleCode))
 const standalonePage = computed(() => Boolean(route.meta?.standalone) || String(route.query.scan || '') === '1')
-const configuredRouteLabel = computed(() => menuConfigByRoute.value.get(route.path)?.menuName || '')
+const configuredRouteLabel = computed(() => routeLabelOverrides[route.path] || menuConfigByRoute.value.get(route.path)?.menuName || '')
 const resolvedPageTitle = computed(() => configuredRouteLabel.value || routeTitleMap[route.name] || route.meta.title || activeGroup.value?.label || '系统模块')
 const resolvedSectionTitle = computed(
   () => routeSectionMap[route.name] || route.meta.sectionTitle || activeGroup.value?.label || '系统模块'
@@ -717,11 +720,11 @@ function refreshSystemConsoleVersion() {
 function applyMenuConfig(item) {
   const config = menuConfigByRoute.value.get(item.to)
   if (!config) {
-    return item
+    return routeLabelOverrides[item.to] ? { ...item, label: routeLabelOverrides[item.to] } : item
   }
   return {
     ...item,
-    label: config.menuName || item.label,
+    label: routeLabelOverrides[item.to] || config.menuName || item.label,
     moduleCode: config.moduleCode || item.moduleCode,
     roleCodes: config.roleCodes?.length ? config.roleCodes : item.roleCodes,
     isEnabled: config.isEnabled !== 0

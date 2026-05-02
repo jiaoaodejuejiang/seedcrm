@@ -11,14 +11,14 @@ const PRODUCT_SOURCE_LABELS = {
   GROUP_BUY: '团购',
   GROUPBUY: '团购',
   GROUPON: '团购',
-  FORM: '表单'
+  FORM: '定金'
 }
 
 const ORDER_TYPE_LABELS = {
   1: '定金',
-  2: '团购券',
+  2: '团购',
   DEPOSIT: '定金',
-  COUPON: '团购券',
+  COUPON: '团购',
   DISTRIBUTION_PRODUCT: '分销商品'
 }
 

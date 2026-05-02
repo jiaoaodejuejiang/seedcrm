@@ -51,6 +51,89 @@ class SchedulerIntegrationServiceImplTest {
     }
 
     @Test
+    void saveDistributionProviderShouldUseDistributionVoucherDefaults() {
+        when(providerConfigMapper.insert(any(IntegrationProviderConfig.class))).thenReturn(1);
+
+        IntegrationProviderConfig request = new IntegrationProviderConfig();
+        request.setProviderCode("DISTRIBUTION");
+        request.setProviderName("外部分销系统");
+        request.setModuleCode("SCHEDULER");
+        request.setExecutionMode("LIVE");
+        request.setAuthType("SIGN_TOKEN");
+        request.setEndpointPath("/open/distribution/events");
+        request.setStatusQueryPath("/open/distribution/orders/status");
+        request.setReconciliationPullPath("/open/distribution/orders/reconcile");
+        request.setEnabled(1);
+
+        schedulerIntegrationService.saveProvider(request);
+
+        ArgumentCaptor<IntegrationProviderConfig> providerCaptor = ArgumentCaptor.forClass(IntegrationProviderConfig.class);
+        verify(providerConfigMapper).insert(providerCaptor.capture());
+        IntegrationProviderConfig persisted = providerCaptor.getValue();
+        assertThat(persisted.getVoucherVerifyPath()).isEqualTo("/open/distribution/vouchers/verify");
+        assertThat(persisted.getVerifyCodeField()).isEqualTo("voucherCode");
+        assertThat(persisted.getRefundApplyPath()).isNull();
+    }
+
+    @Test
+    void testDistributionProviderShouldValidateVoucherConfigInLiveMode() {
+        IntegrationProviderConfig request = new IntegrationProviderConfig();
+        request.setProviderCode("DISTRIBUTION");
+        request.setProviderName("外部分销系统");
+        request.setModuleCode("SCHEDULER");
+        request.setExecutionMode("LIVE");
+        request.setAuthType("SIGN_TOKEN");
+        request.setBaseUrl("https://partner.example.com");
+        request.setClientSecret("secret-001");
+        request.setVoucherVerifyPath("/open/distribution/vouchers/verify");
+        request.setVerifyCodeField("voucherCode");
+
+        IntegrationProviderConfig result = schedulerIntegrationService.testProvider(request);
+
+        assertThat(result.getLastTestStatus()).isEqualTo("SUCCESS");
+        assertThat(result.getLastTestMessage()).contains("分销券核销配置模拟检查通过");
+        assertThat(result.getLastTestMessage()).contains("券码字段");
+        verify(providerConfigMapper, never()).updateById(any(IntegrationProviderConfig.class));
+    }
+
+    @Test
+    void testDistributionProviderShouldRejectLiveModeWithoutSecret() {
+        IntegrationProviderConfig request = new IntegrationProviderConfig();
+        request.setProviderCode("DISTRIBUTION");
+        request.setProviderName("外部分销系统");
+        request.setModuleCode("SCHEDULER");
+        request.setExecutionMode("LIVE");
+        request.setAuthType("SIGN_TOKEN");
+        request.setBaseUrl("https://partner.example.com");
+        request.setVoucherVerifyPath("/open/distribution/vouchers/verify");
+        request.setVerifyCodeField("voucherCode");
+
+        assertThatThrownBy(() -> schedulerIntegrationService.testProvider(request))
+                .hasMessageContaining("签名密钥");
+
+        verify(providerConfigMapper, never()).updateById(any(IntegrationProviderConfig.class));
+    }
+
+    @Test
+    void testDistributionProviderShouldRejectInvalidVoucherPath() {
+        IntegrationProviderConfig request = new IntegrationProviderConfig();
+        request.setProviderCode("DISTRIBUTION");
+        request.setProviderName("外部分销系统");
+        request.setModuleCode("SCHEDULER");
+        request.setExecutionMode("LIVE");
+        request.setAuthType("SIGN_TOKEN");
+        request.setBaseUrl("https://partner.example.com");
+        request.setClientSecret("secret-001");
+        request.setVoucherVerifyPath("open/distribution/vouchers/verify");
+        request.setVerifyCodeField("voucherCode");
+
+        assertThatThrownBy(() -> schedulerIntegrationService.testProvider(request))
+                .hasMessageContaining("门店核销调用路径");
+
+        verify(providerConfigMapper, never()).updateById(any(IntegrationProviderConfig.class));
+    }
+
+    @Test
     void shouldReceiveDouyinCallbackAndUpdateStatus() {
         IntegrationProviderConfig provider = new IntegrationProviderConfig();
         provider.setId(1L);
@@ -95,6 +178,95 @@ class SchedulerIntegrationServiceImplTest {
         assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("SUCCESS");
         assertThat(logCaptor.getValue().getIdempotencyStatus()).isEqualTo("NEW");
         assertThat(logCaptor.getValue().getProcessPolicy()).isEqualTo("AUTH_UPDATE_ONLY");
+    }
+
+    @Test
+    void shouldPersistDouyinAuthCodeEvenWhenTokenExchangeCannotRunYet() {
+        IntegrationProviderConfig provider = new IntegrationProviderConfig();
+        provider.setId(1L);
+        provider.setProviderCode("DOUYIN_LAIKE");
+        provider.setProviderName("Douyin");
+        provider.setModuleCode("CLUE");
+        provider.setExecutionMode("LIVE");
+        provider.setCallbackUrl("http://127.0.0.1:8080/scheduler/oauth/douyin/callback");
+
+        IntegrationCallbackConfig callback = new IntegrationCallbackConfig();
+        callback.setId(2L);
+        callback.setProviderCode("DOUYIN_LAIKE");
+        callback.setCallbackUrl("http://127.0.0.1:8080/scheduler/oauth/douyin/callback");
+        callback.setCallbackName("Douyin OAuth");
+
+        when(providerConfigMapper.selectOne(any())).thenReturn(provider);
+        when(callbackConfigMapper.selectOne(any())).thenReturn(callback);
+
+        IntegrationProviderConfig result = schedulerIntegrationService.receiveProviderCallback(
+                "DOUYIN_LAIKE",
+                "Douyin OAuth",
+                "/scheduler/oauth/douyin/callback",
+                "GET",
+                Map.of("auth_code", "auth-code-002", "state", "seedcrm-douyin"),
+                null);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getAuthStatus()).isEqualTo("AUTH_CODE_RECEIVED");
+        assertThat(result.getAuthCodeMasked()).isNotBlank();
+
+        ArgumentCaptor<IntegrationProviderConfig> providerCaptor = ArgumentCaptor.forClass(IntegrationProviderConfig.class);
+        verify(providerConfigMapper).updateById(providerCaptor.capture());
+        IntegrationProviderConfig persisted = providerCaptor.getValue();
+        assertThat(persisted.getAuthCode()).isEqualTo("auth-code-002");
+        assertThat(persisted.getAuthCodeStatus()).isEqualTo("RECEIVED");
+        assertThat(persisted.getLastAuthCodeAt()).isNotNull();
+        assertThat(persisted.getLastCallbackStatus()).isEqualTo("FAILED");
+        assertThat(persisted.getLastCallbackMessage()).contains("appId");
+
+        ArgumentCaptor<IntegrationCallbackEventLog> logCaptor = ArgumentCaptor.forClass(IntegrationCallbackEventLog.class);
+        verify(callbackEventLogMapper).insert(logCaptor.capture());
+        assertThat(logCaptor.getValue().getAuthCode()).contains("****");
+        assertThat(logCaptor.getValue().getProcessPolicy()).isEqualTo("AUTH_UPDATE_ONLY");
+        assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("FAILED");
+    }
+
+    @Test
+    void shouldNotUpdateAuthorizationFieldsFromBusinessEventCallback() {
+        IntegrationProviderConfig provider = new IntegrationProviderConfig();
+        provider.setId(1L);
+        provider.setProviderCode("DOUYIN_LAIKE");
+        provider.setProviderName("Douyin");
+        provider.setModuleCode("CLUE");
+        provider.setExecutionMode("LIVE");
+        provider.setCallbackUrl("http://127.0.0.1:8080/scheduler/callback/douyin/refund");
+
+        IntegrationCallbackConfig callback = new IntegrationCallbackConfig();
+        callback.setId(2L);
+        callback.setProviderCode("DOUYIN_LAIKE");
+        callback.setCallbackUrl("http://127.0.0.1:8080/scheduler/callback/douyin/refund");
+        callback.setCallbackName("Douyin Event");
+
+        when(providerConfigMapper.selectOne(any())).thenReturn(provider);
+        when(callbackConfigMapper.selectOne(any())).thenReturn(callback);
+
+        schedulerIntegrationService.receiveProviderCallback(
+                "DOUYIN_LAIKE",
+                "Douyin Event",
+                "/scheduler/callback/douyin/refund",
+                "POST",
+                Map.of("event_type", "clue_record_update"),
+                "{\"auth_code\":\"event-auth-code\"}");
+
+        ArgumentCaptor<IntegrationProviderConfig> providerCaptor = ArgumentCaptor.forClass(IntegrationProviderConfig.class);
+        verify(providerConfigMapper).updateById(providerCaptor.capture());
+        IntegrationProviderConfig persisted = providerCaptor.getValue();
+        assertThat(persisted.getAuthCode()).isNull();
+        assertThat(persisted.getAuthCodeStatus()).isNull();
+        assertThat(persisted.getLastAuthCodeAt()).isNull();
+        assertThat(persisted.getLastCallbackStatus()).isEqualTo("RECEIVED");
+
+        ArgumentCaptor<IntegrationCallbackEventLog> logCaptor = ArgumentCaptor.forClass(IntegrationCallbackEventLog.class);
+        verify(callbackEventLogMapper).insert(logCaptor.capture());
+        assertThat(logCaptor.getValue().getAuthCode()).contains("****");
+        assertThat(logCaptor.getValue().getProcessPolicy()).isEqualTo("LOG_ONLY");
+        assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("RECEIVED");
     }
 
     @Test

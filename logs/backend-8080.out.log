@@ -78,3 +78,7 @@
 2026-05-01T15:43:42.848+08:00  INFO 28164 --- [nio-8080-exec-2] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604291914133472704, customerId=1005, status=APPOINTMENT
 2026-05-01T15:44:04.558+08:00  INFO 28164 --- [nio-8080-exec-5] c.s.c.o.service.impl.OrderServiceImpl    : order status updated, orderNo=ORD202604291914133472704, customerId=1005, status=APPOINTMENT
 2026-05-01T16:52:45.641+08:00  WARN 28164 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=10m56s901ms949?s).
+2026-05-01T22:36:18.754+08:00  WARN 28164 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1h48m49s377ms656?s400ns).
+2026-05-02T09:51:55.639+08:00  WARN 28164 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=10h23m36s82ms344?s700ns).
+2026-05-02T13:07:29.327+08:00  WARN 28164 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=19m267ms181?s300ns).
+2026-05-02T17:48:56.626+08:00  WARN 28164 --- [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=3h34m56s220ms580?s700ns).

@@ -1,8 +1,12 @@
 package com.seedcrm.crm.workbench.service.impl;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.seedcrm.crm.clue.entity.Clue;
+import com.seedcrm.crm.clue.entity.ClueRecord;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
+import com.seedcrm.crm.clue.service.ClueRecordService;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.customer.entity.Customer;
 import com.seedcrm.crm.customer.entity.CustomerEcomUser;
@@ -43,6 +47,7 @@ import com.seedcrm.crm.wecom.mapper.WecomTouchLogMapper;
 import com.seedcrm.crm.wecom.service.WecomConsoleService;
 import com.seedcrm.crm.wecom.support.WecomBindingStateCodec;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueItemResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueRecordItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.AppointmentRecordResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CurrentRoleResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CustomerProfileResponse;
@@ -93,7 +98,12 @@ import org.springframework.web.client.RestClient;
 @Service
 public class WorkbenchServiceImpl implements WorkbenchService {
 
+    private static final int CLUE_LIST_BATCH_SIZE = 200;
+    private static final int CLUE_LIST_DEFAULT_LIMIT = 1000;
+    private static final int CLUE_LIST_SCAN_LIMIT = 2000;
+
     private final ClueMapper clueMapper;
+    private final ClueRecordService clueRecordService;
     private final OrderMapper orderMapper;
     private final OrderActionRecordMapper orderActionRecordMapper;
     private final PlanOrderMapper planOrderMapper;
@@ -114,6 +124,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
     private final JdbcTemplate jdbcTemplate;
 
     public WorkbenchServiceImpl(ClueMapper clueMapper,
+                                ClueRecordService clueRecordService,
                                 OrderMapper orderMapper,
                                 OrderActionRecordMapper orderActionRecordMapper,
                                 PlanOrderMapper planOrderMapper,
@@ -133,6 +144,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                                  WecomConsoleService wecomConsoleService,
                                  DataSource dataSource) {
         this.clueMapper = clueMapper;
+        this.clueRecordService = clueRecordService;
         this.orderMapper = orderMapper;
         this.orderActionRecordMapper = orderActionRecordMapper;
         this.planOrderMapper = planOrderMapper;
@@ -155,31 +167,19 @@ public class WorkbenchServiceImpl implements WorkbenchService {
 
     @Override
     public List<ClueItemResponse> listClues(String sourceChannel, String productSourceType, String status) {
-        List<Clue> clues = clueMapper.selectList(Wrappers.<Clue>lambdaQuery()
-                .orderByDesc(Clue::getCreatedAt)
-                .orderByDesc(Clue::getId));
-
         String normalizedSourceChannel = normalize(sourceChannel);
         String normalizedProductSourceType = normalize(productSourceType);
         String normalizedStatus = normalize(status);
-        List<Clue> filteredClues = clues.stream()
-                .filter(clue -> !StringUtils.hasText(normalizedSourceChannel)
-                        || normalizedSourceChannel.equals(normalize(clue.getSourceChannel())))
-                .filter(clue -> !StringUtils.hasText(normalizedProductSourceType)
-                        || normalizedProductSourceType.equals(resolveProductSourceType(
-                        clue.getSourceChannel(),
-                        clue.getSource(),
-                        clue.getRawData(),
-                        clue.getSourceId(),
-                        clue.getId())))
-                .filter(clue -> !StringUtils.hasText(normalizedStatus)
-                        || normalizedStatus.equals(normalize(clue.getStatus())))
-                .limit(20)
-                .toList();
+        List<Clue> filteredClues = selectClueCandidates(
+                normalizedSourceChannel,
+                normalizedProductSourceType,
+                normalizedStatus,
+                CLUE_LIST_DEFAULT_LIMIT);
 
         List<Long> clueIds = filteredClues.stream().map(Clue::getId).filter(Objects::nonNull).toList();
         Map<Long, Customer> customerByClueId = loadCustomerByClueId(clueIds);
         Map<Long, List<Order>> ordersByClueId = loadOrdersByClueId(clueIds);
+        Map<Long, List<ClueRecordItemResponse>> clueRecordsByClueId = loadClueRecordsByClueId(clueIds);
 
         List<ClueItemResponse> responses = new ArrayList<>();
         for (Clue clue : filteredClues) {
@@ -191,6 +191,10 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                     .findFirst()
                     .orElse(null);
             Customer customer = customerByClueId.get(clue.getId());
+            List<ClueRecordItemResponse> clueRecords = clueRecordsByClueId.getOrDefault(clue.getId(), List.of());
+            if (clueRecords.isEmpty() && hasMeaningfulRawData(clue.getRawData())) {
+                clueRecords = List.of(buildRawDataFallbackRecord(clue));
+            }
             responses.add(new ClueItemResponse(
                     clue.getId(),
                     clue.getName(),
@@ -207,10 +211,87 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                     customer == null ? null : customer.getId(),
                     latestOrder == null ? null : latestOrder.getId(),
                     latestOrder == null ? null : toWorkbenchOrderStatus(latestOrder.getStatus()),
+                    latestOrder == null ? null : OrderType.toApiValue(latestOrder.getType()),
                     (long) clueOrders.size(),
-                    clue.getCreatedAt()));
+                    clue.getCreatedAt(),
+                    clueRecords));
         }
         return responses;
+    }
+
+    private List<Clue> selectClueCandidates(String normalizedSourceChannel,
+                                            String normalizedProductSourceType,
+                                            String normalizedStatus,
+                                            int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, CLUE_LIST_DEFAULT_LIMIT));
+        List<Clue> result = new ArrayList<>();
+        int scanned = 0;
+        long pageNo = 1L;
+        String statusValue = StringUtils.hasText(normalizedStatus) ? normalizedStatus.toLowerCase(Locale.ROOT) : null;
+        while (result.size() < safeLimit && scanned < CLUE_LIST_SCAN_LIMIT) {
+            Page<Clue> page = new Page<>(pageNo, CLUE_LIST_BATCH_SIZE, false);
+            IPage<Clue> batchPage = clueMapper.selectPage(page, Wrappers.<Clue>lambdaQuery()
+                    .eq(StringUtils.hasText(statusValue), Clue::getStatus, statusValue)
+                    .orderByDesc(Clue::getCreatedAt)
+                    .orderByDesc(Clue::getId));
+            List<Clue> batch = batchPage == null ? List.of() : batchPage.getRecords();
+            if (batch == null || batch.isEmpty()) {
+                break;
+            }
+            scanned += batch.size();
+
+            Map<Long, List<ClueRecord>> recordsByClueId = StringUtils.hasText(normalizedSourceChannel)
+                    ? loadRawClueRecordsByClueId(batch)
+                    : Map.of();
+            Map<Long, List<Order>> ordersByClueId = StringUtils.hasText(normalizedSourceChannel)
+                    ? loadOrdersByClueId(batch.stream().map(Clue::getId).filter(Objects::nonNull).toList())
+                    : Map.of();
+
+            for (Clue clue : batch) {
+                if (result.size() >= safeLimit) {
+                    break;
+                }
+                if (!matchesClueSourceChannel(clue, recordsByClueId.getOrDefault(clue.getId(), List.of()),
+                        ordersByClueId.getOrDefault(clue.getId(), List.of()), normalizedSourceChannel)) {
+                    continue;
+                }
+                if (StringUtils.hasText(normalizedProductSourceType)
+                        && !normalizedProductSourceType.equals(resolveProductSourceType(
+                        clue.getSourceChannel(),
+                        clue.getSource(),
+                        clue.getRawData(),
+                        clue.getSourceId(),
+                        clue.getId()))) {
+                    continue;
+                }
+                result.add(clue);
+            }
+
+            if (batch.size() < CLUE_LIST_BATCH_SIZE) {
+                break;
+            }
+            pageNo++;
+        }
+        return result;
+    }
+
+    private boolean matchesClueSourceChannel(Clue clue,
+                                             List<ClueRecord> clueRecords,
+                                             List<Order> orders,
+                                             String normalizedSourceChannel) {
+        if (!StringUtils.hasText(normalizedSourceChannel)) {
+            return true;
+        }
+        if (normalizedSourceChannel.equals(normalize(clue == null ? null : clue.getSourceChannel()))) {
+            return true;
+        }
+        boolean recordMatched = clueRecords.stream()
+                .anyMatch(record -> normalizedSourceChannel.equals(normalize(record.getSourceChannel())));
+        if (recordMatched) {
+            return true;
+        }
+        return orders.stream()
+                .anyMatch(order -> normalizedSourceChannel.equals(normalize(order.getSourceChannel())));
     }
 
     @Override
@@ -892,6 +973,64 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 .stream()
                 .filter(order -> order.getClueId() != null)
                 .collect(Collectors.groupingBy(Order::getClueId));
+    }
+
+    private Map<Long, List<ClueRecordItemResponse>> loadClueRecordsByClueId(List<Long> clueIds) {
+        if (clueIds.isEmpty()) {
+            return Map.of();
+        }
+        return clueRecordService.listByClueIds(clueIds).stream()
+                .filter(record -> record.getClueId() != null)
+                .collect(Collectors.groupingBy(
+                        ClueRecord::getClueId,
+                        LinkedHashMap::new,
+                        Collectors.mapping(this::buildClueRecordResponse, Collectors.toList())));
+    }
+
+    private Map<Long, List<ClueRecord>> loadRawClueRecordsByClueId(Collection<Clue> clues) {
+        List<Long> clueIds = clues == null
+                ? List.of()
+                : clues.stream().map(Clue::getId).filter(Objects::nonNull).toList();
+        if (clueIds.isEmpty()) {
+            return Map.of();
+        }
+        return clueRecordService.listByClueIds(clueIds).stream()
+                .filter(record -> record.getClueId() != null)
+                .collect(Collectors.groupingBy(
+                        ClueRecord::getClueId,
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+    }
+
+    private ClueRecordItemResponse buildClueRecordResponse(ClueRecord record) {
+        return new ClueRecordItemResponse(
+                record.getId(),
+                record.getRecordType(),
+                record.getSourceChannel(),
+                record.getExternalRecordId(),
+                record.getExternalOrderId(),
+                record.getTitle(),
+                record.getContent(),
+                record.getOccurredAt(),
+                record.getCreatedAt());
+    }
+
+    private boolean hasMeaningfulRawData(String rawData) {
+        String value = rawData == null ? "" : rawData.trim();
+        return StringUtils.hasText(value) && !"{}".equals(value);
+    }
+
+    private ClueRecordItemResponse buildRawDataFallbackRecord(Clue clue) {
+        return new ClueRecordItemResponse(
+                null,
+                "CLUE",
+                clue.getSourceChannel(),
+                clue.getSourceId() == null ? null : String.valueOf(clue.getSourceId()),
+                null,
+                "历史客资同步",
+                "该客资来自历史 raw_data，后续同步会写入结构化客资记录",
+                clue.getCreatedAt(),
+                clue.getCreatedAt());
     }
 
     private Map<Long, PlanOrder> loadPlanOrderByOrderId(List<Long> orderIds) {

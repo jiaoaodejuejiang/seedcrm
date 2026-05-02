@@ -83,7 +83,7 @@ const routes = [
         component: PaidOrderManagement,
         meta: {
           title: '顾客排档',
-          sectionTitle: '客资中心',
+          sectionTitle: '门店服务',
           moduleCode: 'ORDER',
           roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE'],
           navKey: 'paid-orders'
@@ -98,7 +98,7 @@ const routes = [
         name: 'clue-auto-assign',
         component: ClueAutoAssignmentView,
         meta: {
-          title: '自动分配',
+          title: '客资配置',
           sectionTitle: '客资中心 / 客资管理',
           moduleCode: 'CLUE',
           roleCodes: ['CLUE_MANAGER', 'ADMIN'],

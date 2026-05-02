@@ -21,3 +21,5 @@ seedcrm:
   domain:
     system-base-url: ${SEEDCRM_SYSTEM_BASE_URL:http://127.0.0.1:8003}
     api-base-url: ${SEEDCRM_API_BASE_URL:http://127.0.0.1:8004}
+  go-live:
+    allow-destructive-clear-test-data: ${SEEDCRM_ALLOW_CLEAR_TEST_DATA:false}

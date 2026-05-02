@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM 宝塔面板 Docker 部署说明</title>
+  <style>
+    body { margin: 0; background: #f7fafc; color: #172033; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; line-height: 1.75; }
+    main { max-width: 1080px; margin: 0 auto; padding: 34px 22px 64px; }
+    header, section { margin-top: 18px; padding: 24px; border: 1px solid #e5eaf3; border-radius: 22px; background: #fff; box-shadow: 0 18px 45px rgba(23, 32, 51, .06); }
+    h1, h2, h3 { margin: 0; line-height: 1.35; }
+    h1 { font-size: 30px; }
+    h2 { margin-bottom: 12px; font-size: 22px; }
+    h3 { margin-top: 16px; font-size: 17px; }
+    p { margin: 8px 0 0; color: #64748b; }
+    ul, ol { margin: 10px 0 0; padding-left: 22px; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    pre { overflow: auto; padding: 14px; border-radius: 14px; background: #101827; color: #e5edf8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5eaf3; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    .badge { display: inline-block; margin: 10px 8px 0 0; padding: 5px 10px; border-radius: 999px; background: #e8f4ff; color: #075985; font-size: 12px; font-weight: 700; }
+    .warn { border-left: 4px solid #f59e0b; }
+    .danger { border-left: 4px solid #ef4444; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SeedCRM 宝塔面板 Docker 部署说明</h1>
+    <p>面向使用宝塔面板管理服务器的部署方式。推荐使用宝塔的 Docker / Docker Compose 能力部署，本系统默认前端端口为 8003，后端接口端口为 8004。</p>
+    <span class="badge">前端 8003</span>
+    <span class="badge">后端 8004</span>
+    <span class="badge">MySQL 8.x</span>
+    <span class="badge">Compose 编排</span>
+  </header>
+
+  <section>
+    <h2>1. 宝塔面板准备</h2>
+    <ol>
+      <li>在宝塔面板中安装 Docker 管理器，确认服务器可以执行 <code>docker compose version</code>。</li>
+      <li>放行安全组和宝塔防火墙端口：<code>8003</code>、<code>8004</code>。MySQL 默认只绑定服务器本机 <code>127.0.0.1:3306</code>，不建议对公网放行。</li>
+      <li>建议先创建站点域名，例如 <code>crm.example.com</code> 指向前端，<code>api.example.com</code> 指向后端。</li>
+      <li>如果没有域名，测试阶段可先用 <code>http://服务器IP:8003</code> 和 <code>http://服务器IP:8004</code> 联调。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>2. 上传代码与配置</h2>
+    <p>在宝塔文件管理中创建目录，例如 <code>/www/wwwroot/seedcrm</code>，上传整个项目代码。</p>
+    <pre><code>cd /www/wwwroot/seedcrm
+cp .env.example .env</code></pre>
+    <p>编辑 <code>.env</code>，至少修改数据库密码和域名：</p>
+    <pre><code>SEEDCRM_MYSQL_PASSWORD=请替换为强密码
+SEEDCRM_MYSQL_ROOT_PASSWORD=请替换为强密码
+SEEDCRM_SYSTEM_BASE_URL=http://服务器IP:8003
+SEEDCRM_API_BASE_URL=http://服务器IP:8004
+SEEDCRM_FRONTEND_PORT=8003
+SEEDCRM_BACKEND_PORT=8004
+SEEDCRM_ALLOW_CLEAR_TEST_DATA=false</code></pre>
+    <p><code>SEEDCRM_ALLOW_CLEAR_TEST_DATA</code> 默认必须保持 <code>false</code>。只有在确认连接的是测试库、且已备份后，才可临时改为 <code>true</code> 执行真实测试数据清理。</p>
+  </section>
+
+  <section>
+    <h2>3. 启动容器</h2>
+    <p>可在宝塔终端执行，也可在 Docker Compose 项目中选择本项目的 <code>docker-compose.yml</code>。</p>
+    <pre><code>docker compose build
+docker compose up -d
+docker compose ps
+docker compose logs -f backend</code></pre>
+    <table>
+      <thead><tr><th>服务</th><th>容器</th><th>端口</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>frontend</td><td>seedcrm-frontend</td><td>8003 -> 80</td><td>后台前端页面，内部 Nginx 会把 /api 代理到后端。</td></tr>
+        <tr><td>backend</td><td>seedcrm-backend</td><td>8004 -> 8004</td><td>Spring Boot API 服务。</td></tr>
+        <tr><td>mysql</td><td>seedcrm-mysql</td><td>127.0.0.1:3306 -> 3306</td><td>仅服务器本机可访问，正式环境不要对公网开放。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>4. 宝塔反向代理建议</h2>
+    <h3>前端站点</h3>
+    <p>宝塔站点 <code>crm.example.com</code> 反代到：</p>
+    <pre><code>http://127.0.0.1:8003</code></pre>
+    <h3>后端 API 站点</h3>
+    <p>宝塔站点 <code>api.example.com</code> 反代到：</p>
+    <pre><code>http://127.0.0.1:8004</code></pre>
+    <p>开启 HTTPS 后，把【系统设置 / 基础配置 / 域名配置】更新为：</p>
+    <pre><code>系统基础域名：https://crm.example.com
+API 域名：https://api.example.com</code></pre>
+  </section>
+
+  <section class="warn">
+    <h2>5. 上线工具检查</h2>
+    <ol>
+      <li>访问 <code>http://服务器IP:8003</code>，使用管理员账号登录。</li>
+      <li>进入【系统设置 / 基础配置 / 上线工具】，先运行上线预检。</li>
+      <li>清理测试数据只能在 TEST/STAGING 环境执行，先 dry-run，确认词为 <code>CLEAR_TEST_DATA</code>；真实删除还需要 <code>SEEDCRM_ALLOW_CLEAR_TEST_DATA=true</code>。</li>
+      <li>正式环境初始化确认词为 <code>INIT_PROD_SYSTEM</code>，并且不会自动把接口切回 MOCK。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>6. Scheme B 接口联调</h2>
+    <ul>
+      <li>外部分销已支付订单入站地址：<code>{API 域名}/open/distribution/events</code>。</li>
+      <li>分销订单不进入 Clue，只通过受控入站服务创建或匹配 Customer，并创建 Order(已支付)。</li>
+      <li>状态回查、对账拉取先执行“预检（不入库）”，再执行真实任务。</li>
+      <li>PlanOrder finished 后写 Outbox，调度异步回推 <code>crm.order.used</code>。</li>
+    </ul>
+  </section>
+
+  <section class="danger">
+    <h2>7. 不建议上线的情况</h2>
+    <ul>
+      <li>宝塔防火墙或云安全组未放行 8003/8004，外部平台无法回调。</li>
+      <li>线上域名仍配置为 <code>127.0.0.1</code>、<code>localhost</code> 或测试 IP。</li>
+      <li>Swagger/OpenAPI 在公网开启但没有鉴权、IP 白名单或 VPN 限制。</li>
+      <li>抖音 auth_code 已过期，但仍继续保存或测试真实拉取。</li>
+      <li>没有先执行上线工具 dry-run，或没有确认当前连接测试库，就直接打开真实清理开关。</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

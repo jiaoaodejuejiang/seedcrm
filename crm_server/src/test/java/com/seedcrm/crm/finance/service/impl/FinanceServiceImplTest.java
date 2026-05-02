@@ -2,6 +2,8 @@ package com.seedcrm.crm.finance.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,6 +16,8 @@ import com.seedcrm.crm.finance.dto.FinanceCheckResponse;
 import com.seedcrm.crm.finance.entity.Account;
 import com.seedcrm.crm.finance.entity.FinanceCheckRecord;
 import com.seedcrm.crm.finance.enums.AccountOwnerType;
+import com.seedcrm.crm.finance.enums.LedgerBizType;
+import com.seedcrm.crm.finance.enums.LedgerDirection;
 import com.seedcrm.crm.finance.service.AccountService;
 import com.seedcrm.crm.finance.service.LedgerService;
 import com.seedcrm.crm.order.entity.Order;
@@ -83,6 +87,24 @@ class FinanceServiceImplTest {
     }
 
     @Test
+    void recordSalaryIncomeShouldRecordRefundReversalAsOutLedger() {
+        SalaryDetail salaryDetail = new SalaryDetail();
+        salaryDetail.setId(22L);
+        salaryDetail.setUserId(9L);
+        salaryDetail.setAmount(new BigDecimal("-35.00"));
+
+        financeService.recordSalaryIncome(salaryDetail);
+
+        verify(ledgerService).record(
+                eq(AccountOwnerType.USER),
+                eq(9L),
+                argThat(amount -> amount.compareTo(new BigDecimal("35.00")) == 0),
+                eq(LedgerBizType.SALARY),
+                eq(22L),
+                eq(LedgerDirection.OUT));
+    }
+
+    @Test
     void checkShouldPersistMatchAndMismatchRecords() {
         Order order = new Order();
         order.setId(1L);
@@ -140,5 +162,39 @@ class FinanceServiceImplTest {
         verify(financeCheckRecordMapper, times(3)).insert(captor.capture());
         assertThat(captor.getAllValues()).extracting(FinanceCheckRecord::getStatus)
                 .containsExactly("MATCH", "MISMATCH", "MATCH");
+    }
+
+    @Test
+    void checkShouldMatchNegativeSalaryReversalLedger() {
+        when(orderMapper.selectList(any())).thenReturn(List.of());
+        SalaryDetail salaryDetail = new SalaryDetail();
+        salaryDetail.setId(44L);
+        salaryDetail.setUserId(9L);
+        salaryDetail.setAmount(new BigDecimal("-40.00"));
+        when(salaryDetailMapper.selectList(any())).thenReturn(List.of(salaryDetail));
+        when(distributorIncomeDetailMapper.selectList(any())).thenReturn(List.of());
+        when(withdrawRecordMapper.selectList(any())).thenReturn(List.of());
+        when(distributorWithdrawMapper.selectList(any())).thenReturn(List.of());
+
+        Account userAccount = new Account();
+        userAccount.setId(12L);
+        userAccount.setOwnerType(AccountOwnerType.USER.name());
+        userAccount.setOwnerId(9L);
+        when(accountService.getOrCreateAccount(AccountOwnerType.USER, 9L)).thenReturn(userAccount);
+        when(ledgerService.getBizAmount(12L, LedgerBizType.SALARY, 44L))
+                .thenReturn(new BigDecimal("-40.00"));
+        when(financeCheckRecordMapper.insert(any(FinanceCheckRecord.class))).thenReturn(1);
+
+        FinanceCheckResponse response = financeService.check();
+
+        assertThat(response.getTotalCount()).isEqualTo(1);
+        assertThat(response.getMatchCount()).isEqualTo(1);
+        verify(ledgerService).record(
+                eq(AccountOwnerType.USER),
+                eq(9L),
+                argThat(amount -> amount.compareTo(new BigDecimal("40.00")) == 0),
+                eq(LedgerBizType.SALARY),
+                eq(44L),
+                eq(LedgerDirection.OUT));
     }
 }

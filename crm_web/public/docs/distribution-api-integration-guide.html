@@ -1,9 +1,9 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SeedCRM 分销接口联调说明</title>
+  <title>SeedCRM 鍒嗛攢鎺ュ彛鑱旇皟璇存槑</title>
   <style>
     :root {
       --ink: #17231f;
@@ -356,324 +356,314 @@
 <body>
   <div class="shell">
     <aside class="toc">
-      <strong>目录</strong>
-      <a href="#overview">1. 接入概览</a>
-      <a href="#environment">2. 环境与权限</a>
-      <a href="#inbound">3. 已支付订单入站</a>
-      <a href="#signature">4. 签名与防重放</a>
-      <a href="#idempotency">5. 防重复规则</a>
-      <a href="#outbox">6. 履约回推</a>
-      <a href="#reconcile">7. 状态回查与对账</a>
-      <a href="#debug">8. 调试与诊断</a>
-      <a href="#errors">9. 错误码与排障</a>
-      <a href="#acceptance">10. 上线验收</a>
+      <strong>鐩綍</strong>
+      <a href="#overview">1. 鎺ュ叆姒傝</a>
+      <a href="#environment">2. 鐜涓庢潈闄?/a>
+      <a href="#inbound">3. 宸叉敮浠樿鍗曞叆绔?/a>
+      <a href="#signature">4. 绛惧悕涓庨槻閲嶆斁</a>
+      <a href="#idempotency">5. 闃查噸澶嶈鍒?/a>
+      <a href="#outbox">6. 灞ョ害鍥炴帹</a>
+      <a href="#reconcile">7. 鐘舵€佸洖鏌ヤ笌瀵硅处</a>
+      <a href="#debug">8. 璋冭瘯涓庤瘖鏂?/a>
+      <a href="#errors">9. 閿欒鐮佷笌鎺掗殰</a>
+      <a href="#acceptance">10. 涓婄嚎楠屾敹</a>
     </aside>
 
     <main>
       <header class="hero">
         <p class="eyebrow">SEEDCRM DISTRIBUTION API</p>
-        <h1>分销接口联调说明</h1>
+        <h1>鍒嗛攢鎺ュ彛鑱旇皟璇存槑</h1>
         <p>
-          本文面向外部分销 / 电商系统研发、SeedCRM 集成管理员和联调人员，说明方案 B 的入站事件、签名、防重复、Outbox 回推、异常队列、回查对账和验收样本。
-        </p>
+          鏈枃闈㈠悜澶栭儴鍒嗛攢 / 鐢靛晢绯荤粺鐮斿彂銆丼eedCRM 闆嗘垚绠＄悊鍛樺拰鑱旇皟浜哄憳锛岃鏄庢柟妗?B 鐨勫叆绔欎簨浠躲€佺鍚嶃€侀槻閲嶅銆丱utbox 鍥炴帹銆佸紓甯搁槦鍒椼€佸洖鏌ュ璐﹀拰楠屾敹鏍锋湰銆?        </p>
         <div class="meta">
-          <span class="pill">适用版本：方案 B V1</span>
-          <span class="pill">最后更新：2026-05-01</span>
-          <span class="pill">响应包：code / message / data</span>
+          <span class="pill">閫傜敤鐗堟湰锛氭柟妗?B V1</span>
+          <span class="pill">鏈€鍚庢洿鏂帮細2026-05-01</span>
+          <span class="pill">鍝嶅簲鍖咃細code / message / data</span>
         </div>
       </header>
 
       <section id="overview" class="section">
-        <h2>1. 接入概览</h2>
+        <h2>1. 鎺ュ叆姒傝</h2>
         <div class="notice">
-          分销方案 B 的接口目标是：外部分销系统把已支付成交订单推送给 SeedCRM；SeedCRM 完成预约排档和门店履约后，再把 <code>crm.order.used</code> 异步回推给外部分销系统。
-        </div>
+          鍒嗛攢鏂规 B 鐨勬帴鍙ｇ洰鏍囨槸锛氬閮ㄥ垎閿€绯荤粺鎶婂凡鏀粯鎴愪氦璁㈠崟鎺ㄩ€佺粰 SeedCRM锛汼eedCRM 瀹屾垚棰勭害鎺掓。鍜岄棬搴楀饱绾﹀悗锛屽啀鎶?<code>crm.order.used</code> 寮傛鍥炴帹缁欏閮ㄥ垎閿€绯荤粺銆?        </div>
         <div class="flow">
           <div class="step">
-            <b>1. 外部支付</b>
-            分销小程序或电商系统完成付款。
-          </div>
+            <b>1. 澶栭儴鏀粯</b>
+            鍒嗛攢灏忕▼搴忔垨鐢靛晢绯荤粺瀹屾垚浠樻銆?          </div>
           <div class="step">
-            <b>2. 入站事件</b>
-            调用 <code>POST /open/distribution/events</code>。
-          </div>
+            <b>2. 鍏ョ珯浜嬩欢</b>
+            璋冪敤 <code>POST /open/distribution/events</code>銆?          </div>
           <div class="step">
-            <b>3. 入站服务</b>
-            统一经 <code>DistributionEventIngestService</code>。
-          </div>
+            <b>3. 鍏ョ珯鏈嶅姟</b>
+            缁熶竴缁?<code>DistributionEventIngestService</code>銆?          </div>
           <div class="step">
-            <b>4. 本地主链</b>
-            创建或匹配 <code>Customer</code>，创建 <code>Order(paid)</code>。
-          </div>
+            <b>4. 鏈湴涓婚摼</b>
+            鍒涘缓鎴栧尮閰?<code>Customer</code>锛屽垱寤?<code>Order(paid)</code>銆?          </div>
           <div class="step">
-            <b>5. 门店履约</b>
-            预约排档，生成并完成 <code>PlanOrder</code>。
-          </div>
+            <b>5. 闂ㄥ簵灞ョ害</b>
+            棰勭害鎺掓。锛岀敓鎴愬苟瀹屾垚 <code>PlanOrder</code>銆?          </div>
           <div class="step">
-            <b>6. 回推完成</b>
-            Outbox 异步回推 <code>crm.order.used</code>。
-          </div>
+            <b>6. 鍥炴帹瀹屾垚</b>
+            Outbox 寮傛鍥炴帹 <code>crm.order.used</code>銆?          </div>
         </div>
         <pre><code>ExternalDistributionPaidOrder -> Customer -> Order(paid) -> PlanOrder -> scheduler_outbox_event -> crm.order.used</code></pre>
         <div class="notice danger">
-          分销已支付订单不进入 <code>Clue</code>；SeedCRM 不处理外部分销佣金、提现、退款资金流；Open API / Scheduler 都不得绕过入站服务直接写 <code>Customer / Order / PlanOrder</code>。
-        </div>
+          鍒嗛攢宸叉敮浠樿鍗曚笉杩涘叆 <code>Clue</code>锛汼eedCRM 涓嶅鐞嗗閮ㄥ垎閿€浣ｉ噾銆佹彁鐜般€侀€€娆捐祫閲戞祦锛汷pen API / Scheduler 閮戒笉寰楃粫杩囧叆绔欐湇鍔＄洿鎺ュ啓 <code>Customer / Order / PlanOrder</code>銆?        </div>
       </section>
 
       <section id="environment" class="section">
-        <h2>2. 环境与权限</h2>
+        <h2>2. 鐜涓庢潈闄?/h2>
         <table>
           <thead>
             <tr>
-              <th>项目</th>
-              <th>说明</th>
+              <th>椤圭洰</th>
+              <th>璇存槑</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>后台接口前缀</td>
-              <td>本地默认 <code>http://127.0.0.1:8080</code>；前端代理默认 <code>/api</code>。</td>
+              <td>鍚庡彴鎺ュ彛鍓嶇紑</td>
+              <td>鏈湴榛樿 <code>http://127.0.0.1:8004</code>锛涘墠绔唬鐞嗛粯璁?<code>/api</code>銆?/td>
             </tr>
             <tr>
-              <td>Open API 入口</td>
-              <td>外部分销系统调用 <code>/open/distribution/events</code>，不需要后台登录 token，但需要渠道配置和签名规则。</td>
+              <td>Open API 鍏ュ彛</td>
+              <td>澶栭儴鍒嗛攢绯荤粺璋冪敤 <code>/open/distribution/events</code>锛屼笉闇€瑕佸悗鍙扮櫥褰?token锛屼絾闇€瑕佹笭閬撻厤缃拰绛惧悕瑙勫垯銆?/td>
             </tr>
             <tr>
-              <td>后台调试接口</td>
-              <td>后台用户登录后使用 <code>X-Auth-Token</code> 调用 <code>/scheduler/*</code> 接口。</td>
+              <td>鍚庡彴璋冭瘯鎺ュ彛</td>
+              <td>鍚庡彴鐢ㄦ埛鐧诲綍鍚庝娇鐢?<code>X-Auth-Token</code> 璋冪敤 <code>/scheduler/*</code> 鎺ュ彛銆?/td>
             </tr>
             <tr>
-              <td>配置入口</td>
-              <td>系统设置 -> 调度中心 -> 分销接口 -> 接入配置。</td>
+              <td>閰嶇疆鍏ュ彛</td>
+              <td>绯荤粺璁剧疆 -> 璋冨害涓績 -> 鍒嗛攢鎺ュ彛 -> 鎺ュ叆閰嶇疆銆?/td>
             </tr>
             <tr>
-              <td>联调角色</td>
-              <td><code>INTEGRATION_ADMIN</code> 配置和执行全局处理；<code>INTEGRATION_OPERATOR</code> 查看日志、异常和脱敏结果。</td>
+              <td>鑱旇皟瑙掕壊</td>
+              <td><code>INTEGRATION_ADMIN</code> 閰嶇疆鍜屾墽琛屽叏灞€澶勭悊锛?code>INTEGRATION_OPERATOR</code> 鏌ョ湅鏃ュ織銆佸紓甯稿拰鑴辨晱缁撴灉銆?/td>
             </tr>
           </tbody>
         </table>
-        <h3>2.1 MOCK 与 LIVE</h3>
+        <h3>2.1 MOCK 涓?LIVE</h3>
         <table>
           <thead>
             <tr>
-              <th>模式</th>
-              <th>用途</th>
-              <th>安全规则</th>
+              <th>妯″紡</th>
+              <th>鐢ㄩ€?/th>
+              <th>瀹夊叏瑙勫垯</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td><code>MOCK</code></td>
-              <td>本地联调、回归测试、验收样本生成。</td>
-              <td>入站仍需要 <code>X-Idempotency-Key</code> 和事件字段；签名可跳过。</td>
+              <td>鏈湴鑱旇皟銆佸洖褰掓祴璇曘€侀獙鏀舵牱鏈敓鎴愩€?/td>
+              <td>鍏ョ珯浠嶉渶瑕?<code>X-Idempotency-Key</code> 鍜屼簨浠跺瓧娈碉紱绛惧悕鍙烦杩囥€?/td>
             </tr>
             <tr>
               <td><code>LIVE</code></td>
-              <td>真实外部分销系统联调或生产接入。</td>
-              <td>必须配置 <code>AppId</code>、<code>AppSecret</code>、回推地址、状态回查路径、对账路径，并携带签名头。</td>
+              <td>鐪熷疄澶栭儴鍒嗛攢绯荤粺鑱旇皟鎴栫敓浜ф帴鍏ャ€?/td>
+              <td>蹇呴』閰嶇疆 <code>AppId</code>銆?code>AppSecret</code>銆佸洖鎺ㄥ湴鍧€銆佺姸鎬佸洖鏌ヨ矾寰勩€佸璐﹁矾寰勶紝骞舵惡甯︾鍚嶅ご銆?/td>
             </tr>
           </tbody>
         </table>
-        <h3>2.2 上线域名与 OpenAPI</h3>
+        <h3>2.2 涓婄嚎鍩熷悕涓?OpenAPI</h3>
         <table>
           <thead>
             <tr>
-              <th>配置项</th>
-              <th>用途</th>
-              <th>上线要求</th>
+              <th>閰嶇疆椤?/th>
+              <th>鐢ㄩ€?/th>
+              <th>涓婄嚎瑕佹眰</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td><code>SEEDCRM_SYSTEM_BASE_URL</code></td>
-              <td>系统后台访问域名，用于页面跳转、扫码服务单等前端入口。</td>
-              <td>生产环境必须配置为可访问的 HTTPS 域名。</td>
+              <td>绯荤粺鍚庡彴璁块棶鍩熷悕锛岀敤浜庨〉闈㈣烦杞€佹壂鐮佹湇鍔″崟绛夊墠绔叆鍙ｃ€?/td>
+              <td>鐢熶骇鐜蹇呴』閰嶇疆涓哄彲璁块棶鐨?HTTPS 鍩熷悕銆?/td>
             </tr>
             <tr>
               <td><code>SEEDCRM_API_BASE_URL</code></td>
-              <td>API 域名，用于分销入站、回调地址、Swagger/OpenAPI 示例地址。</td>
-              <td>生产环境必须配置为外部分销系统可访问的 HTTPS 地址。</td>
+              <td>API 鍩熷悕锛岀敤浜庡垎閿€鍏ョ珯銆佸洖璋冨湴鍧€銆丼wagger/OpenAPI 绀轰緥鍦板潃銆?/td>
+              <td>鐢熶骇鐜蹇呴』閰嶇疆涓哄閮ㄥ垎閿€绯荤粺鍙闂殑 HTTPS 鍦板潃銆?/td>
             </tr>
             <tr>
               <td><code>SEEDCRM_OPENAPI_ENABLED</code></td>
-              <td>是否启用 Swagger UI 和 <code>/v3/api-docs/*</code>。</td>
-              <td>生产可启用，但必须通过后台 token 访问；未授权用户不能看到接口定义。</td>
+              <td>鏄惁鍚敤 Swagger UI 鍜?<code>/v3/api-docs/*</code>銆?/td>
+              <td>鐢熶骇鍙惎鐢紝浣嗗繀椤婚€氳繃鍚庡彴 token 璁块棶锛涙湭鎺堟潈鐢ㄦ埛涓嶈兘鐪嬪埌鎺ュ彛瀹氫箟銆?/td>
             </tr>
             <tr>
               <td><code>SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN</code></td>
-              <td>本地访问 Swagger 是否允许免 token。</td>
-              <td>生产环境建议设置为 <code>false</code>。</td>
+              <td>鏈湴璁块棶 Swagger 鏄惁鍏佽鍏?token銆?/td>
+              <td>鐢熶骇鐜寤鸿璁剧疆涓?<code>false</code>銆?/td>
             </tr>
           </tbody>
         </table>
         <div class="notice warn">
-          Swagger UI 用于查看接口定义；正式联调请优先使用“联调工作台”进行 dry-run 验证。生产环境不要把 Swagger/OpenAPI 直接暴露给公网未授权访问。
-        </div>
+          Swagger UI 鐢ㄤ簬鏌ョ湅鎺ュ彛瀹氫箟锛涙寮忚仈璋冭浼樺厛浣跨敤鈥滆仈璋冨伐浣滃彴鈥濊繘琛?dry-run 楠岃瘉銆傜敓浜х幆澧冧笉瑕佹妸 Swagger/OpenAPI 鐩存帴鏆撮湶缁欏叕缃戞湭鎺堟潈璁块棶銆?        </div>
       </section>
 
       <section id="inbound" class="section">
-        <h2>3. 已支付订单入站</h2>
+        <h2>3. 宸叉敮浠樿鍗曞叆绔?/h2>
         <div class="endpoint">
           <span class="method">POST</span>
           <code>/open/distribution/events</code>
         </div>
-        <p>该接口接收外部分销已支付订单、取消、退款待处理、已退款等事件。所有写入动作统一进入入站业务服务。</p>
+        <p>璇ユ帴鍙ｆ帴鏀跺閮ㄥ垎閿€宸叉敮浠樿鍗曘€佸彇娑堛€侀€€娆惧緟澶勭悊銆佸凡閫€娆剧瓑浜嬩欢銆傛墍鏈夊啓鍏ュ姩浣滅粺涓€杩涘叆鍏ョ珯涓氬姟鏈嶅姟銆?/p>
 
-        <h3>3.1 请求头</h3>
+        <h3>3.1 璇锋眰澶?/h3>
         <table>
           <thead>
             <tr>
               <th>Header</th>
-              <th>是否必填</th>
-              <th>说明</th>
+              <th>鏄惁蹇呭～</th>
+              <th>璇存槑</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td><code>X-Partner-Code</code></td>
-              <td>建议必填</td>
-              <td>渠道编码，默认 <code>DISTRIBUTION</code>。如请求头和报文 <code>partnerCode</code> 同时存在，必须一致。</td>
+              <td>寤鸿蹇呭～</td>
+              <td>娓犻亾缂栫爜锛岄粯璁?<code>DISTRIBUTION</code>銆傚璇锋眰澶村拰鎶ユ枃 <code>partnerCode</code> 鍚屾椂瀛樺湪锛屽繀椤讳竴鑷淬€?/td>
             </tr>
             <tr>
               <td><code>X-Idempotency-Key</code></td>
-              <td>必填</td>
-              <td>幂等键，页面展示为“防重复编号”。禁止使用手机号作为订单幂等依据。</td>
+              <td>蹇呭～</td>
+              <td>骞傜瓑閿紝椤甸潰灞曠ず涓衡€滈槻閲嶅缂栧彿鈥濄€傜姝娇鐢ㄦ墜鏈哄彿浣滀负璁㈠崟骞傜瓑渚濇嵁銆?/td>
             </tr>
             <tr>
               <td><code>X-Timestamp</code></td>
-              <td>LIVE 必填</td>
-              <td>签名时间，允许 10 分钟窗口。建议 ISO-8601 UTC 时间。</td>
+              <td>LIVE 蹇呭～</td>
+              <td>绛惧悕鏃堕棿锛屽厑璁?10 鍒嗛挓绐楀彛銆傚缓璁?ISO-8601 UTC 鏃堕棿銆?/td>
             </tr>
             <tr>
               <td><code>X-Nonce</code></td>
-              <td>LIVE 必填</td>
-              <td>随机串，用于防重放。同渠道已验证 nonce 不能重复使用。</td>
+              <td>LIVE 蹇呭～</td>
+              <td>闅忔満涓诧紝鐢ㄤ簬闃查噸鏀俱€傚悓娓犻亾宸查獙璇?nonce 涓嶈兘閲嶅浣跨敤銆?/td>
             </tr>
             <tr>
               <td><code>X-Signature</code></td>
-              <td>LIVE 必填</td>
-              <td>HMAC-SHA256 签名，规则见“签名与防重放”。</td>
+              <td>LIVE 蹇呭～</td>
+              <td>HMAC-SHA256 绛惧悕锛岃鍒欒鈥滅鍚嶄笌闃查噸鏀锯€濄€?/td>
             </tr>
           </tbody>
         </table>
 
-        <h3>3.2 支持事件</h3>
+        <h3>3.2 鏀寔浜嬩欢</h3>
         <table>
           <thead>
             <tr>
               <th>eventType</th>
-              <th>SeedCRM 行为</th>
-              <th>备注</th>
+              <th>SeedCRM 琛屼负</th>
+              <th>澶囨敞</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td><code>distribution.order.paid</code></td>
-              <td>创建或匹配 <code>Customer</code>，创建 <code>Order(paid)</code>。</td>
-              <td>唯一允许创建订单的事件。</td>
+              <td>鍒涘缓鎴栧尮閰?<code>Customer</code>锛屽垱寤?<code>Order(paid)</code>銆?/td>
+              <td>鍞竴鍏佽鍒涘缓璁㈠崟鐨勪簨浠躲€?/td>
             </tr>
             <tr>
               <td><code>distribution.order.cancelled</code></td>
-              <td>只能更新已有订单的外部状态或进入异常队列。</td>
-              <td>不能反向创建订单。</td>
+              <td>鍙兘鏇存柊宸叉湁璁㈠崟鐨勫閮ㄧ姸鎬佹垨杩涘叆寮傚父闃熷垪銆?/td>
+              <td>涓嶈兘鍙嶅悜鍒涘缓璁㈠崟銆?/td>
             </tr>
             <tr>
               <td><code>distribution.order.refund_pending</code></td>
-              <td>记录外部退款待处理状态，必要时进入异常队列。</td>
-              <td>外部退款资金流仍由外部分销系统处理。</td>
+              <td>璁板綍澶栭儴閫€娆惧緟澶勭悊鐘舵€侊紝蹇呰鏃惰繘鍏ュ紓甯搁槦鍒椼€?/td>
+              <td>澶栭儴閫€娆捐祫閲戞祦浠嶇敱澶栭儴鍒嗛攢绯荤粺澶勭悊銆?/td>
             </tr>
             <tr>
               <td><code>distribution.order.refunded</code></td>
-              <td>更新已有订单外部退款状态，或按冲突进入异常队列。</td>
-              <td>不得绕过入站服务直接改核心表。</td>
+              <td>鏇存柊宸叉湁璁㈠崟澶栭儴閫€娆剧姸鎬侊紝鎴栨寜鍐茬獊杩涘叆寮傚父闃熷垪銆?/td>
+              <td>涓嶅緱缁曡繃鍏ョ珯鏈嶅姟鐩存帴鏀规牳蹇冭〃銆?/td>
             </tr>
             <tr>
               <td><code>distribution.promoter.synced</code> / <code>distribution.member.updated</code></td>
-              <td>V1 仅记录事件日志。</td>
-              <td>不创建核心模型，不触发分佣提现。</td>
+              <td>V1 浠呰褰曚簨浠舵棩蹇椼€?/td>
+              <td>涓嶅垱寤烘牳蹇冩ā鍨嬶紝涓嶈Е鍙戝垎浣ｆ彁鐜般€?/td>
             </tr>
           </tbody>
         </table>
 
-        <h3>3.3 请求体字段</h3>
+        <h3>3.3 璇锋眰浣撳瓧娈?/h3>
         <table>
           <thead>
             <tr>
-              <th>字段</th>
-              <th>必填</th>
-              <th>说明</th>
+              <th>瀛楁</th>
+              <th>蹇呭～</th>
+              <th>璇存槑</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td><code>eventType</code></td>
-              <td>是</td>
-              <td>事件类型，例如 <code>distribution.order.paid</code>。</td>
+              <td>鏄?/td>
+              <td>浜嬩欢绫诲瀷锛屼緥濡?<code>distribution.order.paid</code>銆?/td>
             </tr>
             <tr>
               <td><code>eventId</code></td>
-              <td>是</td>
-              <td>外部事件 ID，用于日志追踪和重复事件识别。</td>
+              <td>鏄?/td>
+              <td>澶栭儴浜嬩欢 ID锛岀敤浜庢棩蹇楄拷韪拰閲嶅浜嬩欢璇嗗埆銆?/td>
             </tr>
             <tr>
               <td><code>partnerCode</code></td>
-              <td>建议</td>
-              <td>渠道编码，默认 <code>DISTRIBUTION</code>。</td>
+              <td>寤鸿</td>
+              <td>娓犻亾缂栫爜锛岄粯璁?<code>DISTRIBUTION</code>銆?/td>
             </tr>
             <tr>
               <td><code>member.externalMemberId</code></td>
-              <td>paid 必填</td>
-              <td>外部会员 ID，与 <code>partnerCode</code> 一起用于会员身份匹配。</td>
+              <td>paid 蹇呭～</td>
+              <td>澶栭儴浼氬憳 ID锛屼笌 <code>partnerCode</code> 涓€璧风敤浜庝細鍛樿韩浠藉尮閰嶃€?/td>
             </tr>
             <tr>
               <td><code>member.phone</code></td>
-              <td>paid 必填</td>
-              <td>会员手机号，用于 Customer 匹配。不能作为订单幂等键。</td>
+              <td>paid 蹇呭～</td>
+              <td>浼氬憳鎵嬫満鍙凤紝鐢ㄤ簬 Customer 鍖归厤銆備笉鑳戒綔涓鸿鍗曞箓绛夐敭銆?/td>
             </tr>
             <tr>
               <td><code>member.role</code></td>
-              <td>否</td>
-              <td>会员身份展示字段，例如 <code>leader</code>、<code>member</code>，仅用于展示 / 画像。</td>
+              <td>鍚?/td>
+              <td>浼氬憳韬唤灞曠ず瀛楁锛屼緥濡?<code>leader</code>銆?code>member</code>锛屼粎鐢ㄤ簬灞曠ず / 鐢诲儚銆?/td>
             </tr>
             <tr>
               <td><code>promoter.externalPromoterId</code></td>
-              <td>否</td>
-              <td>外部分销者 ID，仅记录外部快照，不参与 SeedCRM 分佣提现。</td>
+              <td>鍚?/td>
+              <td>澶栭儴鍒嗛攢鑰?ID锛屼粎璁板綍澶栭儴蹇収锛屼笉鍙備笌 SeedCRM 鍒嗕剑鎻愮幇銆?/td>
             </tr>
             <tr>
               <td><code>order.externalOrderId</code></td>
-              <td>paid 必填</td>
-              <td>外部订单号，与 <code>partnerCode</code> 共同作为订单唯一依据。</td>
+              <td>paid 蹇呭～</td>
+              <td>澶栭儴璁㈠崟鍙凤紝涓?<code>partnerCode</code> 鍏卞悓浣滀负璁㈠崟鍞竴渚濇嵁銆?/td>
             </tr>
             <tr>
               <td><code>order.externalTradeNo</code></td>
-              <td>建议</td>
-              <td>外部支付流水号，用于对账和冲突排查。</td>
+              <td>寤鸿</td>
+              <td>澶栭儴鏀粯娴佹按鍙凤紝鐢ㄤ簬瀵硅处鍜屽啿绐佹帓鏌ャ€?/td>
             </tr>
             <tr>
               <td><code>order.type</code></td>
-              <td>建议</td>
-              <td><code>deposit</code> 或 <code>coupon</code>，V1 本地默认可映射为团购券 / 定金类订单。</td>
+              <td>寤鸿</td>
+              <td><code>deposit</code> 鎴?<code>coupon</code>锛孷1 鏈湴榛樿鍙槧灏勪负鍥㈣喘鍒?/ 瀹氶噾绫昏鍗曘€?/td>
             </tr>
             <tr>
               <td><code>order.amount</code></td>
-              <td>paid 必填</td>
-              <td>已支付金额，单位为分。系统入库时转换为元并保留两位小数。</td>
+              <td>paid 蹇呭～</td>
+              <td>宸叉敮浠橀噾棰濓紝鍗曚綅涓哄垎銆傜郴缁熷叆搴撴椂杞崲涓哄厓骞朵繚鐣欎袱浣嶅皬鏁般€?/td>
             </tr>
             <tr>
               <td><code>order.status</code></td>
-              <td>建议</td>
-              <td>外部状态，例如 <code>paid</code>、<code>cancelled</code>、<code>refund_pending</code>、<code>refunded</code>。</td>
+              <td>寤鸿</td>
+              <td>澶栭儴鐘舵€侊紝渚嬪 <code>paid</code>銆?code>cancelled</code>銆?code>refund_pending</code>銆?code>refunded</code>銆?/td>
             </tr>
             <tr>
               <td><code>rawData</code></td>
-              <td>是</td>
-              <td>外部原始报文快照，用于追踪、补偿、对账和审计。</td>
+              <td>鏄?/td>
+              <td>澶栭儴鍘熷鎶ユ枃蹇収锛岀敤浜庤拷韪€佽ˉ鍋裤€佸璐﹀拰瀹¤銆?/td>
             </tr>
           </tbody>
         </table>
 
-        <h3>3.4 paid 样例</h3>
+        <h3>3.4 paid 鏍蜂緥</h3>
         <pre><code>POST /open/distribution/events
 X-Partner-Code: DISTRIBUTION
 X-Idempotency-Key: DISTRIBUTION:ORDER_PAID:o_202605010001
@@ -686,7 +676,7 @@ Content-Type: application/json
   "occurredAt": "2026-05-01T10:30:00+08:00",
   "member": {
     "externalMemberId": "m_10001",
-    "name": "张三",
+    "name": "寮犱笁",
     "phone": "13800000000",
     "role": "member"
   },
@@ -708,7 +698,7 @@ Content-Type: application/json
   }
 }</code></pre>
 
-        <h3>3.5 成功响应</h3>
+        <h3>3.5 鎴愬姛鍝嶅簲</h3>
         <pre><code>{
   "code": 0,
   "message": "success",
@@ -724,40 +714,39 @@ Content-Type: application/json
       </section>
 
       <section id="signature" class="section">
-        <h2>4. 签名与防重放</h2>
-        <p>LIVE 模式下，入站事件必须携带时间戳、随机串和签名。</p>
+        <h2>4. 绛惧悕涓庨槻閲嶆斁</h2>
+        <p>LIVE 妯″紡涓嬶紝鍏ョ珯浜嬩欢蹇呴』鎼哄甫鏃堕棿鎴炽€侀殢鏈轰覆鍜岀鍚嶃€?/p>
         <table>
           <thead>
             <tr>
-              <th>项目</th>
-              <th>规则</th>
+              <th>椤圭洰</th>
+              <th>瑙勫垯</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>签名算法</td>
+              <td>绛惧悕绠楁硶</td>
               <td><code>HMAC-SHA256</code></td>
             </tr>
             <tr>
-              <td>签名密钥</td>
-              <td>分销接口配置中的 <code>AppSecret</code> / <code>clientSecret</code></td>
+              <td>绛惧悕瀵嗛挜</td>
+              <td>鍒嗛攢鎺ュ彛閰嶇疆涓殑 <code>AppSecret</code> / <code>clientSecret</code></td>
             </tr>
             <tr>
-              <td>入站签名原文</td>
+              <td>鍏ョ珯绛惧悕鍘熸枃</td>
               <td><code>X-Timestamp + "|" + X-Nonce + "|" + X-Idempotency-Key + "|" + rawRequestBody</code></td>
             </tr>
             <tr>
-              <td>时间窗口</td>
-              <td>允许 10 分钟偏差，超出会返回时间戳异常。</td>
+              <td>鏃堕棿绐楀彛</td>
+              <td>鍏佽 10 鍒嗛挓鍋忓樊锛岃秴鍑轰細杩斿洖鏃堕棿鎴冲紓甯搞€?/td>
             </tr>
             <tr>
-              <td>nonce 防重放</td>
-              <td>同渠道已验证 nonce 不能重复使用。</td>
+              <td>nonce 闃查噸鏀?/td>
+              <td>鍚屾笭閬撳凡楠岃瘉 nonce 涓嶈兘閲嶅浣跨敤銆?/td>
             </tr>
           </tbody>
         </table>
-        <pre><code>// 伪代码
-source = timestamp + "|" + nonce + "|" + idempotencyKey + "|" + rawJsonBody
+        <pre><code>// 浼唬鐮?source = timestamp + "|" + nonce + "|" + idempotencyKey + "|" + rawJsonBody
 signature = hmacSha256Hex(clientSecret, source)
 
 headers = {
@@ -768,81 +757,78 @@ headers = {
   "X-Signature": signature
 }</code></pre>
         <div class="notice warn">
-          生成签名时必须使用原始请求体字符串。字段顺序、空格、换行变化都会改变签名结果，联调时建议先固定 JSON 序列化方式。
-        </div>
+          鐢熸垚绛惧悕鏃跺繀椤讳娇鐢ㄥ師濮嬭姹備綋瀛楃涓层€傚瓧娈甸『搴忋€佺┖鏍笺€佹崲琛屽彉鍖栭兘浼氭敼鍙樼鍚嶇粨鏋滐紝鑱旇皟鏃跺缓璁厛鍥哄畾 JSON 搴忓垪鍖栨柟寮忋€?        </div>
       </section>
 
       <section id="idempotency" class="section">
-        <h2>5. 防重复规则</h2>
+        <h2>5. 闃查噸澶嶈鍒?/h2>
         <table>
           <thead>
             <tr>
-              <th>场景</th>
-              <th>结果</th>
-              <th>说明</th>
+              <th>鍦烘櫙</th>
+              <th>缁撴灉</th>
+              <th>璇存槑</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>同 <code>X-Idempotency-Key</code> 或同 <code>eventId</code>，报文一致</td>
+              <td>鍚?<code>X-Idempotency-Key</code> 鎴栧悓 <code>eventId</code>锛屾姤鏂囦竴鑷?/td>
               <td><span class="tag ok">DUPLICATE</span></td>
-              <td>系统返回成功并忽略重复事件，不重复创建订单。</td>
+              <td>绯荤粺杩斿洖鎴愬姛骞跺拷鐣ラ噸澶嶄簨浠讹紝涓嶉噸澶嶅垱寤鸿鍗曘€?/td>
             </tr>
             <tr>
-              <td>同 <code>X-Idempotency-Key</code> 或同 <code>eventId</code>，报文不一致</td>
+              <td>鍚?<code>X-Idempotency-Key</code> 鎴栧悓 <code>eventId</code>锛屾姤鏂囦笉涓€鑷?/td>
               <td><span class="tag danger">EXCEPTION_QUEUED</span></td>
-              <td>进入异常队列，异常类型为重复报文冲突，需要人工核对内容指纹。</td>
+              <td>杩涘叆寮傚父闃熷垪锛屽紓甯哥被鍨嬩负閲嶅鎶ユ枃鍐茬獊锛岄渶瑕佷汉宸ユ牳瀵瑰唴瀹规寚绾广€?/td>
             </tr>
             <tr>
-              <td>同 <code>partnerCode + externalOrderId</code> 已存在，关键字段一致</td>
+              <td>鍚?<code>partnerCode + externalOrderId</code> 宸插瓨鍦紝鍏抽敭瀛楁涓€鑷?/td>
               <td><span class="tag ok">EXISTING</span></td>
-              <td>刷新外部状态快照，不重复创建订单。</td>
+              <td>鍒锋柊澶栭儴鐘舵€佸揩鐓э紝涓嶉噸澶嶅垱寤鸿鍗曘€?/td>
             </tr>
             <tr>
-              <td>同外部订单号已存在，但交易号、会员、类型或金额冲突</td>
+              <td>鍚屽閮ㄨ鍗曞彿宸插瓨鍦紝浣嗕氦鏄撳彿銆佷細鍛樸€佺被鍨嬫垨閲戦鍐茬獊</td>
               <td><span class="tag danger">EXCEPTION_QUEUED</span></td>
-              <td>进入异常队列，显示冲突字段、本地值、外部值和处理建议。</td>
+              <td>杩涘叆寮傚父闃熷垪锛屾樉绀哄啿绐佸瓧娈点€佹湰鍦板€笺€佸閮ㄥ€煎拰澶勭悊寤鸿銆?/td>
             </tr>
           </tbody>
         </table>
         <div class="notice danger">
-          上线前请检查“幂等健康”。若历史重复接口接收日志导致唯一索引暂未生效，需要先导出、人工确认、治理重复记录，再由管理员或 DBA 重建唯一索引。禁止直接删除 <code>Customer / Order / PlanOrder</code> 数据。
-        </div>
+          涓婄嚎鍓嶈妫€鏌モ€滃箓绛夊仴搴封€濄€傝嫢鍘嗗彶閲嶅鎺ュ彛鎺ユ敹鏃ュ織瀵艰嚧鍞竴绱㈠紩鏆傛湭鐢熸晥锛岄渶瑕佸厛瀵煎嚭銆佷汉宸ョ‘璁ゃ€佹不鐞嗛噸澶嶈褰曪紝鍐嶇敱绠＄悊鍛樻垨 DBA 閲嶅缓鍞竴绱㈠紩銆傜姝㈢洿鎺ュ垹闄?<code>Customer / Order / PlanOrder</code> 鏁版嵁銆?        </div>
       </section>
 
       <section id="outbox" class="section">
-        <h2>6. 履约回推</h2>
+        <h2>6. 灞ョ害鍥炴帹</h2>
         <p>
-          门店服务完成后，SeedCRM 先在本地完成 <code>PlanOrder finished -> Order used</code>，再写入 <code>scheduler_outbox_event</code>，由调度器异步调用外部分销系统。
-        </p>
-        <h3>6.1 回推事件</h3>
+          闂ㄥ簵鏈嶅姟瀹屾垚鍚庯紝SeedCRM 鍏堝湪鏈湴瀹屾垚 <code>PlanOrder finished -> Order used</code>锛屽啀鍐欏叆 <code>scheduler_outbox_event</code>锛岀敱璋冨害鍣ㄥ紓姝ヨ皟鐢ㄥ閮ㄥ垎閿€绯荤粺銆?        </p>
+        <h3>6.1 鍥炴帹浜嬩欢</h3>
         <table>
           <thead>
             <tr>
-              <th>项目</th>
-              <th>值</th>
+              <th>椤圭洰</th>
+              <th>鍊?/th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>事件类型</td>
+              <td>浜嬩欢绫诲瀷</td>
               <td><code>crm.order.used</code></td>
             </tr>
             <tr>
-              <td>回推地址</td>
-              <td>分销接口配置中的 <code>callbackUrl</code>，或 <code>baseUrl + endpointPath</code></td>
+              <td>鍥炴帹鍦板潃</td>
+              <td>鍒嗛攢鎺ュ彛閰嶇疆涓殑 <code>callbackUrl</code>锛屾垨 <code>baseUrl + endpointPath</code></td>
             </tr>
             <tr>
-              <td>幂等键</td>
+              <td>骞傜瓑閿?/td>
               <td><code>providerCode:eventType:orderId:planOrderId</code></td>
             </tr>
             <tr>
-              <td>签名原文</td>
+              <td>绛惧悕鍘熸枃</td>
               <td><code>timestamp + "|" + nonce + "|" + idempotencyKey + "|" + payload</code></td>
             </tr>
           </tbody>
         </table>
-        <h3>6.2 回推 Header</h3>
+        <h3>6.2 鍥炴帹 Header</h3>
         <pre><code>X-Partner-Code: DISTRIBUTION
 X-Idempotency-Key: DISTRIBUTION:crm.order.used:202:301
 X-Trace-Id: outbox-188
@@ -850,7 +836,7 @@ X-Event-Type: crm.order.used
 X-Timestamp: 2026-05-01T02:30:00Z
 X-Nonce: 7f29c40a-91e7-4e58-b38b-bb2cb6a3401c
 X-Signature: hmac_sha256_hex</code></pre>
-        <h3>6.3 回推 Body</h3>
+        <h3>6.3 鍥炴帹 Body</h3>
         <pre><code>{
   "eventType": "crm.order.used",
   "eventId": "crm.order.used_202_301",
@@ -870,101 +856,99 @@ X-Signature: hmac_sha256_hex</code></pre>
   }
 }</code></pre>
         <div class="notice">
-          Outbox 是异步机制。外部系统短时不可用不会回滚本地履约，失败会进入失败或死信状态，待修正配置或外部接口后重新入队。
-        </div>
+          Outbox 鏄紓姝ユ満鍒躲€傚閮ㄧ郴缁熺煭鏃朵笉鍙敤涓嶄細鍥炴粴鏈湴灞ョ害锛屽け璐ヤ細杩涘叆澶辫触鎴栨淇＄姸鎬侊紝寰呬慨姝ｉ厤缃垨澶栭儴鎺ュ彛鍚庨噸鏂板叆闃熴€?        </div>
       </section>
 
       <section id="reconcile" class="section">
-        <h2>7. 状态回查与对账</h2>
+        <h2>7. 鐘舵€佸洖鏌ヤ笌瀵硅处</h2>
         <p>
-          Scheduler 负责状态回查、对账拉取、失败重试和补偿同步。它只能读取外部状态或本地 MOCK 数据；若需要改变订单状态，必须生成 <code>distribution.order.*</code> 事件并调用 <code>DistributionEventIngestService.replayFromScheduler</code>。
-        </p>
+          Scheduler 璐熻矗鐘舵€佸洖鏌ャ€佸璐︽媺鍙栥€佸け璐ラ噸璇曞拰琛ュ伩鍚屾銆傚畠鍙兘璇诲彇澶栭儴鐘舵€佹垨鏈湴 MOCK 鏁版嵁锛涜嫢闇€瑕佹敼鍙樿鍗曠姸鎬侊紝蹇呴』鐢熸垚 <code>distribution.order.*</code> 浜嬩欢骞惰皟鐢?<code>DistributionEventIngestService.replayFromScheduler</code>銆?        </p>
         <table>
           <thead>
             <tr>
-              <th>任务</th>
-              <th>后台触发接口</th>
-              <th>说明</th>
+              <th>浠诲姟</th>
+              <th>鍚庡彴瑙﹀彂鎺ュ彛</th>
+              <th>璇存槑</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>履约回推队列处理</td>
+              <td>灞ョ害鍥炴帹闃熷垪澶勭悊</td>
               <td><code>POST /scheduler/outbox/process?limit=20</code></td>
-              <td>处理 <code>PENDING</code> / 到期 <code>FAILED</code> 回推事件。</td>
+              <td>澶勭悊 <code>PENDING</code> / 鍒版湡 <code>FAILED</code> 鍥炴帹浜嬩欢銆?/td>
             </tr>
             <tr>
-              <td>异常重试队列处理</td>
+              <td>寮傚父閲嶈瘯闃熷垪澶勭悊</td>
               <td><code>POST /scheduler/distribution/exceptions/process?limit=10</code></td>
-              <td>处理 <code>RETRY_QUEUED</code> 异常，可信重放入站服务。</td>
+              <td>澶勭悊 <code>RETRY_QUEUED</code> 寮傚父锛屽彲淇￠噸鏀惧叆绔欐湇鍔°€?/td>
             </tr>
             <tr>
-              <td>状态回查</td>
+              <td>鐘舵€佸洖鏌?/td>
               <td><code>POST /scheduler/distribution/status-check/process?limit=20</code></td>
-              <td>读取外部订单状态，生成状态事件重放。</td>
+              <td>璇诲彇澶栭儴璁㈠崟鐘舵€侊紝鐢熸垚鐘舵€佷簨浠堕噸鏀俱€?/td>
             </tr>
             <tr>
-              <td>对账拉取</td>
+              <td>瀵硅处鎷夊彇</td>
               <td><code>POST /scheduler/distribution/reconcile/process?limit=20</code></td>
-              <td>拉取外部对账记录，统一转成入站事件处理。</td>
+              <td>鎷夊彇澶栭儴瀵硅处璁板綍锛岀粺涓€杞垚鍏ョ珯浜嬩欢澶勭悊銆?/td>
             </tr>
           </tbody>
         </table>
-        <h3>7.1 LIVE 外部接口要求</h3>
+        <h3>7.1 LIVE 澶栭儴鎺ュ彛瑕佹眰</h3>
         <table>
           <thead>
             <tr>
-              <th>能力</th>
-              <th>配置字段</th>
-              <th>外部接口期望</th>
+              <th>鑳藉姏</th>
+              <th>閰嶇疆瀛楁</th>
+              <th>澶栭儴鎺ュ彛鏈熸湜</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>状态回查</td>
+              <td>鐘舵€佸洖鏌?/td>
               <td><code>statusQueryPath</code></td>
-              <td>SeedCRM POST 外部地址，请返回状态或标准事件。支持 <code>paid/cancelled/refund_pending/refunded</code> 映射。</td>
+              <td>SeedCRM POST 澶栭儴鍦板潃锛岃杩斿洖鐘舵€佹垨鏍囧噯浜嬩欢銆傛敮鎸?<code>paid/cancelled/refund_pending/refunded</code> 鏄犲皠銆?/td>
             </tr>
             <tr>
-              <td>对账拉取</td>
+              <td>瀵硅处鎷夊彇</td>
               <td><code>reconciliationPullPath</code></td>
-              <td>SeedCRM POST 外部地址，请返回 <code>items / records / list / orders</code> 或单条对象。</td>
+              <td>SeedCRM POST 澶栭儴鍦板潃锛岃杩斿洖 <code>items / records / list / orders</code> 鎴栧崟鏉″璞°€?/td>
             </tr>
             <tr>
-              <td>履约回推</td>
-              <td><code>callbackUrl</code> 或 <code>baseUrl + endpointPath</code></td>
-              <td>外部分销系统接收 <code>crm.order.used</code>，并按幂等键去重。</td>
+              <td>灞ョ害鍥炴帹</td>
+              <td><code>callbackUrl</code> 鎴?<code>baseUrl + endpointPath</code></td>
+              <td>澶栭儴鍒嗛攢绯荤粺鎺ユ敹 <code>crm.order.used</code>锛屽苟鎸夊箓绛夐敭鍘婚噸銆?/td>
             </tr>
           </tbody>
         </table>
       </section>
 
       <section id="debug" class="section">
-        <h2>8. 调试与诊断</h2>
+        <h2>8. 璋冭瘯涓庤瘖鏂?/h2>
         <div class="grid">
           <div class="card">
-            <h3>联调工作台 dry-run</h3>
-            <p>入口：系统设置 -> 调度中心 -> 联调工作台。</p>
-            <p>用途：预览字段映射、状态映射、Customer 匹配、Order 幂等结果，不落库。</p>
-            <p>后台接口：<code>POST /scheduler/interface/debug</code>。</p>
+            <h3>鑱旇皟宸ヤ綔鍙?dry-run</h3>
+            <p>鍏ュ彛锛氱郴缁熻缃?-> 璋冨害涓績 -> 鑱旇皟宸ヤ綔鍙般€?/p>
+            <p>鐢ㄩ€旓細棰勮瀛楁鏄犲皠銆佺姸鎬佹槧灏勩€丆ustomer 鍖归厤銆丱rder 骞傜瓑缁撴灉锛屼笉钀藉簱銆?/p>
+            <p>鍚庡彴鎺ュ彛锛?code>POST /scheduler/interface/debug</code>銆?/p>
           </div>
           <div class="card">
-            <h3>验收样本</h3>
-            <p>入口：系统设置 -> 调度中心 -> 分销接口 -> 验收样本。</p>
-            <p>覆盖成功回推、失败回推、死信、异常待处理、对账失败样本。</p>
+            <h3>楠屾敹鏍锋湰</h3>
+            <p>鍏ュ彛锛氱郴缁熻缃?-> 璋冨害涓績 -> 鍒嗛攢鎺ュ彛 -> 楠屾敹鏍锋湰銆?/p>
+            <p>瑕嗙洊鎴愬姛鍥炴帹銆佸け璐ュ洖鎺ㄣ€佹淇°€佸紓甯稿緟澶勭悊銆佸璐﹀け璐ユ牱鏈€?/p>
           </div>
           <div class="card">
-            <h3>幂等健康</h3>
-            <p>后台接口：<code>GET /scheduler/idempotency-health?providerCode=DISTRIBUTION</code>。</p>
-            <p>用于查看唯一索引状态、重复分组、建议保留记录、需核对记录和日志样例。</p>
+            <h3>骞傜瓑鍋ュ悍</h3>
+            <p>鍚庡彴鎺ュ彛锛?code>GET /scheduler/idempotency-health?providerCode=DISTRIBUTION</code>銆?/p>
+            <p>鐢ㄤ簬鏌ョ湅鍞竴绱㈠紩鐘舵€併€侀噸澶嶅垎缁勩€佸缓璁繚鐣欒褰曘€侀渶鏍稿璁板綍鍜屾棩蹇楁牱渚嬨€?/p>
           </div>
           <div class="card">
-            <h3>监控摘要</h3>
-            <p>后台接口：<code>GET /scheduler/monitor/summary?providerCode=DISTRIBUTION</code>。</p>
-            <p>返回 Outbox、异常队列、幂等健康、最近调度批次和验收样本。</p>
+            <h3>鐩戞帶鎽樿</h3>
+            <p>鍚庡彴鎺ュ彛锛?code>GET /scheduler/monitor/summary?providerCode=DISTRIBUTION</code>銆?/p>
+            <p>杩斿洖 Outbox銆佸紓甯搁槦鍒椼€佸箓绛夊仴搴枫€佹渶杩戣皟搴︽壒娆″拰楠屾敹鏍锋湰銆?/p>
           </div>
         </div>
-        <h3>8.1 后台接口鉴权</h3>
+        <h3>8.1 鍚庡彴鎺ュ彛閴存潈</h3>
         <pre><code>POST /auth/login
 Content-Type: application/json
 
@@ -973,128 +957,119 @@ Content-Type: application/json
   "password": "123456"
 }
 
-后续请求：
-X-Auth-Token: 登录响应中的 token</code></pre>
+鍚庣画璇锋眰锛?X-Auth-Token: 鐧诲綍鍝嶅簲涓殑 token</code></pre>
       </section>
 
       <section id="errors" class="section">
-        <h2>9. 错误码与排障</h2>
+        <h2>9. 閿欒鐮佷笌鎺掗殰</h2>
         <table>
           <thead>
             <tr>
-              <th>错误类型</th>
-              <th>常见原因</th>
-              <th>处理建议</th>
+              <th>閿欒绫诲瀷</th>
+              <th>甯歌鍘熷洜</th>
+              <th>澶勭悊寤鸿</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td><code>PROVIDER_INVALID</code></td>
-              <td>分销渠道未配置、被停用或 partnerCode 不匹配。</td>
-              <td>检查分销接口配置、启用状态、请求头和报文中的渠道编码。</td>
+              <td>鍒嗛攢娓犻亾鏈厤缃€佽鍋滅敤鎴?partnerCode 涓嶅尮閰嶃€?/td>
+              <td>妫€鏌ュ垎閿€鎺ュ彛閰嶇疆銆佸惎鐢ㄧ姸鎬併€佽姹傚ご鍜屾姤鏂囦腑鐨勬笭閬撶紪鐮併€?/td>
             </tr>
             <tr>
               <td><code>SIGNATURE_MISSING</code> / <code>SIGNATURE_INVALID</code></td>
-              <td>LIVE 请求缺少签名头，或签名原文 / 密钥不一致。</td>
-              <td>核对 AppSecret、原始请求体、timestamp、nonce、idempotencyKey。</td>
+              <td>LIVE 璇锋眰缂哄皯绛惧悕澶达紝鎴栫鍚嶅師鏂?/ 瀵嗛挜涓嶄竴鑷淬€?/td>
+              <td>鏍稿 AppSecret銆佸師濮嬭姹備綋銆乼imestamp銆乶once銆乮dempotencyKey銆?/td>
             </tr>
             <tr>
               <td><code>TIMESTAMP_INVALID</code></td>
-              <td>时间戳格式错误或超出 10 分钟窗口。</td>
-              <td>统一服务器时间，使用 ISO-8601 或秒 / 毫秒时间戳。</td>
+              <td>鏃堕棿鎴虫牸寮忛敊璇垨瓒呭嚭 10 鍒嗛挓绐楀彛銆?/td>
+              <td>缁熶竴鏈嶅姟鍣ㄦ椂闂达紝浣跨敤 ISO-8601 鎴栫 / 姣鏃堕棿鎴炽€?/td>
             </tr>
             <tr>
               <td><code>IDEMPOTENCY_MISSING</code></td>
-              <td>缺少 <code>X-Idempotency-Key</code>。</td>
-              <td>外部系统为每个业务事件生成稳定防重复编号。</td>
+              <td>缂哄皯 <code>X-Idempotency-Key</code>銆?/td>
+              <td>澶栭儴绯荤粺涓烘瘡涓笟鍔′簨浠剁敓鎴愮ǔ瀹氶槻閲嶅缂栧彿銆?/td>
             </tr>
             <tr>
               <td><code>DUPLICATE_PAYLOAD_CONFLICT</code></td>
-              <td>同幂等键或同事件 ID 发送了不同报文。</td>
-              <td>核对内容指纹，外部系统修正报文或生成新的幂等键后重推。</td>
+              <td>鍚屽箓绛夐敭鎴栧悓浜嬩欢 ID 鍙戦€佷簡涓嶅悓鎶ユ枃銆?/td>
+              <td>鏍稿鍐呭鎸囩汗锛屽閮ㄧ郴缁熶慨姝ｆ姤鏂囨垨鐢熸垚鏂扮殑骞傜瓑閿悗閲嶆帹銆?/td>
             </tr>
             <tr>
               <td><code>EXTERNAL_ORDER_CONFLICT</code></td>
-              <td>同外部订单号已存在，但交易号、会员、类型或金额冲突。</td>
-              <td>查看异常队列冲突字段，确认以本地值或外部值为准后再处理。</td>
+              <td>鍚屽閮ㄨ鍗曞彿宸插瓨鍦紝浣嗕氦鏄撳彿銆佷細鍛樸€佺被鍨嬫垨閲戦鍐茬獊銆?/td>
+              <td>鏌ョ湅寮傚父闃熷垪鍐茬獊瀛楁锛岀‘璁や互鏈湴鍊兼垨澶栭儴鍊间负鍑嗗悗鍐嶅鐞嗐€?/td>
             </tr>
             <tr>
               <td><code>EXTERNAL_STATUS_CONFLICT</code></td>
-              <td>外部取消 / 退款事件与本地履约状态冲突。</td>
-              <td>由业务人员确认是否需要退款、冲正绩效或仅记录外部状态。</td>
+              <td>澶栭儴鍙栨秷 / 閫€娆句簨浠朵笌鏈湴灞ョ害鐘舵€佸啿绐併€?/td>
+              <td>鐢变笟鍔′汉鍛樼‘璁ゆ槸鍚﹂渶瑕侀€€娆俱€佸啿姝ｇ哗鏁堟垨浠呰褰曞閮ㄧ姸鎬併€?/td>
             </tr>
           </tbody>
         </table>
-        <h3>9.1 异常处理标准流程</h3>
+        <h3>9.1 寮傚父澶勭悊鏍囧噯娴佺▼</h3>
         <div class="flow">
           <div class="step">
-            <b>查看异常</b>
-            进入分销接口 -> 异常队列。
-          </div>
+            <b>鏌ョ湅寮傚父</b>
+            杩涘叆鍒嗛攢鎺ュ彛 -> 寮傚父闃熷垪銆?          </div>
           <div class="step">
-            <b>定位订单</b>
-            复制外部订单号、本地订单号、追踪编号。
-          </div>
+            <b>瀹氫綅璁㈠崟</b>
+            澶嶅埗澶栭儴璁㈠崟鍙枫€佹湰鍦拌鍗曞彿銆佽拷韪紪鍙枫€?          </div>
           <div class="step">
-            <b>核对字段</b>
-            查看冲突字段、本地值、外部值。
-          </div>
+            <b>鏍稿瀛楁</b>
+            鏌ョ湅鍐茬獊瀛楁銆佹湰鍦板€笺€佸閮ㄥ€笺€?          </div>
           <div class="step">
-            <b>修复源头</b>
-            修正外部数据、接口配置或状态映射。
-          </div>
+            <b>淇婧愬ご</b>
+            淇澶栭儴鏁版嵁銆佹帴鍙ｉ厤缃垨鐘舵€佹槧灏勩€?          </div>
           <div class="step">
-            <b>重新入队</b>
-            管理员触发重试，系统可信重放。
-          </div>
+            <b>閲嶆柊鍏ラ槦</b>
+            绠＄悊鍛樿Е鍙戦噸璇曪紝绯荤粺鍙俊閲嶆斁銆?          </div>
           <div class="step">
-            <b>关闭记录</b>
-            成功后自动已处理，或人工标记处理。
-          </div>
+            <b>鍏抽棴璁板綍</b>
+            鎴愬姛鍚庤嚜鍔ㄥ凡澶勭悊锛屾垨浜哄伐鏍囪澶勭悊銆?          </div>
         </div>
       </section>
 
       <section id="acceptance" class="section">
-        <h2>10. 上线验收</h2>
+        <h2>10. 涓婄嚎楠屾敹</h2>
         <ul class="checklist">
-          <li><code>distribution.order.paid</code> 可创建 / 匹配 <code>Customer</code> 并创建 <code>Order(paid)</code>。</li>
-          <li>分销已支付订单不进入 <code>Clue</code>，不参与公海和客资分配。</li>
-          <li>重复同报文返回成功且不重复创建订单。</li>
-          <li>同幂等键不同报文进入异常队列。</li>
-          <li>同外部订单号关键字段冲突进入异常队列并显示冲突字段。</li>
-          <li>门店完成 <code>PlanOrder</code> 后生成 <code>crm.order.used</code> Outbox。</li>
-          <li>MOCK 模式 Outbox 可模拟成功，LIVE 模式按签名调用外部回调地址。</li>
-          <li>失败回推可重新入队，超过重试进入死信。</li>
-          <li>状态回查 / 对账拉取只能生成事件重放，不直接更新核心表。</li>
-          <li>异常 OPEN / RETRY_QUEUED / HANDLED 状态可闭环。</li>
-          <li>幂等健康能显示唯一索引风险和重复数据治理建议。</li>
-          <li><code>INTEGRATION_OPERATOR</code> 查看敏感字段为脱敏结果。</li>
-          <li><code>PARTNER_APP</code> 只能访问自身 <code>partner_code</code> 范围，不能触发全局批处理。</li>
-          <li>验收样本页 5 类样本可展示：成功、失败、死信、异常、对账失败。</li>
-          <li>系统设置 -> 基础配置 -> 域名配置保存后，分销接口页展示的入站、回查、对账和 Swagger 地址同步更新。</li>
-          <li>Swagger UI / OpenAPI JSON 仅允许管理员、集成管理员或集成操作员访问；普通业务角色和外部分销应用不能访问。</li>
-          <li>生产环境变量已配置：<code>SEEDCRM_SYSTEM_BASE_URL</code>、<code>SEEDCRM_API_BASE_URL</code>、<code>SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN=false</code>。</li>
+          <li><code>distribution.order.paid</code> 鍙垱寤?/ 鍖归厤 <code>Customer</code> 骞跺垱寤?<code>Order(paid)</code>銆?/li>
+          <li>鍒嗛攢宸叉敮浠樿鍗曚笉杩涘叆 <code>Clue</code>锛屼笉鍙備笌鍏捣鍜屽璧勫垎閰嶃€?/li>
+          <li>閲嶅鍚屾姤鏂囪繑鍥炴垚鍔熶笖涓嶉噸澶嶅垱寤鸿鍗曘€?/li>
+          <li>鍚屽箓绛夐敭涓嶅悓鎶ユ枃杩涘叆寮傚父闃熷垪銆?/li>
+          <li>鍚屽閮ㄨ鍗曞彿鍏抽敭瀛楁鍐茬獊杩涘叆寮傚父闃熷垪骞舵樉绀哄啿绐佸瓧娈点€?/li>
+          <li>闂ㄥ簵瀹屾垚 <code>PlanOrder</code> 鍚庣敓鎴?<code>crm.order.used</code> Outbox銆?/li>
+          <li>MOCK 妯″紡 Outbox 鍙ā鎷熸垚鍔燂紝LIVE 妯″紡鎸夌鍚嶈皟鐢ㄥ閮ㄥ洖璋冨湴鍧€銆?/li>
+          <li>澶辫触鍥炴帹鍙噸鏂板叆闃燂紝瓒呰繃閲嶈瘯杩涘叆姝讳俊銆?/li>
+          <li>鐘舵€佸洖鏌?/ 瀵硅处鎷夊彇鍙兘鐢熸垚浜嬩欢閲嶆斁锛屼笉鐩存帴鏇存柊鏍稿績琛ㄣ€?/li>
+          <li>寮傚父 OPEN / RETRY_QUEUED / HANDLED 鐘舵€佸彲闂幆銆?/li>
+          <li>骞傜瓑鍋ュ悍鑳芥樉绀哄敮涓€绱㈠紩椋庨櫓鍜岄噸澶嶆暟鎹不鐞嗗缓璁€?/li>
+          <li><code>INTEGRATION_OPERATOR</code> 鏌ョ湅鏁忔劅瀛楁涓鸿劚鏁忕粨鏋溿€?/li>
+          <li><code>PARTNER_APP</code> 鍙兘璁块棶鑷韩 <code>partner_code</code> 鑼冨洿锛屼笉鑳借Е鍙戝叏灞€鎵瑰鐞嗐€?/li>
+          <li>楠屾敹鏍锋湰椤?5 绫绘牱鏈彲灞曠ず锛氭垚鍔熴€佸け璐ャ€佹淇°€佸紓甯搞€佸璐﹀け璐ャ€?/li>
+          <li>绯荤粺璁剧疆 -> 鍩虹閰嶇疆 -> 鍩熷悕閰嶇疆淇濆瓨鍚庯紝鍒嗛攢鎺ュ彛椤靛睍绀虹殑鍏ョ珯銆佸洖鏌ャ€佸璐﹀拰 Swagger 鍦板潃鍚屾鏇存柊銆?/li>
+          <li>Swagger UI / OpenAPI JSON 浠呭厑璁哥鐞嗗憳銆侀泦鎴愮鐞嗗憳鎴栭泦鎴愭搷浣滃憳璁块棶锛涙櫘閫氫笟鍔¤鑹插拰澶栭儴鍒嗛攢搴旂敤涓嶈兘璁块棶銆?/li>
+          <li>鐢熶骇鐜鍙橀噺宸查厤缃細<code>SEEDCRM_SYSTEM_BASE_URL</code>銆?code>SEEDCRM_API_BASE_URL</code>銆?code>SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN=false</code>銆?/li>
         </ul>
         <div class="notice warn">
-          若幂等唯一索引因历史重复接收日志暂未生效，上线前必须完成数据治理或形成书面风险确认。治理原则是导出、人工确认、备份 / 归档、重建索引、复查，禁止直接删除核心业务数据。禁止直接删除 Customer / Order / PlanOrder 数据。
-        </div>
+          鑻ュ箓绛夊敮涓€绱㈠紩鍥犲巻鍙查噸澶嶆帴鏀舵棩蹇楁殏鏈敓鏁堬紝涓婄嚎鍓嶅繀椤诲畬鎴愭暟鎹不鐞嗘垨褰㈡垚涔﹂潰椋庨櫓纭銆傛不鐞嗗師鍒欐槸瀵煎嚭銆佷汉宸ョ‘璁ゃ€佸浠?/ 褰掓。銆侀噸寤虹储寮曘€佸鏌ワ紝绂佹鐩存帴鍒犻櫎鏍稿績涓氬姟鏁版嵁銆傜姝㈢洿鎺ュ垹闄?Customer / Order / PlanOrder 鏁版嵁銆?        </div>
       </section>
 
       <section class="section">
-        <h2>附录：已废弃客资输出接口</h2>
+        <h2>闄勫綍锛氬凡搴熷純瀹㈣祫杈撳嚭鎺ュ彛</h2>
         <div class="endpoint">
           <span class="method">GET/POST</span>
           <code>/open/distribution/leads</code>
         </div>
         <p>
-          该接口保留为兼容兜底，当前方案 B 不再向外部分销系统输出 Clue 客资。调用后会返回空列表和废弃提示，不会创建 <code>Clue / Customer / Order</code>。
-        </p>
+          璇ユ帴鍙ｄ繚鐣欎负鍏煎鍏滃簳锛屽綋鍓嶆柟妗?B 涓嶅啀鍚戝閮ㄥ垎閿€绯荤粺杈撳嚭 Clue 瀹㈣祫銆傝皟鐢ㄥ悗浼氳繑鍥炵┖鍒楄〃鍜屽簾寮冩彁绀猴紝涓嶄細鍒涘缓 <code>Clue / Customer / Order</code>銆?        </p>
       </section>
 
       <footer>
-        SeedCRM 分销接口联调说明。本文档由系统当前实现和 AGENT.md / CONTEXT.md 约束生成，适用于 2026-05-01 当前项目状态。
-      </footer>
+        SeedCRM 鍒嗛攢鎺ュ彛鑱旇皟璇存槑銆傛湰鏂囨。鐢辩郴缁熷綋鍓嶅疄鐜板拰 AGENT.md / CONTEXT.md 绾︽潫鐢熸垚锛岄€傜敤浜?2026-05-01 褰撳墠椤圭洰鐘舵€併€?      </footer>
     </main>
   </div>
 </body>
 </html>
+

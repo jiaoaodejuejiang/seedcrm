@@ -8,6 +8,18 @@ export function saveAssignmentStrategy(payload) {
   return http.post('/clue-management/assignment-strategy', payload)
 }
 
+export function fetchDedupConfig(options = {}) {
+  return http.get('/clue-management/dedup-config', {
+    silentError: options.silentError === true
+  })
+}
+
+export function saveDedupConfig(payload, options = {}) {
+  return http.post('/clue-management/dedup-config', payload, {
+    silentError: options.silentError === true
+  })
+}
+
 export function fetchDutyCustomerServices() {
   return http.get('/clue-management/duty-cs')
 }

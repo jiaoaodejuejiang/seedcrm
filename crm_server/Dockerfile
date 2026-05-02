@@ -9,5 +9,5 @@ FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 ENV TZ=Asia/Shanghai
 COPY --from=build /workspace/target/*.jar /app/seedcrm-server.jar
-EXPOSE 8080
+EXPOSE 8004
 ENTRYPOINT ["java", "-jar", "/app/seedcrm-server.jar"]

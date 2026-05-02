@@ -50,7 +50,26 @@ public final class WorkbenchResponses {
         private Long customerId;
         private Long latestOrderId;
         private String latestOrderStatus;
+        private String latestOrderType;
         private Long orderCount;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime createdAt;
+        private List<ClueRecordItemResponse> clueRecords;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ClueRecordItemResponse {
+        private Long id;
+        private String recordType;
+        private String sourceChannel;
+        private String externalRecordId;
+        private String externalOrderId;
+        private String title;
+        private String content;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime occurredAt;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime createdAt;
     }

@@ -10,11 +10,11 @@
               <span>{{ customerDisplayPhone }}</span>
               <span>{{ storeDisplayName }}</span>
               <span>预约：{{ appointmentLabel }}</span>
-              <span v-if="canViewAmounts">核销金额：{{ formatMoney(verificationAmount) }}</span>
-              <span v-if="canViewAmounts">确认单金额：{{ serviceConfirmAmountLabel }}</span>
+              <span v-if="canViewVerificationAmounts">{{ verificationAmountLabel }}：{{ formatMoney(verificationAmount) }}</span>
+              <span v-if="canViewServiceConfirmAmounts">确认单金额：{{ serviceConfirmAmountLabel }}</span>
               <span v-if="serviceTemplateDisplay">模板：{{ serviceTemplateDisplay }}</span>
               <span>表单状态：{{ serviceFormStatusLabel }}</span>
-              <span>核销：{{ formatVerificationStatus(detail.order?.verificationStatus || 'UNVERIFIED') }}</span>
+              <span>{{ verificationStatusMetaLabel }}：{{ verificationStatusLabel }}</span>
               <span>履约：{{ serviceStage.label }}</span>
               <span v-if="detail.order?.orderNo" class="service-header__weak">订单号 {{ detail.order.orderNo }}</span>
             </div>
@@ -31,10 +31,10 @@
           <section class="service-card">
             <div class="service-card__header">
               <div>
-                <h3>{{ isVerified ? '核销完成' : '先完成核销，再填写服务确认单' }}</h3>
+                <h3>{{ verificationStepTitle }}</h3>
               </div>
               <el-tag :type="isVerified ? 'success' : 'warning'">
-                {{ isVerified ? '已核销' : '待核销' }}
+                {{ verificationStepTagLabel }}
               </el-tag>
             </div>
 
@@ -43,9 +43,9 @@
                 <div class="verify-panel__result">
                   <div class="verify-panel__result-icon">已</div>
                   <div class="verify-panel__result-body">
-                    <strong>{{ readOnlyMode || isFinishedOrder ? '核销已完成，服务单只读查看' : '核销已完成，可以继续填写服务单' }}</strong>
-                    <span>核销时间：{{ formatDateTime(detail.order?.verificationTime) || '--' }}</span>
-                    <span v-if="detail.order?.verificationCode">核销码：{{ detail.order.verificationCode }}</span>
+                    <strong>{{ verificationResultTitle }}</strong>
+                    <span>{{ verificationTimeLabel }}：{{ formatDateTime(detail.order?.verificationTime) || '--' }}</span>
+                    <span v-if="showVerificationCodeMeta">{{ verificationCodeLabel }}：{{ detail.order.verificationCode }}</span>
                   </div>
                 </div>
               </template>
@@ -56,28 +56,45 @@
                     v-if="isDepositOrder"
                     type="button"
                     class="verify-hero verify-hero--primary"
+                    :disabled="!directDepositEnabled || verifyingVoucher"
                     @click="handleDirectDepositVerify"
                   >
-                    <strong>直接核销</strong>
-                    <span>定金订单不用扫码或输码，直接进入后续流程</span>
+                    <strong>定金免码确认</strong>
+                    <span>{{ directDepositEnabled ? '定金订单不用扫码或输码，确认到店后进入服务确认单流程' : '系统已停用定金免码确认' }}</span>
                   </button>
-                  <button v-else type="button" class="verify-hero verify-hero--primary" @click="openCameraScanner">
-                    <strong>扫码核销</strong>
-                    <span>优先使用摄像头快速核销</span>
+                  <button
+                    v-else
+                    type="button"
+                    class="verify-hero verify-hero--primary"
+                    :disabled="verifyingVoucher || !canVerifyVoucher"
+                    @click="openCameraScanner"
+                  >
+                    <strong>{{ scanVerifyTitle }}</strong>
+                    <span>{{ verifyingVoucher ? verifyingHint : voucherVerifyHint }}</span>
                   </button>
                   <div v-if="!isDepositOrder" class="verify-hero verify-hero--manual">
-                    <strong>输码核销</strong>
+                    <strong>{{ manualVerifyTitle }}</strong>
                     <div class="verify-panel__manual">
-                      <el-input ref="verificationInputRef" v-model="verificationCode" placeholder="请输入核销码" />
-                      <el-button @click="handleCodeVerify">确认核销</el-button>
+                      <el-input ref="verificationInputRef" v-model="verificationCode" :disabled="!canVerifyVoucher || verifyingVoucher" placeholder="请输入核销码" />
+                      <el-button :loading="verifyingVoucher" :disabled="!canVerifyVoucher" @click="handleCodeVerify">确认核销</el-button>
                     </div>
+                  </div>
+                </div>
+                <div v-if="voucherVerifyError" class="verify-panel__error">
+                  <strong>{{ voucherFailureTitle }}</strong>
+                  <span>{{ voucherVerifyError }}</span>
+                  <div class="action-group">
+                    <el-button size="small" type="primary" plain @click="openCameraScanner">重新扫码</el-button>
+                    <el-button size="small" plain @click="focusVerificationInput">改为输码</el-button>
+                    <el-button size="small" text @click="copyVoucherFailureInfo">复制排障信息</el-button>
+                    <el-button v-if="canOpenVoucherConfig" size="small" text @click="goVoucherConfig">{{ voucherConfigButtonLabel }}</el-button>
                   </div>
                 </div>
               </template>
 
               <template v-else>
                 <div class="verify-panel__pending">
-                  <span>当前服务单尚未核销，暂不可编辑。</span>
+                  <span>{{ verificationPendingText }}</span>
                 </div>
               </template>
             </div>
@@ -153,15 +170,15 @@
                 </el-checkbox-group>
               </div>
 
-              <div v-if="canViewAmounts" class="service-field">
+              <div v-if="canViewServiceConfirmAmounts" class="service-field">
                 <label>服务确认单金额</label>
-                <template v-if="readOnlyMode">
+                <template v-if="readOnlyMode || !canEditServiceConfirmAmount">
                   <div class="service-field__display">{{ serviceConfirmAmountLabel }}</div>
                 </template>
                 <el-input-number
                   v-else
                   v-model="serviceForm.serviceConfirmAmount"
-                  :disabled="!canEditForm"
+                  :disabled="!canEditServiceConfirmAmount"
                   :min="0"
                   :precision="2"
                   controls-position="right"
@@ -354,7 +371,7 @@
           <div><span>预约时间</span><strong>{{ appointmentLabel }}</strong></div>
           <div><span>订单号</span><strong>{{ detail.order?.orderNo || '--' }}</strong></div>
           <div><span>来源渠道</span><strong>{{ formatChannel(detail.order?.sourceChannel) }}</strong></div>
-          <div v-if="canViewAmounts"><span>确认单金额</span><strong>{{ serviceConfirmAmountLabel }}</strong></div>
+          <div v-if="canViewServiceConfirmAmounts"><span>确认单金额</span><strong>{{ serviceConfirmAmountLabel }}</strong></div>
         </div>
 
         <div class="print-service-form__section">
@@ -441,10 +458,10 @@
     </section>
 
     <section v-else class="panel empty-panel">
-      <el-empty :description="scanMode ? '服务单不存在或链接已失效，请联系门店重发。' : '请选择一个服务单'" />
+      <el-empty :description="scanMode ? '服务确认单不存在或链接已失效，请联系门店重发。' : '请选择一个服务确认单'" />
     </section>
 
-    <el-dialog v-model="scannerDialogVisible" title="扫码核销" width="720px" destroy-on-close @closed="stopCameraScanner">
+    <el-dialog v-model="scannerDialogVisible" :title="scanVerifyTitle" width="720px" destroy-on-close @closed="stopCameraScanner">
       <div class="scanner-dialog">
         <div class="scanner-dialog__viewport">
           <video ref="scannerVideoRef" autoplay muted playsinline class="scanner-dialog__video"></video>
@@ -453,6 +470,7 @@
         <div class="scanner-dialog__footer">
           <p>{{ scannerHint }}</p>
           <p v-if="scannerError" class="scanner-dialog__error">{{ scannerError }}</p>
+          <p v-if="!isDepositOrder" class="scanner-dialog__note">{{ voucherVerifyHint }}</p>
           <div class="action-group">
             <el-button @click="scannerDialogVisible = false">关闭</el-button>
             <el-button v-if="scannerError" text type="primary" @click="restartCameraScanner">重新扫码</el-button>
@@ -479,8 +497,9 @@ import {
 } from '../api/actions'
 import { saveOrderServiceDetail, verifyOrderVoucher } from '../api/order'
 import { previewServiceFormTemplate } from '../api/serviceFormTemplate'
+import { fetchSystemConfigs } from '../api/systemConfig'
 import { fetchPlanOrderDetail, fetchStaffOptions } from '../api/workbench'
-import { currentUser } from '../utils/auth'
+import { canViewBusinessAmounts, canViewServiceAmounts, currentUser, hasRouteAccess } from '../utils/auth'
 import { buildSystemUrl, loadSystemConsoleState } from '../utils/systemConsoleStore'
 import {
   formatChannel,
@@ -504,6 +523,8 @@ const detail = ref(null)
 const staffOptions = ref([])
 const verificationCode = ref('')
 const verificationInputRef = ref(null)
+const verifyingVoucher = ref(false)
+const voucherVerifyError = ref('')
 const scannerDialogVisible = ref(false)
 const scannerAutoOpened = ref(false)
 const scannerVideoRef = ref(null)
@@ -512,11 +533,26 @@ const scannerError = ref('')
 const autosaveMessage = ref('')
 const dirty = ref(false)
 const serviceTemplatePreview = ref(null)
+const directDepositEnabled = ref(true)
+const serviceConfirmAmountEditRoles = ref(['ADMIN', 'FINANCE', 'PHOTO_SELECTOR'])
 const state = reactive(loadSystemConsoleState())
 const serviceForm = reactive(createServiceForm())
 
 const STORE_ROLE_CODES = ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR']
 const ROLE_ASSIGNMENT_MANAGER_CODES = ['ADMIN', 'STORE_MANAGER']
+const DEFAULT_SERVICE_CONFIRM_AMOUNT_EDIT_ROLES = ['ADMIN', 'FINANCE', 'PHOTO_SELECTOR']
+const VOUCHER_CONFIG_TARGETS = {
+  DISTRIBUTION: {
+    path: '/settings/integration/distribution-api?tab=config',
+    routePath: '/settings/integration/distribution-api',
+    roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR']
+  },
+  DOUYIN_LAIKE: {
+    path: '/settings/integration/third-party?tab=voucher',
+    routePath: '/settings/integration/third-party',
+    roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR']
+  }
+}
 const styleOptions = ['自然', '高级感', '轻奢', '活力', '知性']
 const sceneOptions = ['特写', '三分', '五分', '七分', '全身']
 const serviceItemOptions = ['服装造型', '精修底片', '拍摄服务', '加选服务']
@@ -537,8 +573,12 @@ const hasCurrentPrintedServiceForm = computed(
 const compatibilityBackfillMode = computed(() => false)
 const hasConfirmedServiceForm = computed(() => isServiceFormConfirmed(serviceForm.confirmation))
 const canManageRoles = computed(() => ROLE_ASSIGNMENT_MANAGER_CODES.includes(normalize(currentUser.value?.roleCode || '')))
-const canViewAmounts = computed(() => ['ADMIN', 'FINANCE'].includes(normalize(currentUser.value?.roleCode || '')))
+const canViewVerificationAmounts = computed(() => canViewBusinessAmounts())
+const canViewServiceConfirmAmounts = computed(() => canViewServiceAmounts())
 const canEditForm = computed(() => !readOnlyMode.value && isVerified.value && (!isFinishedOrder.value || compatibilityBackfillMode.value))
+const canEditServiceConfirmAmount = computed(
+  () => canEditForm.value && serviceConfirmAmountEditRoles.value.includes(normalize(currentUser.value?.roleCode || ''))
+)
 const canSwitchToEditMode = computed(() => readOnlyMode.value && !isFinishedOrder.value)
 const canPrintServiceForm = computed(() => isVerified.value && hasSavedServiceDetail.value)
 const showConfirmPaperButton = computed(
@@ -572,7 +612,54 @@ const serviceTemplateTitle = computed(() => savedServiceTemplate.value?.title ||
 const serviceTemplateDisplay = computed(
   () => savedServiceTemplate.value?.title || serviceTemplatePreview.value?.template?.title || serviceTemplatePreview.value?.template?.templateName || ''
 )
-const pageTitle = computed(() => serviceTemplateTitle.value || (readOnlyMode.value ? '查看服务单' : '服务确认单'))
+const pageTitle = computed(() => serviceTemplateTitle.value || (readOnlyMode.value ? '查看服务确认单' : '服务确认单'))
+const voucherProviderLabel = computed(() => resolveVoucherProviderLabel(detail.value?.order))
+const voucherProviderCode = computed(() => resolveVoucherProviderCode(detail.value?.order))
+const voucherConfigTarget = computed(() => VOUCHER_CONFIG_TARGETS[voucherProviderCode.value] || null)
+const canVerifyVoucher = computed(() => Boolean(voucherProviderCode.value))
+const canOpenVoucherConfig = computed(() =>
+  Boolean(voucherConfigTarget.value)
+    && hasRouteAccess(voucherConfigTarget.value.routePath, 'SETTING', voucherConfigTarget.value.roleCodes)
+)
+const verificationAmountLabel = computed(() => (isDepositOrder.value ? '定金金额' : '核销金额'))
+const verificationStatusMetaLabel = computed(() => (isDepositOrder.value ? '到店确认' : '核销'))
+const verificationStatusLabel = computed(() =>
+  isDepositOrder.value
+    ? isVerified.value
+      ? '到店已确认'
+      : '待确认'
+    : formatVerificationStatus(detail.value?.order?.verificationStatus || 'UNVERIFIED')
+)
+const verificationStepTitle = computed(() => {
+  if (isDepositOrder.value) {
+    return isVerified.value ? '到店已确认' : '先完成定金免码确认，再填写服务确认单'
+  }
+  return isVerified.value ? '核销完成' : '先完成团购券核销，再填写服务确认单'
+})
+const verificationStepTagLabel = computed(() => {
+  if (isDepositOrder.value) {
+    return isVerified.value ? '到店已确认' : '待确认'
+  }
+  return isVerified.value ? '已核销' : '待核销'
+})
+const verificationResultTitle = computed(() => {
+  if (isDepositOrder.value) {
+    return readOnlyMode.value || isFinishedOrder.value ? '到店确认已完成，服务确认单只读查看' : '到店确认已完成，可以继续填写服务确认单'
+  }
+  return readOnlyMode.value || isFinishedOrder.value ? '核销已完成，服务确认单只读查看' : '核销已完成，可以继续填写服务确认单'
+})
+const verificationTimeLabel = computed(() => (isDepositOrder.value ? '确认时间' : '核销时间'))
+const verificationCodeLabel = computed(() => (isDepositOrder.value ? '确认编号' : '核销码'))
+const showVerificationCodeMeta = computed(() => !isDepositOrder.value && Boolean(detail.value?.order?.verificationCode))
+const verificationPendingText = computed(() => (isDepositOrder.value ? '当前定金订单尚未到店确认，暂不可编辑。' : '当前订单尚未完成团购券核销，服务确认单暂不可编辑。'))
+const scanVerifyTitle = computed(() => (canVerifyVoucher.value ? `扫码核销${voucherProviderLabel.value}团购券` : '订单来源未识别，暂不能核销'))
+const manualVerifyTitle = computed(() => (canVerifyVoucher.value ? `输码核销${voucherProviderLabel.value}团购券` : '请联系管理员补齐来源'))
+const voucherVerifyHint = computed(() =>
+  canVerifyVoucher.value ? `${voucherProviderLabel.value}外部接口返回成功后，系统才会进入服务确认单流程` : '订单来源未识别，请联系管理员补齐来源或核销策略'
+)
+const verifyingHint = computed(() => `正在向${voucherProviderLabel.value}系统核销，请勿重复点击`)
+const voucherFailureTitle = computed(() => (canVerifyVoucher.value ? `${voucherProviderLabel.value}核销失败，订单仍为待核销` : '订单来源未识别，暂不能核销'))
+const voucherConfigButtonLabel = computed(() => `检查${voucherProviderLabel.value}券核销配置`)
 const verificationAmount = computed(() => {
   const deposit = toAmount(detail.value?.order?.deposit)
   if (deposit && deposit > 0) {
@@ -581,11 +668,15 @@ const verificationAmount = computed(() => {
   return toAmount(detail.value?.order?.amount) || 0
 })
 const serviceConfirmAmountLabel = computed(() =>
-  Number(serviceForm.serviceConfirmAmount || 0) > 0 ? formatMoney(serviceForm.serviceConfirmAmount) : '待填写'
+  Number(serviceForm.serviceConfirmAmount || 0) > 0
+    ? formatMoney(serviceForm.serviceConfirmAmount)
+    : !isVerified.value
+      ? isDepositOrder.value ? '到店确认后填写' : '核销后填写'
+      : '待填写'
 )
 const serviceFormStatusLabel = computed(() => {
   if (!isVerified.value) {
-    return '待核销'
+    return isDepositOrder.value ? '待到店确认' : '待核销'
   }
   if (readOnlyMode.value || serviceStage.value.key === 'finish') {
     return '已完成'
@@ -609,7 +700,7 @@ const serviceStage = computed(() => {
     return { label: '服务中', key: 'serving' }
   }
   if (!isVerified.value) {
-    return { label: '待核销', key: 'verify' }
+    return { label: isDepositOrder.value ? '待到店确认' : '待核销', key: 'verify' }
   }
   if (!hasConfirmedServiceForm.value) {
     return { label: hasCurrentPrintedServiceForm.value ? '待确认签字' : hasSavedServiceDetail.value ? '待打印确认' : '待确认单', key: 'confirm' }
@@ -651,7 +742,10 @@ const nextActionDisabledReason = computed(() => {
     return ''
   }
   if (!isVerified.value) {
-    return isDepositOrder.value ? '请先点击直接核销，定金订单不用扫码或输码' : '请先完成团购券核销'
+    if (isDepositOrder.value) {
+      return directDepositEnabled.value ? '请先点击定金免码确认，定金订单不用扫码或输码' : '定金免码确认已停用，请在系统流程配置中开启'
+    }
+    return '请先完成团购券核销'
   }
   if (!hasSavedServiceDetail.value) {
     return '请先保存服务确认单草稿'
@@ -699,15 +793,15 @@ const orderSummaryItems = computed(() =>
   [
     { label: '订单号', value: detail.value?.order?.orderNo || '--' },
     { label: '订单状态', value: formatOrderStatus(detail.value?.order?.status) },
-    canViewAmounts.value ? { label: '核销金额', value: formatMoney(verificationAmount.value) } : null,
-    canViewAmounts.value ? { label: '确认单金额', value: serviceConfirmAmountLabel.value } : null,
+    canViewVerificationAmounts.value ? { label: verificationAmountLabel.value, value: formatMoney(verificationAmount.value) } : null,
+    canViewServiceConfirmAmounts.value ? { label: '确认单金额', value: serviceConfirmAmountLabel.value } : null,
     { label: '服务模板', value: serviceTemplateDisplay.value || '--' },
     { label: '来源渠道', value: formatChannel(detail.value?.order?.sourceChannel) },
     { label: '最近更新', value: formatDateTime(detail.value?.order?.updateTime || detail.value?.order?.createTime) || '--' }
   ].filter(Boolean)
 )
 const timelineItems = computed(() => [
-  { label: '核销时间', value: formatDateTime(detail.value?.order?.verificationTime) || '--' },
+  { label: verificationTimeLabel.value, value: formatDateTime(detail.value?.order?.verificationTime) || '--' },
   { label: '打印确认单', value: hasCurrentPrintedServiceForm.value ? `${formatDateTime(serviceForm.printAudit?.printedAt) || '已打印'} / 第 ${serviceForm.printAudit?.printCount || 1} 次` : '未打印' },
   { label: '纸质签字', value: hasConfirmedServiceForm.value ? '已确认' : hasCurrentPrintedServiceForm.value ? '待确认' : hasSavedServiceDetail.value ? '待打印' : '待确认' },
   { label: '开始服务', value: formatDateTime(detail.value?.summary?.startTime) || '--' },
@@ -730,7 +824,7 @@ const serviceProcessSteps = computed(() => {
   const finished = Boolean(detail.value?.summary?.finishTime)
   return [
     { key: 'appointment', label: '预约', done: Boolean(detail.value?.order?.appointmentTime) || verified || started || finished },
-    { key: 'verify', label: isDepositOrder.value ? '直接核销' : '到店核销', done: verified, current: stage === 'verify' },
+    { key: 'verify', label: isDepositOrder.value ? '免码确认' : '到店核销', done: verified, current: stage === 'verify' },
     { key: 'form', label: '确认单', done: confirmed, current: stage === 'confirm' },
     { key: 'serving', label: '服务中', done: started || finished, current: stage === 'serving' },
     { key: 'finish', label: '已完成', done: finished, current: stage === 'finish' }
@@ -744,7 +838,7 @@ const serviceNextStepHint = computed(() => {
     return '下一步：结束订单，系统只做账务记录。'
   }
   if (!isVerified.value) {
-    return isDepositOrder.value ? '下一步：直接确认到店，不用扫码或输码。' : '下一步：完成团购券码核销。'
+    return isDepositOrder.value ? '下一步：免码确认到店，不用扫码或输码。' : '下一步：完成团购券码核销。'
   }
   if (!hasConfirmedServiceForm.value) {
     return hasSavedServiceDetail.value
@@ -917,8 +1011,8 @@ function formatFlowTraceAction(actionCode) {
     INSTANCE_START: '流程记录',
     ORDER_APPOINTMENT: '预约排档',
     ORDER_APPOINTMENT_CANCEL: '取消预约',
-    ORDER_VERIFY: isDepositOrder.value ? '直接核销' : '到店核销',
-    PLAN_CREATE: '创建服务单',
+    ORDER_VERIFY: isDepositOrder.value ? '免码确认' : '到店核销',
+    PLAN_CREATE: '创建服务确认单',
     PLAN_ARRIVE: '确认到店',
     SERVICE_FORM_PRINT: '打印确认单',
     SERVICE_FORM_CONFIRM: '确认纸质单',
@@ -958,6 +1052,36 @@ async function loadStaffOptions() {
   } catch {
     staffOptions.value = []
   }
+}
+
+async function loadDirectDepositConfig() {
+  try {
+    const rows = await fetchSystemConfigs('deposit.direct.')
+    const row = rows.find((item) => item.configKey === 'deposit.direct.enabled')
+    directDepositEnabled.value = row ? String(row.configValue).toLowerCase() === 'true' && row.enabled !== 0 : true
+  } catch {
+    directDepositEnabled.value = true
+  }
+}
+
+async function loadAmountVisibilityConfig() {
+  try {
+    const rows = await fetchSystemConfigs('amount.visibility.')
+    const row = rows.find((item) => item.configKey === 'amount.visibility.service_confirm_edit_roles')
+    serviceConfirmAmountEditRoles.value = row && row.enabled !== 0
+      ? parseRoleList(row.configValue, DEFAULT_SERVICE_CONFIRM_AMOUNT_EDIT_ROLES)
+      : [...DEFAULT_SERVICE_CONFIRM_AMOUNT_EDIT_ROLES]
+  } catch {
+    serviceConfirmAmountEditRoles.value = [...DEFAULT_SERVICE_CONFIRM_AMOUNT_EDIT_ROLES]
+  }
+}
+
+function parseRoleList(value, fallback) {
+  const roles = String(value || '')
+    .split(/[,，\s]+/)
+    .map((item) => normalize(item))
+    .filter(Boolean)
+  return roles.length ? roles : [...fallback]
 }
 
 async function ensureCurrentRoleBound(planOrderId) {
@@ -1022,7 +1146,7 @@ async function loadPageContext() {
     applyServiceForm()
     return
   }
-  await loadStaffOptions()
+  await Promise.all([loadStaffOptions(), loadDirectDepositConfig(), loadAmountVisibilityConfig()])
   await loadDetail(planOrderId)
 }
 
@@ -1065,11 +1189,11 @@ async function handleConfirmAndAdvance() {
   try {
     const saved = await handleSaveServiceForm({ silent: true })
     if (!saved) {
-      ElMessage.error('服务单未保存成功，暂不能推进状态')
+      ElMessage.error('服务确认单未保存成功，暂不能推进状态')
       return
     }
     if (detail.value?.summary?.finishTime) {
-      ElMessage.info('当前服务单已完成')
+      ElMessage.info('当前服务确认单已完成')
       return
     }
     if (detail.value?.summary?.startTime) {
@@ -1096,7 +1220,9 @@ async function handleConfirmPaperForm() {
   }
   try {
     await ElMessageBox.confirm(
-      '请确认服务确认单已经打印，客户已在线下纸质单手写签名。本操作只记录纸质确认，不会自动开始服务。',
+      canViewServiceConfirmAmounts.value
+        ? '请确认服务确认单已经打印，客户已在线下纸质单手写签名。本操作只记录纸质确认，不会自动开始服务。'
+        : '当前角色不能查看确认单金额，请确认客户签署的是当前打印版本；如需金额确认，请由店长或选片负责人重新打印含金额版本。本操作只记录纸质确认，不会自动开始服务。',
       '确认纸质单',
       {
         confirmButtonText: '确认纸质单',
@@ -1111,7 +1237,7 @@ async function handleConfirmPaperForm() {
   try {
     const saved = await handleSaveServiceForm({ silent: true })
     if (!saved) {
-      ElMessage.error('服务单未保存成功，暂不能确认纸质单')
+      ElMessage.error('服务确认单未保存成功，暂不能确认纸质单')
       return
     }
     await confirmPlanOrderServiceForm({
@@ -1220,13 +1346,13 @@ async function handleSaveServiceForm(options = {}) {
     const timeText = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
     autosaveMessage.value = options.autosave ? `已自动保存 ${timeText}` : `已保存 ${timeText}`
     if (!options.silent) {
-      ElMessage.success(options.autosave ? '已自动保存' : '服务单已保存')
+      ElMessage.success(options.autosave ? '已自动保存' : '服务确认单已保存')
     }
     return true
   } catch {
     autosaveMessage.value = options.autosave ? '自动保存失败，请手动保存' : autosaveMessage.value
     if (!options.silent) {
-      ElMessage.error('服务单保存失败')
+      ElMessage.error('服务确认单保存失败')
     }
     return false
   } finally {
@@ -1245,7 +1371,22 @@ async function handlePrintServiceForm() {
   if (canEditForm.value && dirty.value) {
     const saved = await handleSaveServiceForm({ silent: true })
     if (!saved) {
-      ElMessage.error('服务单未保存成功，暂不能打印')
+      ElMessage.error('服务确认单未保存成功，暂不能打印')
+      return
+    }
+  }
+  if (!canViewServiceConfirmAmounts.value) {
+    try {
+      await ElMessageBox.confirm(
+        '当前角色打印的纸质确认单不包含确认单金额，建议由店长或选片负责人打印含金额版本。是否继续打印？',
+        '确认打印',
+        {
+          confirmButtonText: '继续打印',
+          cancelButtonText: '取消',
+          type: 'warning'
+        }
+      )
+    } catch {
       return
     }
   }
@@ -1272,7 +1413,7 @@ function buildServiceFormMessage() {
     `服务需求：${fieldText(serviceForm.serviceRequirement)}`,
     `查看链接：${url}`
   ]
-  if (canViewAmounts.value) {
+  if (canViewServiceConfirmAmounts.value) {
     lines.splice(3, 0, `服务确认单金额：${serviceConfirmAmountLabel.value}`)
   }
   return lines.join('\n')
@@ -1284,11 +1425,17 @@ async function handleSaveAndSend() {
     return
   }
   try {
-    await ElMessageBox.confirm(`将通过企业微信把当前服务确认单发送给 ${customerDisplayName.value}，是否继续？`, '发送确认单', {
-      confirmButtonText: '确认发送',
-      cancelButtonText: '取消',
-      type: 'info'
-    })
+    await ElMessageBox.confirm(
+      canViewServiceConfirmAmounts.value
+        ? `将通过企业微信把当前服务确认单发送给 ${customerDisplayName.value}，是否继续？`
+        : `将通过企业微信把当前服务确认单发送给 ${customerDisplayName.value}，本次发送内容不包含确认单金额，是否继续？`,
+      '发送确认单',
+      {
+        confirmButtonText: '确认发送',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    )
   } catch {
     return
   }
@@ -1299,23 +1446,27 @@ async function handleSaveAndSend() {
   try {
     const saved = await handleSaveServiceForm({ silent: true })
     if (!saved) {
-      ElMessage.error('服务单未保存成功，暂未发送')
+      ElMessage.error('服务确认单未保存成功，暂未发送')
       return
     }
     await sendPlanOrderServiceForm({
       planOrderId: Number(route.params.id),
       message: buildServiceFormMessage()
     })
-    ElMessage.success('服务单已保存并发送给客户')
+    ElMessage.success('服务确认单已保存并发送给客户')
   } catch {
-    ElMessage.warning('服务单已保存，但发送失败，请稍后重试')
+    ElMessage.warning('服务确认单已保存，但发送失败，请稍后重试')
   } finally {
     sendingToCustomer.value = false
   }
 }
 
 function openCameraScanner() {
-  scannerHint.value = '请将核销二维码置于取景框内'
+  if (!canVerifyVoucher.value) {
+    ElMessage.warning('订单来源未识别，请联系管理员补齐来源或核销策略')
+    return
+  }
+  scannerHint.value = `${voucherProviderLabel.value}团购券会在外部接口核销成功后推进服务流程，请将二维码置于取景框内`
   scannerError.value = ''
   scannerDialogVisible.value = true
 }
@@ -1398,8 +1549,8 @@ async function handleCameraDetected(code) {
   try {
     await verifyCurrentOrder(code, 'SCAN_CAMERA')
     scannerDialogVisible.value = false
-  } catch {
-    scannerError.value = '核销失败，请核对二维码后重试，或改用输码核销。'
+  } catch (error) {
+    scannerError.value = buildVoucherFailureMessage(error)
     scannerDialogVisible.value = true
   }
 }
@@ -1428,22 +1579,112 @@ function resolveCameraError(error) {
   return '摄像头暂时无法使用，请改用输码核销。'
 }
 
+function resolveVoucherProviderLabel(order) {
+  const providerCode = resolveVoucherProviderCode(order)
+  if (providerCode === 'DISTRIBUTION') {
+    return '分销'
+  }
+  if (providerCode === 'DOUYIN_LAIKE') {
+    return '抖音'
+  }
+  return '未知来源'
+}
+
+function resolveVoucherProviderCode(order) {
+  const sourceChannel = normalize(order?.sourceChannel || order?.source || '')
+  const partnerCode = normalize(order?.externalPartnerCode || '')
+  if (sourceChannel === 'DISTRIBUTOR' || sourceChannel === 'DISTRIBUTION' || partnerCode === 'DISTRIBUTION') {
+    return 'DISTRIBUTION'
+  }
+  if (sourceChannel === 'DOUYIN' || partnerCode === 'DOUYIN_LAIKE') {
+    return 'DOUYIN_LAIKE'
+  }
+  return ''
+}
+
+function buildVoucherFailureMessage(error) {
+  const reason = normalizeApiError(error) || '外部核销接口未返回明确原因'
+  if (isDepositOrder.value) {
+    return `定金免码确认失败，订单仍为待确认。失败原因：${reason}`
+  }
+  if (!voucherProviderCode.value) {
+    return `订单来源未识别，系统没有找到对应的券核销通道。失败原因：${reason}。请复制排障信息发给管理员补齐来源或核销策略。`
+  }
+  return `${voucherProviderLabel.value}团购券未核销成功，订单仍为待核销。失败原因：${reason}。可重新扫码、改为输码，或联系管理员检查${voucherProviderLabel.value}券核销配置。`
+}
+
+function normalizeApiError(error) {
+  const data = error?.response?.data || {}
+  const nested = data?.data || {}
+  const reason = firstText(
+    data.providerMessage,
+    data.message,
+    data.detail,
+    data.errorMessage,
+    data.msg,
+    nested.providerMessage,
+    nested.message,
+    nested.detail,
+    nested.errorMessage,
+    nested.msg,
+    error?.message
+  )
+  const traceId = firstText(data.traceId, data.trace_id, data.requestId, nested.traceId, nested.trace_id, nested.requestId)
+  const cleanReason = reason.replace(/\s+/g, ' ').slice(0, 180)
+  if (!cleanReason) {
+    return traceId ? `第三方返回异常（追踪编号：${traceId}）` : ''
+  }
+  return traceId ? `${cleanReason}（追踪编号：${traceId}）` : cleanReason
+}
+
+function firstText(...values) {
+  return values.map((value) => String(value || '').trim()).find(Boolean) || ''
+}
+
+async function copyVoucherFailureInfo() {
+  const text = [
+    `订单号：${detail.value?.order?.orderNo || '--'}`,
+    `订单ID：${detail.value?.order?.id || route.params.id || '--'}`,
+    `核销来源：${voucherProviderLabel.value}`,
+    `核销状态：${formatVerificationStatus(detail.value?.order?.verificationStatus || 'UNVERIFIED')}`,
+    `失败原因：${voucherVerifyError.value || scannerError.value || '--'}`
+  ].join('\n')
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('排障信息已复制，可发给管理员处理')
+  } catch {
+    ElMessage.warning('复制失败，请手动截图或转发失败原因')
+  }
+}
+
 async function handleCodeVerify() {
+  if (!canVerifyVoucher.value) {
+    ElMessage.warning('订单来源未识别，请联系管理员补齐来源或核销策略')
+    return
+  }
   if (!String(verificationCode.value || '').trim()) {
     ElMessage.warning('请输入核销码')
     await focusVerificationInput()
     return
   }
-  await verifyCurrentOrder(String(verificationCode.value || '').trim(), 'CODE')
+  try {
+    await verifyCurrentOrder(String(verificationCode.value || '').trim(), 'CODE')
+  } catch {
+    await focusVerificationInput()
+  }
 }
 
 async function handleDirectDepositVerify() {
+  if (!directDepositEnabled.value) {
+    ElMessage.warning('定金免码确认已停用，请在系统流程配置中开启')
+    return
+  }
   try {
     await ElMessageBox.confirm(
       '定金订单不用扫码或输码。确认后将记录为定金到店确认，并进入服务确认单流程。本操作不会调用真实核销接口，也不会生成券码核销记录。',
-      '确认直接核销？',
+      '确认定金免码到店？',
       {
-        confirmButtonText: '确认直接核销',
+        confirmButtonText: '确认到店',
         cancelButtonText: '取消',
         type: 'info'
       }
@@ -1458,18 +1699,32 @@ async function verifyCurrentOrder(code, method) {
   if (!detail.value?.order?.id) {
     return
   }
-  const response = await verifyOrderVoucher({
-    orderId: detail.value.order.id,
-    verificationCode: code,
-    verificationMethod: method
-  })
-  detail.value.order = {
-    ...detail.value.order,
-    ...response
+  voucherVerifyError.value = ''
+  scannerError.value = ''
+  verifyingVoucher.value = true
+  try {
+    if (method !== 'DIRECT_DEPOSIT') {
+      scannerHint.value = verifyingHint.value
+    }
+    const response = await verifyOrderVoucher({
+      orderId: detail.value.order.id,
+      verificationCode: code,
+      verificationMethod: method
+    })
+    detail.value.order = {
+      ...detail.value.order,
+      ...response
+    }
+    verificationCode.value = response.verificationCode || code
+    ElMessage.success(method === 'DIRECT_DEPOSIT' ? '定金到店已确认，可以继续填写服务确认单' : `${voucherProviderLabel.value}核销成功，可以继续填写服务确认单`)
+    await scrollToFormStart()
+    return response
+  } catch (error) {
+    voucherVerifyError.value = buildVoucherFailureMessage(error)
+    throw error
+  } finally {
+    verifyingVoucher.value = false
   }
-  verificationCode.value = response.verificationCode || code
-  ElMessage.success(method === 'DIRECT_DEPOSIT' ? '已确认到店，可以继续填写服务单' : '核销成功，可以继续填写服务单')
-  await scrollToFormStart()
 }
 
 async function scrollToFormStart() {
@@ -1533,6 +1788,18 @@ function stringifyTemplateConfig(config) {
 
 function goBackToOrders() {
   router.push('/store-service/orders')
+}
+
+function goVoucherConfig() {
+  if (!voucherConfigTarget.value) {
+    ElMessage.warning('订单来源未识别，请联系管理员补齐来源或核销策略')
+    return
+  }
+  if (!canOpenVoucherConfig.value) {
+    ElMessage.warning('当前角色不能进入接口配置，请复制排障信息发给管理员处理')
+    return
+  }
+  router.push(voucherConfigTarget.value.path)
 }
 
 function switchToEditMode() {
@@ -1802,6 +2069,24 @@ onBeforeUnmount(() => {
   gap: 4px;
 }
 
+.verify-panel__error {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  background: #fff1f2;
+  color: #991b1b;
+}
+
+.verify-panel__error strong {
+  color: #7f1d1d;
+}
+
+.verify-panel__error span {
+  line-height: 1.6;
+}
+
 .verify-hero {
   display: grid;
   gap: 10px;
@@ -1833,6 +2118,12 @@ onBeforeUnmount(() => {
 .verify-hero--primary strong,
 .verify-hero--primary span {
   color: #ffffff;
+}
+
+.verify-hero:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  box-shadow: none;
 }
 
 .service-form-grid {
@@ -2148,6 +2439,11 @@ onBeforeUnmount(() => {
 
 .scanner-dialog__error {
   color: #dc2626;
+}
+
+.scanner-dialog__note {
+  color: #64748b;
+  font-size: 13px;
 }
 
 @media (max-width: 1080px) {

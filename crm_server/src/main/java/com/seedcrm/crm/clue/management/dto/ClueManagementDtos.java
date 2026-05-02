@@ -38,6 +38,24 @@ public final class ClueManagementDtos {
 
     @Data
     @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DedupConfigRequest {
+        private Integer enabled;
+        private Integer windowDays;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DedupConfigResponse {
+        private Integer enabled;
+        private Integer windowDays;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime updatedAt;
+    }
+
+    @Data
+    @NoArgsConstructor
     public static class DutyCustomerServiceBatchRequest {
         private List<DutyCustomerServiceItemRequest> staff = new ArrayList<>();
     }

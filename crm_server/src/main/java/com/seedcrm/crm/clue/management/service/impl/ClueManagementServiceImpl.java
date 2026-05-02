@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.AssignmentStrategyRequest;
 import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.AssignmentStrategyResponse;
+import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.DedupConfigRequest;
+import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.DedupConfigResponse;
 import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.DutyCustomerServiceBatchRequest;
 import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.DutyCustomerServiceItemRequest;
 import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.DutyCustomerServiceResponse;
@@ -14,6 +16,9 @@ import com.seedcrm.crm.clue.management.mapper.DutyCustomerServiceMapper;
 import com.seedcrm.crm.clue.management.service.ClueManagementService;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.permission.support.PermissionRequestContext;
+import com.seedcrm.crm.systemconfig.dto.SystemConfigDtos;
+import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -32,17 +37,23 @@ public class ClueManagementServiceImpl implements ClueManagementService {
 
     private static final long DEFAULT_STORE_ID = 10L;
     private static final String ROUND_ROBIN = "ROUND_ROBIN";
+    public static final String CLUE_DEDUP_ENABLED_KEY = "clue.dedup.enabled";
+    public static final String CLUE_DEDUP_WINDOW_DAYS_KEY = "clue.dedup.window_days";
+    public static final int DEFAULT_DEDUP_WINDOW_DAYS = 90;
 
     private final ClueAssignmentStrategyMapper clueAssignmentStrategyMapper;
     private final DutyCustomerServiceMapper dutyCustomerServiceMapper;
     private final ClueMapper clueMapper;
+    private final SystemConfigService systemConfigService;
 
     public ClueManagementServiceImpl(ClueAssignmentStrategyMapper clueAssignmentStrategyMapper,
                                      DutyCustomerServiceMapper dutyCustomerServiceMapper,
-                                     ClueMapper clueMapper) {
+                                     ClueMapper clueMapper,
+                                     SystemConfigService systemConfigService) {
         this.clueAssignmentStrategyMapper = clueAssignmentStrategyMapper;
         this.dutyCustomerServiceMapper = dutyCustomerServiceMapper;
         this.clueMapper = clueMapper;
+        this.systemConfigService = systemConfigService;
     }
 
     @Override
@@ -76,6 +87,39 @@ public class ClueManagementServiceImpl implements ClueManagementService {
             clueAssignmentStrategyMapper.updateById(strategy);
         }
         return toAssignmentStrategyResponse(resolveStrategy(finalStoreId));
+    }
+
+    @Override
+    public DedupConfigResponse getDedupConfig() {
+        int enabled = systemConfigService.getBoolean(CLUE_DEDUP_ENABLED_KEY, true) ? 1 : 0;
+        int windowDays = normalizeDedupWindowDays(systemConfigService.getString(
+                CLUE_DEDUP_WINDOW_DAYS_KEY, String.valueOf(DEFAULT_DEDUP_WINDOW_DAYS)));
+        LocalDateTime updatedAt = systemConfigService.listConfigs("clue.dedup.").stream()
+                .map(SystemConfigDtos.ConfigResponse::getUpdateTime)
+                .filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+        return new DedupConfigResponse(enabled, windowDays, updatedAt);
+    }
+
+    @Override
+    @Transactional
+    public DedupConfigResponse saveDedupConfig(DedupConfigRequest request, PermissionRequestContext context) {
+        int enabled = normalizeFlag(request == null ? null : request.getEnabled(), 1);
+        int windowDays = normalizeDedupWindowDays(request == null ? null : request.getWindowDays());
+        systemConfigService.saveConfig(configRequest(
+                CLUE_DEDUP_ENABLED_KEY,
+                enabled == 1 ? "true" : "false",
+                "BOOLEAN",
+                "客资入库启用按客户身份去重，默认开启",
+                "更新客资去重开关"), context);
+        systemConfigService.saveConfig(configRequest(
+                CLUE_DEDUP_WINDOW_DAYS_KEY,
+                String.valueOf(windowDays),
+                "NUMBER",
+                "客资去重窗口天数；窗口内同客户保留一条基础客资，多条订单/动作写入客资记录",
+                "更新客资去重窗口"), context);
+        return getDedupConfig();
     }
 
     @Override
@@ -292,6 +336,41 @@ public class ClueManagementServiceImpl implements ClueManagementService {
             return defaultValue;
         }
         return value == 1 ? 1 : 0;
+    }
+
+    private int normalizeDedupWindowDays(Integer value) {
+        if (value == null) {
+            return DEFAULT_DEDUP_WINDOW_DAYS;
+        }
+        return Math.max(1, Math.min(value, 3650));
+    }
+
+    private int normalizeDedupWindowDays(String value) {
+        if (!StringUtils.hasText(value)) {
+            return DEFAULT_DEDUP_WINDOW_DAYS;
+        }
+        try {
+            return normalizeDedupWindowDays(Integer.parseInt(value.trim()));
+        } catch (NumberFormatException exception) {
+            return DEFAULT_DEDUP_WINDOW_DAYS;
+        }
+    }
+
+    private SystemConfigDtos.SaveConfigRequest configRequest(String key,
+                                                             String value,
+                                                             String valueType,
+                                                             String description,
+                                                             String summary) {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey(key);
+        request.setConfigValue(value);
+        request.setValueType(valueType);
+        request.setScopeType("GLOBAL");
+        request.setScopeId("GLOBAL");
+        request.setEnabled(1);
+        request.setDescription(description);
+        request.setSummary(summary);
+        return request;
     }
 
     private String normalizeAssignmentMode(String assignmentMode) {

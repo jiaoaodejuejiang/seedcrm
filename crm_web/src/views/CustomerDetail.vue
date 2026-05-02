@@ -183,6 +183,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { sendWecomMessage } from '../api/actions'
 import { fetchCustomerDetail } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
+import { canViewBusinessAmounts } from '../utils/auth'
 import { formatDateTime, normalize, statusTagType } from '../utils/format'
 
 const route = useRoute()
@@ -199,9 +200,7 @@ const messageForm = reactive({
 const customer = computed(() => profile.value?.customer || {})
 const fromMembers = computed(() => route.query.from === 'private-domain-members')
 const highlightedOrderId = computed(() => Number(route.query.orderId || 0))
-const canViewOrderAmounts = computed(() =>
-  (profile.value?.orderHistory || []).some((order) => order?.amount !== null && order?.amount !== undefined)
-)
+const canViewOrderAmounts = computed(() => canViewBusinessAmounts())
 
 async function loadProfile(customerId) {
   if (!customerId) {
@@ -255,7 +254,7 @@ function sourceLabel(value) {
     DOUYIN: '抖音',
     DISTRIBUTION: '分销',
     DISTRIBUTOR: '分销',
-    FORM: '表单',
+    FORM: '定金',
     MANUAL: '手动'
   }
   return labels[normalize(value)] || value || '--'
@@ -264,9 +263,9 @@ function sourceLabel(value) {
 function orderTypeLabel(value) {
   const labels = {
     1: '定金',
-    2: '团购券',
+    2: '团购',
     DEPOSIT: '定金',
-    COUPON: '团购券',
+    COUPON: '团购',
     DISTRIBUTION_PRODUCT: '分销商品'
   }
   return labels[normalize(value)] || labels[String(value)] || value || '--'

@@ -93,6 +93,50 @@ class ServiceFormTemplateServiceImplTest {
     }
 
     @Test
+    void saveDraftShouldRejectUnsupportedDesignerEngine() {
+        ServiceFormTemplateDtos.SaveTemplateRequest request = new ServiceFormTemplateDtos.SaveTemplateRequest();
+        request.setTemplateCode("BAD_ENGINE");
+        request.setTemplateName("未知设计器模板");
+        request.setTitle("未知设计器模板");
+        request.setDesignerEngine("HOMEGROWN_HEAVY_EDITOR");
+
+        assertThatThrownBy(() -> service.saveTemplateDraft(request, context("ADMIN", "ALL", null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不支持");
+        verify(jdbcTemplate, never()).update(ArgumentMatchers.anyString(), ArgumentMatchers.<Object[]>any());
+    }
+
+    @Test
+    void saveDraftShouldRejectElectronicSignatureComponent() {
+        ServiceFormTemplateDtos.SaveTemplateRequest request = new ServiceFormTemplateDtos.SaveTemplateRequest();
+        request.setTemplateCode("BAD_SIGNATURE");
+        request.setTemplateName("电子签名模板");
+        request.setTitle("电子签名模板");
+        request.setDesignerEngine("VFORM3");
+        request.setRawSchemaJson("{\"components\":[{\"component\":\"signature\",\"label\":\"客户签名\"}]}");
+
+        assertThatThrownBy(() -> service.saveTemplateDraft(request, context("ADMIN", "ALL", null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不允许");
+        verify(jdbcTemplate, never()).update(ArgumentMatchers.anyString(), ArgumentMatchers.<Object[]>any());
+    }
+
+    @Test
+    void saveDraftShouldRejectScriptLikeSchema() {
+        ServiceFormTemplateDtos.SaveTemplateRequest request = new ServiceFormTemplateDtos.SaveTemplateRequest();
+        request.setTemplateCode("BAD_SCRIPT");
+        request.setTemplateName("脚本模板");
+        request.setTitle("脚本模板");
+        request.setDesignerEngine("FORMILY");
+        request.setNormalizedSchemaJson("{\"schema\":{\"type\":\"object\",\"properties\":{\"remark\":{\"type\":\"string\",\"onClick\":\"alert(1)\"}}}}");
+
+        assertThatThrownBy(() -> service.saveTemplateDraft(request, context("ADMIN", "ALL", null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不安全");
+        verify(jdbcTemplate, never()).update(ArgumentMatchers.anyString(), ArgumentMatchers.<Object[]>any());
+    }
+
+    @Test
     void publishTemplateShouldArchiveOtherPublishedVersionsWithSameCode() {
         ServiceFormTemplateDtos.TemplateResponse draft = template(8L, "DRAFT", 0);
         ServiceFormTemplateDtos.TemplateResponse published = template(8L, "PUBLISHED", 1);

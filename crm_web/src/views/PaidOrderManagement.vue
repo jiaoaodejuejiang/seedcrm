@@ -22,9 +22,9 @@
       <div class="toolbar">
         <div class="toolbar-tabs">
           <el-radio-group v-model="productSourceFilter">
-            <el-radio-button value="ALL">全部来源</el-radio-button>
+            <el-radio-button value="ALL">全部订单</el-radio-button>
             <el-radio-button value="GROUP_BUY">团购</el-radio-button>
-            <el-radio-button value="FORM">表单</el-radio-button>
+            <el-radio-button value="FORM">定金</el-radio-button>
           </el-radio-group>
 
           <el-radio-group v-model="viewMode">
@@ -130,7 +130,7 @@
             <template #default="{ row }">
               <div class="action-group action-group--compact">
                 <el-button v-if="canEditAppointment(row)" size="small" type="primary" @click="openAppointmentDialog(row)">
-                  约档
+                  {{ isAppointedOrder(row) ? '改档' : '约档' }}
                 </el-button>
                 <el-popconfirm v-if="canCancelAppointment(row)" title="确认取消当前预约吗？" @confirm="handleCancelAppointment(row)">
                   <template #reference>

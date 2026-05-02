@@ -2,6 +2,8 @@ package com.seedcrm.crm.clue.management.controller;
 
 import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.AssignmentStrategyRequest;
 import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.AssignmentStrategyResponse;
+import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.DedupConfigRequest;
+import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.DedupConfigResponse;
 import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.DutyCustomerServiceBatchRequest;
 import com.seedcrm.crm.clue.management.dto.ClueManagementDtos.DutyCustomerServiceResponse;
 import com.seedcrm.crm.clue.management.service.ClueManagementService;
@@ -47,6 +49,19 @@ public class ClueManagementController {
                 context.getCurrentStoreId(),
                 context.getCurrentUserId(),
                 request));
+    }
+
+    @GetMapping("/dedup-config")
+    public ApiResponse<DedupConfigResponse> dedupConfig(HttpServletRequest request) {
+        resolveContext(request);
+        return ApiResponse.success(clueManagementService.getDedupConfig());
+    }
+
+    @PostMapping("/dedup-config")
+    public ApiResponse<DedupConfigResponse> saveDedupConfig(@RequestBody(required = false) DedupConfigRequest request,
+                                                            HttpServletRequest httpServletRequest) {
+        PermissionRequestContext context = resolveContext(httpServletRequest);
+        return ApiResponse.success(clueManagementService.saveDedupConfig(request, context));
     }
 
     @GetMapping("/duty-cs")

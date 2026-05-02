@@ -14,7 +14,7 @@ services:
       - --collation-server=utf8mb4_general_ci
       - --default-time-zone=+08:00
     ports:
-      - "3306:3306"
+      - "127.0.0.1:${SEEDCRM_MYSQL_PORT:-3306}:3306"
     volumes:
       - seedcrm-mysql-data:/var/lib/mysql
     healthcheck:
@@ -41,6 +41,7 @@ services:
       SEEDCRM_API_BASE_URL: ${SEEDCRM_API_BASE_URL:-https://api.example.com}
       SEEDCRM_OPENAPI_ENABLED: ${SEEDCRM_OPENAPI_ENABLED:-false}
       SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN: ${SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN:-false}
+      SEEDCRM_ALLOW_CLEAR_TEST_DATA: ${SEEDCRM_ALLOW_CLEAR_TEST_DATA:-false}
       TZ: Asia/Shanghai
     ports:
       - "${SEEDCRM_BACKEND_PORT:-8004}:8004"

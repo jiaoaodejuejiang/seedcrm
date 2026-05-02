@@ -40,6 +40,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     private static final String MODE_MOCK = "MOCK";
     private static final String MODE_LIVE = "LIVE";
     private static final String PROVIDER_DOUYIN = "DOUYIN_LAIKE";
+    private static final String PROVIDER_DISTRIBUTION = "DISTRIBUTION";
     private static final String AUTH_TYPE_AUTH_CODE = "AUTH_CODE";
     private static final String SIGNATURE_MODE_NONE_LOCAL_ONLY = "NONE_LOCAL_ONLY";
     private static final String SIGNATURE_MODE_TOKEN_QUERY = "TOKEN_QUERY";
@@ -49,8 +50,8 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     private static final String PROCESS_POLICY_LOG_ONLY = "LOG_ONLY";
     private static final String PROCESS_POLICY_AUTH_UPDATE_ONLY = "AUTH_UPDATE_ONLY";
     private static final String MASKED_VALUE = "******";
-    private static final String DOUYIN_TOKEN_URL = "https://open.douyin.com/oauth/access_token/";
-    private static final String DOUYIN_REFRESH_TOKEN_URL = "https://open.douyin.com/oauth/refresh_token/";
+    private static final String DOUYIN_TOKEN_URL = "https://api.oceanengine.com/open_api/oauth2/access_token/";
+    private static final String DOUYIN_REFRESH_TOKEN_URL = "https://api.oceanengine.com/open_api/oauth2/refresh_token/";
     private static final String DOUYIN_DEFAULT_VOUCHER_PREPARE_PATH = "/goodlife/v1/fulfilment/certificate/prepare/";
     private static final String DOUYIN_DEFAULT_VOUCHER_VERIFY_PATH = "/goodlife/v1/fulfilment/certificate/verify/";
     private static final String DOUYIN_DEFAULT_VOUCHER_CANCEL_PATH = "/goodlife/v1/fulfilment/certificate/cancel/";
@@ -61,6 +62,8 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
     private static final String DOUYIN_DEFAULT_REFUND_AUDIT_CALLBACK_PATH = "/scheduler/callback/douyin/refund-audit";
     private static final String DOUYIN_DEFAULT_REFUND_AMOUNT_UNIT = "CENT";
     private static final String DOUYIN_DEFAULT_VERIFY_CODE_FIELD = "encrypted_codes";
+    private static final String DISTRIBUTION_DEFAULT_VOUCHER_VERIFY_PATH = "/open/distribution/vouchers/verify";
+    private static final String DISTRIBUTION_DEFAULT_VERIFY_CODE_FIELD = "voucherCode";
     private static final int AUTH_CODE_VALID_MINUTES = 5;
 
     private final IntegrationProviderConfigMapper providerConfigMapper;
@@ -147,6 +150,22 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             }
             working.setLastTestStatus("SUCCESS");
             working.setLastTestMessage("连接成功，已获取 access_token：" + maskValue(token));
+            working.setLastTestAt(LocalDateTime.now());
+            updateProviderTestStateIfPersisted(working);
+            return maskProvider(working);
+        }
+        if (PROVIDER_DISTRIBUTION.equals(working.getProviderCode())) {
+            try {
+                validateDistributionVoucherProbe(working);
+            } catch (BusinessException exception) {
+                working.setLastTestStatus("FAILED");
+                working.setLastTestMessage(exception.getMessage());
+                working.setLastTestAt(LocalDateTime.now());
+                updateProviderTestStateIfPersisted(working);
+                throw exception;
+            }
+            working.setLastTestStatus("SUCCESS");
+            working.setLastTestMessage("分销券核销配置模拟检查通过：已检查外部分销系统域名、门店核销调用路径、券码字段和签名密钥；真实核销以门店核销时外部分销系统返回为准");
             working.setLastTestAt(LocalDateTime.now());
             updateProviderTestStateIfPersisted(working);
             return maskProvider(working);
@@ -243,10 +262,12 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
                 normalizedParameters.get("error"),
                 extractText(payloadNode, "error_description", "error_msg", "errmsg", "message", "error"));
         String traceId = UUID.randomUUID().toString();
-        boolean authorizationCallback = StringUtils.hasText(authCode)
+        boolean authorizationEndpoint = isAuthorizationCallback(callbackPath, callbackName);
+        boolean authorizationCallback = authorizationEndpoint
+                && (StringUtils.hasText(authCode)
                 || StringUtils.hasText(accessToken)
                 || StringUtils.hasText(refreshToken)
-                || (StringUtils.hasText(callbackName) && callbackName.contains("授权"));
+                || (StringUtils.hasText(callbackName) && callbackName.contains("授权")));
 
         IntegrationProviderConfig provider = providerConfigMapper.selectOne(Wrappers.<IntegrationProviderConfig>lambdaQuery()
                 .eq(IntegrationProviderConfig::getProviderCode, normalizedProviderCode)
@@ -545,38 +566,47 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
                 existing == null ? null : existing.getStatusQueryPath()));
         target.setReconciliationPullPath(resolveOptionalConfigValue(source.getReconciliationPullPath(),
                 existing == null ? null : existing.getReconciliationPullPath()));
-        target.setVoucherPreparePath(resolveDouyinPathConfig(
+        String providerCode = normalize(source.getProviderCode());
+        target.setVoucherPreparePath(resolveProviderPathConfig(providerCode,
                 source.getVoucherPreparePath(),
                 existing == null ? null : existing.getVoucherPreparePath(),
-                DOUYIN_DEFAULT_VOUCHER_PREPARE_PATH));
-        target.setVoucherVerifyPath(resolveDouyinPathConfig(
+                DOUYIN_DEFAULT_VOUCHER_PREPARE_PATH,
+                null));
+        target.setVoucherVerifyPath(resolveProviderPathConfig(providerCode,
                 source.getVoucherVerifyPath(),
                 existing == null ? null : existing.getVoucherVerifyPath(),
-                DOUYIN_DEFAULT_VOUCHER_VERIFY_PATH));
-        target.setVoucherCancelPath(resolveDouyinPathConfig(
+                DOUYIN_DEFAULT_VOUCHER_VERIFY_PATH,
+                DISTRIBUTION_DEFAULT_VOUCHER_VERIFY_PATH));
+        target.setVoucherCancelPath(resolveProviderPathConfig(providerCode,
                 source.getVoucherCancelPath(),
                 existing == null ? null : existing.getVoucherCancelPath(),
-                DOUYIN_DEFAULT_VOUCHER_CANCEL_PATH));
-        target.setRefundApplyPath(resolveDouyinPathConfig(
+                DOUYIN_DEFAULT_VOUCHER_CANCEL_PATH,
+                null));
+        target.setRefundApplyPath(resolveProviderPathConfig(providerCode,
                 source.getRefundApplyPath(),
                 existing == null ? null : existing.getRefundApplyPath(),
-                DOUYIN_DEFAULT_REFUND_APPLY_PATH));
-        target.setRefundQueryPath(resolveDouyinPathConfig(
+                DOUYIN_DEFAULT_REFUND_APPLY_PATH,
+                null));
+        target.setRefundQueryPath(resolveProviderPathConfig(providerCode,
                 source.getRefundQueryPath(),
                 existing == null ? null : existing.getRefundQueryPath(),
-                DOUYIN_DEFAULT_REFUND_QUERY_PATH));
-        target.setRefundListPath(resolveDouyinPathConfig(
+                DOUYIN_DEFAULT_REFUND_QUERY_PATH,
+                null));
+        target.setRefundListPath(resolveProviderPathConfig(providerCode,
                 source.getRefundListPath(),
                 existing == null ? null : existing.getRefundListPath(),
-                DOUYIN_DEFAULT_REFUND_LIST_PATH));
-        target.setRefundNotifyPath(resolveDouyinPathConfig(
+                DOUYIN_DEFAULT_REFUND_LIST_PATH,
+                null));
+        target.setRefundNotifyPath(resolveProviderPathConfig(providerCode,
                 source.getRefundNotifyPath(),
                 existing == null ? null : existing.getRefundNotifyPath(),
-                DOUYIN_DEFAULT_REFUND_NOTIFY_PATH));
-        target.setRefundAuditCallbackPath(resolveDouyinPathConfig(
+                DOUYIN_DEFAULT_REFUND_NOTIFY_PATH,
+                null));
+        target.setRefundAuditCallbackPath(resolveProviderPathConfig(providerCode,
                 source.getRefundAuditCallbackPath(),
                 existing == null ? null : existing.getRefundAuditCallbackPath(),
-                DOUYIN_DEFAULT_REFUND_AUDIT_CALLBACK_PATH));
+                DOUYIN_DEFAULT_REFUND_AUDIT_CALLBACK_PATH,
+                null));
         target.setRefundOrderIdField(resolveOptionalConfigValue(source.getRefundOrderIdField(),
                 existing == null ? null : existing.getRefundOrderIdField()));
         target.setRefundAmountField(resolveOptionalConfigValue(source.getRefundAmountField(),
@@ -627,7 +657,7 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         target.setOpenId(trimToNull(source.getOpenId()));
         target.setPoiId(resolveOptionalConfigValue(source.getPoiId(), existing == null ? null : existing.getPoiId()));
         target.setVerifyCodeField(resolveOptionalConfigValue(
-                firstNonBlank(source.getVerifyCodeField(), DOUYIN_DEFAULT_VERIFY_CODE_FIELD),
+                firstNonBlank(source.getVerifyCodeField(), defaultVerifyCodeField(providerCode)),
                 existing == null ? null : existing.getVerifyCodeField()));
         target.setPageSize(source.getPageSize() == null || source.getPageSize() <= 0 ? 20 : source.getPageSize());
         target.setPullWindowMinutes(source.getPullWindowMinutes() == null || source.getPullWindowMinutes() <= 0 ? 60 : source.getPullWindowMinutes());
@@ -647,8 +677,29 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         }
     }
 
-    private String resolveDouyinPathConfig(String incoming, String existing, String defaultValue) {
-        return firstNonBlank(trimToNull(incoming), trimToNull(existing), defaultValue);
+    private String resolveProviderPathConfig(String providerCode,
+                                             String incoming,
+                                             String existing,
+                                             String douyinDefaultValue,
+                                             String distributionDefaultValue) {
+        return firstNonBlank(
+                trimToNull(incoming),
+                trimToNull(existing),
+                defaultProviderValue(providerCode, douyinDefaultValue, distributionDefaultValue));
+    }
+
+    private String defaultProviderValue(String providerCode, String douyinValue, String distributionValue) {
+        if (PROVIDER_DOUYIN.equals(providerCode)) {
+            return douyinValue;
+        }
+        if (PROVIDER_DISTRIBUTION.equals(providerCode)) {
+            return distributionValue;
+        }
+        return null;
+    }
+
+    private String defaultVerifyCodeField(String providerCode) {
+        return defaultProviderValue(providerCode, DOUYIN_DEFAULT_VERIFY_CODE_FIELD, DISTRIBUTION_DEFAULT_VERIFY_CODE_FIELD);
     }
 
     private String resolveOptionalConfigValue(String incoming, String existing) {
@@ -878,6 +929,25 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
             return tokenUrl.replace("/access_token/", "/refresh_token/");
         }
         return DOUYIN_REFRESH_TOKEN_URL;
+    }
+
+    private void validateDistributionVoucherProbe(IntegrationProviderConfig config) {
+        requireText(config.getVoucherVerifyPath(), "分销 LIVE 模式必须填写门店核销调用路径");
+        assertEndpointPathOrHttps(config.getVoucherVerifyPath(), "门店核销调用路径");
+        requireText(config.getVerifyCodeField(), "分销 LIVE 模式必须填写券码字段");
+        String authType = normalize(config.getAuthType());
+        if ("APP_SECRET".equals(authType)) {
+            requireText(config.getAppId(), "APP_SECRET 模式必须填写 AppId");
+        }
+        if (!"NONE".equals(authType) && !SIGNATURE_MODE_NONE_LOCAL_ONLY.equals(authType)) {
+            requireText(config.getClientSecret(), "分销 LIVE 模式必须填写签名密钥 AppSecret");
+        }
+    }
+
+    private void requireText(String value, String message) {
+        if (!StringUtils.hasText(value)) {
+            throw new BusinessException(message);
+        }
     }
 
     private IntegrationCallbackConfig findCallbackByProviderOrName(String providerCode, String callbackName) {
@@ -1195,6 +1265,16 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
                 || value.contains("薪酬");
     }
 
+    private boolean isAuthorizationCallback(String callbackPath, String callbackName) {
+        String path = nullToEmpty(callbackPath).toLowerCase(Locale.ROOT);
+        String name = nullToEmpty(callbackName).toUpperCase(Locale.ROOT);
+        return path.contains("/oauth/")
+                || path.contains("/auth/")
+                || name.contains("OAUTH")
+                || name.contains("AUTHORIZATION")
+                || name.contains("AUTH CODE");
+    }
+
     private String resolveCallbackErrorCode(boolean duplicate,
                                             String errorMessage,
                                             CallbackTrustResult trust,
@@ -1428,6 +1508,22 @@ public class SchedulerIntegrationServiceImpl implements SchedulerIntegrationServ
         } catch (IllegalArgumentException exception) {
             throw new BusinessException(fieldName + " 格式不正确");
         }
+    }
+
+    private void assertEndpointPathOrHttps(String endpointPath, String fieldName) {
+        if (!StringUtils.hasText(endpointPath)) {
+            return;
+        }
+        String trimmed = endpointPath.trim();
+        if (trimmed.startsWith("/")) {
+            return;
+        }
+        if (trimmed.regionMatches(true, 0, "http://", 0, 7)
+                || trimmed.regionMatches(true, 0, "https://", 0, 8)) {
+            assertHttps(trimmed, fieldName);
+            return;
+        }
+        throw new BusinessException(fieldName + " 必须以 / 开头，或填写 https 完整地址");
     }
 
     private String extractText(JsonNode node, String... candidates) {

@@ -15,8 +15,8 @@ public class SystemConfigSchemaInitializer {
     private final String defaultApiBaseUrl;
 
     public SystemConfigSchemaInitializer(DataSource dataSource,
-                                         @Value("${seedcrm.domain.system-base-url:http://127.0.0.1:4173}") String defaultSystemBaseUrl,
-                                         @Value("${seedcrm.domain.api-base-url:http://127.0.0.1:8080}") String defaultApiBaseUrl) {
+                                         @Value("${seedcrm.domain.system-base-url:http://127.0.0.1:8003}") String defaultSystemBaseUrl,
+                                         @Value("${seedcrm.domain.api-base-url:http://127.0.0.1:8004}") String defaultApiBaseUrl) {
         this.jdbcTemplate = new JdbcTemplate(dataSource);
         this.defaultSystemBaseUrl = defaultSystemBaseUrl;
         this.defaultApiBaseUrl = defaultApiBaseUrl;
@@ -60,6 +60,20 @@ public class SystemConfigSchemaInitializer {
         seedDefault("workflow.scheduling.enabled", "false", "BOOLEAN", "排档正式接管轻量流程引擎开关，默认关闭");
         seedDefault("deposit.direct.enabled", "true", "BOOLEAN", "定金订单允许免码直接核销");
         seedDefault("amount.visibility.store_staff_hidden", "true", "BOOLEAN", "门店角色隐藏前置订单金额");
+        seedDefault("amount.visibility.store_staff_hidden_roles",
+                "STORE_SERVICE,STORE_MANAGER,PHOTOGRAPHER,MAKEUP_ARTIST,PHOTO_SELECTOR",
+                "STRING",
+                "需要隐藏定金、团购和核销金额的角色编码，英文逗号分隔；服务确认单金额单独配置");
+        seedDefault("amount.visibility.service_confirm_hidden_roles",
+                "STORE_SERVICE,PHOTOGRAPHER,MAKEUP_ARTIST",
+                "STRING",
+                "需要隐藏服务确认单金额的角色编码，英文逗号分隔；默认店长和选片负责人可看服务确认金额");
+        seedDefault("amount.visibility.service_confirm_edit_roles",
+                "ADMIN,FINANCE,PHOTO_SELECTOR",
+                "STRING",
+                "允许填写或修改服务确认单金额的角色编码，英文逗号分隔；默认选片负责人填写，店长只读查看");
+        seedDefault("clue.dedup.enabled", "true", "BOOLEAN", "客资入库启用按客户身份去重，默认开启");
+        seedDefault("clue.dedup.window_days", "90", "NUMBER", "客资去重窗口天数；窗口内同客户保留一条基础客资，多条订单/动作写入客资记录");
         seedDefault("form_designer.adapter.enabled", "true", "BOOLEAN", "启用服务单设计器适配层");
         seedDefault("form_designer.provider", "INTERNAL_SCHEMA", "STRING", "默认服务单设计器适配器");
         seedDefault("system.environment.mode", "TEST", "STRING", "系统运行环境：LOCAL/DEV/TEST/STAGING/PROD；清理测试数据会阻断 PROD");
@@ -69,6 +83,7 @@ public class SystemConfigSchemaInitializer {
                 "分销外部订单类型、商品和 SKU 到内部团购 / 定金的映射配置");
         seedDefault("system.domain.systemBaseUrl", defaultSystemBaseUrl, "URL", "系统后台访问基础域名，用于页面跳转和扫码服务单地址");
         seedDefault("system.domain.apiBaseUrl", defaultApiBaseUrl, "URL", "系统 API 基础域名，用于 Open API、回调接口和三方平台联调地址");
+        migrateLegacyLocalDomainDefaults();
     }
 
     private void seedDefault(String key, String value, String valueType, String description) {
@@ -84,5 +99,29 @@ public class SystemConfigSchemaInitializer {
                 INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
                 VALUES (?, ?, ?, 'GLOBAL', 'GLOBAL', 1, ?)
                 """, key, value, valueType, description);
+    }
+
+    private void migrateLegacyLocalDomainDefaults() {
+        updateLegacyLocalDefault("system.domain.systemBaseUrl", defaultSystemBaseUrl,
+                "http://127.0.0.1:4173",
+                "http://localhost:4173",
+                "http://127.0.0.1:5173",
+                "http://localhost:5173");
+        updateLegacyLocalDefault("system.domain.apiBaseUrl", defaultApiBaseUrl,
+                "http://127.0.0.1:8080",
+                "http://localhost:8080");
+    }
+
+    private void updateLegacyLocalDefault(String key, String replacement, String... legacyValues) {
+        for (String legacyValue : legacyValues) {
+            jdbcTemplate.update("""
+                    UPDATE system_config
+                    SET config_value = ?, update_time = CURRENT_TIMESTAMP
+                    WHERE scope_type = 'GLOBAL'
+                      AND scope_id = 'GLOBAL'
+                      AND config_key = ?
+                      AND config_value = ?
+                    """, replacement, key, legacyValue);
+        }
     }
 }

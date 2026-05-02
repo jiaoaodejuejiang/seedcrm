@@ -74,15 +74,24 @@ public class OrderResponse {
         return response;
     }
 
-    public OrderResponse maskAmounts() {
+    public OrderResponse maskBusinessAmounts() {
         this.amount = null;
         this.deposit = null;
         return this;
     }
 
-    public OrderResponse maskAmounts(ObjectMapper objectMapper) {
-        maskAmounts();
+    public OrderResponse maskServiceAmounts(ObjectMapper objectMapper) {
         this.serviceDetailJson = OrderAmountMaskingSupport.maskServiceDetailJson(this.serviceDetailJson, objectMapper);
+        return this;
+    }
+
+    public OrderResponse maskAmounts() {
+        return maskBusinessAmounts();
+    }
+
+    public OrderResponse maskAmounts(ObjectMapper objectMapper) {
+        maskBusinessAmounts();
+        maskServiceAmounts(objectMapper);
         return this;
     }
 }

@@ -25,6 +25,10 @@
                 <el-option v-for="item in interfaceTemplates" :key="item.key" :label="item.label" :value="item.key" />
               </el-select>
             </label>
+            <label class="full-span">
+              <span>模板说明</span>
+              <span class="readonly-prefix">{{ selectedTemplate?.description || '用于验证接口配置、字段映射和返回结构。' }}</span>
+            </label>
             <label>
               <span>平台编码</span>
               <el-input v-model="form.providerCode" />
@@ -179,10 +183,13 @@ const interfaceTemplates = [
     label: '抖音客资拉取',
     providerCode: 'DOUYIN_LAIKE',
     requestMethod: 'POST',
-    path: '/goodlife/v1/clue/douyin/list/',
+    path: '/open_api/2/tools/clue/life/get/',
+    description: '用于验证客资列表固定拉取口径，local_account_ids 必须填写，不填不会全量拉取。',
+    successNextAction: '客资拉取配置链路预检通过，再到抖音接口页开启真实调度。',
+    failureNextAction: '去抖音接口-线索拉取补齐 local_account_ids、授权和时间窗口配置。',
     parameters: {},
     payload: {
-      account_id: 'life_account_id',
+      local_account_ids: [123456789],
       start_time: '2026-04-27 00:00:00',
       end_time: '2026-04-27 23:59:59',
       page: 1,
@@ -195,10 +202,31 @@ const interfaceTemplates = [
     providerCode: 'DOUYIN_LAIKE',
     requestMethod: 'POST',
     path: '/goodlife/v1/fulfilment/certificate/verify/',
+    description: '用于验证门店“扫码/输码核销抖音团购券”的配置链路；预检通过不代表真实订单已核销。',
+    successNextAction: '配置链路预检通过，仍需在门店订单中使用真实券码完成核销。',
+    failureNextAction: '去抖音接口-券核销补齐授权、核销路径、POI 和券码字段配置。',
     parameters: {},
     payload: {
       encrypted_codes: ['mock-voucher-code'],
       poi_id: 'mock-poi-id'
+    }
+  },
+  {
+    key: 'DISTRIBUTION_VOUCHER_VERIFY',
+    label: '分销券核销',
+    providerCode: 'DISTRIBUTION',
+    requestMethod: 'POST',
+    path: '/open/distribution/vouchers/verify',
+    description: '用于验证门店“扫码/输码核销分销团购券”的配置链路；失败时本地订单必须保持待核销。',
+    successNextAction: '分销核销配置预检通过，仍需在门店订单中用真实券码完成核销。',
+    failureNextAction: '去联调工作台或分销接口配置中检查分销 provider、核销路径、签名和返回成功字段。',
+    parameters: {
+      'X-Partner-Code': 'DISTRIBUTION',
+      'X-Idempotency-Key': 'voucher-debug-001'
+    },
+    payload: {
+      voucherCode: 'mock-distribution-voucher-code',
+      externalOrderId: 'o_20001'
     }
   },
   {
@@ -247,9 +275,9 @@ const resultNextAction = computed(() => {
     return '--'
   }
   if (result.value.success === false) {
-    return resultTraceId.value === '--' ? '查看失败原因，修正配置或报文后重试' : '复制追踪编号，去异常队列或回调记录继续处理'
+    return selectedTemplate.value?.failureNextAction || (resultTraceId.value === '--' ? '查看失败原因，修正配置或报文后重试' : '复制追踪编号，去异常队列或回调记录继续处理')
   }
-  return form.mode === 'LIVE' ? '本次只完成真实配置预检；实际入站、回推、日志仍由正式接口或调度任务触发' : '核对字段映射无误后，再切换真实模式预检'
+  return selectedTemplate.value?.successNextAction || (form.mode === 'LIVE' ? '本次只完成真实配置预检；实际入站、回推、日志仍由正式接口或调度任务触发' : '核对字段映射无误后，再切换真实模式预检')
 })
 const resultSummary = computed(() => [
   { label: '结果状态', value: result.value?.success === false ? '预检异常' : '预检通过' },
@@ -262,6 +290,7 @@ const requestTargetLabel = computed(() =>
     ? `真实模式：只校验 ${form.providerCode || '--'} ${form.requestMethod || 'POST'} ${form.path || '--'} 的配置和报文，不写核心业务表`
     : `模拟模式：仅在系统内预检 ${form.providerCode || '--'} ${form.interfaceCode || '--'}，不落业务数据`
 )
+const selectedTemplate = computed(() => interfaceTemplates.find((item) => item.key === selectedTemplateKey.value) || null)
 const swaggerUiUrl = computed(() => buildSystemUrl(systemState, 'api', '/swagger-ui.html'))
 
 applyTemplate()

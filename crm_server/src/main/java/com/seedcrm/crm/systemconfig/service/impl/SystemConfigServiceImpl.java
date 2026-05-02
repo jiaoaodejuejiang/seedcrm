@@ -24,8 +24,8 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     private static final String SYSTEM_BASE_URL_KEY = "system.domain.systemBaseUrl";
     private static final String API_BASE_URL_KEY = "system.domain.apiBaseUrl";
-    private static final String DEFAULT_SYSTEM_BASE_URL = "http://127.0.0.1:4173";
-    private static final String DEFAULT_API_BASE_URL = "http://127.0.0.1:8080";
+    private static final String DEFAULT_SYSTEM_BASE_URL = "http://127.0.0.1:8003";
+    private static final String DEFAULT_API_BASE_URL = "http://127.0.0.1:8004";
     private static final String MASKED_VALUE = "******";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final List<String> ALLOWED_CONFIG_PREFIXES = List.of(
@@ -33,6 +33,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             "workflow.",
             "deposit.",
             "amount.",
+            "clue.",
             "form_designer.",
             "distribution.",
             "scheduler.",

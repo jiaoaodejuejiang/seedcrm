@@ -49,6 +49,11 @@
 
             <article class="detail-card">
               <h3>券核销</h3>
+              <p>
+                就绪状态：
+                <el-tag :type="voucherReadiness.type" effect="plain">{{ voucherReadiness.label }}</el-tag>
+              </p>
+              <p>{{ voucherReadiness.message }}</p>
               <p>预查询接口：{{ provider.voucherPreparePath || '--' }}</p>
               <p>核销接口：{{ provider.voucherVerifyPath || '--' }}</p>
               <p>撤销接口：{{ provider.voucherCancelPath || '--' }}</p>
@@ -165,11 +170,11 @@
             <div class="full-span form-group-title">请求地址</div>
             <label>
               <span>开放平台域名</span>
-              <el-input v-model="provider.baseUrl" placeholder="例如 https://open.douyin.com" />
+              <el-input v-model="provider.baseUrl" placeholder="例如 https://api.oceanengine.com" />
             </label>
             <label>
               <span>换取 Token 地址</span>
-              <el-input v-model="provider.tokenUrl" placeholder="请输入 access_token 接口地址" />
+              <el-input v-model="provider.tokenUrl" placeholder="https://api.oceanengine.com/open_api/oauth2/access_token/" />
             </label>
             <label>
               <span>系统基础域名</span>
@@ -180,12 +185,14 @@
               <span class="readonly-prefix">{{ apiBaseUrl }}</span>
             </label>
             <label class="full-span">
-              <span>回调登记地址</span>
+              <span>授权回跳登记地址</span>
               <span class="readonly-prefix">{{ provider.callbackUrl || backendCallbackUrl }}</span>
+              <small>填到巨量引擎开放平台应用的授权回跳/回调地址；携带 auth_code 或 code 时会写入本系统 auth_code。</small>
             </label>
             <label class="full-span">
               <span>固定后端回调地址</span>
               <span class="readonly-prefix">{{ backendCallbackUrl }}</span>
+              <small>线索拉取不依赖事件回调；退款、订单等业务回调只记录回调日志，不会写 auth_code。</small>
             </label>
             <label class="full-span">
               <span>授权回跳地址</span>
@@ -205,24 +212,18 @@
 
         <el-tab-pane label="线索拉取" name="clue">
           <div class="form-grid">
-            <div class="full-span form-group-title">账号配置</div>
-            <label>
-              <span>平台账号 ID</span>
-              <el-input v-model="provider.accountId" placeholder="可按平台实际字段填写" />
-            </label>
-            <label>
-              <span>来客账号 ID</span>
-              <el-input v-model="provider.lifeAccountIds" placeholder="多个账号用英文逗号分隔" />
-            </label>
+            <div class="full-span form-group-title">拉取范围</div>
             <label class="full-span">
-              <span>本地账号映射</span>
-              <el-input v-model="provider.localAccountIds" placeholder="多个账号用英文逗号分隔" />
+              <span>拉取账号 ID（必填）</span>
+              <el-input v-model="provider.localAccountIds" placeholder="必填，对应接口 local_account_ids，数字 ID 多个用英文逗号分隔" />
+              <small>不填不会全量拉取，会导致同步任务失败；这里只用于指定巨量接口拉哪些账号的客资，不是授权配置。</small>
             </label>
 
             <div class="full-span form-group-title">拉取参数</div>
             <label class="full-span">
               <span>线索接口路径</span>
-              <el-input v-model="provider.endpointPath" placeholder="/goodlife/v1/clue/douyin/list/" />
+              <el-input v-model="provider.endpointPath" placeholder="/open_api/2/tools/clue/life/get/" />
+              <small>当前客资列表固定使用 POST {{ cluePullUrl }}，暂不启用抖音生活服务 clue/query 接口。</small>
             </label>
             <label>
               <span>每页数量</span>
@@ -244,6 +245,13 @@
         </el-tab-pane>
 
         <el-tab-pane label="券核销" name="voucher">
+          <el-alert
+            class="config-alert"
+            :title="voucherReadiness.message"
+            :type="voucherAlertType"
+            show-icon
+            :closable="false"
+          />
           <div class="form-grid">
             <div class="full-span form-group-title">接口路径</div>
             <label class="full-span">
@@ -268,6 +276,9 @@
               <span>券码字段名</span>
               <el-input v-model="provider.verifyCodeField" placeholder="例如 encrypted_codes" />
             </label>
+            <div class="full-span action-group action-group--section">
+              <el-button plain @click="handleTestVoucherReadiness">测试券核销配置（模拟）</el-button>
+            </div>
           </div>
         </el-tab-pane>
 
@@ -355,6 +366,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRoute } from 'vue-router'
 import {
   fetchIntegrationCallbackLogs,
   fetchIntegrationProviders,
@@ -378,8 +390,21 @@ import { buildSystemUrl, loadSystemConsoleState } from '../utils/systemConsoleSt
 
 const DOUYIN_CODE = 'DOUYIN_LAIKE'
 const DOUYIN_JOB_CODE = 'DOUYIN_CLUE_INCREMENTAL'
+const DOUYIN_BASE_URL = 'https://api.oceanengine.com'
+const DOUYIN_TOKEN_URL = 'https://api.oceanengine.com/open_api/oauth2/access_token/'
+const DOUYIN_CLUE_ENDPOINT = '/open_api/2/tools/clue/life/get/'
+const LEGACY_DOUYIN_BASE_URLS = ['https://open.douyin.com']
+const LEGACY_DOUYIN_TOKEN_URLS = [
+  'https://open.douyin.com/oauth/access_token/',
+  'https://open.douyin.com/oauth/client_token/'
+]
+const LEGACY_DOUYIN_CLUE_ENDPOINTS = [
+  '/goodlife/v1/clue/douyin/list/',
+  '/goodlife/v1/open_api/crm/clue/query/'
+]
 
-const activeTab = ref('overview')
+const route = useRoute()
+const activeTab = ref(resolveInitialTab())
 const savingProvider = ref(false)
 const testingProvider = ref(false)
 const savingJob = ref(false)
@@ -393,6 +418,9 @@ const provider = reactive(createProvider())
 const jobForm = reactive(createJobForm())
 const systemBaseUrl = computed(() => String(systemState.domainSettings?.systemBaseUrl || '').trim() || '--')
 const apiBaseUrl = computed(() => String(systemState.domainSettings?.apiBaseUrl || '').trim() || '--')
+const cluePullUrl = computed(() => buildProviderUrl(provider.baseUrl, provider.endpointPath))
+const voucherReadiness = computed(() => resolveVoucherReadiness(provider))
+const voucherAlertType = computed(() => (voucherReadiness.value.type === 'danger' ? 'error' : voucherReadiness.value.type))
 
 const backendCallbackUrl = computed(() => {
   return buildSystemUrl(systemState, 'callback', '/scheduler/oauth/douyin/callback')
@@ -403,6 +431,11 @@ const refundNotifyUrl = computed(() =>
 const refundAuditCallbackUrl = computed(() =>
   buildSystemUrl(systemState, 'callback', provider.refundAuditCallbackPath || '/scheduler/callback/douyin/refund-audit')
 )
+
+function resolveInitialTab() {
+  const tab = String(route.query.tab || '').trim()
+  return ['overview', 'clue', 'voucher', 'refund', 'runtime'].includes(tab) ? tab : 'overview'
+}
 
 const verificationWarning = computed(() => {
   if (provider.executionMode !== 'LIVE') {
@@ -431,9 +464,9 @@ function createProvider() {
     executionMode: 'MOCK',
     authType: 'AUTH_CODE',
     appId: '',
-    baseUrl: 'https://open.douyin.com',
-    tokenUrl: 'https://open.douyin.com/oauth/access_token/',
-    endpointPath: '/goodlife/v1/clue/douyin/list/',
+    baseUrl: DOUYIN_BASE_URL,
+    tokenUrl: DOUYIN_TOKEN_URL,
+    endpointPath: DOUYIN_CLUE_ENDPOINT,
     voucherPreparePath: '/goodlife/v1/fulfilment/certificate/prepare/',
     voucherVerifyPath: '/goodlife/v1/fulfilment/certificate/verify/',
     voucherCancelPath: '/goodlife/v1/fulfilment/certificate/cancel/',
@@ -512,6 +545,8 @@ function createJobForm() {
 function applyProvider(payload) {
   const defaults = createProvider()
   Object.assign(provider, defaults, payload || {})
+  normalizeDouyinClueDefaults(provider)
+  normalizeDouyinPullAccountIds(provider)
   for (const key of [
     'refundApplyPath',
     'refundQueryPath',
@@ -547,6 +582,110 @@ function applyProvider(payload) {
     poiId: provider.poiId,
     verifyCodeField: provider.verifyCodeField
   }))
+}
+
+function normalizeDouyinPullAccountIds(target) {
+  if (!target || String(target.localAccountIds || '').trim()) {
+    return
+  }
+  target.localAccountIds = firstNonBlank(target.lifeAccountIds, target.accountId)
+}
+
+function normalizeDouyinClueDefaults(target) {
+  if (!target) {
+    return
+  }
+  const baseUrl = String(target.baseUrl || '').trim()
+  const tokenUrl = String(target.tokenUrl || '').trim()
+  const endpointPath = String(target.endpointPath || '').trim()
+  if (!baseUrl || LEGACY_DOUYIN_BASE_URLS.includes(trimTrailingSlash(baseUrl))) {
+    target.baseUrl = DOUYIN_BASE_URL
+  }
+  if (!tokenUrl || LEGACY_DOUYIN_TOKEN_URLS.includes(tokenUrl)) {
+    target.tokenUrl = DOUYIN_TOKEN_URL
+  }
+  if (!endpointPath || LEGACY_DOUYIN_CLUE_ENDPOINTS.includes(endpointPath)) {
+    target.endpointPath = DOUYIN_CLUE_ENDPOINT
+  }
+}
+
+function buildProviderUrl(baseUrl, endpointPath) {
+  const path = String(endpointPath || DOUYIN_CLUE_ENDPOINT).trim()
+  if (/^https?:\/\//i.test(path)) {
+    return path
+  }
+  const base = trimTrailingSlash(String(baseUrl || DOUYIN_BASE_URL).trim())
+  return `${base}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+function resolveVoucherReadiness(target) {
+  if (!target || Number(target.enabled) === 0) {
+    return {
+      type: 'info',
+      label: '未启用',
+      message: '抖音接口未启用，门店端抖音团购券核销会被阻断，不会自动推进服务单'
+    }
+  }
+  if (String(target.executionMode || '').toUpperCase() !== 'LIVE') {
+    return {
+      type: 'warning',
+      label: '联调模式',
+      message: '当前为 MOCK 联调模式，不代表真实核销成功；正式上线前必须切换 LIVE 并完成连接测试'
+    }
+  }
+  const missing = []
+  if (!String(target.baseUrl || '').trim()) {
+    missing.push('开放平台域名')
+  }
+  if (!String(target.voucherVerifyPath || '').trim()) {
+    missing.push('核销提交路径')
+  }
+  if (!String(target.verifyCodeField || '').trim()) {
+    missing.push('券码字段名')
+  }
+  if (!['AUTHORIZED', 'CONNECTED'].includes(String(target.authStatus || '').toUpperCase())) {
+    missing.push('有效授权状态')
+  }
+  if (!firstNonBlank(target.accessTokenMasked, target.refreshTokenMasked, target.authCodeMasked, target.authCode)) {
+    missing.push('授权 Token 或 auth_code')
+  }
+  if (target.authCodeExpired && !firstNonBlank(target.accessTokenMasked, target.refreshTokenMasked)) {
+    missing.push('未过期授权')
+  }
+  if (missing.length) {
+    return {
+      type: 'warning',
+      label: '未配置',
+      message: `缺少 ${missing.join('、')}；门店端抖音团购券核销将被阻断，不会自动推进服务单`
+    }
+  }
+  if (target.lastTestStatus && ['FAIL', 'FAILED', 'ERROR'].includes(String(target.lastTestStatus).toUpperCase())) {
+    return {
+      type: 'danger',
+      label: '测试失败',
+      message: `最近连接测试失败：${target.lastTestMessage || '请检查授权和接口地址'}`
+    }
+  }
+  if (String(target.lastTestStatus || '').toUpperCase() !== 'SUCCESS') {
+    return {
+      type: 'warning',
+      label: '待测试',
+      message: '请先完成抖音连接测试；测试通过前，门店端抖音团购券核销会被阻断'
+    }
+  }
+  return {
+    type: 'success',
+    label: '已就绪',
+    message: '抖音券核销配置已就绪；门店端只有外部接口返回成功后才会进入服务确认单流程'
+  }
+}
+
+function trimTrailingSlash(value) {
+  return value.endsWith('/') ? value.slice(0, -1) : value
+}
+
+function firstNonBlank(...values) {
+  return values.map((value) => String(value || '').trim()).find(Boolean) || ''
 }
 
 function applyJob(payload) {
@@ -600,6 +739,11 @@ function formatAuthType(value) {
 }
 
 async function handleSaveProvider() {
+  if (provider.executionMode === 'LIVE' && !firstNonBlank(provider.localAccountIds, provider.lifeAccountIds, provider.accountId)) {
+    activeTab.value = 'clue'
+    ElMessage.warning('请先填写拉取账号 ID；不填不会全量拉取，真实同步会失败')
+    return
+  }
   const changedDangerFields = buildProviderDangerList()
   if (changedDangerFields.length) {
     await ElMessageBox.confirm(
@@ -637,6 +781,15 @@ async function handleTestProvider() {
   } finally {
     testingProvider.value = false
   }
+}
+
+function handleTestVoucherReadiness() {
+  if (voucherReadiness.value.type === 'success') {
+    ElMessage.success('抖音券核销配置模拟检查通过；真实核销仍以门店核销时外部接口返回为准')
+    return
+  }
+  activeTab.value = 'voucher'
+  ElMessage.warning(voucherReadiness.value.message)
 }
 
 async function handleSaveJob() {
@@ -678,6 +831,10 @@ async function handleTrigger() {
 
 .action-group--section {
   margin-top: 20px;
+}
+
+.config-alert {
+  margin-bottom: 16px;
 }
 
 .danger-text {

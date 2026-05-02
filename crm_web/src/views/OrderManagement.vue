@@ -39,12 +39,12 @@
           </template>
         </el-table-column>
         <el-table-column label="门店" min-width="140" prop="storeName" />
-        <el-table-column v-if="canViewAmounts" label="核销金额" width="120">
+        <el-table-column v-if="canViewVerificationAmounts" label="核销金额" width="120">
           <template #default="{ row }">
             {{ formatMoney(resolveVerificationAmount(row)) }}
           </template>
         </el-table-column>
-        <el-table-column v-if="canViewAmounts" label="确认单金额" width="130">
+        <el-table-column v-if="canViewServiceConfirmAmounts" label="确认单金额" width="130">
           <template #default="{ row }">
             {{ formatServiceConfirmAmount(row) }}
           </template>
@@ -87,7 +87,7 @@
               <el-button type="primary" size="small" :disabled="!canOpenServiceForm(row)" @click="openServiceForm(row)">
                 {{ serviceButtonLabel(row) }}
               </el-button>
-              <el-button v-if="canViewAmounts && canRefundOrder(row)" type="danger" size="small" plain @click="handleRefund(row)">退款</el-button>
+              <el-button v-if="canManageRefunds && canRefundOrder(row)" type="danger" size="small" plain @click="handleRefund(row)">退款</el-button>
               <el-button size="small" plain @click="openWecomDialog(row)">企微活码</el-button>
               <el-button v-if="row.customerId" link @click="router.push(`/customers/${row.customerId}`)">客户详情</el-button>
             </div>
@@ -206,7 +206,7 @@ import { createPlanOrder } from '../api/actions'
 import { refundOrder } from '../api/order'
 import { fetchOrderWecomLiveCode, fetchOrders } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
-import { currentUser } from '../utils/auth'
+import { canViewBusinessAmounts, canViewServiceAmounts } from '../utils/auth'
 import { buildSystemUrl, loadSystemConsoleState } from '../utils/systemConsoleStore'
 import { formatDateTime, formatMoney, formatOrderStatus, formatVerificationStatus, normalize, statusTagType } from '../utils/format'
 
@@ -219,7 +219,9 @@ const customerPhoneKeyword = ref('')
 const wecomDialogVisible = ref(false)
 const refundDialogVisible = ref(false)
 const refundSubmitting = ref(false)
-const canViewAmounts = computed(() => ['ADMIN', 'FINANCE'].includes(normalize(currentUser.value?.roleCode || '')))
+const canViewVerificationAmounts = computed(() => canViewBusinessAmounts())
+const canViewServiceConfirmAmounts = computed(() => canViewServiceAmounts())
+const canManageRefunds = computed(() => canViewBusinessAmounts())
 const wecomLoading = ref(false)
 const activeOrderForWecom = ref(null)
 const wecomPreview = ref(null)

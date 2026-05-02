@@ -6,3 +6,4 @@ output/*.log
 output/
 doc/
 log/
+crm_web/dist/*

@@ -88,14 +88,14 @@
             <span v-else class="text-secondary">未排档</span>
           </template>
         </el-table-column>
-        <el-table-column prop="latestOrderAmount" label="最近金额" min-width="110">
+        <el-table-column v-if="canViewAmounts" prop="latestOrderAmount" label="最近金额" min-width="110">
           <template #default="{ row }">{{ money(row.latestOrderAmount) }}</template>
         </el-table-column>
         <el-table-column prop="latestOrderTime" label="最近成交时间" min-width="170">
           <template #default="{ row }">{{ formatDateTime(row.latestOrderTime) }}</template>
         </el-table-column>
         <el-table-column prop="orderCount" label="订单数" min-width="90" />
-        <el-table-column prop="totalOrderAmount" label="累计金额" min-width="110">
+        <el-table-column v-if="canViewAmounts" prop="totalOrderAmount" label="累计金额" min-width="110">
           <template #default="{ row }">{{ money(row.totalOrderAmount) }}</template>
         </el-table-column>
         <el-table-column prop="wecomBound" label="企微绑定" min-width="100">
@@ -144,12 +144,14 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchMembers } from '../api/member'
+import { canViewBusinessAmounts } from '../utils/auth'
 import { formatDateTime, normalize, statusTagType } from '../utils/format'
 
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const rows = ref([])
+const canViewAmounts = computed(() => canViewBusinessAmounts())
 const sourceTabs = [
   { label: '全部成交会员', value: 'all' },
   { label: '分销成交', value: 'distribution' },

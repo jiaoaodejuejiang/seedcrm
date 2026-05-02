@@ -29,7 +29,14 @@ public class SystemConfigController {
 
     private static final Set<String> DOMAIN_READ_ROLES = Set.of("INTEGRATION_ADMIN", "INTEGRATION_OPERATOR");
     private static final Set<String> INTEGRATION_CONFIG_WRITE_ROLES = Set.of("INTEGRATION_ADMIN");
+    private static final Set<String> RUNTIME_CAPABILITY_READ_ROLES = Set.of(
+            "STORE_SERVICE",
+            "STORE_MANAGER",
+            "PHOTOGRAPHER",
+            "MAKEUP_ARTIST",
+            "PHOTO_SELECTOR");
     private static final String DISTRIBUTION_ORDER_TYPE_PREFIX = "distribution.order.type.";
+    private static final String DEPOSIT_DIRECT_PREFIX = "deposit.direct.";
 
     private final SystemConfigService systemConfigService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
@@ -57,6 +64,9 @@ public class SystemConfigController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         if (isDistributionIntegrationConfig(prefix) && isIntegrationReader(context)) {
             schedulerModuleGuard.checkView(context);
+            return ApiResponse.success(systemConfigService.listConfigs(prefix));
+        }
+        if (isRuntimeCapabilityConfig(prefix) && isRuntimeCapabilityReader(context)) {
             return ApiResponse.success(systemConfigService.listConfigs(prefix));
         }
         settingModuleGuard.checkView(context);
@@ -123,6 +133,15 @@ public class SystemConfigController {
 
     private boolean isIntegrationWriter(PermissionRequestContext context) {
         return INTEGRATION_CONFIG_WRITE_ROLES.contains(normalize(context == null ? null : context.getRoleCode()));
+    }
+
+    private boolean isRuntimeCapabilityReader(PermissionRequestContext context) {
+        return RUNTIME_CAPABILITY_READ_ROLES.contains(normalize(context == null ? null : context.getRoleCode()));
+    }
+
+    private boolean isRuntimeCapabilityConfig(String keyOrPrefix) {
+        String value = keyOrPrefix == null ? "" : keyOrPrefix.trim();
+        return value.startsWith(DEPOSIT_DIRECT_PREFIX) || value.equals("deposit.direct");
     }
 
     private boolean isDistributionIntegrationConfig(String keyOrPrefix) {

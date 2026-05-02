@@ -96,7 +96,12 @@ const DEFAULT_DICTIONARIES = [
   { id: 75, dictType: 'role_code', itemCode: 'PRIVATE_DOMAIN_SERVICE', itemLabel: '私域客服', sortOrder: 100, isEnabled: 1 },
   { id: 76, dictType: 'role_code', itemCode: 'NORMAL_CS', itemLabel: '普通客服', sortOrder: 110, isEnabled: 1 },
   { id: 77, dictType: 'role_code', itemCode: 'SENIOR_CS', itemLabel: '资深客服', sortOrder: 120, isEnabled: 1 },
-  { id: 78, dictType: 'role_code', itemCode: 'LEADER', itemLabel: '组长', sortOrder: 130, isEnabled: 1 }
+  { id: 78, dictType: 'role_code', itemCode: 'LEADER', itemLabel: '组长', sortOrder: 130, isEnabled: 1 },
+  { id: 79, dictType: 'appointment_reason_type', itemCode: 'CUSTOMER_REQUEST', itemLabel: '客户主动预约', sortOrder: 10, isEnabled: 1 },
+  { id: 80, dictType: 'appointment_reason_type', itemCode: 'RESCHEDULE', itemLabel: '客户改约', sortOrder: 20, isEnabled: 1 },
+  { id: 81, dictType: 'appointment_reason_type', itemCode: 'STORE_ADJUST', itemLabel: '门店调整', sortOrder: 30, isEnabled: 1 },
+  { id: 82, dictType: 'appointment_reason_type', itemCode: 'TRAFFIC_DELAY', itemLabel: '到店延迟', sortOrder: 40, isEnabled: 1 },
+  { id: 83, dictType: 'appointment_reason_type', itemCode: 'CUSTOMER_CANCEL', itemLabel: '客户取消', sortOrder: 50, isEnabled: 1 }
 ]
 
 const DEFAULT_STATE = {

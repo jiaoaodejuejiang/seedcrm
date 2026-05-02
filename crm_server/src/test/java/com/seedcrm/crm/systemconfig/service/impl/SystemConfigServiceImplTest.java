@@ -108,6 +108,45 @@ class SystemConfigServiceImplTest {
     }
 
     @Test
+    void shouldPreviewConfigChangeWithoutWritingAuditLog() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('clue.dedup.window_days', '90', 'NUMBER', 'GLOBAL', 'GLOBAL', 1, 'dedup window')
+                """);
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("clue.dedup.window_days");
+        request.setConfigValue("120");
+        request.setValueType("NUMBER");
+
+        SystemConfigDtos.ConfigPreviewResponse response = service.previewConfig(request);
+
+        assertThat(response.getBeforeValue()).isEqualTo("90");
+        assertThat(response.getAfterValue()).isEqualTo("120");
+        assertThat(response.getChanged()).isTrue();
+        assertThat(response.getRiskLevel()).isEqualTo("MEDIUM");
+        assertThat(response.getChangeType()).isEqualTo("UPDATE");
+        Integer logCount = jdbcTemplate.queryForObject("SELECT COUNT(1) FROM system_config_change_log", Integer.class);
+        assertThat(logCount).isZero();
+    }
+
+    @Test
+    void shouldListChangeLogsWithSensitiveValuesMasked() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("wecom.clientSecret");
+        request.setConfigValue("new-secret-value");
+        request.setValueType("STRING");
+        service.saveConfig(request, adminContext());
+
+        List<SystemConfigDtos.ChangeLogResponse> logs = service.listChangeLogs("wecom.", null, 10);
+
+        assertThat(logs).hasSize(1);
+        assertThat(logs.get(0).getConfigKey()).isEqualTo("wecom.clientSecret");
+        assertThat(logs.get(0).getSensitive()).isTrue();
+        assertThat(logs.get(0).getAfterValue()).isEqualTo("******");
+        assertThat(logs.get(0).getRiskLevel()).isEqualTo("HIGH");
+    }
+
+    @Test
     void shouldAllowDistributionOrderTypeMappingJson() {
         SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
         request.setConfigKey(DistributionOrderTypeMappingResolver.CONFIG_KEY);

@@ -164,4 +164,25 @@ class ClueServiceImplTest {
         verify(clueMapper, never()).insert(any(Clue.class));
         verify(clueManagementService, never()).autoAssignIfEnabled(any(Clue.class));
     }
+
+    @Test
+    void addClueShouldKeepIdentityGuardOutsideDedupWindow() {
+        when(clueManagementService.getDedupConfig()).thenReturn(new DedupConfigResponse(1, 90, null));
+        Clue existing = new Clue();
+        existing.setId(12L);
+        existing.setPhone("13800138101");
+        existing.setSourceChannel("DOUYIN");
+        existing.setCreatedAt(LocalDateTime.now().minusDays(180));
+        when(clueMapper.selectOne(any())).thenReturn(null, existing);
+
+        Clue request = new Clue();
+        request.setPhone("13800138101");
+        request.setSourceChannel("DOUYIN");
+
+        Clue merged = clueService.addClue(request);
+
+        assertThat(merged.getId()).isEqualTo(12L);
+        verify(clueMapper, never()).insert(any(Clue.class));
+        verify(clueManagementService, never()).autoAssignIfEnabled(any(Clue.class));
+    }
 }

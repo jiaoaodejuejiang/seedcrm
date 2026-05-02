@@ -1,11 +1,14 @@
 package com.seedcrm.crm.workbench.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.entity.ClueRecord;
+import com.seedcrm.crm.clue.dto.ClueProfileDtos.ClueProfileResponse;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
+import com.seedcrm.crm.clue.service.ClueProfileService;
 import com.seedcrm.crm.clue.service.ClueRecordService;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.customer.entity.Customer;
@@ -47,6 +50,7 @@ import com.seedcrm.crm.wecom.mapper.WecomTouchLogMapper;
 import com.seedcrm.crm.wecom.service.WecomConsoleService;
 import com.seedcrm.crm.wecom.support.WecomBindingStateCodec;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueItemResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CluePageResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueRecordItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.AppointmentRecordResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CurrentRoleResponse;
@@ -86,6 +90,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.springframework.dao.DataAccessException;
@@ -101,8 +106,10 @@ public class WorkbenchServiceImpl implements WorkbenchService {
     private static final int CLUE_LIST_BATCH_SIZE = 200;
     private static final int CLUE_LIST_DEFAULT_LIMIT = 1000;
     private static final int CLUE_LIST_SCAN_LIMIT = 2000;
+    private static final int CLUE_PAGE_MAX_PAGE_SIZE = 200;
 
     private final ClueMapper clueMapper;
+    private final ClueProfileService clueProfileService;
     private final ClueRecordService clueRecordService;
     private final OrderMapper orderMapper;
     private final OrderActionRecordMapper orderActionRecordMapper;
@@ -124,6 +131,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
     private final JdbcTemplate jdbcTemplate;
 
     public WorkbenchServiceImpl(ClueMapper clueMapper,
+                                ClueProfileService clueProfileService,
                                 ClueRecordService clueRecordService,
                                 OrderMapper orderMapper,
                                 OrderActionRecordMapper orderActionRecordMapper,
@@ -144,6 +152,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                                  WecomConsoleService wecomConsoleService,
                                  DataSource dataSource) {
         this.clueMapper = clueMapper;
+        this.clueProfileService = clueProfileService;
         this.clueRecordService = clueRecordService;
         this.orderMapper = orderMapper;
         this.orderActionRecordMapper = orderActionRecordMapper;
@@ -167,7 +176,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
 
     @Override
     public List<ClueItemResponse> listClues(String sourceChannel, String productSourceType, String status) {
-        String normalizedSourceChannel = normalize(sourceChannel);
+        String normalizedSourceChannel = normalizeSourceChannel(sourceChannel);
         String normalizedProductSourceType = normalize(productSourceType);
         String normalizedStatus = normalize(status);
         List<Clue> filteredClues = selectClueCandidates(
@@ -175,11 +184,51 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 normalizedProductSourceType,
                 normalizedStatus,
                 CLUE_LIST_DEFAULT_LIMIT);
+        return buildClueResponses(filteredClues);
+    }
+
+    @Override
+    public CluePageResponse pageClues(String sourceChannel,
+                                      String productSourceType,
+                                      String status,
+                                      String phone,
+                                      LocalDateTime createdStart,
+                                      LocalDateTime createdEnd,
+                                      String queueStatus,
+                                      int page,
+                                      int pageSize,
+                                      Predicate<Long> clueVisiblePredicate) {
+        int safePage = Math.max(1, page);
+        int safePageSize = Math.max(1, Math.min(pageSize, CLUE_PAGE_MAX_PAGE_SIZE));
+        ClueListCriteria criteria = new ClueListCriteria(
+                normalizeSourceChannel(sourceChannel),
+                normalize(productSourceType),
+                normalize(status),
+                StringUtils.hasText(phone) ? phone.trim() : null,
+                createdStart,
+                createdEnd,
+                normalize(queueStatus));
+        CluePageCandidates pageCandidates = selectCluePageCandidates(
+                criteria,
+                safePage,
+                safePageSize,
+                clueVisiblePredicate == null ? clueId -> true : clueVisiblePredicate);
+        return new CluePageResponse(
+                buildClueResponses(pageCandidates.rows()),
+                pageCandidates.total(),
+                safePage,
+                safePageSize,
+                pageCandidates.productSourceCounts(),
+                pageCandidates.queueStatusCounts());
+    }
+
+    private List<ClueItemResponse> buildClueResponses(List<Clue> filteredClues) {
 
         List<Long> clueIds = filteredClues.stream().map(Clue::getId).filter(Objects::nonNull).toList();
         Map<Long, Customer> customerByClueId = loadCustomerByClueId(clueIds);
         Map<Long, List<Order>> ordersByClueId = loadOrdersByClueId(clueIds);
         Map<Long, List<ClueRecordItemResponse>> clueRecordsByClueId = loadClueRecordsByClueId(clueIds);
+        Map<Long, ClueProfileResponse> profileByClueId = loadClueProfilesByClueId(clueIds);
 
         List<ClueItemResponse> responses = new ArrayList<>();
         for (Clue clue : filteredClues) {
@@ -195,6 +244,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
             if (clueRecords.isEmpty() && hasMeaningfulRawData(clue.getRawData())) {
                 clueRecords = List.of(buildRawDataFallbackRecord(clue));
             }
+            ClueProfileResponse profile = profileByClueId.get(clue.getId());
             responses.add(new ClueItemResponse(
                     clue.getId(),
                     clue.getName(),
@@ -214,6 +264,16 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                     latestOrder == null ? null : OrderType.toApiValue(latestOrder.getType()),
                     (long) clueOrders.size(),
                     clue.getCreatedAt(),
+                    profile == null ? null : profile.getDisplayName(),
+                    profile == null ? null : profile.getPhone(),
+                    profile == null ? null : profile.getCallStatus(),
+                    profile == null ? null : profile.getLeadStage(),
+                    profile == null ? List.of() : profile.getLeadTags(),
+                    profile == null ? List.of() : profile.getFollowRecords(),
+                    profile == null ? null : profile.getId(),
+                    profile == null ? null : profile.getIntendedStoreName(),
+                    profile == null ? null : profile.getAssignedAt(),
+                    profile == null ? null : profile.getUpdatedAt(),
                     clueRecords));
         }
         return responses;
@@ -275,6 +335,140 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         return result;
     }
 
+    private CluePageCandidates selectCluePageCandidates(ClueListCriteria criteria,
+                                                        int page,
+                                                        int pageSize,
+                                                        Predicate<Long> clueVisiblePredicate) {
+        long offset = (long) (page - 1) * pageSize;
+        long total = 0L;
+        List<Clue> rows = new ArrayList<>();
+        Map<String, Long> productSourceCounts = emptyCounts("ALL", "GROUP_BUY", "FORM");
+        Map<String, Long> queueStatusCounts = emptyCounts("ALL", "WAIT_ASSIGN", "WAIT_FOLLOW_UP");
+        long pageNo = 1L;
+
+        while (true) {
+            Page<Clue> dbPage = new Page<>(pageNo, CLUE_LIST_BATCH_SIZE, false);
+            IPage<Clue> batchPage = clueMapper.selectPage(dbPage, buildClueBaseQuery(criteria));
+            List<Clue> batch = batchPage == null ? List.of() : batchPage.getRecords();
+            if (batch == null || batch.isEmpty()) {
+                break;
+            }
+
+            Map<Long, List<ClueRecord>> recordsByClueId = StringUtils.hasText(criteria.sourceChannel())
+                    ? loadRawClueRecordsByClueId(batch)
+                    : Map.of();
+            Map<Long, List<Order>> ordersByClueId = StringUtils.hasText(criteria.sourceChannel())
+                    ? loadOrdersByClueId(batch.stream().map(Clue::getId).filter(Objects::nonNull).toList())
+                    : Map.of();
+            Map<Long, ClueProfileResponse> profileByClueId = StringUtils.hasText(criteria.phone())
+                    ? loadClueProfilesByClueId(batch.stream().map(Clue::getId).filter(Objects::nonNull).toList())
+                    : Map.of();
+
+            for (Clue clue : batch) {
+                if (!matchesClueSourceChannel(clue, recordsByClueId.getOrDefault(clue.getId(), List.of()),
+                        ordersByClueId.getOrDefault(clue.getId(), List.of()), criteria.sourceChannel())) {
+                    continue;
+                }
+                if (!clueVisiblePredicate.test(clue.getId())) {
+                    continue;
+                }
+                if (!matchesCluePhone(clue, profileByClueId.get(clue.getId()), criteria.phone())) {
+                    continue;
+                }
+
+                String productSourceType = resolveProductSourceType(
+                        clue.getSourceChannel(),
+                        clue.getSource(),
+                        clue.getRawData(),
+                        clue.getSourceId(),
+                        clue.getId());
+                String queueStatus = resolveClueQueueStatus(clue);
+                increment(productSourceCounts, "ALL");
+                increment(productSourceCounts, productSourceType);
+
+                if (!matchesProductSourceType(productSourceType, criteria.productSourceType())) {
+                    continue;
+                }
+                increment(queueStatusCounts, "ALL");
+                increment(queueStatusCounts, queueStatus);
+
+                if (!matchesClueQueueStatus(queueStatus, criteria.queueStatus())) {
+                    continue;
+                }
+
+                if (total >= offset && rows.size() < pageSize) {
+                    rows.add(clue);
+                }
+                total++;
+            }
+
+            if (batch.size() < CLUE_LIST_BATCH_SIZE) {
+                break;
+            }
+            pageNo++;
+        }
+
+        return new CluePageCandidates(rows, total, productSourceCounts, queueStatusCounts);
+    }
+
+    private LambdaQueryWrapper<Clue> buildClueBaseQuery(ClueListCriteria criteria) {
+        String statusValue = StringUtils.hasText(criteria.status())
+                ? criteria.status().toLowerCase(Locale.ROOT)
+                : null;
+        LambdaQueryWrapper<Clue> query = Wrappers.<Clue>lambdaQuery()
+                .eq(StringUtils.hasText(statusValue), Clue::getStatus, statusValue)
+                .ge(criteria.createdStart() != null, Clue::getCreatedAt, criteria.createdStart())
+                .le(criteria.createdEnd() != null, Clue::getCreatedAt, criteria.createdEnd())
+                .orderByDesc(Clue::getCreatedAt)
+                .orderByDesc(Clue::getId);
+        return query;
+    }
+
+    private boolean matchesCluePhone(Clue clue, ClueProfileResponse profile, String phoneKeyword) {
+        if (!StringUtils.hasText(phoneKeyword)) {
+            return true;
+        }
+        String keyword = phoneKeyword.trim();
+        return contains(clue == null ? null : clue.getPhone(), keyword)
+                || contains(profile == null ? null : profile.getPhone(), keyword);
+    }
+
+    private boolean contains(String value, String keyword) {
+        return StringUtils.hasText(value) && StringUtils.hasText(keyword) && value.contains(keyword);
+    }
+
+    private Map<String, Long> emptyCounts(String... keys) {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (String key : keys) {
+            counts.put(key, 0L);
+        }
+        return counts;
+    }
+
+    private void increment(Map<String, Long> counts, String key) {
+        if (!StringUtils.hasText(key)) {
+            return;
+        }
+        counts.merge(key.trim().toUpperCase(Locale.ROOT), 1L, Long::sum);
+    }
+
+    private boolean matchesProductSourceType(String actualProductSourceType, String expectedProductSourceType) {
+        return !StringUtils.hasText(expectedProductSourceType)
+                || expectedProductSourceType.equals(normalize(actualProductSourceType));
+    }
+
+    private boolean matchesClueQueueStatus(String actualQueueStatus, String expectedQueueStatus) {
+        if (!StringUtils.hasText(expectedQueueStatus) || "ALL".equals(expectedQueueStatus)) {
+            return true;
+        }
+        return expectedQueueStatus.equals(normalize(actualQueueStatus));
+    }
+
+    private String resolveClueQueueStatus(Clue clue) {
+        Long ownerId = clue == null ? null : clue.getCurrentOwnerId();
+        return ownerId == null || ownerId <= 0 ? "WAIT_ASSIGN" : "WAIT_FOLLOW_UP";
+    }
+
     private boolean matchesClueSourceChannel(Clue clue,
                                              List<ClueRecord> clueRecords,
                                              List<Order> orders,
@@ -282,16 +476,21 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         if (!StringUtils.hasText(normalizedSourceChannel)) {
             return true;
         }
-        if (normalizedSourceChannel.equals(normalize(clue == null ? null : clue.getSourceChannel()))) {
+        if (matchesSourceValue(normalizedSourceChannel, clue == null ? null : clue.getSourceChannel())) {
+            return true;
+        }
+        if (matchesSourceValue(normalizedSourceChannel, clue == null ? null : clue.getSource())) {
             return true;
         }
         boolean recordMatched = clueRecords.stream()
-                .anyMatch(record -> normalizedSourceChannel.equals(normalize(record.getSourceChannel())));
+                .anyMatch(record -> matchesSourceValue(normalizedSourceChannel, record.getSourceChannel()));
         if (recordMatched) {
             return true;
         }
         return orders.stream()
-                .anyMatch(order -> normalizedSourceChannel.equals(normalize(order.getSourceChannel())));
+                .anyMatch(order -> matchesSourceValue(normalizedSourceChannel, order.getSourceChannel())
+                        || matchesSourceValue(normalizedSourceChannel, order.getSource())
+                        || matchesSourceValue(normalizedSourceChannel, order.getExternalPartnerCode()));
     }
 
     @Override
@@ -750,6 +949,8 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         }
         List<Long> customerIds = orders.stream().map(Order::getCustomerId).filter(Objects::nonNull).distinct().toList();
         Map<Long, Customer> customerMap = loadCustomers(customerIds);
+        Map<Long, ClueProfileResponse> profileByClueId = loadClueProfilesByClueId(
+                orders.stream().map(Order::getClueId).filter(Objects::nonNull).distinct().toList());
         Map<Long, PlanOrder> planOrderByOrderId = loadPlanOrderByOrderId(orders.stream().map(Order::getId).toList());
         Map<Long, List<AppointmentRecordResponse>> appointmentRecordsByOrderId =
                 loadAppointmentRecordsByOrderId(orders.stream().map(Order::getId).filter(Objects::nonNull).toList());
@@ -761,7 +962,8 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                     OrderItemResponse response = buildOrderResponse(order,
                             planOrder == null ? null : planOrder.getId(),
                             planOrder == null ? null : planOrder.getStatus(),
-                            customer);
+                            customer,
+                            profileByClueId.get(order.getClueId()));
                     response.setAppointmentRecords(appointmentRecordsByOrderId.getOrDefault(order.getId(), List.of()));
                     return response;
                 })
@@ -799,7 +1001,11 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 record.getCreateTime());
     }
 
-    private OrderItemResponse buildOrderResponse(Order order, Long planOrderId, String planOrderStatus, Customer customer) {
+    private OrderItemResponse buildOrderResponse(Order order,
+                                                 Long planOrderId,
+                                                 String planOrderStatus,
+                                                 Customer customer,
+                                                 ClueProfileResponse profile) {
         if (order == null) {
             return null;
         }
@@ -812,7 +1018,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 customer == null ? null : customer.getPhone(),
                 order.getSourceChannel(),
                 resolveProductSourceType(order.getSourceChannel(), null, null, order.getSourceId(), order.getClueId()),
-                resolveOrderStoreName(order),
+                resolveOrderStoreName(order, profile),
                 scale(order.getAmount()),
                 scale(order.getDeposit()),
                 OrderType.toApiValue(order.getType()),
@@ -832,6 +1038,13 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 order.getVerificationOperatorId(),
                 List.of(),
                 order.getCreateTime());
+    }
+
+    private OrderItemResponse buildOrderResponse(Order order,
+                                                 Long planOrderId,
+                                                 String planOrderStatus,
+                                                 Customer customer) {
+        return buildOrderResponse(order, planOrderId, planOrderStatus, customer, null);
     }
 
     private boolean matchesCustomerName(Order order, Customer customer, String normalizedCustomerName) {
@@ -987,6 +1200,15 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                         Collectors.mapping(this::buildClueRecordResponse, Collectors.toList())));
     }
 
+    private Map<Long, ClueProfileResponse> loadClueProfilesByClueId(List<Long> clueIds) {
+        if (clueIds.isEmpty()) {
+            return Map.of();
+        }
+        return clueProfileService.listByClueIds(clueIds).stream()
+                .filter(profile -> profile.getClueId() != null)
+                .collect(Collectors.toMap(ClueProfileResponse::getClueId, Function.identity(), (left, right) -> left));
+    }
+
     private Map<Long, List<ClueRecord>> loadRawClueRecordsByClueId(Collection<Clue> clues) {
         List<Long> clueIds = clues == null
                 ? List.of()
@@ -1112,6 +1334,23 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         return value == null ? null : value.trim().toUpperCase(Locale.ROOT);
     }
 
+    private String normalizeSourceChannel(String value) {
+        String normalized = normalize(value);
+        if (!StringUtils.hasText(normalized)) {
+            return normalized;
+        }
+        return switch (normalized) {
+            case "DOUYIN_LAIKE", "OCEANENGINE", "OCEAN_ENGINE" -> "DOUYIN";
+            case "DISTRIBUTION" -> "DISTRIBUTOR";
+            default -> normalized;
+        };
+    }
+
+    private boolean matchesSourceValue(String expectedSourceChannel, String actualSourceChannel) {
+        return StringUtils.hasText(expectedSourceChannel)
+                && expectedSourceChannel.equals(normalizeSourceChannel(actualSourceChannel));
+    }
+
     private String extractText(com.fasterxml.jackson.databind.JsonNode node, String... candidates) {
         if (node == null || candidates == null) {
             return null;
@@ -1171,11 +1410,18 @@ public class WorkbenchServiceImpl implements WorkbenchService {
     }
 
     private String resolveOrderStoreName(Order order) {
+        return resolveOrderStoreName(order, null);
+    }
+
+    private String resolveOrderStoreName(Order order, ClueProfileResponse profile) {
         if (order == null) {
             return null;
         }
         if (StringUtils.hasText(order.getAppointmentStoreName())) {
             return order.getAppointmentStoreName().trim();
+        }
+        if (profile != null && StringUtils.hasText(profile.getIntendedStoreName())) {
+            return profile.getIntendedStoreName().trim();
         }
         return resolveVisibleStoreName(order.getClueId() == null ? order.getId() : order.getClueId());
     }
@@ -1328,6 +1574,21 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         EMPLOYEE,
         DISTRIBUTOR,
         WITHDRAW
+    }
+
+    private record ClueListCriteria(String sourceChannel,
+                                    String productSourceType,
+                                    String status,
+                                    String phone,
+                                    LocalDateTime createdStart,
+                                    LocalDateTime createdEnd,
+                                    String queueStatus) {
+    }
+
+    private record CluePageCandidates(List<Clue> rows,
+                                      Long total,
+                                      Map<String, Long> productSourceCounts,
+                                      Map<String, Long> queueStatusCounts) {
     }
 
     private static class MonthlyFinanceBucket {

@@ -42,6 +42,7 @@ public class SystemGoLiveServiceImpl implements SystemGoLiveService {
             table("customer_ecom_user", "会员身份"),
             table("customer", "客户"),
             table("clue", "客资"),
+            table("clue_profile", "客资运营状态"),
             table("clue_record", "客资记录"),
             table("salary_detail", "薪酬明细"),
             table("salary_settlement", "薪酬结算"),

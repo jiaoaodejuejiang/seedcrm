@@ -40,6 +40,14 @@
         </div>
       </div>
 
+      <div class="sync-status-row">
+        <span>最近同步</span>
+        <el-tag size="small" :type="syncStatusTagType" effect="light">{{ formatSyncStatus(syncStatus.status) }}</el-tag>
+        <span>{{ syncStatusTimeText }}</span>
+        <span>导入 {{ syncStatus.importedCount ?? 0 }} 条</span>
+        <span v-if="syncStatus.errorMessage" class="sync-status-row__error">{{ syncStatus.errorMessage }}</span>
+      </div>
+
       <div
         v-show="hasFloatingTableScrollbar"
         ref="floatingTableScrollbarRef"
@@ -450,7 +458,7 @@
           <section class="panel">
                 <div class="panel-heading compact">
                   <div>
-                    <h3>客资记录</h3>
+                    <h3>客资记录 {{ detailRow.leadRecordItems.length }} 条</h3>
                   </div>
                 </div>
             <div v-if="detailRow.leadRecordItems.length" class="follow-record-list">
@@ -464,7 +472,7 @@
                 <p>{{ record.content }}</p>
               </article>
             </div>
-            <p v-else class="text-secondary">暂无客资记录</p>
+            <p v-else class="text-secondary">暂无外部客资、订单或动作记录，后续接口同步后会展示在这里。</p>
           </section>
         </div>
       </template>
@@ -494,10 +502,9 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { ElMessage } from 'element-plus'
 import { EditPen } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import { assignClue, recycleClue } from '../api/actions'
+import { assignClue, recycleClue, updateClueProfile } from '../api/actions'
 import { fetchDutyCustomerServices } from '../api/clueManagement'
-import { fetchClues, fetchOrders } from '../api/workbench'
-import { useTablePagination } from '../composables/useTablePagination'
+import { fetchCluePage, fetchClueSyncStatus, fetchOrders } from '../api/workbench'
 import { currentUser } from '../utils/auth'
 import {
   formatCallStatus,
@@ -521,6 +528,7 @@ const detailDrawerVisible = ref(false)
 const columnDrawerVisible = ref(false)
 const assignTarget = ref(null)
 const detailRowId = ref(null)
+const detailSnapshot = ref(null)
 const productSourceFilter = ref('ALL')
 const clueTableRef = ref(null)
 const floatingTableScrollbarRef = ref(null)
@@ -528,12 +536,24 @@ const floatingTableScrollWidth = ref(0)
 const hasFloatingTableScrollbar = ref(false)
 const followRecordDrafts = reactive({})
 const cellDrafts = reactive({})
+const syncStatus = reactive({
+  status: '',
+  triggerType: '',
+  importedCount: 0,
+  payload: '',
+  errorMessage: '',
+  startedAt: '',
+  finishedAt: '',
+  createdAt: '',
+  durationMs: null
+})
 let refreshTimer = null
 let tableScrollWrap = null
 let scrollSyncing = false
 let tableResizeObserver = null
 
 const COLUMN_PREFERENCE_KEY = 'seedcrm:clue-list-columns'
+const TABLE_PAGE_SIZES = [30, 50]
 const defaultColumnConfig = [
   { key: 'sourceChannel', label: '来源', width: 112, visible: true, required: false },
   { key: 'orderType', label: '订单类型', width: 120, visible: true, required: false },
@@ -556,18 +576,38 @@ const filters = reactive({
   queueStatus: 'ALL'
 })
 
-const clueSourceRows = computed(() => {
-  const existingClueIds = new Set(clues.value.map((item) => item.id))
-  const fallbackRows = paidOrders.value
-    .filter((item) => item?.clueId && !existingClueIds.has(item.clueId))
-    .map((item) => buildSyntheticClueFromOrder(item))
-  return [...fallbackRows, ...clues.value].sort((left, right) => compareClueRecency(right, left))
-})
+const clueSourceRows = computed(() => [...clues.value].sort((left, right) => compareClueRecency(right, left)))
 const mergedClues = computed(() => clueSourceRows.value.map((item) => buildClueRow(item)))
-const filteredClues = computed(() =>
-  mergedClues.value.filter((item) => matchesProductSource(item) && matchesPhone(item) && matchesCreatedRange(item) && matchesQueueStatus(item))
-)
-const pagination = useTablePagination(filteredClues)
+const pagination = reactive({
+  currentPage: 1,
+  pageSize: 30,
+  pageSizes: TABLE_PAGE_SIZES,
+  total: 0,
+  productSourceCounts: {
+    ALL: 0,
+    GROUP_BUY: 0,
+    FORM: 0
+  },
+  queueStatusCounts: {
+    ALL: 0,
+    WAIT_ASSIGN: 0,
+    WAIT_FOLLOW_UP: 0
+  },
+  rows: computed(() => mergedClues.value),
+  handleSizeChange(size) {
+    pagination.pageSize = size
+    pagination.currentPage = 1
+    void loadClues()
+  },
+  handleCurrentChange(page) {
+    pagination.currentPage = page
+    void loadClues()
+  },
+  reset() {
+    pagination.currentPage = 1
+    void loadClues()
+  }
+})
 const storeOptions = computed(() => {
   const values = [
     ...listStoreNames(consoleState),
@@ -592,20 +632,27 @@ const latestPaidOrderByClueId = computed(() => {
 const assignableStaff = computed(() => dutyStaff.value.filter((item) => item.onLeave !== 1))
 const canAssignClue = computed(() => ['ADMIN', 'CLUE_MANAGER'].includes(currentUser.value?.roleCode || ''))
 const canRecycleClue = computed(() => ['ADMIN', 'CLUE_MANAGER'].includes(currentUser.value?.roleCode || ''))
-const detailRow = computed(() => mergedClues.value.find((item) => item.id === detailRowId.value) || null)
-const sourceFilterCounts = computed(() => ({
-  ALL: mergedClues.value.length,
-  GROUP_BUY: mergedClues.value.filter((item) => normalize(item.productSourceType) === 'GROUP_BUY').length,
-  FORM: mergedClues.value.filter((item) => normalize(item.productSourceType) === 'FORM').length
-}))
-const queueFilterCounts = computed(() => {
-  const sourceMatchedRows = mergedClues.value.filter((item) => matchesProductSource(item) && matchesPhone(item) && matchesCreatedRange(item))
-  return {
-    ALL: sourceMatchedRows.length,
-    WAIT_ASSIGN: sourceMatchedRows.filter((item) => resolveQueueStatus(item) === 'WAIT_ASSIGN').length,
-    WAIT_FOLLOW_UP: sourceMatchedRows.filter((item) => resolveQueueStatus(item) === 'WAIT_FOLLOW_UP').length
+const detailRow = computed(() => mergedClues.value.find((item) => item.id === detailRowId.value) || detailSnapshot.value)
+const sourceFilterCounts = computed(() => normalizedCounts(pagination.productSourceCounts, ['ALL', 'GROUP_BUY', 'FORM']))
+const queueFilterCounts = computed(() => normalizedCounts(pagination.queueStatusCounts, ['ALL', 'WAIT_ASSIGN', 'WAIT_FOLLOW_UP']))
+const syncStatusTagType = computed(() => {
+  const status = normalize(syncStatus.status)
+  if (status === 'SUCCESS') {
+    return 'success'
   }
+  if (status === 'FAILED') {
+    return 'danger'
+  }
+  if (['RUNNING', 'QUEUED'].includes(status)) {
+    return 'warning'
+  }
+  return 'info'
 })
+const syncStatusTimeText = computed(() =>
+  syncStatus.finishedAt || syncStatus.startedAt || syncStatus.createdAt
+    ? formatDateTime(syncStatus.finishedAt || syncStatus.startedAt || syncStatus.createdAt)
+    : '暂无同步记录'
+)
 
 const callStatusOptions = [
   { label: '未通话', value: 'NOT_CALLED' },
@@ -686,6 +733,13 @@ function resetColumnPreferences() {
   persistColumnPreferences()
 }
 
+function normalizedCounts(source = {}, keys = []) {
+  return keys.reduce((result, key) => {
+    result[key] = Number(source?.[key] || 0)
+    return result
+  }, {})
+}
+
 function sourceFilterLabel(value) {
   const labels = {
     ALL: '全部订单',
@@ -702,6 +756,18 @@ function queueFilterLabel(value) {
     WAIT_FOLLOW_UP: '待跟进'
   }
   return `${labels[value] || value} ${queueFilterCounts.value[value] ?? 0}`
+}
+
+function formatSyncStatus(value) {
+  const labels = {
+    SUCCESS: '成功',
+    FAILED: '失败',
+    RUNNING: '同步中',
+    QUEUED: '排队中',
+    PRECHECK: '预检'
+  }
+  const normalized = normalize(value)
+  return labels[normalized] || '暂无'
 }
 
 function parseDateValue(value) {
@@ -961,7 +1027,35 @@ function findClueProfile(clueId) {
   return (consoleState.clueConsoleProfiles || []).find((item) => item.clueId === clueId) || null
 }
 
+function serverClueProfile(row) {
+  if (!row) {
+    return null
+  }
+  const hasServerProfile = row.profileId || row.profileUpdatedAt || row.displayName || row.contactPhone || row.callStatus || row.leadStage || row.intendedStoreName || row.assignedAt ||
+    row.leadTags?.length || row.followRecords?.length
+  if (!hasServerProfile) {
+    return null
+  }
+  return {
+    id: row.profileId || row.id,
+    clueId: row.id,
+    displayName: row.displayName || row.name || '',
+    phone: row.contactPhone || row.phone || '',
+    callStatus: row.callStatus || defaultCallStatus(row),
+    leadStage: row.leadStage || defaultLeadStage(row),
+    leadTags: [...(row.leadTags || [])],
+    followRecords: sortFollowRecords(row.followRecords || []),
+    intendedStoreName: row.intendedStoreName || row.storeName || storeOptions.value[0] || '静安门店',
+    assignedAt: row.assignedAt || (row.currentOwnerId ? row.createdAt || currentTimestampString() : ''),
+    updatedAt: row.profileUpdatedAt || ''
+  }
+}
+
 function ensureClueProfile(row) {
+  const serverProfile = serverClueProfile(row)
+  if (serverProfile) {
+    return serverProfile
+  }
   const existing = findClueProfile(row.id)
   if (existing) {
     return existing
@@ -977,7 +1071,36 @@ function ensureClueProfile(row) {
     followRecords: [],
     intendedStoreName: row.storeName || storeOptions.value[0] || '静安门店',
     assignedAt: row.currentOwnerId ? row.createdAt || currentTimestampString() : '',
-    updatedAt: currentTimestampString()
+    updatedAt: ''
+  }
+}
+
+function persistLocalClueProfile(profile) {
+  const nextProfiles = [...(consoleState.clueConsoleProfiles || [])]
+  const index = nextProfiles.findIndex((item) => item.clueId === profile.clueId)
+  if (index >= 0) {
+    nextProfiles[index] = profile
+  } else {
+    nextProfiles.push(profile)
+  }
+  replaceConsoleState({
+    ...consoleState,
+    clueConsoleProfiles: nextProfiles
+  })
+}
+
+function toProfilePayload(profile) {
+  return {
+    clueId: profile.clueId,
+    displayName: profile.displayName || '',
+    phone: profile.phone || '',
+    callStatus: profile.callStatus || '',
+    leadStage: profile.leadStage || '',
+    leadTags: [...(profile.leadTags || [])],
+    followRecords: sortFollowRecords(profile.followRecords || []),
+    intendedStoreName: profile.intendedStoreName || '',
+    assignedAt: profile.assignedAt || null,
+    updatedAt: profile.updatedAt || null
   }
 }
 
@@ -1130,11 +1253,14 @@ function canShowMoreActions(row) {
   return canAssignClue.value || (canRecycleClue.value && row.currentOwnerId)
 }
 
-function saveCellEdit(row, field, currentValue, patchKey = field) {
+async function saveCellEdit(row, field, currentValue, patchKey = field) {
   const nextValue = getCellDraft(row.id, field, currentValue)
-  handleInlineUpdate(row, {
+  const saved = await handleInlineUpdate(row, {
     [patchKey]: nextValue
   })
+  if (!saved) {
+    return
+  }
   if (patchKey === 'leadStage' && normalize(nextValue) === 'DEPOSIT_PAID') {
     if (row.paidOrderId) {
       ElMessage.success('已标记预付定金，正在进入预约排档')
@@ -1156,7 +1282,7 @@ function resetFilters() {
   pagination.reset()
 }
 
-function handleInlineUpdate(row, patch, options = {}) {
+async function handleInlineUpdate(row, patch, options = {}) {
   const nextPatch = { ...patch }
   if (Object.prototype.hasOwnProperty.call(nextPatch, 'displayName')) {
     nextPatch.displayName = String(nextPatch.displayName || '').trim()
@@ -1182,32 +1308,45 @@ function handleInlineUpdate(row, patch, options = {}) {
   const profile = ensureClueProfile(row)
   const changed = Object.entries(nextPatch).some(([key, value]) => JSON.stringify(profile[key]) !== JSON.stringify(value))
   if (!changed) {
-    return
+    return profile
   }
 
-  const nextProfiles = [...(consoleState.clueConsoleProfiles || [])]
-  const index = nextProfiles.findIndex((item) => item.clueId === row.id)
   const nextProfile = {
     ...profile,
-    ...nextPatch,
-    updatedAt: currentTimestampString()
+    ...nextPatch
   }
-  if (index >= 0) {
-    nextProfiles[index] = nextProfile
-  } else {
-    nextProfiles.push(nextProfile)
+  let savedProfile = nextProfile
+  try {
+    const response = await updateClueProfile(toProfilePayload(nextProfile))
+    if (response) {
+      savedProfile = {
+        ...nextProfile,
+        id: response.id || nextProfile.id,
+        clueId: response.clueId || nextProfile.clueId,
+        displayName: response.displayName || '',
+        phone: response.phone || '',
+        callStatus: response.callStatus || nextProfile.callStatus,
+        leadStage: response.leadStage || nextProfile.leadStage,
+        leadTags: [...(response.leadTags || [])],
+        followRecords: sortFollowRecords(response.followRecords || []),
+        intendedStoreName: response.intendedStoreName || '',
+        assignedAt: response.assignedAt || '',
+        updatedAt: response.updatedAt || nextProfile.updatedAt
+      }
+    }
+  } catch {
+    ElMessage.error('保存失败，修改未生效，请刷新后重试')
+    return null
   }
-  replaceConsoleState({
-    ...consoleState,
-    clueConsoleProfiles: nextProfiles
-  })
+  persistLocalClueProfile(savedProfile)
 
   if (!options.silent) {
     ElMessage.success('线索信息已更新')
   }
+  return savedProfile
 }
 
-function addFollowRecord(row) {
+async function addFollowRecord(row) {
   const content = String(followRecordDrafts[row.id] || '').trim()
   if (!content) {
     ElMessage.warning('请先填写跟进内容')
@@ -1222,32 +1361,93 @@ function addFollowRecord(row) {
     },
     ...(profile.followRecords || [])
   ]
-  handleInlineUpdate(row, { followRecords: nextRecords }, { silent: true })
+  const saved = await handleInlineUpdate(row, { followRecords: nextRecords }, { silent: true })
+  if (!saved) {
+    return
+  }
   followRecordDrafts[row.id] = ''
   ElMessage.success('跟进记录已添加')
 }
 
-function removeFollowRecord(row, recordId) {
+async function removeFollowRecord(row, recordId) {
   const profile = ensureClueProfile(row)
   const nextRecords = (profile.followRecords || []).filter((item) => item.id !== recordId)
-  handleInlineUpdate(row, { followRecords: nextRecords }, { silent: true })
+  const saved = await handleInlineUpdate(row, { followRecords: nextRecords }, { silent: true })
+  if (!saved) {
+    return
+  }
   ElMessage.success('跟进记录已删除')
 }
 
-async function loadClues() {
+function buildCluePageParams() {
+  const [createdStart, createdEnd] = filters.createdRange || []
+  return {
+    page: pagination.currentPage,
+    pageSize: pagination.pageSize,
+    productSourceType: productSourceFilter.value === 'ALL' ? undefined : productSourceFilter.value,
+    queueStatus: filters.queueStatus === 'ALL' ? undefined : filters.queueStatus,
+    phone: String(filters.phone || '').trim() || undefined,
+    createdStart: createdStart || undefined,
+    createdEnd: createdEnd || undefined
+  }
+}
+
+function applyCluePageResponse(response) {
+  const pageData = response || {}
+  clues.value = Array.isArray(pageData.rows) ? pageData.rows : []
+  pagination.total = Number(pageData.total || 0)
+  pagination.productSourceCounts = {
+    ALL: Number(pageData.productSourceCounts?.ALL || 0),
+    GROUP_BUY: Number(pageData.productSourceCounts?.GROUP_BUY || 0),
+    FORM: Number(pageData.productSourceCounts?.FORM || 0)
+  }
+  pagination.queueStatusCounts = {
+    ALL: Number(pageData.queueStatusCounts?.ALL || 0),
+    WAIT_ASSIGN: Number(pageData.queueStatusCounts?.WAIT_ASSIGN || 0),
+    WAIT_FOLLOW_UP: Number(pageData.queueStatusCounts?.WAIT_FOLLOW_UP || 0)
+  }
+}
+
+function applySyncStatusResponse(response) {
+  const status = response || {}
+  syncStatus.status = status.status || ''
+  syncStatus.triggerType = status.triggerType || ''
+  syncStatus.importedCount = status.importedCount ?? 0
+  syncStatus.payload = status.payload || ''
+  syncStatus.errorMessage = status.errorMessage || ''
+  syncStatus.startedAt = status.startedAt || ''
+  syncStatus.finishedAt = status.finishedAt || ''
+  syncStatus.createdAt = status.createdAt || ''
+  syncStatus.durationMs = status.durationMs ?? null
+}
+
+async function loadClues(options = {}) {
   loading.value = true
   try {
-    const [clueResult, orderResult] = await Promise.allSettled([
-      fetchClues(),
+    const [clueResult, orderResult, syncResult] = await Promise.allSettled([
+      fetchCluePage(buildCluePageParams()),
       fetchOrders({
         status: 'paid'
-      })
+      }),
+      fetchClueSyncStatus()
     ])
-    clues.value = clueResult.status === 'fulfilled' ? clueResult.value : []
+    if (clueResult.status === 'fulfilled') {
+      applyCluePageResponse(clueResult.value)
+      const maxPage = Math.max(1, Math.ceil(pagination.total / pagination.pageSize))
+      if (!options.retried && pagination.currentPage > maxPage) {
+        pagination.currentPage = maxPage
+        await loadClues({ retried: true })
+        return
+      }
+    } else {
+      ElMessage.warning('客资列表刷新失败，仍显示上次结果')
+    }
     paidOrders.value = orderResult.status === 'fulfilled' ? orderResult.value : []
+    if (syncResult.status === 'fulfilled') {
+      applySyncStatusResponse(syncResult.value)
+    }
   } catch {
-    clues.value = []
-    paidOrders.value = []
+    ElMessage.warning('客资列表刷新失败，仍显示上次结果')
   } finally {
     loading.value = false
   }
@@ -1278,7 +1478,7 @@ async function handleAssign(row, userId) {
     clueId: row.id,
     userId
   })
-  handleInlineUpdate(
+  const profileSaved = await handleInlineUpdate(
     row,
     {
       assignedAt: currentTimestampString(),
@@ -1286,6 +1486,11 @@ async function handleAssign(row, userId) {
     },
     { silent: true }
   )
+  if (!profileSaved) {
+    ElMessage.warning('线索已分配，但跟进状态同步失败，请刷新确认')
+    await loadClues()
+    return
+  }
   assignDialogVisible.value = false
   ElMessage.success('线索已分配')
   await loadClues()
@@ -1293,7 +1498,7 @@ async function handleAssign(row, userId) {
 
 async function handleRecycle(row) {
   await recycleClue(row.id)
-  handleInlineUpdate(
+  const profileSaved = await handleInlineUpdate(
     row,
     {
       assignedAt: '',
@@ -1302,12 +1507,18 @@ async function handleRecycle(row) {
     },
     { silent: true }
   )
+  if (!profileSaved) {
+    ElMessage.warning('线索已回收，但跟进状态同步失败，请刷新确认')
+    await loadClues()
+    return
+  }
   ElMessage.success('线索已回收到公海')
   await loadClues()
 }
 
 function openDetailDrawer(row) {
   detailRowId.value = row.id
+  detailSnapshot.value = { ...row }
   detailDrawerVisible.value = true
 }
 
@@ -1426,5 +1637,29 @@ watch(
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.clue-management-page .follow-record-item,
+.clue-management-page .follow-record-item p {
+  overflow-wrap: anywhere;
+}
+
+.clue-management-page .follow-record-item__header {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.sync-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 10px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.sync-status-row__error {
+  color: var(--el-color-danger);
 }
 </style>

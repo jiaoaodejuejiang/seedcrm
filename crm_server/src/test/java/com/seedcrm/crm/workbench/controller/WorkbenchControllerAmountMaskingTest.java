@@ -13,6 +13,8 @@ import com.seedcrm.crm.permission.support.OrderPermissionGuard;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
 import com.seedcrm.crm.permission.support.PlanOrderPermissionGuard;
+import com.seedcrm.crm.scheduler.service.SchedulerService;
+import com.seedcrm.crm.scheduler.support.SchedulerSensitiveDataMasker;
 import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.OrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderItemResponse;
@@ -51,6 +53,12 @@ class WorkbenchControllerAmountMaskingTest {
     private SystemConfigService systemConfigService;
 
     @Mock
+    private SchedulerService schedulerService;
+
+    @Mock
+    private SchedulerSensitiveDataMasker schedulerSensitiveDataMasker;
+
+    @Mock
     private HttpServletRequest request;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -66,7 +74,9 @@ class WorkbenchControllerAmountMaskingTest {
                 orderPermissionGuard,
                 planOrderPermissionGuard,
                 objectMapper,
-                systemConfigService);
+                systemConfigService,
+                schedulerService,
+                schedulerSensitiveDataMasker);
         when(systemConfigService.getBoolean("amount.visibility.store_staff_hidden", true)).thenReturn(true);
         when(systemConfigService.getString(anyString(), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
     }

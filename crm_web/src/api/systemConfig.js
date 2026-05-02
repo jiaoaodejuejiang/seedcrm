@@ -12,6 +12,20 @@ export function saveSystemConfig(payload) {
   return http.post('/system-config/save', payload)
 }
 
+export function previewSystemConfig(payload) {
+  return http.post('/system-config/preview', payload)
+}
+
+export function fetchSystemConfigChangeLogs(params = {}) {
+  return http.get('/system-config/change-logs', {
+    params: {
+      prefix: params.prefix || undefined,
+      configKey: params.configKey || undefined,
+      limit: params.limit || undefined
+    }
+  })
+}
+
 export function fetchDomainSettings() {
   return http.get('/system-config/domain-settings')
 }

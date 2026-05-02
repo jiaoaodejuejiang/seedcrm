@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM P0-7 系统上线联调与运行健康中心详细落地方案</title>
+  <style>
+    body { margin: 0; background: #f6f8fb; color: #172033; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; line-height: 1.75; }
+    main { max-width: 1180px; margin: 0 auto; padding: 34px 22px 72px; }
+    header, section { margin-top: 18px; padding: 24px; border: 1px solid #e5eaf3; border-radius: 22px; background: #fff; box-shadow: 0 18px 45px rgba(23, 32, 51, .06); }
+    h1, h2, h3 { margin: 0; line-height: 1.35; }
+    h1 { font-size: 30px; }
+    h2 { margin-bottom: 12px; font-size: 22px; }
+    h3 { margin-top: 16px; font-size: 17px; }
+    p { margin: 8px 0 0; color: #64748b; }
+    ul, ol { margin: 10px 0 0; padding-left: 22px; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    code { color: #0f766e; }
+    pre { overflow: auto; padding: 14px; border-radius: 14px; background: #101827; color: #e5edf8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5eaf3; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    .badge { display: inline-block; margin: 10px 8px 0 0; padding: 5px 10px; border-radius: 999px; background: #e8f4ff; color: #075985; font-size: 12px; font-weight: 700; }
+    .ok { border-left: 4px solid #10b981; }
+    .warn { border-left: 4px solid #f59e0b; }
+    .danger { border-left: 4px solid #ef4444; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card { padding: 14px; border: 1px solid #e5eaf3; border-radius: 16px; background: #fbfdff; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SeedCRM P0-7 系统上线联调与运行健康中心详细落地方案</h1>
+    <p>建议产品侧命名为“上线准备中心”。它是实施、运维、集成管理员使用的上线任务清单、联调入口和运行健康门禁，不是新的业务操作中心。</p>
+    <span class="badge">P0-7</span>
+    <span class="badge">上线准备</span>
+    <span class="badge">OpenAPI / Swagger</span>
+    <span class="badge">Mock / LIVE</span>
+    <span class="badge">健康检查</span>
+    <span class="badge">生产硬门禁</span>
+  </header>
+
+  <section class="danger">
+    <h2>1. 目标与边界</h2>
+    <ul>
+      <li>标准主链路仍然是 <code>Clue -&gt; Customer -&gt; Order -&gt; PlanOrder</code>。</li>
+      <li>分销 B 方案仍然是 <code>ExternalDistributionPaidOrder -&gt; Customer -&gt; Order(paid) -&gt; PlanOrder</code>。</li>
+      <li>上线准备中心只治理域名、环境、OpenAPI、Provider、Scheduler、配置版本、初始化、测试数据清理、运行健康和部署文档。</li>
+      <li>上线准备中心不直接创建、修改、删除真实 <code>Customer</code>、<code>Order</code>、<code>PlanOrder</code>。</li>
+      <li>真实第三方测试数据不能通过后台表单或 SQL 直接入核心表，必须走 Open API / Scheduler 统一入站服务。</li>
+      <li>分销 paid order 联调不进入 <code>Clue</code>，只能预览或通过受控入站事务创建 / 匹配 <code>Customer + Order(paid)</code>。</li>
+      <li>状态回查、对账拉取、异常重放不得直接更新核心业务表，必须生成 <code>distribution.order.*</code> 事件并复用入站服务。</li>
+      <li>生产环境禁止真实清理业务数据，这是硬门禁，不能被配置开关或确认词绕过。</li>
+      <li>Swagger/OpenAPI 在生产环境不能匿名裸开，必须受开关、角色、Token、IP 白名单或 VPN 约束。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>2. 当前系统现状</h2>
+    <table>
+      <thead><tr><th>能力</th><th>现状</th><th>P0-7 补齐方向</th></tr></thead>
+      <tbody>
+        <tr><td>上线工具</td><td>已有 <code>/system-config/go-live/summary</code>、<code>/initialize</code>、<code>/clear-test-data</code> 和前端「上线工具」。</td><td>升级为分步骤上线准备中心，补齐检查记录、检查项、报告、健康快照和审计。</td></tr>
+        <tr><td>域名配置</td><td>已有系统基础域名和 API 域名配置，并在支付、企微、抖音、接口调试等页面使用。</td><td>统一拼接回调地址、OpenAPI 地址和外部联调地址，检查 localhost、HTTP、重复 slash、路径错误。</td></tr>
+        <tr><td>OpenAPI / Swagger</td><td>已有 springdoc OpenAPI 分组和 <code>OpenApiDocsAccessFilter</code>。</td><td>接入上线检查，生产默认关闭，开启时显示暴露风险和权限状态。</td></tr>
+        <tr><td>接口调试</td><td>已有「接口调试」页面，支持 MOCK / LIVE 预检、模板、Swagger 入口。</td><td>纳入上线步骤，联动 Provider、Mapping、签名、幂等和 dry-run 结果。</td></tr>
+        <tr><td>Docker / 宝塔文档</td><td>已有 Docker Compose、宝塔部署、轻量 CI/CD、部署联调文档。</td><td>增加文档索引、适用环境、版本和检查入口，避免静态文档散落。</td></tr>
+        <tr><td>测试数据清理</td><td>已有 dry-run、确认词、环境阻断、<code>SEEDCRM_ALLOW_CLEAR_TEST_DATA</code> 开关。</td><td>补齐批次、来源、环境标记和清理报告；生产永远阻断真实清理。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="ok">
+    <h2>3. 数据结构</h2>
+    <p>P0-7 新增的结构只记录检查、联调、健康快照、文档入口、测试批次和审计，不属于核心业务模型。</p>
+    <pre><code>go_live_check_record
+- id
+- check_no
+- environment: LOCAL | DEV | TEST | STAGING | PROD
+- check_type: FULL | OPENAPI | PROVIDER | SCHEDULER | CALLBACK | CONFIG | PERMISSION | DEPLOY | TEST_DATA
+- status: PASS | WARN | FAIL
+- summary
+- detail_json_masked
+- blocker_count
+- warning_count
+- checked_by
+- checked_at</code></pre>
+
+    <pre><code>go_live_check_item
+- id
+- check_no
+- item_code
+- item_name
+- step_code: DEPLOY | DOMAIN | ENVIRONMENT | API_DEBUG | MOCK_VERIFY | LIVE_CHECK | HEALTH | CONCLUSION
+- module_code: SYSTEM_CONFIG | SCHEDULER | PROVIDER | OPENAPI | PERMISSION | DEPLOY
+- severity: BLOCKER | WARN | INFO
+- status: PASS | WARN | FAIL | SKIPPED
+- expected_value
+- actual_value_masked
+- suggestion
+- action_route
+- created_at</code></pre>
+
+    <pre><code>integration_runbook_session
+- id
+- session_no
+- provider_code
+- partner_code
+- environment
+- mode: MOCK | LIVE
+- status: DRAFT | DRY_RUN_PASSED | LIVE_CONFIRMED | CLOSED
+- callback_base_url
+- openapi_docs_url
+- swagger_ui_url
+- dry_run_result_json_masked
+- live_confirm_result_json_masked
+- created_by
+- created_at
+- updated_at</code></pre>
+
+    <pre><code>runtime_health_snapshot
+- id
+- snapshot_no
+- environment
+- app_status: UP | DEGRADED | DOWN
+- db_status
+- frontend_status
+- openapi_status
+- scheduler_status
+- provider_status
+- outbox_status
+- exception_queue_status
+- config_version_no
+- detail_json_masked
+- created_at</code></pre>
+
+    <pre><code>test_data_batch
+- id
+- batch_no
+- environment
+- scenario_code: STANDARD_FLOW | DISTRIBUTION_PAID | REFUND_CANCEL | SCHEDULER_OUTBOX | PERMISSION
+- source: GO_LIVE_CENTER | API_DEBUG | TEST_SCRIPT
+- status: CREATED | CLEAN_PREVIEWED | CLEANED | LOCKED
+- business_refs_json_masked
+- cleanup_allowed
+- cleanup_reason
+- created_by
+- created_at
+- cleaned_by
+- cleaned_at</code></pre>
+
+    <pre><code>go_live_audit_log
+- id
+- actor_user_id
+- actor_role_code
+- action_code: CHECK | DRY_RUN | INIT | CLEAR_TEST_DATA | SWITCH_MODE | PUBLISH_CONFIG | ROLLBACK_CONFIG | EXPORT_REPORT
+- target_type
+- target_key
+- environment
+- request_json_masked
+- result_json_masked
+- ip
+- user_agent
+- trace_id
+- created_at</code></pre>
+
+    <h3>数据约束</h3>
+    <ul>
+      <li>检查、联调、健康、审计 JSON 字段必须脱敏，不保存明文 token、secret、auth_code、signature、手机号、raw_data。</li>
+      <li><code>test_data_batch</code> 只能标记测试数据，不得把真实生产数据纳入可清理范围。</li>
+      <li>部署状态、Docker Compose 状态、宝塔反代状态只作为健康结果记录，不驱动业务状态变化。</li>
+      <li>OpenAPI 文档地址和回调地址必须由 API 域名拼接，不允许在各配置页散落维护基础域名。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>4. 接口定义</h2>
+    <p>接口按上线步骤、检查记录、Provider 联调、Scheduler 预检、OpenAPI 链接、初始化清理和审计组织。</p>
+
+    <h3>上线总览与检查记录</h3>
+    <pre><code>GET  /system-config/go-live/summary
+GET  /system-config/go-live/health
+GET  /system-config/go-live/check-records
+GET  /system-config/go-live/check-records/{checkNo}
+POST /system-config/go-live/check/full
+POST /system-config/go-live/check/deploy
+POST /system-config/go-live/check/domain
+POST /system-config/go-live/check/openapi
+POST /system-config/go-live/check/provider
+POST /system-config/go-live/check/scheduler
+POST /system-config/go-live/check/callback-url
+POST /system-config/go-live/check/permission-audit</code></pre>
+
+    <h3>环境与部署支持</h3>
+    <pre><code>GET  /system-config/go-live/environment
+POST /system-config/go-live/initialize
+POST /system-config/go-live/switch-environment/prepare
+POST /system-config/go-live/switch-environment/confirm
+GET  /system-config/go-live/deploy/docs
+GET  /system-config/go-live/deploy/docker-compose
+GET  /system-config/go-live/deploy/baota-guide</code></pre>
+
+    <h3>OpenAPI / Swagger</h3>
+    <pre><code>GET /system-config/go-live/openapi/links
+GET /v3/api-docs/distribution-open-api
+GET /v3/api-docs/scheduler-admin
+GET /v3/api-docs/system-config
+GET /swagger-ui.html</code></pre>
+    <ul>
+      <li>生产环境 <code>seedcrm.openapi.enabled=false</code> 时必须不可访问。</li>
+      <li>开启 Swagger/OpenAPI 时必须展示访问权限、暴露风险、建议关闭时间和审计记录。</li>
+    </ul>
+
+    <h3>Provider 联调</h3>
+    <pre><code>POST /system-config/go-live/provider/{providerCode}/dry-run
+POST /system-config/go-live/provider/{providerCode}/auth-code/check
+POST /system-config/go-live/provider/{providerCode}/token/check
+POST /system-config/go-live/provider/{providerCode}/switch-mode/prepare
+POST /system-config/go-live/provider/{providerCode}/switch-mode/confirm</code></pre>
+    <ul>
+      <li><code>dry-run</code> 必须返回 <code>willPersist=false</code>、<code>willCallExternal=false</code>、字段映射、状态映射、幂等和异常预判。</li>
+      <li><code>auth-code/check</code> 检查授权码状态、最近接收时间、过期时间和是否已换 token。</li>
+      <li><code>switch-mode/confirm</code> 必须在 Mock / LIVE 检查通过后执行，并写审计。</li>
+    </ul>
+
+    <h3>Scheduler 联调</h3>
+    <pre><code>GET  /scheduler/go-live/readiness
+GET  /scheduler/idempotency-health
+POST /scheduler/jobs/{jobCode}/dry-run
+POST /scheduler/distribution/status-check/dry-run
+POST /scheduler/distribution/reconcile/dry-run
+POST /scheduler/outbox/events/{id}/dry-run
+POST /scheduler/distribution/exceptions/{id}/dry-run</code></pre>
+    <ul>
+      <li>状态回查、对账、异常重放和 Outbox 回推默认只 dry-run。</li>
+      <li>真实执行必须回到 P0-5 调度与队列中心的 prepare / confirm 流程。</li>
+    </ul>
+
+    <h3>测试数据治理</h3>
+    <pre><code>POST /system-config/go-live/test-data/init
+POST /system-config/go-live/test-data/cleanup/dry-run
+POST /system-config/go-live/test-data/cleanup/confirm
+GET  /system-config/go-live/test-data/batches
+GET  /system-config/go-live/audit-logs</code></pre>
+    <ul>
+      <li>测试数据初始化必须写入批次、环境、场景和创建人。</li>
+      <li>真实清理必须先 dry-run，且 PROD 永远拒绝。</li>
+      <li>清理结果必须可追踪到表、数量、批次、操作者和确认原因。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>5. 权限规则</h2>
+    <p>上线准备中心属于系统级高风险能力，必须执行 RBAC + ABAC。前端隐藏按钮不能替代后端校验。</p>
+    <table>
+      <thead><tr><th>角色</th><th>可做动作</th><th>禁止动作</th><th>数据范围</th></tr></thead>
+      <tbody>
+        <tr><td>admin</td><td>查看全局健康、执行检查、初始化、配置发布/回滚、环境切换、非生产测试数据清理。</td><td>仍不能绕过生产清理硬门禁，不能直接写核心业务表。</td><td>all</td></tr>
+        <tr><td>integration_admin</td><td>Provider、Callback、OpenAPI、Scheduler 联调；执行 dry-run；发起 MOCK/LIVE 切换申请。</td><td>PROD 生效建议需要 admin 确认；不能清理数据。</td><td>all / partner</td></tr>
+        <tr><td>integration_operator</td><td>查看 OpenAPI、执行 dry-run、查看健康、查看异常队列和调度结果。</td><td>不能发布配置、切 LIVE、清理数据、查看完整密钥。</td><td>team / partner</td></tr>
+        <tr><td>partner_app</td><td>非后台用户，仅可调用自身 partner_code 范围开放接口。</td><td>不能访问上线准备中心。</td><td>partner</td></tr>
+        <tr><td>其他业务角色</td><td>默认不可访问；如有需要，仅开放只读文档或测试账号验证入口。</td><td>不能操作环境、配置、OpenAPI、调度、清理。</td><td>self / team / store</td></tr>
+      </tbody>
+    </table>
+
+    <h3>字段与审计</h3>
+    <ul>
+      <li>Provider 检查必须按 <code>provider_code / partner_code</code> 隔离。</li>
+      <li>健康中心 counts 也要按权限过滤，避免数量泄露。</li>
+      <li>auth_code、secret、token、signature、raw_data、手机号、支付流水默认脱敏。</li>
+      <li>上线检查、dry-run、初始化、清理、切 LIVE、发布、回滚、导出报告都必须写审计。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>6. 流程</h2>
+    <h3>6.1 上线准备步骤</h3>
+    <ol>
+      <li>部署检查：检查 backend、frontend、MySQL、Docker Compose、端口、镜像版本、最近部署时间。</li>
+      <li>域名配置：检查系统基础域名、API 域名、HTTPS、localhost、127.0.0.1、外部可达性。</li>
+      <li>环境确认：检查 TEST / STAGING / PROD、MOCK / LIVE、OpenAPI 开关、清理测试数据开关。</li>
+      <li>接口联调：展示入站地址、Swagger/OpenAPI、签名样例、字段映射、状态映射和 dry-run。</li>
+      <li>MOCK 验证：验证 paid、重复 paid、cancelled、refund_pending、refunded、Outbox 模拟、异常队列闭环。</li>
+      <li>LIVE 检查：检查 AppId、Secret、token、auth_code 时效、timestamp、nonce、signature、IP 白名单、状态回查、对账路径。</li>
+      <li>健康检查：检查登录、菜单权限、调度任务、队列积压、死信、幂等健康、敏感字段脱敏。</li>
+      <li>上线结论：输出可上线、需确认、不可上线，并生成检查报告。</li>
+    </ol>
+
+    <h3>6.2 Provider 联调流程</h3>
+    <ol>
+      <li>从 API 域名拼接回调地址和 OpenAPI 地址。</li>
+      <li>选择 Provider 和接口模板。</li>
+      <li>执行 dry-run，验证验签、timestamp、nonce、防重放、字段映射、状态映射、幂等。</li>
+      <li>分销 paid order dry-run 只能预览 Customer 匹配和 Order(paid) 幂等，不进入 Clue。</li>
+      <li>refund / cancel dry-run 本地无订单时不得反向创建 Order。</li>
+      <li>dry-run 通过后进入 MOCK 验证。</li>
+      <li>切 LIVE 前执行 prepare，展示影响范围和阻断项。</li>
+      <li>confirm 后写配置版本、审计和运行健康检查记录。</li>
+    </ol>
+
+    <h3>6.3 Scheduler 联调流程</h3>
+    <ol>
+      <li>执行任务 dry-run，确认不写核心业务表、不调用真实外部接口。</li>
+      <li>状态回查、对账拉取只生成 <code>distribution.order.*</code> 预览事件。</li>
+      <li>异常重放 dry-run 只读取异常记录原 payload，不允许用户提交新 payload。</li>
+      <li>Outbox dry-run 只预览 <code>crm.order.used</code> 回推 payload、签名和目标地址。</li>
+      <li>真实执行必须跳转调度与队列中心，走 prepare / confirm 和调度锁。</li>
+    </ol>
+
+    <h3>6.4 初始化与清理测试数据流程</h3>
+    <ol>
+      <li>初始化前展示当前环境、目标环境、域名、是否切回 MOCK、是否停用调度。</li>
+      <li>生产初始化需要 <code>INIT_PROD_SYSTEM</code> 确认词，且不会自动切回 MOCK。</li>
+      <li>测试数据初始化必须记录批次、环境、场景、来源和关联对象。</li>
+      <li>清理前必须执行 dry-run，展示将清理的表、数量、批次和影响范围。</li>
+      <li>真实清理需要确认词、后端开关、非 PROD 环境、最近一次 dry-run 结果一致。</li>
+      <li>PROD 环境真实清理永远拒绝。</li>
+      <li>清理后生成报告和审计，不能静默删除。</li>
+    </ol>
+
+    <h3>6.5 上线后健康观测流程</h3>
+    <ol>
+      <li>定时采集 backend、frontend、MySQL、OpenAPI、Scheduler、Provider、Outbox、异常队列健康快照。</li>
+      <li>展示回调成功率、任务成功率、Outbox 积压、dead-letter、异常队列、配置版本状态。</li>
+      <li>出现阻断项时推送到 P0-6 工作台，提醒 admin / integration_admin / integration_operator。</li>
+      <li>配置异常通过配置版本 rollback 恢复，不直接手改数据库。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>7. 页面体验设计</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>首屏结论</h3>
+        <ul>
+          <li>顶部环境条常驻：当前环境、系统域名、API 域名、OpenAPI 状态、清理保护、最近检查时间。</li>
+          <li>上线结论区分可上线、需确认、不可上线。</li>
+          <li>不可上线时禁用切 LIVE、真实联调、真实清理等高风险动作。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>步骤式导航</h3>
+        <ul>
+          <li>部署检查、域名配置、环境确认、接口联调、MOCK 验证、LIVE 检查、健康检查、上线结论。</li>
+          <li>每一步只做一类事情，失败项展示原因、影响和建议动作。</li>
+          <li>右侧固定显示下一步、阻断项、跳转入口、最近操作记录。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>高风险确认</h3>
+        <ul>
+          <li>切 LIVE、开启 OpenAPI、生产初始化、清理测试数据、真实联调、配置发布、回滚必须二次确认。</li>
+          <li>确认弹窗展示环境、差异预览、影响范围、确认原因和确认词。</li>
+          <li>OpenAPI 临时开启应填写关闭时间或到期提醒。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>文档与报告</h3>
+        <ul>
+          <li>部署文档、接口文档、回调文档、联调指南、故障处理手册按环境聚合展示。</li>
+          <li>检查报告可导出，包含检查时间、操作者、环境、通过项、警告项、阻断项。</li>
+          <li>技术字段默认折叠，敏感值脱敏。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="warn">
+    <h2>8. 上线门禁</h2>
+    <table>
+      <thead><tr><th>门禁</th><th>阻断条件</th><th>建议动作</th></tr></thead>
+      <tbody>
+        <tr><td>生产域名</td><td>PROD 使用 localhost、127.0.0.1、0.0.0.0、测试 IP、HTTP。</td><td>到域名配置改为 HTTPS 公网域名。</td></tr>
+        <tr><td>OpenAPI 暴露</td><td>生产 Swagger/OpenAPI 匿名开放、允许本地免 Token、无 IP 白名单或 VPN。</td><td>关闭 OpenAPI 或加鉴权与网络限制。</td></tr>
+        <tr><td>清理测试数据</td><td>PROD 真实清理、未 dry-run、确认词不匹配、清理范围无批次。</td><td>仅在 TEST/STAGING 且备份后清理。</td></tr>
+        <tr><td>Provider LIVE</td><td>缺 baseUrl、secret、token、auth_code、签名、Mapping、Callback、最近测试失败。</td><td>补齐 Provider 配置并重新 dry-run。</td></tr>
+        <tr><td>auth_code 时效</td><td>auth_code 过期、已使用、缺失或 token 已过期不可刷新。</td><td>重新授权并验证 token 有效期。</td></tr>
+        <tr><td>分销 B 边界</td><td>paid order 会进入 Clue；refund/cancel 会创建 Order。</td><td>修正 Mapping 和入站服务门禁。</td></tr>
+        <tr><td>Scheduler 安全</td><td>dry-run 会写核心表；回查 / 对账直接改业务表；异常重放可提交新 payload。</td><td>回到 P0-5 调度安全流程修复。</td></tr>
+        <tr><td>配置版本</td><td>未 validate、无回滚快照、发布失败无事务回滚。</td><td>走配置版本发布与回滚流程。</td></tr>
+        <tr><td>敏感信息</td><td>日志、审计、健康快照保存明文 secret、token、auth_code、raw_data。</td><td>启用脱敏和字段权限。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="warn">
+    <h2>9. 落地任务拆分</h2>
+    <table>
+      <thead><tr><th>任务</th><th>目标</th><th>依赖</th><th>验收</th><th>风险</th></tr></thead>
+      <tbody>
+        <tr><td>P0-7-1 上线检查模型</td><td>新增 check_record、check_item、health_snapshot、audit_log。</td><td>P0-3 配置版本</td><td>检查可追溯，报告可查询，敏感字段脱敏。</td><td>中</td></tr>
+        <tr><td>P0-7-2 步骤式上线准备中心</td><td>把上线工具升级为部署、域名、环境、接口、MOCK、LIVE、健康、结论八步。</td><td>现有上线工具</td><td>实施人员能按步骤完成上线准备。</td><td>中</td></tr>
+        <tr><td>P0-7-3 OpenAPI / Swagger 治理</td><td>展示文档入口、开关状态、权限状态和公网暴露风险。</td><td>springdoc 配置</td><td>生产默认关闭，开启有审计和门禁。</td><td>高</td></tr>
+        <tr><td>P0-7-4 Provider 联调门禁</td><td>检查 auth_code、token、签名、Mapping、Callback、Mock/LIVE。</td><td>P0-4 Provider 标准化</td><td>缺配置不能切 LIVE，dry-run 不落核心表。</td><td>高</td></tr>
+        <tr><td>P0-7-5 Scheduler 联调门禁</td><td>复用 P0-5 dry-run、Outbox、异常队列、状态回查、对账。</td><td>P0-5 调度安全</td><td>真实执行必须 prepare / confirm，不能绕过入站服务。</td><td>高</td></tr>
+        <tr><td>P0-7-6 测试数据批次治理</td><td>初始化测试数据打批次，清理必须 dry-run + 非 PROD + 后端开关。</td><td>现有 clear-test-data</td><td>PROD 永远阻断真实清理。</td><td>高</td></tr>
+        <tr><td>P0-7-7 文档索引与部署报告</td><td>聚合 Docker、宝塔、CI/CD、接口联调、故障处理文档。</td><td>现有 doc/public/docs</td><td>按环境和场景展示文档入口。</td><td>低</td></tr>
+        <tr><td>P0-7-8 上线后健康推送</td><td>健康快照阻断项进入工作台待办。</td><td>P0-6 工作台</td><td>admin / integration 角色可看到运行风险。</td><td>中</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="danger">
+    <h2>10. 验收标准与禁止行为</h2>
+    <h3>验收标准</h3>
+    <ul>
+      <li>能集中查看基础域名、API 域名、回调地址、OpenAPI/Swagger、Provider、Scheduler、Outbox、权限、配置版本状态。</li>
+      <li>能一键执行上线检查，并输出通过、失败、风险和修复建议。</li>
+      <li>能通过 OpenAPI 模板发起接口调试，自动生成签名示例和 traceId。</li>
+      <li>Mock / LIVE 状态全页面醒目可见，切 LIVE 必须二次确认。</li>
+      <li>auth_code 时效、timestamp、nonce、防重放、签名校验可被检查和 dry-run 验证。</li>
+      <li>抖音联调只进入 Clue，不创建 Customer、Order、PlanOrder。</li>
+      <li>分销 paid order 联调不进入 Clue，能预览 Customer 匹配和 Order(paid) 幂等。</li>
+      <li>分销 refund / cancel 联调不得反向创建 Order。</li>
+      <li>Scheduler 测试默认 dry-run，真实执行必须二次确认。</li>
+      <li>状态回查、对账拉取、异常重放必须复用统一入站服务。</li>
+      <li>能一键初始化标准测试数据，并标记批次、环境、来源。</li>
+      <li>能按批次清理测试数据，生产环境默认且永久禁止真实清理。</li>
+      <li>所有联调、初始化、清理、调度测试、配置检查均有审计日志。</li>
+      <li>敏感字段默认脱敏，密钥不明文展示。</li>
+    </ul>
+
+    <h3>禁止行为</h3>
+    <ul>
+      <li>禁止新增核心业务模型或改变 <code>Clue -&gt; Customer -&gt; Order -&gt; PlanOrder</code>。</li>
+      <li>禁止让分销 paid order 进入 Clue。</li>
+      <li>禁止通过上线准备中心直接创建、修改、删除真实 Customer、Order、PlanOrder。</li>
+      <li>禁止绕过 Open API / Scheduler 的统一入站服务。</li>
+      <li>禁止状态回查、对账拉取直接更新核心表。</li>
+      <li>禁止生产环境任意清库或批量删除。</li>
+      <li>禁止把 Mock / LIVE 切换做成普通业务人员可点的开关。</li>
+      <li>禁止把 auth_code、密钥、raw_data、支付流水明文展示。</li>
+      <li>禁止生产 Swagger/OpenAPI 匿名开放。</li>
+      <li>禁止把一键初始化数据混入生产真实统计口径。</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

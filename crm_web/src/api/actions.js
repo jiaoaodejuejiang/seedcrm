@@ -20,6 +20,10 @@ export function recycleClue(clueId) {
   })
 }
 
+export function updateClueProfile(payload) {
+  return http.post('/clue/profile', payload)
+}
+
 export function createOrder(payload) {
   return http.post('/order/create', payload)
 }

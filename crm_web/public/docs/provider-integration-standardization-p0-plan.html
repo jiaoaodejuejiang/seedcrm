@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM P0-4 Provider 接入标准化详细落地方案</title>
+  <style>
+    body { margin: 0; background: #f6f8fb; color: #172033; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; line-height: 1.75; }
+    main { max-width: 1180px; margin: 0 auto; padding: 34px 22px 72px; }
+    header, section { margin-top: 18px; padding: 24px; border: 1px solid #e5eaf3; border-radius: 22px; background: #fff; box-shadow: 0 18px 45px rgba(23, 32, 51, .06); }
+    h1, h2, h3 { margin: 0; line-height: 1.35; }
+    h1 { font-size: 30px; }
+    h2 { margin-bottom: 12px; font-size: 22px; }
+    h3 { margin-top: 16px; font-size: 17px; }
+    p { margin: 8px 0 0; color: #64748b; }
+    ul, ol { margin: 10px 0 0; padding-left: 22px; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    code { color: #0f766e; }
+    pre { overflow: auto; padding: 14px; border-radius: 14px; background: #101827; color: #e5edf8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5eaf3; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    .badge { display: inline-block; margin: 10px 8px 0 0; padding: 5px 10px; border-radius: 999px; background: #e8f4ff; color: #075985; font-size: 12px; font-weight: 700; }
+    .ok { border-left: 4px solid #10b981; }
+    .warn { border-left: 4px solid #f59e0b; }
+    .danger { border-left: 4px solid #ef4444; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card { padding: 14px; border: 1px solid #e5eaf3; border-radius: 16px; background: #fbfdff; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SeedCRM P0-4 Provider 接入标准化详细落地方案</h1>
+    <p>Provider 接入标准化建议在产品侧命名为“渠道接入中心”。它把抖音、分销、企微、支付等外部系统统一收敛到 Provider + Mapping + Dry-run + Callback + Scheduler + Outbox + Exception Queue 的接入框架里。</p>
+    <span class="badge">P0-4</span>
+    <span class="badge">Scheduler</span>
+    <span class="badge">Provider</span>
+    <span class="badge">Dry-run 不落库</span>
+    <span class="badge">不新增核心业务模型</span>
+  </header>
+
+  <section class="danger">
+    <h2>1. 目标与边界</h2>
+    <ul>
+      <li>目标是把外部接入从零散页面和接口字段，升级为可配置、可联调、可监控、可审计、可回滚的渠道接入中心。</li>
+      <li>标准客资链路仍为 <code>Clue -&gt; Customer -&gt; Order -&gt; PlanOrder</code>。</li>
+      <li>分销 B 链路仍为 <code>ExternalDistributionPaidOrder -&gt; Customer -&gt; Order(paid) -&gt; PlanOrder</code>。</li>
+      <li>抖音客资同步只进入 Clue，不直接创建 Customer、Order、PlanOrder。</li>
+      <li>分销 paid order 不进入 Clue，只能通过统一入站服务创建或匹配 Customer，并创建 Order(paid)。</li>
+      <li>企微关系只能绑定 Customer，不得通过企微回调直接创建 Customer。</li>
+      <li>支付接入只用于 SeedCRM 需要识别的支付状态和回调，不承接外部分销佣金、提现、退款资金流。</li>
+      <li>Open API Controller 和 Scheduler 都不得绕过统一入站服务直接写 Customer、Order、PlanOrder。</li>
+      <li>Mapping 只能做字段、状态、类型、金额单位转换，不能配置“落库动作”或新业务链路。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>2. 当前系统现状</h2>
+    <table>
+      <thead><tr><th>能力</th><th>现状</th><th>P0-4 补齐方向</th></tr></thead>
+      <tbody>
+        <tr><td>Provider 配置</td><td>已有 <code>integration_provider_config</code>，覆盖抖音、分销、核销、退款、auth_code、token、状态回查和对账路径。</td><td>统一字段语义、接入步骤、健康状态、MOCK/LIVE 上线门禁。</td></tr>
+        <tr><td>Callback 配置</td><td>已有 <code>integration_callback_config</code> 和 <code>integration_callback_event_log</code>。</td><td>统一回调入口、验签日志、traceId、事件处理状态、敏感值脱敏。</td></tr>
+        <tr><td>分销 Open API</td><td>已有 <code>/open/distribution/events</code>，并复用 <code>DistributionEventIngestService</code>。</td><td>作为标准入站服务样板，推广到 Provider dry-run 和 Scheduler replay。</td></tr>
+        <tr><td>Dry-run</td><td>已有分销事件 dry-run，能预览字段映射、Customer 匹配、Order 幂等。</td><td>扩展为统一联调工作台：请求头、query、body、验签、映射、异常预判。</td></tr>
+        <tr><td>Outbox / 异常队列</td><td>已有 <code>scheduler_outbox_event</code> 和 <code>distribution_exception_record</code>。</td><td>标准化状态、重试、死信、traceId 和处理建议。</td></tr>
+        <tr><td>调度任务</td><td>已有 DOUYIN_CLUE_INCREMENTAL、DISTRIBUTION_OUTBOX_PROCESS、DISTRIBUTION_EXCEPTION_RETRY、DISTRIBUTION_STATUS_CHECK、DISTRIBUTION_RECONCILE_PULL。</td><td>统一 Provider 绑定、任务 dry-run、真实执行确认、监控摘要。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="ok">
+    <h2>3. 数据结构</h2>
+    <p>P0-4 不推翻现有表，先标准化现有表语义，并新增 Mapping 规则表，避免把字段映射、状态映射长期塞在 Provider 大字段中。</p>
+    <pre><code>integration_provider_config
+- provider_code
+- provider_name
+- module_code
+- execution_mode: MOCK | LIVE
+- auth_type: NONE | APP_SECRET | AUTH_CODE | OAUTH2 | HMAC_SHA256
+- app_id
+- client_key
+- client_secret
+- base_url
+- token_url
+- endpoint_path
+- status_query_path
+- reconciliation_pull_path
+- callback_url
+- status_mapping
+- refund_status_mapping
+- request_timeout_ms
+- rate_limit_per_minute
+- cache_ttl_seconds
+- auth_code
+- auth_code_status: NEW | USED | EXPIRED | EXCHANGED | FAILED
+- last_auth_code_at
+- access_token
+- refresh_token
+- token_expires_at
+- refresh_token_expires_at
+- enabled
+- last_test_status
+- last_callback_status
+
+integration_mapping_rule
+- id
+- provider_code
+- mapping_type: FIELD | STATUS | ORDER_TYPE | REFUND_STATUS | AMOUNT_UNIT
+- source_key
+- source_value
+- target_module: CLUE | CUSTOMER | ORDER | PLANORDER | SCHEDULER
+- target_field
+- target_value
+- condition_json
+- priority
+- enabled
+- created_at
+- updated_at
+
+integration_callback_event_log
+- provider_code
+- provider_id
+- callback_name
+- event_type
+- event_id
+- idempotency_key
+- trace_id
+- signature_mode
+- signature_status
+- signature_value_masked
+- timestamp_value
+- nonce
+- body_hash
+- trust_level: EXTERNAL_SIGNED | SCHEDULER_REPLAY | MOCK
+- process_policy: DRY_RUN | LIVE_PROCESS | REPLAY
+- process_status: RECEIVED | VERIFIED | DUPLICATE | PROCESSED | FAILED
+- related_customer_id
+- related_order_id
+- request_payload
+
+scheduler_outbox_event
+- event_key
+- event_type
+- provider_code
+- related_order_id
+- related_plan_order_id
+- external_partner_code
+- external_order_id
+- payload
+- destination_url
+- status: PENDING | PROCESSING | SUCCESS | FAILED | DEAD_LETTER
+- retry_count
+- next_retry_time
+- last_error
+- last_response
+
+distribution_exception_record
+- partner_code
+- event_type
+- event_id
+- idempotency_key
+- external_order_id
+- related_order_id
+- error_code
+- error_message
+- conflict_detail_json
+- raw_payload
+- callback_log_trace_id
+- handling_status: OPEN | RETRY_QUEUED | HANDLED
+- retry_count
+- next_retry_time
+- handler_user_id
+- handler_role_code
+- handle_remark</code></pre>
+
+    <h3>结构约束</h3>
+    <ul>
+      <li><code>client_secret</code>、<code>token_value</code>、<code>aes_key</code>、<code>auth_code</code>、<code>access_token</code>、<code>refresh_token</code> 必须密文存储，接口只返回 masked。</li>
+      <li><code>provider_code + idempotency_key</code> 和 <code>provider_code + event_id</code> 应作为幂等唯一约束。</li>
+      <li>Mapping 规则不允许定义“直接写核心表”的动作，只能提供转换结果给受控服务校验。</li>
+      <li>Outbox 事件 V1 固定支持 <code>crm.order.used</code>，由 PlanOrder finished 后异步回推。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>4. 接口定义</h2>
+    <table>
+      <thead><tr><th>接口</th><th>用途</th><th>权限</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /scheduler/providers</code></td><td>Provider 列表和健康摘要。</td><td><code>scheduler:view</code></td></tr>
+        <tr><td><code>GET /scheduler/providers/{providerCode}</code></td><td>Provider 详情，敏感字段脱敏。</td><td><code>scheduler:view</code></td></tr>
+        <tr><td><code>POST /scheduler/providers/{providerCode}/save</code></td><td>保存 Provider 草稿或配置。</td><td><code>scheduler:update</code></td></tr>
+        <tr><td><code>POST /scheduler/providers/{providerCode}/dry-run</code></td><td>统一联调预检，不落核心表。</td><td><code>scheduler:debug</code></td></tr>
+        <tr><td><code>POST /scheduler/providers/{providerCode}/test-connection</code></td><td>连接和授权配置检测。</td><td><code>scheduler:debug</code></td></tr>
+        <tr><td><code>POST /scheduler/providers/{providerCode}/switch-mode</code></td><td>MOCK/LIVE 切换，需发布校验。</td><td><code>scheduler:update</code></td></tr>
+        <tr><td><code>POST /scheduler/providers/{providerCode}/auth-code/exchange</code></td><td>auth_code 换 token。</td><td><code>scheduler:update</code></td></tr>
+        <tr><td><code>GET /scheduler/providers/{providerCode}/mappings</code></td><td>查询字段、状态、订单类型映射。</td><td><code>scheduler:view</code></td></tr>
+        <tr><td><code>POST /scheduler/providers/{providerCode}/mappings/save</code></td><td>保存 Mapping 规则。</td><td><code>scheduler:update</code></td></tr>
+        <tr><td><code>POST /scheduler/providers/{providerCode}/mappings/dry-run</code></td><td>映射试算，不落库。</td><td><code>scheduler:debug</code></td></tr>
+        <tr><td><code>POST /open/distribution/events</code></td><td>分销 paid/cancel/refund 入站。</td><td>Partner 签名认证</td></tr>
+        <tr><td><code>POST /scheduler/callback/{providerCode}/{callbackName}</code></td><td>统一 Provider 回调入口。</td><td>Provider 签名认证</td></tr>
+        <tr><td><code>POST /scheduler/jobs/{jobCode}/dry-run</code></td><td>调度任务预检。</td><td><code>scheduler:debug</code></td></tr>
+        <tr><td><code>GET /scheduler/outbox-events</code></td><td>Outbox 回推队列。</td><td><code>scheduler:view</code></td></tr>
+        <tr><td><code>GET /scheduler/distribution-exceptions</code></td><td>异常队列。</td><td><code>scheduler:view</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Dry-run 输出要求</h3>
+    <pre><code>{
+  "willPersist": false,
+  "provider": {
+    "providerCode": "DISTRIBUTION",
+    "executionMode": "MOCK",
+    "enabled": true
+  },
+  "signaturePreview": {
+    "required": false,
+    "result": "MOCK_SKIPPED"
+  },
+  "fieldMapping": {},
+  "statusMapping": {},
+  "customerMatch": {},
+  "orderIdempotency": {},
+  "exceptionPreview": [],
+  "willWrite": {
+    "clue": false,
+    "customer": false,
+    "order": false,
+    "planOrder": false
+  }
+}</code></pre>
+  </section>
+
+  <section class="warn">
+    <h2>5. 权限规则</h2>
+    <table>
+      <thead><tr><th>角色</th><th>允许能力</th><th>限制</th></tr></thead>
+      <tbody>
+        <tr><td><code>admin</code></td><td>管理全部 Provider、Mapping、Callback、Scheduler、Outbox、异常队列。</td><td>PROD LIVE 操作仍需确认词和审计。</td></tr>
+        <tr><td><code>integration_admin</code></td><td>维护 Provider 配置、Mapping、Callback、Scheduler 策略，可执行 dry-run 和重试。</td><td>不得直接修改核心业务数据。</td></tr>
+        <tr><td><code>integration_operator</code></td><td>查看日志、异常、dry-run、允许范围内 retry。</td><td>不可修改密钥、Mapping、生效模式。</td></tr>
+        <tr><td><code>partner_app</code></td><td>访问自身 partner_code 范围 Open API。</td><td>不可进入后台管理接口。</td></tr>
+        <tr><td><code>clue_manager</code></td><td>查看 Clue 同步相关调度状态。</td><td>不可修改 Provider 密钥。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>ABAC 规则</h3>
+    <ul>
+      <li>PARTNER 范围必须满足 <code>currentPartnerCode == resourcePartnerCode</code>。</li>
+      <li>Provider 管理通常只允许 ALL 范围后台管理角色，业务数据查看再按 self/team/store/partner 过滤。</li>
+      <li>异常队列中的手机号、raw_payload、签名、token、auth_code 默认脱敏。</li>
+      <li>integration_operator 的异常重试必须调用受控 replay 服务，不得直写 Customer、Order、PlanOrder。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>6. 流程</h2>
+    <h3>标准入站流程</h3>
+    <ol>
+      <li>外部请求进入 <code>/open/distribution/events</code> 或统一 callback。</li>
+      <li>读取 Provider 配置，判断 MOCK/LIVE、enabled、签名模式、密钥状态。</li>
+      <li>LIVE 模式校验 timestamp、nonce、signature、idempotency_key、partner_code。</li>
+      <li>写入 callback event log，记录 traceId、body_hash、验签状态、幂等状态。</li>
+      <li>幂等命中则返回已有处理结果，不重复落业务。</li>
+      <li>根据 Mapping 做字段、状态、金额单位、订单类型映射。</li>
+      <li>dry-run 到此结束，只返回预览，不落核心表。</li>
+      <li>LIVE 处理调用统一入站业务服务。</li>
+      <li><code>distribution.order.paid</code> 创建或匹配 Customer，并创建 Order(paid)。</li>
+      <li><code>cancelled/refund_pending/refunded</code> 只能更新已有 Order 的外部状态和履约影响。</li>
+      <li>失败写入异常队列，状态为 OPEN。</li>
+      <li>成功更新 callback log 的 related_customer_id、related_order_id、process_status。</li>
+    </ol>
+
+    <h3>Scheduler 补偿流程</h3>
+    <ol>
+      <li>Scheduler 只负责拉取、回查、对账、重试、回推。</li>
+      <li>状态回查或对账发现变化时生成标准事件。</li>
+      <li>事件必须走 <code>DistributionEventIngestService.replayFromScheduler</code> 可信重放。</li>
+      <li>可信重放可跳过外部请求签名头，但必须保留 partner_code、idempotency_key、raw_data、callback log。</li>
+      <li>重放成功后异常记录标记 HANDLED，失败回到 OPEN。</li>
+    </ol>
+
+    <h3>Outbox 回推流程</h3>
+    <ol>
+      <li>PlanOrder finished 后，Order 转 used。</li>
+      <li>先写 scheduler_outbox_event，事件类型 V1 固定为 <code>crm.order.used</code>。</li>
+      <li>Scheduler 异步读取 PENDING 事件。</li>
+      <li>LIVE 模式生成 timestamp、nonce、signature 后回推外部 Provider。</li>
+      <li>成功标记 SUCCESS，失败进入重试，超过阈值进入 DEAD_LETTER。</li>
+      <li>外部回推失败不回滚本地业务主链路。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>7. 前端体验方案</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>渠道总览</h3>
+        <p>展示渠道名称、类型、MOCK/LIVE、启停、接入进度、最近入站、异常数、健康状态和最近失败原因。</p>
+      </div>
+      <div class="card">
+        <h3>接入向导</h3>
+        <p>按“渠道接入、授权、安全、字段映射、状态映射、dry-run、MOCK 验证、上线检查、监控”组织。</p>
+      </div>
+      <div class="card">
+        <h3>拼接地址</h3>
+        <p>API 域名只读展示，入站地址、状态回查、对账、OpenAPI 地址用卡片展示，支持复制和连通性测试。</p>
+      </div>
+      <div class="card">
+        <h3>运行监控</h3>
+        <p>按 traceId、外部订单号、幂等键、状态、异常类型检索；异常详情用时间线展示接收、验签、映射、匹配、建单、回推。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="danger">
+    <h2>8. 上线阻断项</h2>
+    <ul>
+      <li>LIVE 模式缺少 AppSecret、timestamp、nonce、signature 校验。</li>
+      <li>API 域名是 localhost、127.0.0.1、非 HTTPS 或不可访问。</li>
+      <li>dry-run 会写核心业务表或调用真实外部接口。</li>
+      <li>状态映射会让 distribution paid order 进入 Clue。</li>
+      <li>字段映射缺少幂等键 <code>external_partner_code + external_order_id</code>。</li>
+      <li>Scheduler 或人工重试绕过统一入站服务直接写 Customer、Order、PlanOrder。</li>
+      <li>敏感字段将在日志、审计、异常列表或 dry-run 中明文展示。</li>
+      <li>切换 LIVE 前没有最近一次通过的 dry-run 或 MOCK 验证记录。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>9. 测试与验收</h2>
+    <table>
+      <thead><tr><th>测试项</th><th>验收标准</th></tr></thead>
+      <tbody>
+        <tr><td>统一 Provider</td><td>抖音、分销、企微、支付能以统一结构管理基础配置、认证、Callback、Mapping、Scheduler、Outbox。</td></tr>
+        <tr><td>抖音链路</td><td>抖音客资同步只进入 Clue，不创建 Customer、Order、PlanOrder。</td></tr>
+        <tr><td>分销 paid</td><td>不进入 Clue，可创建或匹配 Customer，并创建 Order(paid)。</td></tr>
+        <tr><td>分销 cancel/refund</td><td>本地无 Order 时不得创建新 Order，只记录日志或异常。</td></tr>
+        <tr><td>幂等</td><td>相同 provider_code + idempotency_key 或 event_id 只处理一次。</td></tr>
+        <tr><td>LIVE 安全</td><td>缺签名、timestamp、nonce、partner_code、idempotency_key 必须拒绝。</td></tr>
+        <tr><td>Dry-run</td><td>返回映射、验签、幂等、Customer 匹配、Order 预览，但不写核心表。</td></tr>
+        <tr><td>Scheduler replay</td><td>必须调用入站 replay 服务，不能直接改核心表。</td></tr>
+        <tr><td>Outbox</td><td>PlanOrder finished 后先写 Outbox，异步回推失败不影响本地 used 状态。</td></tr>
+        <tr><td>auth_code</td><td>过期、已使用、状态异常时禁止换 token。</td></tr>
+        <tr><td>权限</td><td>integration_operator 可查看和 dry-run，不可保存密钥、切 LIVE、发布 Mapping。</td></tr>
+        <tr><td>脱敏</td><td>日志、审计、异常列表中的 secret、token、auth_code、raw_payload、手机号均脱敏。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>10. 落地顺序</h2>
+    <ol>
+      <li>先整理现有三方接口、回调接口、接口调试、任务调度页面，统一归入“渠道接入中心”。</li>
+      <li>修复现有接入相关页面中文乱码、敏感字段展示、MOCK/LIVE 视觉提示不足的问题。</li>
+      <li>标准化 Provider 详情和渠道总览，展示健康状态、最近入站、异常数、最近失败原因。</li>
+      <li>新增 <code>integration_mapping_rule</code>，先迁移分销订单类型、状态映射、字段映射。</li>
+      <li>扩展统一 dry-run 工作台，覆盖抖音、分销、企微、支付四类 Provider。</li>
+      <li>接入 P0-3 配置版本和回滚，Provider/Mapping/Callback/Scheduler 高风险变更先草稿后发布。</li>
+      <li>完善上线检查、traceId 全链路、Outbox 和异常队列监控。</li>
+      <li>补齐自动化测试和 OpenAPI/Swagger 联调说明。</li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

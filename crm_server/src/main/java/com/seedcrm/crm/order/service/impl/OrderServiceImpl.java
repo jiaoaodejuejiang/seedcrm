@@ -286,6 +286,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                         previousStoreName,
                         nextStoreName,
                         orderAppointmentDTO.getRemark(),
+                        resolveAppointmentReasonType(
+                                orderAppointmentDTO.getAppointmentReasonType(),
+                                reschedule ? "RESCHEDULE" : "CUSTOMER_REQUEST"),
                         operatorRoleCode,
                         resolveAppointmentSourceSurface(orderAppointmentDTO.getSourceSurface())));
         systemFlowRuntimeBridge.recordOrderAction(updated, "ORDER_PAID", "ORDER_APPOINTMENT",
@@ -333,6 +336,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                         previousStoreName,
                         null,
                         orderActionDTO == null ? null : orderActionDTO.getRemark(),
+                        resolveAppointmentReasonType(
+                                orderActionDTO == null ? null : orderActionDTO.getAppointmentReasonType(),
+                                "CUSTOMER_CANCEL"),
                         operatorRoleCode,
                         resolveAppointmentSourceSurface(orderActionDTO == null ? null : orderActionDTO.getSourceSurface())));
         systemFlowRuntimeBridge.recordOrderAction(updated, "APPOINTMENT", "ORDER_APPOINTMENT_CANCEL",
@@ -1279,6 +1285,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                                                String previousStoreName,
                                                String storeName,
                                                String remark,
+                                               String reasonType,
                                                String operatorRoleCode,
                                                String sourceSurface) {
         return "{"
@@ -1292,10 +1299,22 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 + ",\"slotCountAfter\":" + jsonNumber(nextAppointmentSlots == null ? 0 : nextAppointmentSlots.size())
                 + ",\"storeNameBefore\":" + jsonString(previousStoreName)
                 + ",\"storeNameAfter\":" + jsonString(storeName)
+                + ",\"reasonType\":" + jsonString(reasonType)
                 + ",\"operatorRoleCode\":" + jsonString(operatorRoleCode)
                 + ",\"sourceSurface\":" + jsonString(sourceSurface)
                 + ",\"remark\":" + jsonString(remark)
                 + "}";
+    }
+
+    private String resolveAppointmentReasonType(String value, String defaultValue) {
+        String raw = StringUtils.hasText(value) ? value.trim() : defaultValue;
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String normalized = raw.toUpperCase(Locale.ROOT)
+                .replace('-', '_')
+                .replace(' ', '_');
+        return normalized.length() > 64 ? normalized.substring(0, 64) : normalized;
     }
 
     private String formatDateTime(LocalDateTime value) {

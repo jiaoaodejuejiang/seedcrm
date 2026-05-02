@@ -73,6 +73,43 @@ public class SystemConfigController {
         return ApiResponse.success(systemConfigService.listConfigs(prefix));
     }
 
+    @GetMapping("/change-logs")
+    @Operation(
+            summary = "Query system config change logs",
+            description = "Returns config before and after values, actor, risk level and impact modules. Sensitive values are masked.",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<List<SystemConfigDtos.ChangeLogResponse>> changeLogs(@RequestParam(required = false) String prefix,
+                                                                            @RequestParam(required = false) String configKey,
+                                                                            @RequestParam(required = false) Integer limit,
+                                                                            @Parameter(hidden = true)
+                                                                            HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        if (isDistributionIntegrationConfig(firstText(configKey, prefix)) && isIntegrationReader(context)) {
+            schedulerModuleGuard.checkView(context);
+            return ApiResponse.success(systemConfigService.listChangeLogs(prefix, configKey, limit));
+        }
+        settingModuleGuard.checkView(context);
+        return ApiResponse.success(systemConfigService.listChangeLogs(prefix, configKey, limit));
+    }
+
+    @PostMapping("/preview")
+    @Operation(
+            summary = "Preview system config change",
+            description = "Validates a config payload without saving it and returns diff, risk level and impact modules.",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SystemConfigDtos.ConfigPreviewResponse> preview(@RequestBody SystemConfigDtos.SaveConfigRequest requestBody,
+                                                                       HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        if (requestBody != null
+                && isDistributionIntegrationConfig(requestBody.getConfigKey())
+                && isIntegrationWriter(context)) {
+            schedulerModuleGuard.checkUpdate(context);
+            return ApiResponse.success(systemConfigService.previewConfig(requestBody));
+        }
+        settingModuleGuard.checkUpdate(context);
+        return ApiResponse.success(systemConfigService.previewConfig(requestBody));
+    }
+
     @GetMapping("/domain-settings")
     @Operation(
             summary = "读取系统基础域名和 API 域名",
@@ -125,6 +162,10 @@ public class SystemConfigController {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String firstText(String first, String second) {
+        return first != null && !first.trim().isEmpty() ? first : second;
     }
 
     private boolean isIntegrationReader(PermissionRequestContext context) {

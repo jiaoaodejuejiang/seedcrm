@@ -2,6 +2,7 @@ package com.seedcrm.crm.workbench.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.common.api.ApiResponse;
+import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.order.support.OrderAmountMaskingSupport;
 import com.seedcrm.crm.permission.support.CluePermissionGuard;
 import com.seedcrm.crm.permission.support.CustomerPermissionGuard;
@@ -11,6 +12,8 @@ import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
 import com.seedcrm.crm.permission.support.PlanOrderPermissionGuard;
 import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueItemResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CluePageResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueSyncStatusResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CustomerProfileResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.DistributorBoardItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FinanceOverviewResponse;
@@ -19,8 +22,14 @@ import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderWorkbenchResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StaffRoleOptionResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StoreLiveCodePreviewResponse;
+import com.seedcrm.crm.scheduler.entity.SchedulerJobLog;
+import com.seedcrm.crm.scheduler.service.SchedulerService;
+import com.seedcrm.crm.scheduler.support.SchedulerSensitiveDataMasker;
 import com.seedcrm.crm.workbench.service.WorkbenchService;
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -39,6 +48,7 @@ public class WorkbenchController {
     private static final String CONFIG_STORE_AMOUNT_HIDDEN = "amount.visibility.store_staff_hidden";
     private static final String CONFIG_STORE_AMOUNT_HIDDEN_ROLES = "amount.visibility.store_staff_hidden_roles";
     private static final String CONFIG_SERVICE_AMOUNT_HIDDEN_ROLES = "amount.visibility.service_confirm_hidden_roles";
+    private static final String DOUYIN_CLUE_JOB_CODE = "DOUYIN_CLUE_INCREMENTAL";
     private static final String DEFAULT_STORE_AMOUNT_HIDDEN_ROLES =
             "STORE_SERVICE,STORE_MANAGER,PHOTOGRAPHER,MAKEUP_ARTIST,PHOTO_SELECTOR";
     private static final String DEFAULT_SERVICE_AMOUNT_HIDDEN_ROLES =
@@ -58,6 +68,8 @@ public class WorkbenchController {
     private final PlanOrderPermissionGuard planOrderPermissionGuard;
     private final ObjectMapper objectMapper;
     private final SystemConfigService systemConfigService;
+    private final SchedulerService schedulerService;
+    private final SchedulerSensitiveDataMasker schedulerSensitiveDataMasker;
 
     public WorkbenchController(WorkbenchService workbenchService,
                                PermissionRequestContextResolver permissionRequestContextResolver,
@@ -66,7 +78,9 @@ public class WorkbenchController {
                                OrderPermissionGuard orderPermissionGuard,
                                PlanOrderPermissionGuard planOrderPermissionGuard,
                                ObjectMapper objectMapper,
-                               SystemConfigService systemConfigService) {
+                               SystemConfigService systemConfigService,
+                               SchedulerService schedulerService,
+                               SchedulerSensitiveDataMasker schedulerSensitiveDataMasker) {
         this.workbenchService = workbenchService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
         this.cluePermissionGuard = cluePermissionGuard;
@@ -75,6 +89,8 @@ public class WorkbenchController {
         this.planOrderPermissionGuard = planOrderPermissionGuard;
         this.objectMapper = objectMapper;
         this.systemConfigService = systemConfigService;
+        this.schedulerService = schedulerService;
+        this.schedulerSensitiveDataMasker = schedulerSensitiveDataMasker;
     }
 
     @GetMapping("/clues")
@@ -87,6 +103,83 @@ public class WorkbenchController {
                 .filter(clue -> cluePermissionGuard.canView(context, clue.getId()))
                 .collect(Collectors.toList());
         return ApiResponse.success(clues);
+    }
+
+    @GetMapping("/clues/page")
+    public ApiResponse<CluePageResponse> cluePage(@RequestParam(required = false) String sourceChannel,
+                                                  @RequestParam(required = false) String productSourceType,
+                                                  @RequestParam(required = false) String status,
+                                                  @RequestParam(required = false) String phone,
+                                                  @RequestParam(required = false) String createdStart,
+                                                  @RequestParam(required = false) String createdEnd,
+                                                  @RequestParam(required = false) String queueStatus,
+                                                  @RequestParam(defaultValue = "1") Integer page,
+                                                  @RequestParam(defaultValue = "30") Integer pageSize,
+                                                  HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        CluePageResponse response = workbenchService.pageClues(
+                sourceChannel,
+                productSourceType,
+                status,
+                phone,
+                parseStartOfDay(createdStart),
+                parseEndOfDay(createdEnd),
+                queueStatus,
+                page == null ? 1 : page,
+                pageSize == null ? 30 : pageSize,
+                clueId -> cluePermissionGuard.canView(context, clueId));
+        return ApiResponse.success(response);
+    }
+
+    @GetMapping("/clues/sync-status")
+    public ApiResponse<ClueSyncStatusResponse> clueSyncStatus(HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        List<SchedulerJobLog> logs = schedulerService.listLogs(DOUYIN_CLUE_JOB_CODE);
+        SchedulerJobLog latest = logs.isEmpty() ? null : logs.get(0);
+        if (latest != null) {
+            List<SchedulerJobLog> maskedLogs = schedulerSensitiveDataMasker.maskJobLogs(List.of(latest), context);
+            latest = maskedLogs.isEmpty() ? latest : maskedLogs.get(0);
+        }
+        return ApiResponse.success(buildClueSyncStatus(latest));
+    }
+
+    private LocalDateTime parseStartOfDay(String value) {
+        LocalDate date = parseDate(value);
+        return date == null ? null : date.atStartOfDay();
+    }
+
+    private LocalDateTime parseEndOfDay(String value) {
+        LocalDate date = parseDate(value);
+        return date == null ? null : date.plusDays(1).atStartOfDay().minusSeconds(1);
+    }
+
+    private LocalDate parseDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (DateTimeParseException exception) {
+            throw new BusinessException("invalid date parameter: " + value);
+        }
+    }
+
+    private ClueSyncStatusResponse buildClueSyncStatus(SchedulerJobLog log) {
+        if (log == null) {
+            return null;
+        }
+        return new ClueSyncStatusResponse(
+                log.getId(),
+                log.getJobCode(),
+                log.getStatus(),
+                log.getTriggerType(),
+                log.getImportedCount(),
+                log.getPayload(),
+                log.getErrorMessage(),
+                log.getDurationMs(),
+                log.getStartedAt(),
+                log.getFinishedAt(),
+                log.getCreatedAt());
     }
 
     @GetMapping("/orders")

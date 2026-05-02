@@ -115,6 +115,32 @@ class SystemConfigControllerTest {
         verify(schedulerModuleGuard, never()).checkUpdate(context);
     }
 
+    @Test
+    void shouldUseSettingUpdatePermissionForConfigPreview() {
+        PermissionRequestContext context = context("ADMIN");
+        SystemConfigDtos.SaveConfigRequest body = new SystemConfigDtos.SaveConfigRequest();
+        body.setConfigKey("clue.dedup.window_days");
+        body.setConfigValue("90");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.preview(body, request);
+
+        verify(settingModuleGuard).checkUpdate(context);
+        verify(systemConfigService).previewConfig(body);
+    }
+
+    @Test
+    void shouldAllowIntegrationAdminToReadDistributionConfigChangeLogsThroughSchedulerViewPermission() {
+        PermissionRequestContext context = context("INTEGRATION_ADMIN");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.changeLogs("distribution.order.type.", null, 50, request);
+
+        verify(schedulerModuleGuard).checkView(context);
+        verify(settingModuleGuard, never()).checkView(context);
+        verify(systemConfigService).listChangeLogs("distribution.order.type.", null, 50);
+    }
+
     private PermissionRequestContext context(String roleCode) {
         PermissionRequestContext context = new PermissionRequestContext();
         context.setRoleCode(roleCode);

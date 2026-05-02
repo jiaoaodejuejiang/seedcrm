@@ -144,13 +144,21 @@
           :closable="false"
           title="当前后端版本暂不支持保存去重配置，页面已按默认启用 90 天展示；升级后端后可保存。"
         />
+        <el-alert
+          v-else-if="dedupConfigLoadError"
+          class="compat-alert"
+          type="error"
+          show-icon
+          :closable="false"
+          :title="dedupConfigLoadError"
+        />
 
         <div class="detail-grid">
           <article class="detail-card">
             <h3>启用去重</h3>
             <el-switch
               v-model="dedupEnabled"
-              :disabled="!dedupConfigSupported"
+              :disabled="!canSaveDedupConfig"
               inline-prompt
               active-text="启用"
               inactive-text="停用"
@@ -164,7 +172,7 @@
               :min="1"
               :max="3650"
               :step="1"
-              :disabled="!dedupConfigSupported"
+              :disabled="!canSaveDedupConfig"
               controls-position="right"
             />
             <p class="table-note">默认 90 天；超出窗口仍保留客户身份唯一，订单/动作继续进入客资记录。</p>
@@ -177,7 +185,7 @@
         </div>
 
         <div class="action-group">
-          <el-button type="primary" :loading="savingDedup" :disabled="!dedupConfigSupported" @click="handleSaveDedup">保存去重配置</el-button>
+          <el-button type="primary" :loading="savingDedup" :disabled="!canSaveDedupConfig" @click="handleSaveDedup">保存去重配置</el-button>
           <el-button @click="loadData">刷新数据</el-button>
         </div>
       </section>
@@ -217,6 +225,7 @@ const savingAssignment = ref(false)
 const savingDedup = ref(false)
 const strategyEnabled = ref(true)
 const dedupConfigSupported = ref(true)
+const dedupConfigLoadError = ref('')
 
 const dedupEnabled = computed({
   get: () => dedupForm.enabled === 1,
@@ -224,6 +233,7 @@ const dedupEnabled = computed({
     dedupForm.enabled = value ? 1 : 0
   }
 })
+const canSaveDedupConfig = computed(() => dedupConfigSupported.value && !dedupConfigLoadError.value)
 
 const onDutyCount = computed(() => dutyStaff.value.filter((item) => item.onDuty === 1 && item.onLeave !== 1).length)
 const lastAssignedLabel = computed(() => {
@@ -260,9 +270,17 @@ async function loadDedupConfig() {
   try {
     const response = await fetchDedupConfig({ silentError: true })
     dedupConfigSupported.value = true
+    dedupConfigLoadError.value = ''
     return response
-  } catch {
-    dedupConfigSupported.value = false
+  } catch (error) {
+    const status = error?.response?.status
+    if (status === 404 || status === 501) {
+      dedupConfigSupported.value = false
+      dedupConfigLoadError.value = ''
+      return null
+    }
+    dedupConfigSupported.value = true
+    dedupConfigLoadError.value = '去重配置加载失败，请稍后刷新重试；自动分配功能不受影响。'
     return null
   }
 }
@@ -292,6 +310,10 @@ async function handleSaveAssignment() {
 async function handleSaveDedup() {
   if (!dedupConfigSupported.value) {
     ElMessage.warning('当前后端版本暂不支持保存去重配置，升级后端后可保存')
+    return
+  }
+  if (dedupConfigLoadError.value) {
+    ElMessage.warning('去重配置尚未加载成功，请刷新后再保存')
     return
   }
   savingDedup.value = true

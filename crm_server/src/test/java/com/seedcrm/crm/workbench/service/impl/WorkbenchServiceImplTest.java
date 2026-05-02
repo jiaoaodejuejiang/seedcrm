@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.entity.ClueRecord;
 import com.seedcrm.crm.clue.mapper.ClueMapper;
+import com.seedcrm.crm.clue.service.ClueProfileService;
 import com.seedcrm.crm.clue.service.ClueRecordService;
 import com.seedcrm.crm.customer.mapper.CustomerEcomUserMapper;
 import com.seedcrm.crm.customer.mapper.CustomerMapper;
@@ -16,6 +17,7 @@ import com.seedcrm.crm.distributor.mapper.DistributorIncomeDetailMapper;
 import com.seedcrm.crm.distributor.mapper.DistributorMapper;
 import com.seedcrm.crm.distributor.mapper.DistributorWithdrawMapper;
 import com.seedcrm.crm.distributor.service.DistributorService;
+import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.mapper.OrderActionRecordMapper;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.planorder.mapper.OrderRoleRecordMapper;
@@ -26,6 +28,7 @@ import com.seedcrm.crm.wecom.mapper.CustomerWecomRelationMapper;
 import com.seedcrm.crm.wecom.mapper.WecomTouchLogMapper;
 import com.seedcrm.crm.wecom.service.WecomConsoleService;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueItemResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CluePageResponse;
 import com.seedcrm.crm.workbench.service.StaffDirectoryService;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -42,6 +45,9 @@ class WorkbenchServiceImplTest {
 
     @Mock
     private ClueMapper clueMapper;
+
+    @Mock
+    private ClueProfileService clueProfileService;
 
     @Mock
     private ClueRecordService clueRecordService;
@@ -106,6 +112,7 @@ class WorkbenchServiceImplTest {
     void setUp() {
         workbenchService = new WorkbenchServiceImpl(
                 clueMapper,
+                clueProfileService,
                 clueRecordService,
                 orderMapper,
                 orderActionRecordMapper,
@@ -137,6 +144,7 @@ class WorkbenchServiceImplTest {
         when(customerMapper.selectList(any())).thenReturn(List.of());
         when(orderMapper.selectList(any())).thenReturn(List.of());
         when(clueRecordService.listByClueIds(any())).thenReturn(List.of());
+        when(clueProfileService.listByClueIds(any())).thenReturn(List.of());
 
         List<ClueItemResponse> responses = workbenchService.listClues(null, null, null);
 
@@ -157,6 +165,7 @@ class WorkbenchServiceImplTest {
         when(customerMapper.selectList(any())).thenReturn(List.of());
         when(orderMapper.selectList(any())).thenReturn(List.of());
         when(clueRecordService.listByClueIds(any())).thenReturn(List.of(douyinRecord));
+        when(clueProfileService.listByClueIds(any())).thenReturn(List.of());
 
         List<ClueItemResponse> responses = workbenchService.listClues("DOUYIN", null, null);
 
@@ -164,6 +173,71 @@ class WorkbenchServiceImplTest {
         assertThat(responses.get(0).getId()).isEqualTo(1L);
         assertThat(responses.get(0).getClueRecords()).hasSize(1);
         assertThat(responses.get(0).getClueRecords().get(0).getSourceChannel()).isEqualTo("DOUYIN");
+    }
+
+    @Test
+    void pageCluesShouldReturnRequestedSliceAndTotal() {
+        List<Clue> clues = new ArrayList<>();
+        for (long index = 1; index <= 65; index++) {
+            clues.add(clue(index, "DOUYIN"));
+        }
+        mockCluePage(clues);
+        when(customerMapper.selectList(any())).thenReturn(List.of());
+        when(orderMapper.selectList(any())).thenReturn(List.of());
+        when(clueRecordService.listByClueIds(any())).thenReturn(List.of());
+        when(clueProfileService.listByClueIds(any())).thenReturn(List.of());
+
+        CluePageResponse response = workbenchService.pageClues(
+                null, null, null, null, null, null, null, 2, 30, clueId -> true);
+
+        assertThat(response.getTotal()).isEqualTo(65L);
+        assertThat(response.getRows()).hasSize(30);
+        assertThat(response.getRows().get(0).getId()).isEqualTo(31L);
+        assertThat(response.getProductSourceCounts().get("ALL")).isEqualTo(65L);
+    }
+
+    @Test
+    void pageCluesShouldMatchSourceChannelFromRelatedOrder() {
+        Clue manualClue = clue(1L, "MANUAL");
+        Order douyinOrder = new Order();
+        douyinOrder.setId(20L);
+        douyinOrder.setClueId(1L);
+        douyinOrder.setSourceChannel("DOUYIN");
+        douyinOrder.setStatus("PAID_DEPOSIT");
+        douyinOrder.setCreateTime(LocalDateTime.now());
+        mockCluePage(List.of(manualClue));
+        when(customerMapper.selectList(any())).thenReturn(List.of());
+        when(orderMapper.selectList(any())).thenReturn(List.of(douyinOrder));
+        when(clueRecordService.listByClueIds(any())).thenReturn(List.of());
+        when(clueProfileService.listByClueIds(any())).thenReturn(List.of());
+
+        CluePageResponse response = workbenchService.pageClues(
+                "DOUYIN", null, null, null, null, null, null, 1, 30, clueId -> true);
+
+        assertThat(response.getTotal()).isEqualTo(1L);
+        assertThat(response.getRows()).hasSize(1);
+        assertThat(response.getRows().get(0).getLatestOrderId()).isEqualTo(20L);
+    }
+
+    @Test
+    void pageCluesShouldFilterQueueStatusBeforePaging() {
+        Clue waitAssign = clue(1L, "DOUYIN");
+        Clue waitFollowUp = clue(2L, "DOUYIN");
+        waitFollowUp.setCurrentOwnerId(100L);
+        mockCluePage(List.of(waitAssign, waitFollowUp));
+        when(customerMapper.selectList(any())).thenReturn(List.of());
+        when(orderMapper.selectList(any())).thenReturn(List.of());
+        when(clueRecordService.listByClueIds(any())).thenReturn(List.of());
+        when(clueProfileService.listByClueIds(any())).thenReturn(List.of());
+
+        CluePageResponse response = workbenchService.pageClues(
+                null, null, null, null, null, null, "WAIT_ASSIGN", 1, 30, clueId -> true);
+
+        assertThat(response.getTotal()).isEqualTo(1L);
+        assertThat(response.getRows()).extracting(ClueItemResponse::getId).containsExactly(1L);
+        assertThat(response.getQueueStatusCounts().get("ALL")).isEqualTo(2L);
+        assertThat(response.getQueueStatusCounts().get("WAIT_ASSIGN")).isEqualTo(1L);
+        assertThat(response.getQueueStatusCounts().get("WAIT_FOLLOW_UP")).isEqualTo(1L);
     }
 
     private void mockCluePage(List<Clue> clues) {

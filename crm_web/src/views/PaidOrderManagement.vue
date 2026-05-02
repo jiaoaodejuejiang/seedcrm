@@ -115,6 +115,10 @@
                   </el-tag>
                   <span>{{ recentRecordText(row) }}</span>
                 </div>
+                <div class="schedule-record-preview__meta">
+                  <span>最近操作：{{ formatDateTime(latestAppointmentRecord(row)?.createTime) }}</span>
+                  <span v-if="recordReasonLabel(latestAppointmentRecord(row))">原因：{{ recordReasonLabel(latestAppointmentRecord(row)) }}</span>
+                </div>
                 <div v-if="appointmentRecordBadges(row).length" class="schedule-record-preview__badges">
                   <el-tag v-for="badge in appointmentRecordBadges(row)" :key="badge" size="small" effect="plain">
                     {{ badge }}
@@ -334,6 +338,15 @@
             档。
           </div>
         </el-form-item>
+        <el-form-item label="原因类型">
+          <el-select
+            v-model="appointmentForm.reasonType"
+            :disabled="!selectedOrderCanEditAppointment"
+            style="width: 100%"
+          >
+            <el-option v-for="item in appointmentReasonOptions" :key="item.itemCode" :label="item.itemLabel" :value="item.itemCode" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="排档备注">
           <el-input
             v-model="appointmentForm.remark"
@@ -428,7 +441,14 @@
           <div class="schedule-record-line">
             <strong>{{ timelineActionLabel(record.actionType) }}</strong>
             <span v-if="recordActorText(record)">{{ recordActorText(record) }}</span>
-            <span>{{ recordSummary(record) }}</span>
+            <span v-if="statusChangeText(record)">状态：{{ statusChangeText(record) }}</span>
+            <span v-if="recordReasonLabel(record)">原因：{{ recordReasonLabel(record) }}</span>
+            <div v-if="recordTimelineDetails(record).length" class="schedule-record-detail-grid">
+              <span v-for="item in recordTimelineDetails(record)" :key="item.label">
+                <b>{{ item.label }}</b>{{ item.value }}
+              </span>
+            </div>
+            <span v-else>{{ recordSummary(record) }}</span>
           </div>
         </el-timeline-item>
       </el-timeline>
@@ -448,7 +468,13 @@ import { appointOrder, cancelOrderAppointment } from '../api/order'
 import { fetchOrders } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
 import { formatDateTime, normalize } from '../utils/format'
-import { calculateStoreCapacity, loadSystemConsoleState, nextSystemId, saveSystemConsoleState } from '../utils/systemConsoleStore'
+import {
+  calculateStoreCapacity,
+  getDictionaryOptions,
+  loadSystemConsoleState,
+  nextSystemId,
+  saveSystemConsoleState
+} from '../utils/systemConsoleStore'
 
 const FALLBACK_STORE_LOCATIONS = {
   静安门店: '上海市静安区南京西路商圈',
@@ -486,6 +512,7 @@ const appointmentForm = reactive({
   appointmentTime: '',
   appointmentSlots: [],
   headcount: 1,
+  reasonType: '',
   remark: '',
   storeName: ''
 })
@@ -585,6 +612,19 @@ const selectedDayCapacity = computed(() => storeCapacity(activeStoreName.value))
 const selectedDayRemainingCount = computed(() => Math.max(selectedDayCapacity.value - selectedDayScheduledRows.value.length, 0))
 const appointmentCount = computed(() => schedulingOrders.value.filter((item) => isAppointedOrder(item) && !isVerifiedOrder(item)).length)
 const waitingCount = computed(() => schedulingOrders.value.filter((item) => isUnappointedOrder(item) && !isVerifiedOrder(item)).length)
+const appointmentReasonOptions = computed(() => {
+  const configured = getDictionaryOptions(consoleState, 'appointment_reason_type')
+  if (configured.length) {
+    return configured
+  }
+  return [
+    { itemCode: 'CUSTOMER_REQUEST', itemLabel: '客户主动预约' },
+    { itemCode: 'RESCHEDULE', itemLabel: '客户改约' },
+    { itemCode: 'STORE_ADJUST', itemLabel: '门店调整' },
+    { itemCode: 'TRAFFIC_DELAY', itemLabel: '到店延迟' },
+    { itemCode: 'CUSTOMER_CANCEL', itemLabel: '客户取消' }
+  ]
+})
 const selectedOrderCanEditAppointment = computed(() => canEditAppointment(selectedOrder.value))
 const requiredAppointmentSlotCount = computed(() => normalizeHeadcount(appointmentForm.headcount))
 const selectedAppointmentSlotValues = computed(() => normalizeSlotValues(appointmentForm.appointmentSlots))
@@ -801,6 +841,9 @@ function appointmentRecords(row) {
 }
 
 function currentAppointmentExtra(row) {
+  if (normalize(latestAppointmentRecord(row)?.actionType) === 'APPOINTMENT_CANCEL') {
+    return {}
+  }
   const record = appointmentRecords(row).find((item) => ['APPOINTMENT_CREATE', 'APPOINTMENT_CHANGE'].includes(normalize(item?.actionType)))
   return parseRecordExtra(record?.extraJson)
 }
@@ -846,6 +889,13 @@ function appointmentRecordBadges(row) {
     parts.push('曾取消')
   }
   return parts
+}
+
+function defaultAppointmentReasonType(row) {
+  if (isAppointedOrder(row)) {
+    return 'RESCHEDULE'
+  }
+  return 'CUSTOMER_REQUEST'
 }
 
 function openAppointmentRecordDialog(row) {
@@ -948,9 +998,65 @@ function recordSummary(record) {
   return parts.join(' / ') || record?.createTime || '--'
 }
 
+function recordTimelineDetails(record) {
+  const extra = parseRecordExtra(record?.extraJson)
+  const beforeSlots = normalizeSlotValues(extra.appointmentSlotsBefore)
+  const afterSlots = normalizeSlotValues(extra.appointmentSlotsAfter)
+  const details = []
+  addRecordDetail(details, '原门店', extra.storeNameBefore)
+  addRecordDetail(details, '新门店', extra.storeNameAfter || extra.storeName)
+  addRecordDetail(details, '原档期', formatSlotList(beforeSlots) || extra.appointmentTimeBefore)
+  addRecordDetail(details, '新档期', formatSlotList(afterSlots) || extra.appointmentTimeAfter)
+  addRecordDetail(details, '原人数', Number(extra.headcountBefore) > 0 ? `${extra.headcountBefore} 人` : '')
+  addRecordDetail(details, '新人数', Number(extra.headcountAfter) > 0 ? `${extra.headcountAfter} 人` : '')
+  addRecordDetail(details, '备注', extra.remark || record?.remark)
+  return details
+}
+
+function addRecordDetail(details, label, value) {
+  if (!value) {
+    return
+  }
+  details.push({ label, value })
+}
+
 function recordActorText(record) {
   const actor = record?.operatorUserName || (record?.operatorUserId ? `ID ${record.operatorUserId}` : '')
   return actor ? `操作人：${actor}` : ''
+}
+
+function statusChangeText(record) {
+  const fromStatus = record?.fromStatus ? formatOrderStatus(record.fromStatus) : ''
+  const toStatus = record?.toStatus ? formatOrderStatus(record.toStatus) : ''
+  if (fromStatus && toStatus && fromStatus !== toStatus) {
+    return `${fromStatus} -> ${toStatus}`
+  }
+  return toStatus || fromStatus || ''
+}
+
+function formatOrderStatus(value) {
+  const labels = {
+    PAID: '已付款',
+    PAID_DEPOSIT: '已付定金',
+    APPOINTMENT: '已约档',
+    ARRIVED: '已到店',
+    SERVING: '服务中',
+    COMPLETED: '已完成',
+    CANCELLED: '已取消',
+    REFUNDED: '已退款'
+  }
+  const normalized = normalize(value)
+  return labels[normalized] || value || ''
+}
+
+function recordReasonLabel(record) {
+  const extra = parseRecordExtra(record?.extraJson)
+  const reasonType = normalize(extra.reasonType)
+  if (!reasonType) {
+    return ''
+  }
+  const matched = appointmentReasonOptions.value.find((item) => normalize(item.itemCode) === reasonType)
+  return matched?.itemLabel || reasonType
 }
 
 function parseRecordExtra(value) {
@@ -1175,6 +1281,7 @@ function handleAppointmentTimeChange(value) {
 function openAppointmentDialog(row) {
   selectedOrder.value = row
   appointmentForm.remark = row.remark || ''
+  appointmentForm.reasonType = defaultAppointmentReasonType(row)
   appointmentForm.storeName = row.storeName || activeStoreName.value || storeCards.value[0]?.storeName || ''
   appointmentForm.headcount = appointmentHeadcount(row)
   if (appointmentForm.storeName) {
@@ -1300,6 +1407,7 @@ async function handleSaveAppointment() {
       previousStoreName: selectedOrder.value.storeName || undefined,
       storeName: appointmentForm.storeName,
       sourceSurface: 'CUSTOMER_SCHEDULE',
+      appointmentReasonType: appointmentForm.reasonType || defaultAppointmentReasonType(selectedOrder.value),
       remark: appointmentForm.remark || undefined
     })
     persistPreferredStore(selectedOrder.value, appointmentForm.storeName)
@@ -1329,6 +1437,7 @@ async function handleCancelAppointment(row) {
     await cancelOrderAppointment({
       orderId: row.id,
       sourceSurface: 'CUSTOMER_SCHEDULE',
+      appointmentReasonType: 'CUSTOMER_CANCEL',
       remark: '取消预约'
     })
     ElMessage.success('已取消预约，客户已回到未预约状态')
@@ -1374,6 +1483,7 @@ async function handleStoreBookingConfirm() {
       previousStoreName: order.storeName || undefined,
       storeName: activeStoreName.value,
       sourceSurface: 'STORE_SCHEDULE',
+      appointmentReasonType: 'STORE_ADJUST',
       remark: order.remark || undefined
     })
     persistPreferredStore(order, activeStoreName.value)
@@ -1436,10 +1546,17 @@ loadOrders()
 }
 
 .schedule-record-preview__head span,
+.schedule-record-preview__meta span,
 .schedule-record-line span {
   color: #64748b;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.schedule-record-preview__meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .schedule-record-preview__badges {
@@ -1451,6 +1568,18 @@ loadOrders()
 .schedule-record-line {
   display: grid;
   gap: 6px;
+}
+
+.schedule-record-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+}
+
+.schedule-record-detail-grid b {
+  color: #334155;
+  font-weight: 600;
+  margin-right: 4px;
 }
 
 .schedule-record-timeline {

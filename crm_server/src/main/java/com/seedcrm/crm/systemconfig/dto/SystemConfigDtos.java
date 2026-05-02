@@ -1,6 +1,8 @@
 package com.seedcrm.crm.systemconfig.dto;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -53,6 +55,45 @@ public final class SystemConfigDtos {
         private String description;
         @Schema(description = "变更摘要，写入审计日志")
         private String summary;
+    }
+
+    @Data
+    @Schema(name = "SystemConfigPreviewResponse", description = "配置变更预览结果")
+    public static class ConfigPreviewResponse {
+        private String configKey;
+        private String scopeType;
+        private String scopeId;
+        private String beforeValue;
+        private String afterValue;
+        private String valueType;
+        private Integer enabled;
+        private Boolean sensitive;
+        private Boolean changed;
+        private String changeType;
+        private String riskLevel;
+        private List<String> impactModules = new ArrayList<>();
+        private List<String> warnings = new ArrayList<>();
+        private Boolean validationPassed;
+        private String validationMessage;
+    }
+
+    @Data
+    @Schema(name = "SystemConfigChangeLogResponse", description = "配置变更审计日志")
+    public static class ChangeLogResponse {
+        private Long id;
+        private String configKey;
+        private String scopeType;
+        private String scopeId;
+        private String beforeValue;
+        private String afterValue;
+        private Boolean sensitive;
+        private String changeType;
+        private String riskLevel;
+        private List<String> impactModules = new ArrayList<>();
+        private String actorRoleCode;
+        private Long actorUserId;
+        private String summary;
+        private LocalDateTime createTime;
     }
 
     @Data

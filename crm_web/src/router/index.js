@@ -32,6 +32,7 @@ import StorePersonnelManagementView from '../views/StorePersonnelManagementView.
 import StoreRoleManagementView from '../views/StoreRoleManagementView.vue'
 import StoreScheduleManagementView from '../views/StoreScheduleManagementView.vue'
 import StoreServiceTemplateView from '../views/StoreServiceTemplateView.vue'
+import SystemConfigAuditView from '../views/SystemConfigAuditView.vue'
 import SystemFlowView from '../views/SystemFlowView.vue'
 import SystemOrganizationView from '../views/SystemOrganizationView.vue'
 import SystemSettingView from '../views/SystemSettingView.vue'
@@ -544,6 +545,18 @@ const routes = [
           moduleCode: 'SETTING',
           roleCodes: ['ADMIN'],
           navKey: 'settings-go-live'
+        }
+      },
+      {
+        path: 'settings/base/config-audit',
+        name: 'settings-config-audit',
+        component: SystemConfigAuditView,
+        meta: {
+          title: '配置审计',
+          sectionTitle: '系统设置 / 基础配置',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-config-audit'
         }
       },
       {

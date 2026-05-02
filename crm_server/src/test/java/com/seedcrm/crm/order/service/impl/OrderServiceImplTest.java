@@ -255,6 +255,7 @@ class OrderServiceImplTest {
         dto.setHeadcount(2);
         dto.setStoreName("Store B");
         dto.setSourceSurface("CUSTOMER_SCHEDULE");
+        dto.setAppointmentReasonType("customer_request");
         dto.setRemark("two customers");
 
         Order updated = orderService.appointment(dto, 9001L, "CLUE_MANAGER");
@@ -272,6 +273,7 @@ class OrderServiceImplTest {
         assertThat(extra.path("appointmentSlotsAfter").get(1).asText()).isEqualTo("2026-04-26 11:00:00");
         assertThat(extra.path("operatorRoleCode").asText()).isEqualTo("CLUE_MANAGER");
         assertThat(extra.path("sourceSurface").asText()).isEqualTo("CUSTOMER_SCHEDULE");
+        assertThat(extra.path("reasonType").asText()).isEqualTo("CUSTOMER_REQUEST");
     }
 
     @Test
@@ -291,6 +293,7 @@ class OrderServiceImplTest {
         dto.setAppointmentTime(LocalDateTime.of(2026, 4, 26, 11, 30));
         dto.setPreviousStoreName("Store A");
         dto.setStoreName("Store B");
+        dto.setAppointmentReasonType("traffic_delay");
         dto.setRemark("reschedule");
 
         Order updated = orderService.appointment(dto, 9001L, "CLUE_MANAGER");
@@ -311,7 +314,9 @@ class OrderServiceImplTest {
                 "storeNameBefore",
                 "Store A",
                 "storeNameAfter",
-                "Store B");
+                "Store B",
+                "reasonType",
+                "TRAFFIC_DELAY");
     }
     @Test
     void appointmentShouldUseServerStoreSnapshotWhenRescheduling() throws Exception {
@@ -430,6 +435,7 @@ class OrderServiceImplTest {
 
         OrderActionDTO dto = new OrderActionDTO();
         dto.setOrderId(7L);
+        dto.setAppointmentReasonType("customer_cancel");
         dto.setRemark("cancel appointment");
 
         Order updated = orderService.cancelAppointment(dto);
@@ -440,7 +446,11 @@ class OrderServiceImplTest {
         ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
         verify(orderActionRecordMapper).insert(recordCaptor.capture());
         assertThat(recordCaptor.getValue().getActionType()).isEqualTo("APPOINTMENT_CANCEL");
-        assertThat(recordCaptor.getValue().getExtraJson()).contains("appointmentTimeBefore", "2026-04-25 15:00");
+        assertThat(recordCaptor.getValue().getExtraJson()).contains(
+                "appointmentTimeBefore",
+                "2026-04-25 15:00",
+                "reasonType",
+                "CUSTOMER_CANCEL");
     }
 
     @Test

@@ -9,6 +9,7 @@ public class OrderActionDTO {
     private Long orderId;
     private String remark;
     private String sourceSurface;
+    private String appointmentReasonType;
     private String refundScene;
     private BigDecimal refundAmount;
     private String refundReasonType;

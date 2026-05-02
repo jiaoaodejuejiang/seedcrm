@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM 受控低代码兼容主链路方案</title>
+  <style>
+    body { margin: 0; background: #f5f7fb; color: #172033; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; line-height: 1.74; }
+    main { max-width: 1180px; margin: 0 auto; padding: 34px 22px 72px; }
+    header, section { margin-top: 18px; padding: 24px; border: 1px solid #e5eaf3; border-radius: 22px; background: #fff; box-shadow: 0 18px 45px rgba(23, 32, 51, .06); }
+    h1, h2, h3 { margin: 0; line-height: 1.35; }
+    h1 { font-size: 30px; }
+    h2 { margin-bottom: 12px; font-size: 22px; }
+    h3 { margin-top: 18px; font-size: 17px; }
+    p { margin: 8px 0 0; color: #64748b; }
+    ul, ol { margin: 10px 0 0; padding-left: 22px; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    code { color: #0f766e; }
+    pre { overflow: auto; padding: 14px; border-radius: 14px; background: #101827; color: #e5edf8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5eaf3; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    .badge { display: inline-block; margin: 10px 8px 0 0; padding: 5px 10px; border-radius: 999px; background: #e8f4ff; color: #075985; font-size: 12px; font-weight: 700; }
+    .danger { border-left: 4px solid #ef4444; }
+    .ok { border-left: 4px solid #10b981; }
+    .warn { border-left: 4px solid #f59e0b; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card { padding: 14px; border: 1px solid #e5eaf3; border-radius: 16px; background: #fbfdff; }
+    .diagram { margin: 14px 0 0; padding: 14px; border: 1px solid #dbe5f3; border-radius: 18px; background: linear-gradient(180deg, #ffffff, #f8fbff); overflow: auto; }
+    .diagram figcaption { margin-bottom: 10px; color: #475569; font-weight: 700; }
+    svg { display: block; max-width: 100%; height: auto; }
+    .note { padding: 12px 14px; border-radius: 14px; background: #fff7ed; color: #9a3412; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SeedCRM 受控低代码兼容主链路方案</h1>
+    <p>结论：SeedCRM 可以引入“低代码”能力，但必须是受控低代码，也就是配置治理平台 + 运行时解释层。它用于减少高频系统需求反复改代码，不用于任意建模、任意 SQL、任意状态机编排，也不替代现有核心业务服务。</p>
+    <span class="badge">受控低代码</span>
+    <span class="badge">配置治理</span>
+    <span class="badge">兼容唯一主链路</span>
+    <span class="badge">RBAC + ABAC</span>
+    <span class="badge">发布前预览</span>
+    <span class="badge">可回滚可审计</span>
+  </header>
+
+  <section class="danger">
+    <h2>1. 结论与边界</h2>
+    <p>如果按“万能低代码”理解，让业务人员配置数据表、SQL、状态流、外部接口编排，就会破坏当前项目规则。SeedCRM 更适合做“受控低代码”：只开放菜单、权限、页面、表单、列表、按钮、字典、待办、Provider、Scheduler 等系统能力的配置，不开放核心业务模型和核心写入链路。</p>
+    <ul>
+      <li>标准客资链路固定为 <code>Clue -&gt; Customer -&gt; Order -&gt; PlanOrder</code>。</li>
+      <li>分销 B 链路固定为 <code>ExternalDistributionPaidOrder -&gt; Customer -&gt; Order(paid) -&gt; PlanOrder</code>。</li>
+      <li>低代码配置不能新增核心模型，不能让 <code>PlanOrder</code> 独立存在。</li>
+      <li>低代码配置不能直接写 <code>Customer</code>、<code>Order</code>、<code>PlanOrder</code>。</li>
+      <li>低代码配置不能让分销 paid order 进入 <code>Clue</code>。</li>
+      <li>低代码配置不能把外部分销佣金、提现、退款资金流放入 SeedCRM 内部处理。</li>
+      <li>所有接口仍必须执行 RBAC + ABAC，数据范围仍为 <code>self / team / store / all / partner</code>。</li>
+    </ul>
+
+    <figure class="diagram">
+      <figcaption>图 1：受控低代码与核心主链路边界</figcaption>
+      <svg viewBox="0 0 1100 420" role="img" aria-label="受控低代码与主链路边界图">
+        <rect x="20" y="22" width="1060" height="376" rx="22" fill="#f8fafc" stroke="#cbd5e1"/>
+        <rect x="48" y="58" width="286" height="292" rx="18" fill="#ecfeff" stroke="#06b6d4"/>
+        <text x="70" y="94" font-size="22" font-weight="700" fill="#155e75">可配置系统能力</text>
+        <text x="70" y="130" font-size="16" fill="#0f172a">菜单 / 角色 / 权限</text>
+        <text x="70" y="162" font-size="16" fill="#0f172a">字典 / 参数 / 中文化</text>
+        <text x="70" y="194" font-size="16" fill="#0f172a">列表 / 表单 / 字段</text>
+        <text x="70" y="226" font-size="16" fill="#0f172a">按钮动作 / 待办规则</text>
+        <text x="70" y="258" font-size="16" fill="#0f172a">Provider / Scheduler</text>
+        <text x="70" y="306" font-size="15" fill="#0369a1">草稿、校验、预览、发布、回滚、审计</text>
+
+        <rect x="404" y="58" width="292" height="292" rx="18" fill="#fff7ed" stroke="#fb923c"/>
+        <text x="426" y="94" font-size="22" font-weight="700" fill="#9a3412">低代码硬边界</text>
+        <text x="426" y="130" font-size="16" fill="#0f172a">不建核心业务表</text>
+        <text x="426" y="162" font-size="16" fill="#0f172a">不写 Customer / Order / PlanOrder</text>
+        <text x="426" y="194" font-size="16" fill="#0f172a">不绕过统一入站服务</text>
+        <text x="426" y="226" font-size="16" fill="#0f172a">不执行任意 SQL / 脚本</text>
+        <text x="426" y="258" font-size="16" fill="#0f172a">不改变订单状态机</text>
+        <text x="426" y="306" font-size="15" fill="#b45309">所有高风险变更必须进入发布中心</text>
+
+        <rect x="764" y="58" width="286" height="292" rx="18" fill="#f0fdf4" stroke="#22c55e"/>
+        <text x="786" y="94" font-size="22" font-weight="700" fill="#166534">核心主链路</text>
+        <rect x="792" y="124" width="104" height="46" rx="12" fill="#dcfce7" stroke="#16a34a"/>
+        <text x="819" y="154" font-size="16" font-weight="700" fill="#14532d">Clue</text>
+        <path d="M898 147 L930 147" stroke="#16a34a" stroke-width="3" marker-end="url(#arrowGreen)"/>
+        <rect x="932" y="124" width="104" height="46" rx="12" fill="#dcfce7" stroke="#16a34a"/>
+        <text x="951" y="154" font-size="16" font-weight="700" fill="#14532d">Customer</text>
+        <rect x="792" y="214" width="104" height="46" rx="12" fill="#dcfce7" stroke="#16a34a"/>
+        <text x="817" y="244" font-size="16" font-weight="700" fill="#14532d">Order</text>
+        <path d="M984 172 L844 211" stroke="#16a34a" stroke-width="3" marker-end="url(#arrowGreen)"/>
+        <path d="M898 237 L930 237" stroke="#16a34a" stroke-width="3" marker-end="url(#arrowGreen)"/>
+        <rect x="932" y="214" width="104" height="46" rx="12" fill="#dcfce7" stroke="#16a34a"/>
+        <text x="952" y="244" font-size="16" font-weight="700" fill="#14532d">PlanOrder</text>
+        <text x="786" y="306" font-size="15" fill="#166534">配置只能影响入口、展示、校验与门禁</text>
+        <defs>
+          <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#16a34a"/>
+          </marker>
+        </defs>
+      </svg>
+    </figure>
+  </section>
+
+  <section>
+    <h2>2. 当前项目 UI/UX 可复用能力</h2>
+    <table>
+      <thead><tr><th>现有能力</th><th>当前表现</th><th>低代码方案复用方式</th></tr></thead>
+      <tbody>
+        <tr><td>整体框架</td><td>当前 <code>AppLayout.vue</code> 已是顶部一级导航 + 左侧二级菜单 + 主内容面板。</td><td>配置化平台入口放在“系统设置 / 配置化平台”，不重新设计独立后台框架。</td></tr>
+        <tr><td>系统设置页面</td><td><code>SystemSettingView.vue</code> 已使用表格、分页、抽屉编辑、角色选择、模块选择。</td><td>菜单、角色、权限、字典等配置继续使用“列表 + 抽屉编辑 + 发布中心”的交互。</td></tr>
+        <tr><td>系统流程页面</td><td><code>SystemFlowView.vue</code> 已有版本、草稿、差异、体检、模拟、审计。</td><td>复用为配置发布中心的原型底座，扩展到菜单、权限、页面、Provider、Scheduler。</td></tr>
+        <tr><td>服务单设计</td><td><code>StoreServiceTemplateView.vue</code> 已有模板库、门店绑定、效果预览。</td><td>表单设计器 P0 不做复杂拖拽，先做模板 + 字段属性 + 实时预览。</td></tr>
+        <tr><td>调度中心</td><td>已有抖音接口、回调接口、任务调度、联调工作台、分销接口。</td><td>Provider / Scheduler 配置进入受控版本发布，真实执行仍走现有安全服务。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="ok">
+    <h2>3. 数据结构</h2>
+    <p>数据结构分为配置治理层、配置资产层、运行时解释层。它们不是新的业务主模型，只是系统配置资产，最终仍落到现有菜单、权限、字典、流程、服务单模板、Provider、Scheduler 等模块。</p>
+
+    <pre><code>lowcode_config_workspace
+- id
+- workspace_code
+- workspace_name
+- environment: DEV | TEST | PROD
+- current_version_no
+- status: ACTIVE | PAUSED
+- created_by
+- updated_by
+- created_at
+- updated_at</code></pre>
+
+    <pre><code>lowcode_config_asset
+- id
+- asset_code
+- asset_name
+- asset_type: MENU | ROLE | PERMISSION | DICT | PARAMETER | PAGE | LIST | FORM | FIELD | ACTION | TODO_RULE | PROVIDER | SCHEDULER | FLOW
+- target_module: CLUE | CUSTOMER | ORDER | PLANORDER | SCHEDULER | PERMISSION | SALARY
+- target_key
+- scope_type: GLOBAL | STORE | ROLE | USER | PARTNER
+- scope_value
+- config_json
+- risk_level: LOW | MEDIUM | HIGH | BLOCKED
+- enabled
+- version_no
+- created_at
+- updated_at</code></pre>
+
+    <pre><code>lowcode_config_version
+- id
+- version_no
+- base_version_no
+- environment
+- status: DRAFT | VALIDATED | PUBLISHED | ROLLED_BACK | DISCARDED
+- snapshot_json
+- diff_json
+- validate_result_json
+- permission_preview_json
+- impact_report_json
+- publish_reason
+- rollback_from_version_no
+- created_by
+- published_by
+- created_at
+- published_at</code></pre>
+
+    <pre><code>lowcode_runtime_schema
+- id
+- schema_code
+- schema_type: PAGE | LIST | FORM | FIELD | ACTION
+- module_code
+- page_code
+- schema_json
+- permission_code
+- data_scope_rule
+- mask_rule_json
+- runtime_version_no
+- enabled</code></pre>
+
+    <pre><code>lowcode_rule_definition
+- id
+- rule_code
+- rule_name
+- rule_type: VISIBLE | REQUIRED | MASK | DISABLE_ACTION | TODO_GENERATE | FLOW_GATE | PROVIDER_MAPPING
+- target_module
+- condition_json
+- effect_json
+- priority
+- sandbox_only
+- enabled</code></pre>
+
+    <pre><code>lowcode_config_audit_log
+- id
+- trace_id
+- actor_user_id
+- actor_role_code
+- action_code: CREATE_DRAFT | SAVE_DRAFT | DRY_RUN | VALIDATE | PREVIEW | PUBLISH | ROLLBACK
+- target_type
+- target_key
+- request_json_masked
+- result_json_masked
+- risk_level
+- created_at</code></pre>
+  </section>
+
+  <section class="ok">
+    <h2>4. 接口定义</h2>
+    <p>接口分为配置管理接口和运行时读取接口。配置管理接口用于草稿、校验、预览、发布；运行时接口只返回 UI 元数据，不执行业务写入。</p>
+
+    <table>
+      <thead><tr><th>接口</th><th>用途</th><th>权限</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /lowcode/workspaces</code></td><td>读取配置空间、环境和当前版本。</td><td><code>lowcode:view</code></td></tr>
+        <tr><td><code>GET /lowcode/assets</code></td><td>按配置类型、业务模块、风险等级查询配置资产。</td><td><code>lowcode:view</code></td></tr>
+        <tr><td><code>POST /lowcode/assets/create-draft</code></td><td>基于当前版本或模板创建草稿。</td><td><code>lowcode:draft</code></td></tr>
+        <tr><td><code>POST /lowcode/assets/save-draft</code></td><td>保存配置草稿，不影响线上。</td><td><code>lowcode:draft</code></td></tr>
+        <tr><td><code>POST /lowcode/validate</code></td><td>校验 schema、权限引用、字段引用、主链路、安全门禁。</td><td><code>lowcode:draft</code></td></tr>
+        <tr><td><code>POST /lowcode/dry-run</code></td><td>规则、Provider、Scheduler、待办、动作执行预览，不落核心表。</td><td><code>lowcode:debug</code></td></tr>
+        <tr><td><code>POST /lowcode/preview-diff</code></td><td>预览草稿与线上版本差异。</td><td><code>lowcode:view</code></td></tr>
+        <tr><td><code>POST /lowcode/preview-permission</code></td><td>按角色/用户预览菜单、按钮、字段、数据范围、脱敏。</td><td><code>lowcode:view</code></td></tr>
+        <tr><td><code>POST /lowcode/preview-impact</code></td><td>展示影响角色、门店、用户、模块和高风险项。</td><td><code>lowcode:view</code></td></tr>
+        <tr><td><code>POST /lowcode/publish</code></td><td>发布配置版本，写目标配置表、审计并失效缓存。</td><td><code>lowcode:publish</code></td></tr>
+        <tr><td><code>POST /lowcode/rollback-preview</code></td><td>生成回滚草稿和差异预览。</td><td><code>lowcode:view</code></td></tr>
+        <tr><td><code>POST /lowcode/rollback</code></td><td>以新版本方式回滚配置。</td><td><code>lowcode:publish</code></td></tr>
+        <tr><td><code>GET /lowcode/versions</code></td><td>查询配置版本。</td><td><code>lowcode:view</code></td></tr>
+        <tr><td><code>GET /lowcode/audit-logs</code></td><td>查询配置审计，敏感字段脱敏。</td><td><code>lowcode:audit</code></td></tr>
+        <tr><td><code>GET /runtime-config/menu</code></td><td>读取当前用户可见菜单。</td><td>登录用户 + RBAC + ABAC</td></tr>
+        <tr><td><code>GET /runtime-config/page/{pageCode}</code></td><td>读取页面布局、列表、字段、按钮元数据。</td><td>原页面权限 + ABAC</td></tr>
+        <tr><td><code>GET /runtime-config/actions/{moduleCode}</code></td><td>读取当前用户可用动作，不执行动作。</td><td>原模块权限 + ABAC</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Dry-run 固定响应</h3>
+    <pre><code>{
+  "willPersist": false,
+  "willWriteCoreTables": false,
+  "willCallExternalLive": false,
+  "affectedModules": ["ORDER", "PLANORDER"],
+  "blocked": false,
+  "warnings": [],
+  "preview": {
+    "permissionChanges": [],
+    "fieldMaskSamples": [],
+    "providerMappingResult": {},
+    "todoPreview": []
+  }
+}</code></pre>
+  </section>
+
+  <section class="ok">
+    <h2>5. 权限规则</h2>
+    <h3>RBAC</h3>
+    <ul>
+      <li><code>ADMIN</code>：配置平台全量查看、草稿、校验、发布、回滚、审计。</li>
+      <li><code>INTEGRATION_ADMIN</code>：Provider、Callback、Open API、Scheduler、接口调试相关配置草稿与 dry-run；生产发布需管理员复核。</li>
+      <li><code>INTEGRATION_OPERATOR</code>：只读、dry-run、日志和健康检查，不可发布，不可切换 LIVE。</li>
+      <li><code>CLUE_MANAGER</code>：可维护线索列表、自动分配、值班客服、工作台待办等低/中风险草稿，不发布全局权限。</li>
+      <li><code>STORE_MANAGER</code>：可维护门店服务模板、门店绑定、门店人员视图类配置，不可扩大跨门店数据范围。</li>
+      <li><code>FINANCE</code>：可读取薪酬与结算配置效果，不配置外部分销资金流。</li>
+      <li><code>PARTNER_APP</code>：不可访问后台低代码平台，只能访问自身 partner 范围的 Open API。</li>
+    </ul>
+
+    <h3>ABAC</h3>
+    <ul>
+      <li>运行时配置解析必须带 <code>PermissionRequestContext</code>。</li>
+      <li>数据范围必须支持 <code>self / team / store / all / partner</code>，不得由前端参数提升。</li>
+      <li>权限预览必须支持按角色、按用户、按门店、按 partner 查看最终结果。</li>
+      <li>字段配置必须叠加敏感字段脱敏，不允许通过配置绕过。</li>
+      <li>手机号、raw_data、token、secret、auth_code、签名、支付流水、外部订单原文必须脱敏。</li>
+    </ul>
+
+    <h3>高风险门禁</h3>
+    <ul>
+      <li>开放导出、批量操作、重试、回放、LIVE 切换必须进入发布中心。</li>
+      <li>字段脱敏放开、权限扩大、金额完整显示、raw_data 查看必须展示影响范围。</li>
+      <li>生产发布必须填写发布原因并输入确认词。</li>
+      <li>阻断项禁止发布，例如普通角色获得 raw_data 完整查看、动作绕过受控服务直接写核心表、管理员失去配置入口。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>6. 流程</h2>
+    <h3>配置向导流程</h3>
+    <figure class="diagram">
+      <figcaption>图 2：从业务目标到发布的配置流程</figcaption>
+      <svg viewBox="0 0 1100 230" role="img" aria-label="配置向导流程图">
+        <defs>
+          <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#2563eb"/>
+          </marker>
+        </defs>
+        <rect x="20" y="36" width="130" height="72" rx="16" fill="#eff6ff" stroke="#2563eb"/>
+        <text x="51" y="67" font-size="16" font-weight="700" fill="#1e3a8a">选择目标</text>
+        <text x="42" y="94" font-size="13" fill="#475569">列表 / 表单 / 动作</text>
+        <path d="M154 72 L198 72" stroke="#2563eb" stroke-width="3" marker-end="url(#arrowBlue)"/>
+        <rect x="204" y="36" width="130" height="72" rx="16" fill="#eff6ff" stroke="#2563eb"/>
+        <text x="235" y="67" font-size="16" font-weight="700" fill="#1e3a8a">选择对象</text>
+        <text x="222" y="94" font-size="13" fill="#475569">Clue / Order 等</text>
+        <path d="M338 72 L382 72" stroke="#2563eb" stroke-width="3" marker-end="url(#arrowBlue)"/>
+        <rect x="388" y="36" width="130" height="72" rx="16" fill="#eff6ff" stroke="#2563eb"/>
+        <text x="419" y="67" font-size="16" font-weight="700" fill="#1e3a8a">选择模板</text>
+        <text x="411" y="94" font-size="13" fill="#475569">从现有模板复制</text>
+        <path d="M522 72 L566 72" stroke="#2563eb" stroke-width="3" marker-end="url(#arrowBlue)"/>
+        <rect x="572" y="36" width="130" height="72" rx="16" fill="#eff6ff" stroke="#2563eb"/>
+        <text x="603" y="67" font-size="16" font-weight="700" fill="#1e3a8a">生成草稿</text>
+        <text x="604" y="94" font-size="13" fill="#475569">不影响线上</text>
+        <path d="M706 72 L750 72" stroke="#2563eb" stroke-width="3" marker-end="url(#arrowBlue)"/>
+        <rect x="756" y="36" width="130" height="72" rx="16" fill="#eff6ff" stroke="#2563eb"/>
+        <text x="787" y="67" font-size="16" font-weight="700" fill="#1e3a8a">设计预览</text>
+        <text x="780" y="94" font-size="13" fill="#475569">表单化 + 可视化</text>
+        <path d="M890 72 L934 72" stroke="#2563eb" stroke-width="3" marker-end="url(#arrowBlue)"/>
+        <rect x="940" y="36" width="130" height="72" rx="16" fill="#eff6ff" stroke="#2563eb"/>
+        <text x="971" y="67" font-size="16" font-weight="700" fill="#1e3a8a">校验发布</text>
+        <text x="960" y="94" font-size="13" fill="#475569">预览 / 审计 / 回滚</text>
+        <rect x="204" y="142" width="682" height="48" rx="14" fill="#f8fafc" stroke="#cbd5e1"/>
+        <text x="230" y="172" font-size="15" fill="#334155">每一步都执行主链路边界、权限引用、字段脱敏、Provider/Scheduler 安全门禁检查</text>
+      </svg>
+    </figure>
+
+    <h3>设计器流程</h3>
+    <figure class="diagram">
+      <figcaption>图 3：基于当前 Element Plus 后台风格的三栏设计器线框图</figcaption>
+      <svg viewBox="0 0 1100 520" role="img" aria-label="配置设计器线框图">
+        <rect x="20" y="20" width="1060" height="480" rx="22" fill="#ffffff" stroke="#dbe5f3"/>
+        <rect x="42" y="42" width="1016" height="62" rx="16" fill="#0f172a"/>
+        <text x="66" y="80" font-size="18" font-weight="700" fill="#ffffff">配置设计器</text>
+        <rect x="710" y="58" width="82" height="28" rx="14" fill="#1d4ed8"/>
+        <text x="729" y="77" font-size="13" fill="#ffffff">草稿 v3</text>
+        <rect x="806" y="58" width="100" height="28" rx="14" fill="#15803d"/>
+        <text x="824" y="77" font-size="13" fill="#ffffff">校验通过</text>
+        <rect x="920" y="58" width="112" height="28" rx="14" fill="#b45309"/>
+        <text x="938" y="77" font-size="13" fill="#ffffff">生产预览</text>
+
+        <rect x="42" y="126" width="210" height="292" rx="18" fill="#f8fafc" stroke="#cbd5e1"/>
+        <text x="66" y="160" font-size="18" font-weight="700" fill="#0f172a">字段 / 组件库</text>
+        <rect x="66" y="186" width="162" height="36" rx="10" fill="#e0f2fe"/>
+        <text x="88" y="209" font-size="14" fill="#075985">基础字段</text>
+        <rect x="66" y="236" width="162" height="36" rx="10" fill="#dcfce7"/>
+        <text x="88" y="259" font-size="14" fill="#166534">业务字段</text>
+        <rect x="66" y="286" width="162" height="36" rx="10" fill="#fef3c7"/>
+        <text x="88" y="309" font-size="14" fill="#92400e">筛选项</text>
+        <rect x="66" y="336" width="162" height="36" rx="10" fill="#fee2e2"/>
+        <text x="88" y="359" font-size="14" fill="#991b1b">操作按钮</text>
+
+        <rect x="276" y="126" width="510" height="292" rx="18" fill="#ffffff" stroke="#94a3b8"/>
+        <text x="300" y="160" font-size="18" font-weight="700" fill="#0f172a">实时业务页面预览</text>
+        <rect x="300" y="184" width="462" height="42" rx="12" fill="#f1f5f9"/>
+        <text x="322" y="210" font-size="14" fill="#334155">筛选：手机号 / 创建时间 / 状态 / 来源</text>
+        <rect x="300" y="246" width="462" height="120" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+        <line x1="300" y1="286" x2="762" y2="286" stroke="#e2e8f0"/>
+        <line x1="394" y1="246" x2="394" y2="366" stroke="#e2e8f0"/>
+        <line x1="488" y1="246" x2="488" y2="366" stroke="#e2e8f0"/>
+        <line x1="582" y1="246" x2="582" y2="366" stroke="#e2e8f0"/>
+        <line x1="676" y1="246" x2="676" y2="366" stroke="#e2e8f0"/>
+        <text x="324" y="272" font-size="13" fill="#0f172a">姓名</text>
+        <text x="418" y="272" font-size="13" fill="#0f172a">电话</text>
+        <text x="512" y="272" font-size="13" fill="#0f172a">状态</text>
+        <text x="606" y="272" font-size="13" fill="#0f172a">门店</text>
+        <text x="700" y="272" font-size="13" fill="#0f172a">操作</text>
+        <text x="318" y="326" font-size="13" fill="#64748b">王女士</text>
+        <text x="410" y="326" font-size="13" fill="#64748b">138****1234</text>
+        <text x="512" y="326" font-size="13" fill="#16a34a">已付款</text>
+        <text x="606" y="326" font-size="13" fill="#64748b">静安门店</text>
+        <rect x="694" y="306" width="54" height="26" rx="13" fill="#2563eb"/>
+        <text x="707" y="324" font-size="12" fill="#fff">查看</text>
+
+        <rect x="810" y="126" width="248" height="292" rx="18" fill="#f8fafc" stroke="#cbd5e1"/>
+        <text x="834" y="160" font-size="18" font-weight="700" fill="#0f172a">属性面板</text>
+        <text x="834" y="196" font-size="14" fill="#334155">显示名称：电话</text>
+        <text x="834" y="228" font-size="14" fill="#334155">角色可见：客服 / 管理员</text>
+        <text x="834" y="260" font-size="14" fill="#334155">脱敏：默认开启</text>
+        <text x="834" y="292" font-size="14" fill="#334155">是否可查询：是</text>
+        <text x="834" y="324" font-size="14" fill="#334155">高级设置：折叠</text>
+        <rect x="42" y="440" width="1016" height="40" rx="14" fill="#f8fafc" stroke="#cbd5e1"/>
+        <text x="72" y="466" font-size="14" fill="#334155">保存草稿</text>
+        <text x="190" y="466" font-size="14" fill="#334155">校验配置</text>
+        <text x="310" y="466" font-size="14" fill="#334155">权限预览</text>
+        <text x="430" y="466" font-size="14" fill="#334155">影响预览</text>
+        <text x="550" y="466" font-size="14" fill="#334155">提交发布</text>
+      </svg>
+    </figure>
+
+    <h3>发布流程</h3>
+    <ol>
+      <li>创建草稿：从模板或当前线上配置复制。</li>
+      <li>表单化配置：不直接编辑大 JSON，技术字段放入高级设置。</li>
+      <li>实时预览：看到菜单、列表、字段、按钮、表单变化。</li>
+      <li>系统校验：字段引用、权限引用、ABAC、脱敏、主链路、安全门禁。</li>
+      <li>权限预览：按角色/用户查看最终可见内容。</li>
+      <li>影响预览：展示影响角色、门店、用户、接口、缓存和风险项。</li>
+      <li>发布上线：写版本、目标配置表、审计，失效缓存。</li>
+      <li>回滚：从发布记录生成回滚草稿，预览后发布为新版本。</li>
+    </ol>
+
+    <figure class="diagram">
+      <figcaption>图 4：发布前差异与风险确认线框图</figcaption>
+      <svg viewBox="0 0 1100 430" role="img" aria-label="发布前差异与风险确认图">
+        <rect x="20" y="20" width="1060" height="390" rx="22" fill="#fff" stroke="#dbe5f3"/>
+        <text x="46" y="58" font-size="22" font-weight="700" fill="#0f172a">发布中心</text>
+        <rect x="46" y="82" width="310" height="260" rx="18" fill="#f8fafc" stroke="#cbd5e1"/>
+        <text x="70" y="118" font-size="18" font-weight="700" fill="#334155">当前线上版本 v2</text>
+        <text x="70" y="158" font-size="15" fill="#475569">字段：姓名、电话、状态、门店</text>
+        <text x="70" y="190" font-size="15" fill="#475569">按钮：查看详情</text>
+        <text x="70" y="222" font-size="15" fill="#475569">导出：关闭</text>
+        <text x="70" y="254" font-size="15" fill="#475569">门店角色：只能看本门店</text>
+        <text x="70" y="286" font-size="15" fill="#475569">手机号：默认脱敏</text>
+
+        <rect x="394" y="82" width="310" height="260" rx="18" fill="#eff6ff" stroke="#2563eb"/>
+        <text x="418" y="118" font-size="18" font-weight="700" fill="#1e3a8a">即将发布版本 v3</text>
+        <text x="418" y="158" font-size="15" fill="#475569">字段：新增外部订单号</text>
+        <text x="418" y="190" font-size="15" fill="#475569">按钮：新增重试</text>
+        <text x="418" y="222" font-size="15" fill="#b45309">导出：开启，需权限</text>
+        <text x="418" y="254" font-size="15" fill="#475569">门店角色：仍只看本门店</text>
+        <text x="418" y="286" font-size="15" fill="#475569">手机号：仍脱敏</text>
+
+        <rect x="742" y="82" width="310" height="260" rx="18" fill="#fff7ed" stroke="#fb923c"/>
+        <text x="766" y="118" font-size="18" font-weight="700" fill="#9a3412">风险确认</text>
+        <text x="766" y="158" font-size="15" fill="#475569">高风险：新增导出 / 重试</text>
+        <text x="766" y="190" font-size="15" fill="#475569">影响角色：integration_operator</text>
+        <text x="766" y="222" font-size="15" fill="#475569">涉及字段：手机号、外部订单号</text>
+        <text x="766" y="254" font-size="15" fill="#475569">要求：填写发布原因</text>
+        <text x="766" y="286" font-size="15" fill="#475569">确认词：发布生产配置</text>
+        <rect x="766" y="308" width="120" height="34" rx="17" fill="#ef4444"/>
+        <text x="798" y="331" font-size="14" fill="#fff">提交发布</text>
+      </svg>
+    </figure>
+  </section>
+
+  <section class="warn">
+    <h2>7. 可配置与不可配置清单</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>第一批可配置</h3>
+        <ul>
+          <li>菜单、角色、权限点、数据范围绑定。</li>
+          <li>字典、参数、状态中文名、颜色、排序。</li>
+          <li>列表列、筛选项、默认排序、固定列、分页。</li>
+          <li>表单字段、必填、只读、默认值、简单校验。</li>
+          <li>按钮可见条件、权限点、确认文案、跳转入口。</li>
+          <li>服务单模板、门店绑定、效果预览。</li>
+          <li>工作台待办规则、角色入口、风险提醒。</li>
+          <li>Provider Mapping、Callback、Scheduler 频率、重试、熔断、MOCK/LIVE 门禁。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>明确不可配置</h3>
+        <ul>
+          <li>新增核心业务模型或核心业务表。</li>
+          <li>任意 SQL、任意脚本、任意接口编排。</li>
+          <li>直接写 Customer、Order、PlanOrder。</li>
+          <li>修改订单/排档核心状态机。</li>
+          <li>PlanOrder 脱离 Order 独立创建。</li>
+          <li>分销 paid order 进入 Clue。</li>
+          <li>Scheduler 绕过入站服务直写业务表。</li>
+          <li>外部分销佣金、提现、退款资金流进入 SeedCRM。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>8. 落地顺序</h2>
+    <table>
+      <thead><tr><th>阶段</th><th>目标</th><th>复用现有能力</th><th>验收标准</th><th>风险</th></tr></thead>
+      <tbody>
+        <tr><td>L0</td><td>低代码边界文档与配置类型白名单。</td><td>AGENT.md、CONTEXT.md。</td><td>可配置/不可配置边界清晰，主链路红线明确。</td><td>中</td></tr>
+        <tr><td>L1</td><td>配置版本底座：草稿、diff、validate、publish、rollback、audit。</td><td>SystemFlow、SystemConfig。</td><td>所有配置变更可预览、可回滚、可审计。</td><td>高</td></tr>
+        <tr><td>L2</td><td>菜单权限配置化升级。</td><td>SystemAccess、Permission。</td><td>新增菜单父级可选择，权限发布前可按角色/用户预览。</td><td>高</td></tr>
+        <tr><td>L3</td><td>字典、字段、列表、页面运行时配置。</td><td>SystemSettingView、字典中心、当前表格页面。</td><td>常见字段显示、筛选、中文化不再改代码。</td><td>中</td></tr>
+        <tr><td>L4</td><td>表单模板与按钮动作配置。</td><td>ServiceFormTemplate、PlanOrder。</td><td>服务单设计支持模板、预览、发布；按钮不能直写核心表。</td><td>高</td></tr>
+        <tr><td>L5</td><td>工作台待办规则配置。</td><td>Workbench。</td><td>待办只做提醒和跳转，不改变业务状态。</td><td>中</td></tr>
+        <tr><td>L6</td><td>Provider / Scheduler 受控低代码。</td><td>Scheduler、Provider、Outbox、异常队列、接口调试。</td><td>Mapping、频率、重试、LIVE 切换必须 dry-run + 发布。</td><td>高</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>9. 测试与验收</h2>
+    <ul>
+      <li>草稿不影响线上运行。</li>
+      <li>发布成功后，目标配置、版本、审计、缓存失效一致。</li>
+      <li>发布失败整体回滚。</li>
+      <li>回滚以新版本发布，不覆盖历史。</li>
+      <li>低代码运行时接口只返回元数据，不做业务写入。</li>
+      <li>按钮动作只调用已有受控业务接口。</li>
+      <li>权限预览结果与真实登录菜单、按钮、字段、数据范围一致。</li>
+      <li>字段展示配置不能突破手机号、raw_data、token、secret、auth_code、支付流水等脱敏策略。</li>
+      <li>分销 paid order 在任何配置下都不能进入 Clue。</li>
+      <li>Scheduler 在任何配置下都不能直接写 Customer、Order、PlanOrder。</li>
+      <li>dry-run 不落核心业务表，不调用真实外部 LIVE。</li>
+      <li>Provider Mapping 改动必须能预览字段映射、状态映射、幂等结果。</li>
+      <li>PlanOrder 不能通过表单模板或按钮配置独立创建。</li>
+      <li>生产发布、高风险权限扩大、导出、回放、LIVE 切换必须二次确认并审计。</li>
+    </ul>
+  </section>
+
+  <section class="danger">
+    <h2>10. 禁止行为</h2>
+    <ul>
+      <li>禁止把受控低代码升级成任意建表、任意 SQL、任意脚本平台。</li>
+      <li>禁止配置改变 <code>Clue -&gt; Customer -&gt; Order -&gt; PlanOrder</code> 主链路。</li>
+      <li>禁止配置让分销 paid order 进入 <code>Clue</code>。</li>
+      <li>禁止配置直接创建或修改 <code>Customer</code>、<code>Order</code>、<code>PlanOrder</code>。</li>
+      <li>禁止配置让 <code>PlanOrder</code> 不绑定 <code>Order</code>。</li>
+      <li>禁止配置绕过 RBAC + ABAC。</li>
+      <li>禁止配置绕过统一入站服务、Outbox、异常队列和 Scheduler 安全门禁。</li>
+      <li>禁止导入配置覆盖生产密钥或切换 LIVE 模式。</li>
+      <li>禁止审计日志保存明文 secret、token、auth_code、raw_data。</li>
+      <li>禁止把外部分销佣金、提现、退款资金流配置进 SeedCRM。</li>
+    </ul>
+  </section>
+
+  <section class="warn">
+    <h2>11. 需要你确认的问题</h2>
+    <p class="note">建议先确认以下 3 点，再进入代码落地：1）是否接受“受控低代码”命名与边界；2）P0 是否先做模板化配置而不是拖拽式设计器；3）是否优先从菜单权限和页面列表配置开始，而不是先做 Provider/Scheduler。</p>
+  </section>
+</main>
+</body>
+</html>

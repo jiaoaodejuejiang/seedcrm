@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM P0-6 工作台与今日待办中心详细落地方案</title>
+  <style>
+    body { margin: 0; background: #f6f8fb; color: #172033; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; line-height: 1.75; }
+    main { max-width: 1180px; margin: 0 auto; padding: 34px 22px 72px; }
+    header, section { margin-top: 18px; padding: 24px; border: 1px solid #e5eaf3; border-radius: 22px; background: #fff; box-shadow: 0 18px 45px rgba(23, 32, 51, .06); }
+    h1, h2, h3 { margin: 0; line-height: 1.35; }
+    h1 { font-size: 30px; }
+    h2 { margin-bottom: 12px; font-size: 22px; }
+    h3 { margin-top: 16px; font-size: 17px; }
+    p { margin: 8px 0 0; color: #64748b; }
+    ul, ol { margin: 10px 0 0; padding-left: 22px; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    code { color: #0f766e; }
+    pre { overflow: auto; padding: 14px; border-radius: 14px; background: #101827; color: #e5edf8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5eaf3; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    .badge { display: inline-block; margin: 10px 8px 0 0; padding: 5px 10px; border-radius: 999px; background: #e8f4ff; color: #075985; font-size: 12px; font-weight: 700; }
+    .ok { border-left: 4px solid #10b981; }
+    .warn { border-left: 4px solid #f59e0b; }
+    .danger { border-left: 4px solid #ef4444; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card { padding: 14px; border: 1px solid #e5eaf3; border-radius: 16px; background: #fbfdff; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SeedCRM P0-6 工作台与今日待办中心详细落地方案</h1>
+    <p>工作台与今日待办中心是角色化操作入口，不是经营大屏，也不是新的业务流程引擎。它只聚合、排序、提醒和跳转，把用户带回原模块完成受控操作。</p>
+    <span class="badge">P0-6</span>
+    <span class="badge">Workbench</span>
+    <span class="badge">今日待办</span>
+    <span class="badge">角色入口</span>
+    <span class="badge">RBAC + ABAC</span>
+    <span class="badge">不新增核心业务模型</span>
+  </header>
+
+  <section class="danger">
+    <h2>1. 目标与边界</h2>
+    <ul>
+      <li>第一屏只回答一个问题：当前登录角色今天最该处理什么。</li>
+      <li>标准主链路仍然是 <code>Clue -&gt; Customer -&gt; Order -&gt; PlanOrder</code>。</li>
+      <li>分销 B 方案仍然是 <code>ExternalDistributionPaidOrder -&gt; Customer -&gt; Order(paid) -&gt; PlanOrder</code>。</li>
+      <li>工作台只能从 <code>Clue</code>、<code>Customer</code>、<code>Order</code>、<code>PlanOrder</code>、<code>Scheduler</code>、<code>Permission</code>、<code>Salary</code> 等源模块读取待办和风险。</li>
+      <li>工作台不直接创建、修改、删除 <code>Customer</code>、<code>Order</code>、<code>PlanOrder</code>，也不直接推进主链路状态。</li>
+      <li>工作台不处理外部分销佣金、提现、退款资金流；这些仍由外部分销系统负责。</li>
+      <li>待办状态不是业务真实状态，真实状态仍来自原业务对象。</li>
+      <li>所有入口必须复用原模块 RBAC + ABAC，不能出现“原页面无权限，工作台有权限”的越权。</li>
+      <li>统计数字只服务于行动排序，不作为页面主视觉；工作台不是堆统计卡片的看板。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>2. 当前系统现状</h2>
+    <table>
+      <thead><tr><th>能力</th><th>现状</th><th>P0-6 补齐方向</th></tr></thead>
+      <tbody>
+        <tr><td>Workbench 聚合接口</td><td>已有 <code>/workbench/clues</code>、<code>/workbench/orders</code>、<code>/workbench/plan-orders</code>、<code>/workbench/customers/{id}</code>、<code>/workbench/finance-overview</code> 等。</td><td>新增统一 overview、todos、risks、actions，把分散接口升级为角色化待办聚合层。</td></tr>
+        <tr><td>权限守卫</td><td>已有 <code>CluePermissionGuard</code>、<code>CustomerPermissionGuard</code>、<code>OrderPermissionGuard</code>、<code>PlanOrderPermissionGuard</code>。</td><td>工作台先按 SQL 数据范围过滤，再二次调用 guard 校验，counts 和列表都不能泄露无权限数据。</td></tr>
+        <tr><td>金额脱敏</td><td>已有门店角色金额隐藏配置和服务确认单金额脱敏逻辑。</td><td>工作台列表、详情、审计、导出统一复用脱敏策略。</td></tr>
+        <tr><td>调度与异常</td><td>已有 Scheduler 日志、Outbox、异常队列、dry-run 和重试能力。</td><td>工作台只展示集成风险和入口，重试、回放、对账仍跳转调度与队列中心。</td></tr>
+        <tr><td>系统流程</td><td>已有系统流程配置、触发器、运行实例、人工任务等页面能力。</td><td>工作台可读取流程运行待办，但不能把流程运行状态作为新业务状态源。</td></tr>
+        <tr><td>状态中文化</td><td>部分页面仍显示英文编码。</td><td>工作台必须使用字典中心显示中文标签，同时保留英文稳定编码作为接口和筛选值。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="ok">
+    <h2>3. 数据结构</h2>
+    <p>P0-6 不新增核心业务模型。以下结构仅属于读侧投影、用户偏好、阅读状态和审计，可先实时聚合，性能不足时再启用快照。</p>
+    <pre><code>workbench_todo_snapshot
+- id
+- todo_key
+- source_module: CLUE | CUSTOMER | ORDER | PLANORDER | SCHEDULER | PERMISSION | SALARY
+- source_id
+- todo_type: FOLLOW_CLUE | ASSIGN_CLUE | ORDER_APPOINTMENT | ORDER_VERIFY | PLANORDER_SERVICE | OUTBOX_RETRY | EXCEPTION_REPLAY | SALARY_CONFIRM
+- title
+- summary
+- status_code: PENDING | PROCESSING | DONE | EXPIRED | BLOCKED
+- status_label
+- priority: HIGH | MEDIUM | LOW
+- owner_user_id
+- owner_role_code
+- team_id
+- store_id
+- partner_code
+- due_time
+- action_code
+- action_route
+- action_permission_code
+- risk_reason
+- payload_digest_json
+- source_updated_at
+- snapshot_updated_at</code></pre>
+
+    <pre><code>workbench_user_preference
+- id
+- user_id
+- role_code
+- pinned_modules
+- hidden_todo_types
+- default_filter_json
+- created_at
+- updated_at</code></pre>
+
+    <pre><code>workbench_read_state
+- id
+- user_id
+- todo_key
+- read_at
+- dismissed_at
+- dismiss_reason
+- created_at
+- updated_at</code></pre>
+
+    <pre><code>workbench_action_audit_log
+- id
+- actor_user_id
+- actor_role_code
+- action_type: VIEW | OPEN_ENTRY | DISMISS | EXPORT | REFRESH
+- source_module
+- source_id
+- todo_key
+- request_json_masked
+- result_json_masked
+- trace_id
+- created_at</code></pre>
+
+    <h3>待办聚合模型</h3>
+    <pre><code>WorkbenchTodo
+- todoKey
+- sourceModule
+- sourceId
+- todoType
+- title
+- reason
+- statusCode
+- statusLabel
+- priority
+- dueTime
+- waitingMinutes
+- primaryAction
+- secondaryActions
+- riskTags
+- maskedSnapshot
+- technicalDetailCollapsed
+- route</code></pre>
+
+    <h3>数据约束</h3>
+    <ul>
+      <li><code>todo_key</code> 必须稳定，例如 <code>CLUE:123:FOLLOW_UP</code>、<code>OUTBOX:456:RETRY</code>。</li>
+      <li><code>workbench_todo_snapshot</code> 只能写读侧快照，不得反写源业务表。</li>
+      <li><code>status_code</code> 为稳定编码，<code>status_label</code> 来自字典中心或展示快照。</li>
+      <li><code>payload_digest_json</code> 只能保存脱敏摘要，不保存 raw_data、token、secret、auth_code、签名明文。</li>
+      <li>忽略待办只更新 <code>workbench_read_state</code>，不改变源业务对象状态。</li>
+      <li>工作台缓存 key 必须包含 <code>userId</code>、<code>roleCode</code>、<code>dataScope</code>、<code>storeId</code>、<code>partnerCode</code>、<code>permissionVersion</code>。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>4. 接口定义</h2>
+    <p>接口层要围绕“概览、待办、风险、入口、偏好、审计”组织。工作台接口原则上只读；少量写操作只能写偏好、阅读状态和审计。</p>
+
+    <h3>统一工作台</h3>
+    <pre><code>GET /workbench/overview
+GET /workbench/summary
+GET /workbench/todos
+GET /workbench/todos/counts
+GET /workbench/todos/{todoKey}
+GET /workbench/risks
+GET /workbench/actions</code></pre>
+    <ul>
+      <li><code>/overview</code> 返回当前角色第一屏需要的紧急处理、今日待办、需要关注、最近完成和环境提示。</li>
+      <li><code>/todos</code> 支持 <code>sourceModule</code>、<code>todoType</code>、<code>priority</code>、<code>status</code>、<code>dateRange</code>、<code>page</code>、<code>pageSize</code>。</li>
+      <li><code>/todos/counts</code> 计数必须使用与列表一致的权限过滤，不能泄露无权限数量。</li>
+      <li><code>/risks</code> 聚合超时未跟进、预约临近、Outbox 失败、异常队列、配置待发布、权限冲突等风险。</li>
+      <li><code>/actions</code> 根据当前用户 RBAC、菜单配置和数据范围返回快捷入口。</li>
+    </ul>
+
+    <h3>入口与偏好</h3>
+    <pre><code>GET  /workbench/action-entry/{todoKey}
+POST /workbench/todos/{todoKey}/dismiss
+GET  /workbench/preferences
+POST /workbench/preferences</code></pre>
+    <ul>
+      <li><code>/action-entry/{todoKey}</code> 返回目标路由、动作权限、阻断原因和风险提示，不直接执行业务写操作。</li>
+      <li><code>/dismiss</code> 只能忽略提醒，必须填写原因，不能改变原业务状态。</li>
+      <li><code>/preferences</code> 保存个人固定模块、隐藏类型、默认筛选，不影响其他用户。</li>
+    </ul>
+
+    <h3>调度风险入口</h3>
+    <pre><code>GET /workbench/scheduler-alerts
+GET /workbench/integration-todos
+GET /workbench/salary-todos
+GET /workbench/permission-todos</code></pre>
+    <ul>
+      <li>Scheduler 待办只显示 Outbox、异常队列、调度失败、Provider token/auth_code 过期、上线检查失败等入口。</li>
+      <li>异常重放、真实重试、状态回查、对账拉取仍跳转调度与队列中心执行。</li>
+      <li>Salary 待办只聚合 SeedCRM 内部薪酬确认、结算提醒，不处理外部分销佣金、提现、退款资金流。</li>
+      <li>Permission 待办仅 admin 可见，用于权限草稿待发布、角色菜单冲突、策略预览失败提醒。</li>
+    </ul>
+
+    <h3>典型响应结构</h3>
+    <pre><code>{
+  "todoKey": "PLANORDER:100:SERVICING",
+  "sourceModule": "PLANORDER",
+  "sourceLabel": "服务单",
+  "sourceId": 100,
+  "title": "门店服务待完成",
+  "reason": "客户已进入服务中，超过 2 小时未完成",
+  "statusCode": "PENDING",
+  "statusLabel": "待处理",
+  "priority": "HIGH",
+  "dueTime": "2026-05-02 18:00:00",
+  "riskTags": ["超时", "门店服务"],
+  "primaryAction": {
+    "actionCode": "OPEN_DETAIL",
+    "label": "查看服务单",
+    "route": "/plan-orders/100",
+    "allowed": true
+  },
+  "secondaryActions": [
+    {
+      "actionCode": "FINISH",
+      "label": "完成服务",
+      "route": "/plan-orders/100/finish",
+      "allowed": false,
+      "denyReason": "当前角色无 planorder:update 权限"
+    }
+  ],
+  "maskedSnapshot": {
+    "customerPhone": "138****1234",
+    "storeName": "杭州湖滨店"
+  }
+}</code></pre>
+  </section>
+
+  <section class="ok">
+    <h2>5. 权限规则</h2>
+    <p>工作台必须先按权限过滤，再聚合展示。不能先全量查出再让前端隐藏。</p>
+    <table>
+      <thead><tr><th>角色</th><th>第一屏重点</th><th>允许入口</th><th>数据范围</th></tr></thead>
+      <tbody>
+        <tr><td>online_customer_service</td><td>今日待跟进、待联系、即将超时、客户企微未绑定。</td><td>跟进记录、查看我的客户、发起预约入口。</td><td>self / team（clue）</td></tr>
+        <tr><td>clue_manager</td><td>待分配客资、公海积压、无人跟进、重复客资待判断、抖音同步异常。</td><td>分配、回收、查看同步状态。</td><td>all（clue）</td></tr>
+        <tr><td>store_service</td><td>今日预约、待核销、待到店确认、服务中待完成、改档/取消提醒。</td><td>打开订单、服务单、核销、完成服务入口。</td><td>store</td></tr>
+        <tr><td>private_domain_service</td><td>待触达会员、企微未绑定、标签待补充、近期成交客户维护。</td><td>会员信息、标签、企微绑定入口。</td><td>绑定客户 / self / team</td></tr>
+        <tr><td>finance</td><td>待结算订单、薪酬异常、金额字段缺失、结算确认。</td><td>我的薪酬、结算中心、财务看板。</td><td>self / team / all，且按薪酬权限过滤</td></tr>
+        <tr><td>integration_operator</td><td>接口异常、回推失败、死信队列、dry-run 失败、待重试记录。</td><td>查看日志、执行 dry-run、授权重试。</td><td>team / partner</td></tr>
+        <tr><td>integration_admin</td><td>渠道配置风险、LIVE/MOCK 异常、调度预检失败、映射缺失、上线检查。</td><td>配置发布、上线检查、调度预检。</td><td>all / partner</td></tr>
+        <tr><td>admin</td><td>系统风险、配置待发布、高风险确认、权限冲突、环境预警。</td><td>权限预览、配置版本、系统风险检查。</td><td>all</td></tr>
+        <tr><td>partner_app</td><td>不是后台工作台用户。</td><td>仅开放自身 partner_code 范围 API 状态视图。</td><td>partner</td></tr>
+      </tbody>
+    </table>
+
+    <h3>ABAC 数据范围</h3>
+    <ul>
+      <li><code>self</code>：当前用户是负责人、绑定客户负责人、薪酬本人。</li>
+      <li><code>team</code>：资源负责人在当前用户团队内。</li>
+      <li><code>store</code>：当前门店等于订单或服务单归属门店。</li>
+      <li><code>all</code>：仅授权管理角色可用。</li>
+      <li><code>partner</code>：当前 partnerCode 等于资源 partnerCode。</li>
+    </ul>
+
+    <h3>字段脱敏</h3>
+    <ul>
+      <li>手机号默认展示为 <code>138****1234</code>。</li>
+      <li>金额展示继续遵循 <code>amount.visibility.*</code> 配置。</li>
+      <li><code>raw_data</code>、异常 payload、token、secret、auth_code、签名默认不在卡片中展示。</li>
+      <li>traceId、idempotency_key、providerCode、callback log 放入“技术详情”折叠区。</li>
+      <li>完整敏感信息查看需要单独权限、查看原因和审计。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>6. 流程</h2>
+    <h3>6.1 工作台加载流程</h3>
+    <ol>
+      <li>用户登录后解析 <code>PermissionRequestContext</code>。</li>
+      <li>加载当前角色、菜单权限、按钮权限、数据范围、门店、团队、partnerCode、权限版本。</li>
+      <li>根据角色加载工作台布局配置和待办规则。</li>
+      <li>按模块执行聚合查询或读取 <code>workbench_todo_snapshot</code>。</li>
+      <li>每个模块先做 SQL 级 ABAC 过滤，再做权限守卫二次校验。</li>
+      <li>使用字典中心将稳定编码翻译为中文标签。</li>
+      <li>对手机号、金额、raw_data、外部身份、异常 payload 做脱敏。</li>
+      <li>按优先级、到期时间、等待时长、模块权重排序。</li>
+      <li>返回紧急处理、今日要做、需要关注、我发起的、最近完成等分组。</li>
+      <li>写入访问审计，审计内容仅保留脱敏摘要。</li>
+    </ol>
+
+    <h3>6.2 待办点击流程</h3>
+    <ol>
+      <li>用户点击待办主按钮。</li>
+      <li>调用 <code>/workbench/action-entry/{todoKey}</code> 校验权限和数据范围。</li>
+      <li>接口返回目标路由、可用按钮、阻断原因和风险提示。</li>
+      <li>前端跳转原业务页面或打开轻量抽屉。</li>
+      <li>真实业务写操作由原模块受控接口完成。</li>
+      <li>原业务处理完成后，工作台刷新时待办自然消失或更新状态。</li>
+    </ol>
+
+    <h3>6.3 忽略提醒流程</h3>
+    <ol>
+      <li>用户点击忽略提醒。</li>
+      <li>系统要求填写原因。</li>
+      <li>后端只写 <code>workbench_read_state.dismissed_at</code> 和审计。</li>
+      <li>不改变源业务状态，不关闭异常队列，不更新订单或服务单。</li>
+    </ol>
+
+    <h3>6.4 分销 B 方案待办流程</h3>
+    <ol>
+      <li>外部分销成交数据通过 Open API 或 Scheduler 入站服务进入 <code>Customer + Order(paid)</code>。</li>
+      <li>工作台可为门店、客服、集成管理员生成预约、核销、异常、回推相关待办。</li>
+      <li>分销 paid order 不进入 Clue 待办、公海、分配、回收、线索转化率。</li>
+      <li>取消、退款中、已退款事件只针对已有订单生成提醒或集成异常，不创建新订单。</li>
+      <li>履约完成后 Outbox 失败显示在集成角色工作台，处理仍跳转调度与队列中心。</li>
+    </ol>
+
+    <h3>6.5 高风险入口流程</h3>
+    <ol>
+      <li>工作台只展示风险和入口，不直接执行高风险动作。</li>
+      <li>批量重试、死信重新入队、真实调度执行、配置发布、切换 LIVE、权限变更必须跳转对应治理页面。</li>
+      <li>改档、取消预约、退款提醒等业务动作必须进入原模块抽屉确认，展示对象、当前状态、下一步结果和原因输入。</li>
+      <li>查看敏感信息必须记录原因和审计。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>7. 页面体验设计</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>第一屏</h3>
+        <ul>
+          <li>最多展示三个主分组：紧急处理、今日要做、需要关注。</li>
+          <li>统计数字只作为分组角标，不再铺满顶部。</li>
+          <li>每条待办只保留一个主按钮，次级动作放入更多菜单。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>待办卡片</h3>
+        <ul>
+          <li>展示事项标题、为什么出现、当前状态、等待时长、风险标签和下一步动作。</li>
+          <li>技术字段默认折叠，脱敏信息默认展示。</li>
+          <li>空状态必须提示下一步，例如“今天暂无待办，可查看我的客户”。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>桌面端布局</h3>
+        <ul>
+          <li>顶部显示角色问候、环境模式、今日主任务摘要。</li>
+          <li>左侧主区域放行动队列，右侧放预警、快捷入口、我发起的、最近完成。</li>
+          <li>复杂处理跳转原页面，不在工作台塞完整配置表单。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>移动和平板</h3>
+        <ul>
+          <li>移动端使用单列任务流，复杂表格改为卡片。</li>
+          <li>平板端使用左待办、右详情分栏，适合门店现场操作。</li>
+          <li>高风险操作在移动端增加确认或要求管理员桌面端处理。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="warn">
+    <h2>8. 待办来源与中文化</h2>
+    <table>
+      <thead><tr><th>模块</th><th>待办类型</th><th>处理入口</th><th>边界</th></tr></thead>
+      <tbody>
+        <tr><td>Clue</td><td>待跟进、待分配、公海积压、超时未联系、抖音同步异常。</td><td>客资列表、自动分配、同步状态。</td><td>分销 paid order 不出现。</td></tr>
+        <tr><td>Customer</td><td>会员资料待完善、企微未绑定、标签待补充、近期成交维护。</td><td>会员信息、客户画像、标签管理。</td><td>会员信息是 Customer 视图，不新增 Member 核心模型。</td></tr>
+        <tr><td>Order</td><td>待预约、待核销、待到店、退款 / 取消提醒。</td><td>顾客排档、门店订单列表。</td><td>工作台不创建订单，不处理外部分销资金流。</td></tr>
+        <tr><td>PlanOrder</td><td>今日到店、服务中、待完成、角色分配缺失。</td><td>服务确认单、服务单详情。</td><td>PlanOrder 必须绑定 Order，禁止独立创建。</td></tr>
+        <tr><td>Scheduler</td><td>Outbox 失败、异常队列、死信、Provider 过期、对账失败。</td><td>调度与队列中心、接口调试。</td><td>只跳转 dry-run / retry / replay 治理入口，不直接改核心表。</td></tr>
+        <tr><td>Permission</td><td>权限草稿待发布、权限冲突、策略预览失败。</td><td>权限预览、菜单管理、角色管理。</td><td>仅 admin 可见。</td></tr>
+        <tr><td>Salary</td><td>我的薪酬待确认、团队薪酬待审核、财务结算待处理。</td><td>我的薪酬、结算中心。</td><td>不承接外部分销佣金、提现、退款资金流。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>状态中文化</h3>
+    <pre><code>PENDING -> 待处理
+PROCESSING -> 处理中
+DONE -> 已完成
+EXPIRED -> 已过期
+BLOCKED -> 已阻断
+FAILED -> 失败
+DEAD_LETTER -> 死信
+OPEN -> 待处理
+RETRY_QUEUED -> 已入重试队列
+HANDLED -> 已处理
+
+CLUE -> 客资
+CUSTOMER -> 客户 / 会员
+ORDER -> 订单
+PLANORDER -> 服务单
+SCHEDULER -> 调度
+PERMISSION -> 权限
+SALARY -> 薪酬</code></pre>
+  </section>
+
+  <section class="warn">
+    <h2>9. 落地任务拆分</h2>
+    <table>
+      <thead><tr><th>任务</th><th>目标</th><th>依赖</th><th>验收</th><th>风险</th></tr></thead>
+      <tbody>
+        <tr><td>P0-6-1 待办规则模型</td><td>定义 sourceModule、todoType、priority、status、actionRoute、riskReason。</td><td>P0-1 字典中心</td><td>待办编码稳定，中文由字典展示。</td><td>中</td></tr>
+        <tr><td>P0-6-2 统一 overview / todos 接口</td><td>按角色聚合紧急处理、今日待办、需要关注、最近完成。</td><td>现有 workbench 接口</td><td>不同角色返回不同待办，counts 与列表一致。</td><td>高</td></tr>
+        <tr><td>P0-6-3 RBAC / ABAC 一致性</td><td>复用各模块 PermissionGuard，避免工作台越权。</td><td>P0-2 权限预览</td><td>无权限数据不出现在 counts、列表、详情。</td><td>高</td></tr>
+        <tr><td>P0-6-4 入口分发与审计</td><td>实现 action-entry、打开入口审计、dismiss 只读状态。</td><td>P0-6-2</td><td>工作台不直接执行业务写操作，审计脱敏。</td><td>高</td></tr>
+        <tr><td>P0-6-5 调度风险聚合</td><td>聚合 Outbox、异常队列、死信、Provider 过期、上线检查失败。</td><td>P0-5 调度安全</td><td>异常入口跳转调度中心，不能传新 payload 重放。</td><td>高</td></tr>
+        <tr><td>P0-6-6 工作台页面改造</td><td>按角色展示紧急处理、今日要做、需要关注；减少统计卡片。</td><td>P0-6-2</td><td>第一屏能回答“今天先做什么”。</td><td>中</td></tr>
+        <tr><td>P0-6-7 缓存和性能</td><td>首屏 counts + top N，列表分页，权限/字典/配置发布后失效。</td><td>P0-3 配置版本</td><td>大数据量下首屏稳定，缓存不泄露跨角色数据。</td><td>中</td></tr>
+        <tr><td>P0-6-8 回归测试</td><td>覆盖客服、门店、财务、私域、集成、管理员角色。</td><td>P0-6-1 至 P0-6-7</td><td>主链路、分销 B、权限、脱敏、状态中文化全部通过。</td><td>高</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="danger">
+    <h2>10. 验收标准与禁止行为</h2>
+    <h3>验收标准</h3>
+    <ul>
+      <li>不同角色登录后第一屏展示不同待办内容，且与 RBAC / ABAC 权限一致。</li>
+      <li>第一屏主区域是待处理事项，不是统计卡片堆叠。</li>
+      <li>每条待办都能说明事项、原因、状态、下一步主操作。</li>
+      <li>工作台只聚合和引导，不承载复杂配置、复杂排档、复杂异常治理。</li>
+      <li>待办点击后进入原模块或轻量抽屉，真实业务操作仍由原模块受控接口完成。</li>
+      <li>分销 paid order 不出现在 Clue 待办、公海、分配、回收、线索转化率中。</li>
+      <li>Outbox、异常队列、状态回查、对账差异能进入集成角色工作台。</li>
+      <li>未授权数据不能出现在 counts、列表、详情、导出中。</li>
+      <li>手机号、金额、raw_data、外部会员 ID、外部订单号按权限脱敏展示。</li>
+      <li>忽略提醒不改变原业务状态。</li>
+      <li>状态中文来自字典或展示转换，英文编码不反写成中文。</li>
+      <li>操作完成后提示下一步，例如“已确认到店，下一步等待服务完成”。</li>
+    </ul>
+
+    <h3>禁止行为</h3>
+    <ul>
+      <li>禁止新增独立 Task / Workflow 作为核心业务模型驱动主流程。</li>
+      <li>禁止在工作台直接创建 <code>Customer</code>、<code>Order</code>、<code>PlanOrder</code>。</li>
+      <li>禁止让分销 paid order 进入 Clue 待办。</li>
+      <li>禁止在工作台处理外部分销佣金、提现、退款资金流。</li>
+      <li>禁止绕过原模块权限，在工作台给用户额外操作能力。</li>
+      <li>禁止用前端隐藏替代后端 RBAC + ABAC。</li>
+      <li>禁止把待办状态作为真实业务状态来源。</li>
+      <li>禁止让 Scheduler 待办直接更新核心表。</li>
+      <li>禁止把 raw_data 明文暴露在工作台卡片、列表、审计或导出中。</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

@@ -54,4 +54,29 @@ class ClueRecordServiceImplTest {
         assertThat(created).isFalse();
         verify(clueRecordMapper, never()).insert(any(ClueRecord.class));
     }
+
+    @Test
+    void addRecordIfAbsentShouldTrimFieldsToDatabaseLimits() {
+        ClueRecord record = new ClueRecord();
+        record.setClueId(1L);
+        record.setRecordKey("douyin:order:" + "x".repeat(180));
+        record.setRecordType("ORDER_ACTION_STATUS_THAT_IS_TOO_LONG");
+        record.setSourceChannel("DOUYIN_SOURCE_CHANNEL_THAT_IS_TOO_LONG");
+        record.setExternalRecordId("r".repeat(160));
+        record.setExternalOrderId("o".repeat(160));
+        record.setTitle("订单同步".repeat(80));
+        record.setContent("内容".repeat(400));
+
+        boolean created = clueRecordService.addRecordIfAbsent(record);
+
+        assertThat(created).isTrue();
+        assertThat(record.getRecordKey()).hasSizeLessThanOrEqualTo(128);
+        assertThat(record.getRecordType()).hasSizeLessThanOrEqualTo(32);
+        assertThat(record.getSourceChannel()).hasSizeLessThanOrEqualTo(32);
+        assertThat(record.getExternalRecordId()).hasSizeLessThanOrEqualTo(128);
+        assertThat(record.getExternalOrderId()).hasSizeLessThanOrEqualTo(128);
+        assertThat(record.getTitle()).hasSizeLessThanOrEqualTo(128);
+        assertThat(record.getContent()).hasSizeLessThanOrEqualTo(500);
+        verify(clueRecordMapper).insert(record);
+    }
 }

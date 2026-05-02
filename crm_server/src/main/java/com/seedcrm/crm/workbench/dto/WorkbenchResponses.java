@@ -1,9 +1,11 @@
 package com.seedcrm.crm.workbench.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.seedcrm.crm.clue.dto.ClueProfileDtos.FollowRecordResponse;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -54,6 +56,18 @@ public final class WorkbenchResponses {
         private Long orderCount;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime createdAt;
+        private String displayName;
+        private String contactPhone;
+        private String callStatus;
+        private String leadStage;
+        private List<String> leadTags;
+        private List<FollowRecordResponse> followRecords;
+        private Long profileId;
+        private String intendedStoreName;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime assignedAt;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime profileUpdatedAt;
         private List<ClueRecordItemResponse> clueRecords;
     }
 
@@ -70,6 +84,38 @@ public final class WorkbenchResponses {
         private String content;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime occurredAt;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime createdAt;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CluePageResponse {
+        private List<ClueItemResponse> rows;
+        private Long total;
+        private Integer page;
+        private Integer pageSize;
+        private Map<String, Long> productSourceCounts;
+        private Map<String, Long> queueStatusCounts;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ClueSyncStatusResponse {
+        private Long id;
+        private String jobCode;
+        private String status;
+        private String triggerType;
+        private Integer importedCount;
+        private String payload;
+        private String errorMessage;
+        private Long durationMs;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime startedAt;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime finishedAt;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime createdAt;
     }

@@ -1,9 +1,13 @@
 package com.seedcrm.crm.clue.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.seedcrm.crm.clue.dto.ClueProfileDtos.ClueProfileResponse;
+import com.seedcrm.crm.clue.dto.ClueProfileDtos.ClueProfileUpsertRequest;
 import com.seedcrm.crm.clue.dto.DistributorClueCreateRequest;
 import com.seedcrm.crm.clue.entity.Clue;
+import com.seedcrm.crm.clue.service.ClueProfileService;
 import com.seedcrm.crm.clue.service.ClueService;
+import com.seedcrm.crm.common.api.ApiResponse;
 import com.seedcrm.crm.permission.support.CluePermissionGuard;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
@@ -25,13 +29,16 @@ import org.springframework.web.server.ResponseStatusException;
 public class ClueController {
 
     private final ClueService clueService;
+    private final ClueProfileService clueProfileService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
     private final CluePermissionGuard cluePermissionGuard;
 
     public ClueController(ClueService clueService,
+                          ClueProfileService clueProfileService,
                           PermissionRequestContextResolver permissionRequestContextResolver,
                           CluePermissionGuard cluePermissionGuard) {
         this.clueService = clueService;
+        this.clueProfileService = clueProfileService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
         this.cluePermissionGuard = cluePermissionGuard;
     }
@@ -116,6 +123,14 @@ public class ClueController {
         } catch (NoSuchElementException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
         }
+    }
+
+    @PostMapping("/profile")
+    public ApiResponse<ClueProfileResponse> saveProfile(@RequestBody(required = false) ClueProfileUpsertRequest request,
+                                                        HttpServletRequest httpServletRequest) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(httpServletRequest);
+        cluePermissionGuard.checkUpdate(context, request == null ? null : request.getClueId());
+        return ApiResponse.success(clueProfileService.saveProfile(request, context.getCurrentUserId()));
     }
 
     @GetMapping("/test")

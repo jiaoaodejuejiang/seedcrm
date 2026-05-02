@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM P0-1 统一字典中心详细落地方案</title>
+  <style>
+    body { margin: 0; background: #f7fafc; color: #172033; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; line-height: 1.75; }
+    main { max-width: 1160px; margin: 0 auto; padding: 34px 22px 72px; }
+    header, section { margin-top: 18px; padding: 24px; border: 1px solid #e5eaf3; border-radius: 22px; background: #fff; box-shadow: 0 18px 45px rgba(23, 32, 51, .06); }
+    h1, h2, h3 { margin: 0; line-height: 1.35; }
+    h1 { font-size: 30px; }
+    h2 { margin-bottom: 12px; font-size: 22px; }
+    h3 { margin-top: 16px; font-size: 17px; }
+    p { margin: 8px 0 0; color: #64748b; }
+    ul, ol { margin: 10px 0 0; padding-left: 22px; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    code { color: #0f766e; }
+    pre { overflow: auto; padding: 14px; border-radius: 14px; background: #101827; color: #e5edf8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5eaf3; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    .badge { display: inline-block; margin: 10px 8px 0 0; padding: 5px 10px; border-radius: 999px; background: #e8f4ff; color: #075985; font-size: 12px; font-weight: 700; }
+    .ok { border-left: 4px solid #10b981; }
+    .warn { border-left: 4px solid #f59e0b; }
+    .danger { border-left: 4px solid #ef4444; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SeedCRM P0-1 统一字典中心详细落地方案</h1>
+    <p>统一字典中心用于“编码值的中文展示、筛选选项、状态色、排序、启停、字段脱敏分组、来源视角分组”。它不是核心业务状态机，也不能替代权限、流程、幂等、资金边界和接口安全。</p>
+    <span class="badge">P0-1</span>
+    <span class="badge">系统能力</span>
+    <span class="badge">配置优先</span>
+    <span class="badge">不新增核心模型</span>
+    <span class="badge">低频高影响</span>
+  </header>
+
+  <section class="danger">
+    <h2>1. 字典中心边界</h2>
+    <ul>
+      <li>字典可以控制显示名称、状态颜色、筛选选项、排序、启停、说明文案。</li>
+      <li>字典不能改变核心状态流转，例如 Order 仍只能由受控服务从 paid / used / cancelled / refund_pending / refunded 中流转。</li>
+      <li>字典不能新增核心模型，也不能允许外部系统直接创建 Customer / Order / PlanOrder。</li>
+      <li>字典不能替代 RBAC / ABAC；字典项可见性必须继续受角色、数据范围、字段脱敏控制。</li>
+      <li>字典不能保存密钥、token、secret、支付证书、企业微信 secret、抖音 auth_code；这些属于 Provider / 系统配置敏感项。</li>
+      <li>字典启停不得删除历史数据，只影响页面新筛选、新录入和展示。</li>
+      <li>组织、人员、门店、商品等有层级和权限的数据不作为普通字典，必须使用独立主数据或配置模块。</li>
+      <li>高风险字典不做即时随手生效，必须经过变更预览、原因填写、确认词和审计。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>2. P0 字典范围</h2>
+    <table>
+      <thead><tr><th>字典编码</th><th>用途</th><th>是否高风险</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>customer.source</code></td><td>Customer 来源：douyin、distribution、manual、imported。</td><td>是</td><td>影响会员信息 tab、统计和权限展示，只能新增展示值，不能改变分销入站规则。</td></tr>
+        <tr><td><code>customer.source_channel</code></td><td>更细渠道，例如 douyin_laike、distribution_partner。</td><td>中</td><td>用于筛选和渠道统计。</td></tr>
+        <tr><td><code>member.source_tab</code></td><td>会员信息来源 tab：分销来源、抖音来源。</td><td>中</td><td>控制会员视角展示，不改变 Customer 模型。</td></tr>
+        <tr><td><code>member.external_role</code></td><td>外部会员身份：团长、团员、普通会员等。</td><td>中</td><td>仅展示和画像，不参与权限、分佣、提现。</td></tr>
+        <tr><td><code>clue.stage</code></td><td>客资阶段：新线索、有意向、到店、成交、待再次沟通等。</td><td>是</td><td>仅用于 Clue，不适用于 distribution paid order。</td></tr>
+        <tr><td><code>clue.call_status</code></td><td>通话状态。</td><td>低</td><td>用于客资列表筛选和展示。</td></tr>
+        <tr><td><code>clue.tag</code></td><td>线索标签。</td><td>低</td><td>支持客服打标签和筛选。</td></tr>
+        <tr><td><code>order.type</code></td><td>订单类型：deposit、coupon、distribution_product。</td><td>是</td><td>字典只控制显示；允许值仍由 Order 服务约束。</td></tr>
+        <tr><td><code>order.status</code></td><td>订单状态：paid、used、cancelled、refund_pending、refunded。</td><td>是</td><td>只控制中文、颜色、筛选，不能通过字典改状态流转。</td></tr>
+        <tr><td><code>plan_order.status</code></td><td>PlanOrder 状态：arrived、servicing、finished。</td><td>是</td><td>服务履约主流程展示字典。</td></tr>
+        <tr><td><code>external.status</code></td><td>外部状态快照。</td><td>中</td><td>用于入站日志、异常队列、对账展示。</td></tr>
+        <tr><td><code>refund.status</code></td><td>退款状态展示。</td><td>中</td><td>SeedCRM 只记录状态和薪酬影响，不处理外部分销资金流。</td></tr>
+        <tr><td><code>scheduler.job_status</code></td><td>调度任务状态。</td><td>中</td><td>用于调度中心展示和筛选。</td></tr>
+        <tr><td><code>outbox.status</code></td><td>Outbox 状态：PENDING、PROCESSING、SUCCESS、FAILED、DEAD_LETTER。</td><td>中</td><td>只展示队列状态，不改变队列处理逻辑。</td></tr>
+        <tr><td><code>exception.status</code></td><td>异常队列状态：OPEN、RETRY_QUEUED、HANDLED。</td><td>中</td><td>用于异常队列中文化和筛选。</td></tr>
+        <tr><td><code>provider.execution_mode</code></td><td>MOCK / LIVE。</td><td>是</td><td>字典只展示；真实切换仍在 Provider 配置中二次确认。</td></tr>
+        <tr><td><code>field.mask_level</code></td><td>字段脱敏等级。</td><td>是</td><td>控制展示策略，必须结合权限策略。</td></tr>
+        <tr><td><code>operation.reason</code></td><td>预约、改档、取消、退款等操作原因。</td><td>中</td><td>作为操作留痕，不反向驱动核心状态。</td></tr>
+        <tr><td><code>salary.role</code></td><td>薪酬角色展示。</td><td>中</td><td>计算仍基于 order_role_record 和薪酬配置。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="ok">
+    <h2>3. 数据结构</h2>
+    <table>
+      <thead><tr><th>表</th><th>字段</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>system_dictionary</code></td><td>id、dict_code、dict_name、module_code、risk_level、value_mode、scope_mode、enabled、editable、builtin、description、version_no、created_at、updated_at</td><td>字典分组。builtin 表示系统内置，不允许删除；editable 控制是否允许后台编辑。</td></tr>
+        <tr><td><code>system_dictionary_item</code></td><td>id、dict_code、item_code、item_value、display_name、short_name、parent_code、style_token、sort_no、scope_type、scope_id、enabled、builtin、sensitive_level、metadata_json、description、created_at、updated_at</td><td>字典项。item_code 是稳定业务编码，不随中文变化；scope 支持后续门店、伙伴、租户扩展。</td></tr>
+        <tr><td><code>system_dictionary_usage</code></td><td>id、dict_code、item_code、usage_module、usage_scene、field_name、reference_count、block_disable、description</td><td>字典使用关系，用于修改前提示影响范围。</td></tr>
+        <tr><td><code>system_dictionary_draft</code></td><td>id、batch_no、dict_code、draft_type、payload_json、status、operator_user_id、reason、created_at</td><td>待发布变更草稿。P0 可先用于高风险变更和导入预览。</td></tr>
+        <tr><td><code>system_dictionary_change_log</code></td><td>id、dict_code、item_code、change_type、before_json、after_json、operator_role、operator_user_id、reason、created_at</td><td>变更审计，支持追踪和后续回滚。</td></tr>
+      </tbody>
+    </table>
+    <p>唯一约束建议：<code>system_dictionary.dict_code</code> 唯一，<code>system_dictionary_item(dict_code, item_code, scope_type, scope_id)</code> 唯一。业务表保存稳定编码 <code>item_code</code>，不保存展示文案。</p>
+  </section>
+
+  <section>
+    <h2>4. 接口定义</h2>
+    <table>
+      <thead><tr><th>接口</th><th>方法</th><th>说明</th><th>安全要求</th></tr></thead>
+      <tbody>
+        <tr><td><code>/dictionary/types</code></td><td>GET</td><td>分页查询字典分组。</td><td>dictionary:view。</td></tr>
+        <tr><td><code>/dictionary/types/{typeCode}</code></td><td>GET</td><td>读取字典详情和字典项。</td><td>dictionary:view。</td></tr>
+        <tr><td><code>/dictionary/types</code></td><td>POST</td><td>新增字典分组。</td><td>dictionary:update，仅 admin。</td></tr>
+        <tr><td><code>/dictionary/types/{typeCode}</code></td><td>PUT</td><td>修改字典分组名称、说明、风险等级。</td><td>高风险字典需要确认词。</td></tr>
+        <tr><td><code>/dictionary/types/{typeCode}/items</code></td><td>POST</td><td>新增字典项。</td><td>需要校验 item_code 不冲突。</td></tr>
+        <tr><td><code>/dictionary/types/{typeCode}/items/{itemCode}</code></td><td>PUT</td><td>修改显示名、状态色、排序、说明、metadata。</td><td>内置项 item_code 不可改。</td></tr>
+        <tr><td><code>/dictionary/types/{typeCode}/items/sort</code></td><td>POST</td><td>批量排序。</td><td>进入待发布区或记录审计。</td></tr>
+        <tr><td><code>/dictionary/types/{typeCode}/items/{itemCode}/status</code></td><td>PATCH</td><td>启用或停用字典项。</td><td>高风险项停用前显示引用范围。</td></tr>
+        <tr><td><code>/dictionary/types/{typeCode}/usage</code></td><td>GET</td><td>查看字典使用位置。</td><td>用于防误改。</td></tr>
+        <tr><td><code>/dictionary/batch</code></td><td>GET</td><td>按 typeCodes 批量查询运行时字典。</td><td>按角色和作用域过滤。</td></tr>
+        <tr><td><code>/dictionary/resolve</code></td><td>GET</td><td>解析单个编码到显示值。</td><td>支持未知编码提示。</td></tr>
+        <tr><td><code>/dictionary/import/preview</code></td><td>POST</td><td>导入预览，展示新增、修改、冲突。</td><td>只预览不落库。</td></tr>
+        <tr><td><code>/dictionary/import/commit</code></td><td>POST</td><td>确认导入。</td><td>需要导入预览批次号和确认词。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>5. 权限规则</h2>
+    <ul>
+      <li><code>dictionary:view</code>：admin、integration_admin、integration_operator、clue_manager、finance 可查看必要字典。</li>
+      <li><code>dictionary:update</code>：默认仅 admin；integration_admin 可维护接口、Provider、外部状态类字典。</li>
+      <li><code>dictionary:import</code> / <code>dictionary:export</code>：默认仅 admin。</li>
+      <li>高风险字典包括：order.status、order.type、plan_order.status、customer.source、provider.execution_mode、field.mask_level。</li>
+      <li>高风险字典修改必须展示影响范围、要求填写修改原因、记录审计日志。</li>
+      <li>integration_operator 不允许修改字典，只能查看用于排查接口日志和异常队列。</li>
+      <li>partner_app 不能访问后台字典管理接口，只能通过 Open API 获得允许暴露的枚举说明。</li>
+      <li>字典项 metadata_json 中如果包含敏感字段，必须按字段脱敏策略返回。</li>
+      <li>缓存 key 必须包含 typeCode、scopeType、scopeId、roleCode、dataScope；避免 ABAC 作用域串数据。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>6. 流程</h2>
+    <h3>新增字典项流程</h3>
+    <ol>
+      <li>管理员进入系统设置 / 字典管理。</li>
+      <li>选择字典分组，点击新增字典项。</li>
+      <li>填写 item_value、display_name、状态色、排序、说明。</li>
+      <li>系统校验编码唯一、是否命中保留字、是否影响核心枚举边界。</li>
+      <li>低风险字典保存后写入审计日志并刷新缓存；高风险字典先进入待发布区。</li>
+    </ol>
+
+    <h3>修改高风险字典流程</h3>
+    <ol>
+      <li>点击编辑后，系统展示引用页面、接口、字段和历史数据量。</li>
+      <li>只能修改 display_name、style_token、sort_no、description；内置 item_code 不允许修改。</li>
+      <li>提交前展示差异摘要和风险说明。</li>
+      <li>输入确认词 <code>UPDATE_DICTIONARY</code> 或具体字典编码，并填写修改原因。</li>
+      <li>保存为草稿后进入待发布区；发布时写审计、刷新缓存；如失败必须回滚事务。</li>
+    </ol>
+
+    <h3>运行时解析流程</h3>
+    <ol>
+      <li>后端列表接口继续返回稳定编码值。</li>
+      <li>前端通过批量字典解析或本地缓存把编码转为中文。</li>
+      <li>关键导出和对外接口由后端统一解析，避免前端导出不一致。</li>
+      <li>如果字典项不存在，页面显示“未知编码：xxx”，并提示管理员补充字典。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>7. 页面交互</h2>
+    <ul>
+      <li>左侧为字典分组树，右侧为字典项表格。</li>
+      <li>顶部显示风险等级、引用数量、最近修改人、最近修改时间。</li>
+      <li>字典项表格列：编码、显示名称、短名称、状态色、排序、启停、内置、说明、操作。</li>
+      <li>编辑使用抽屉，危险修改使用弹窗确认。</li>
+      <li>停用字典项不删除历史，只从新录入和筛选中隐藏。</li>
+      <li>提供“查看引用”按钮，显示哪些页面、接口、字段正在使用。</li>
+      <li>提供“导入预览”，先展示新增、修改、冲突，不允许直接覆盖。</li>
+      <li>提供“未知编码看板”，列出最近接口和页面中出现但未配置的编码。</li>
+      <li>默认只读浏览，点击“进入编辑模式”后才允许新增、编辑、排序、启停。</li>
+      <li>高风险变更进入底部“待发布变更区”，统一预览影响后发布。</li>
+    </ul>
+  </section>
+
+  <section class="warn">
+    <h2>8. 兼容迁移</h2>
+    <ul>
+      <li>第一阶段不强制改业务表，只新增字典表和默认种子数据。</li>
+      <li>前端已有硬编码中文映射逐步迁移到字典解析，迁移期间保留本地 fallback。</li>
+      <li>后端导出、审计、异常队列优先使用字典解析，减少编码裸露。</li>
+      <li>历史状态值不改库，只通过字典展示中文。</li>
+      <li>若发现代码中存在文档外状态值，进入“未知编码看板”，不自动当作合法业务状态。</li>
+      <li>首期缓存可用本地 Caffeine / Spring Cache；多实例上线后再通过 Redis Pub/Sub 或消息表做缓存失效广播。</li>
+    </ul>
+  </section>
+
+  <section class="danger">
+    <h2>9. 验收门禁</h2>
+    <ul>
+      <li>客资、会员、订单、PlanOrder、调度、异常队列至少 80% 状态字段不再裸露编码。</li>
+      <li>新增来源展示不需要改前端硬编码。</li>
+      <li>Order / PlanOrder 核心状态 item_value 不可通过字典管理修改。</li>
+      <li>停用字典项不会删除历史数据，也不会破坏列表展示。</li>
+      <li>高风险字典修改必须有引用范围、差异摘要、确认词、修改原因和审计记录。</li>
+      <li>字典解析失败时显示未知编码并可追踪，不静默显示空值。</li>
+      <li>所有字典接口必须经过 RBAC，敏感 metadata 必须脱敏。</li>
+      <li>字典运行时缓存更新后能按 typeCode 精准失效，不全量清空。</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

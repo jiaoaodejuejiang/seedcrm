@@ -4,6 +4,14 @@ export function fetchClues(params) {
   return http.get('/workbench/clues', { params })
 }
 
+export function fetchCluePage(params) {
+  return http.get('/workbench/clues/page', { params })
+}
+
+export function fetchClueSyncStatus() {
+  return http.get('/workbench/clues/sync-status')
+}
+
 export function fetchOrders(params) {
   return http.get('/workbench/orders', { params })
 }

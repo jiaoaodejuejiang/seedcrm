@@ -113,7 +113,10 @@ public class PermissionSchemaInitializer {
     private void seedDefaults() {
         seedPolicy("CLUE", "VIEW", "ONLINE_CUSTOMER_SERVICE", "SELF", null);
         seedPolicy("CLUE", "VIEW", "ONLINE_CUSTOMER_SERVICE", "TEAM", null);
+        seedPolicy("CLUE", "UPDATE", "ONLINE_CUSTOMER_SERVICE", "SELF", "clue profile update");
+        seedPolicy("CLUE", "UPDATE", "ONLINE_CUSTOMER_SERVICE", "TEAM", "clue profile update");
         seedPolicy("CLUE", "VIEW", "CLUE_MANAGER", "ALL", null);
+        seedPolicy("CLUE", "UPDATE", "CLUE_MANAGER", "ALL", "clue profile update");
         seedPolicy("CLUE", "CREATE", "CLUE_MANAGER", "ALL", "manual or auto intake");
         seedPolicy("CLUE", "ASSIGN", "CLUE_MANAGER", "ALL", "clue assign");
         seedPolicy("CLUE", "RECYCLE", "CLUE_MANAGER", "ALL", "clue recycle");

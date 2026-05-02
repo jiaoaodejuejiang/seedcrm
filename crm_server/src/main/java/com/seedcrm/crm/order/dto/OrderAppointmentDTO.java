@@ -24,5 +24,7 @@ public class OrderAppointmentDTO {
 
     private String sourceSurface;
 
+    private String appointmentReasonType;
+
     private String remark;
 }

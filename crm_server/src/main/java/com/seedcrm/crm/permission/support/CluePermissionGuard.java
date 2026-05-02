@@ -36,6 +36,10 @@ public class CluePermissionGuard {
         assertAllowed(check(context, "CREATE", context == null ? null : context.getCurrentUserId()), "clue create denied");
     }
 
+    public void checkUpdate(PermissionRequestContext context, Long clueId) {
+        assertAllowed(check(context, "UPDATE", resolveOwnerId(clueId)), "clue update denied");
+    }
+
     public void checkAssign(PermissionRequestContext context, Long clueId) {
         assertAllowed(check(context, "ASSIGN", resolveOwnerId(clueId)), "clue assign denied");
     }

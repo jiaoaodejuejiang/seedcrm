@@ -107,6 +107,27 @@ class ServiceFormTemplateServiceImplTest {
     }
 
     @Test
+    void saveDraftShouldRejectUnsupportedDesignerEngineInsideNormalizedEnvelope() {
+        ServiceFormTemplateDtos.SaveTemplateRequest request = new ServiceFormTemplateDtos.SaveTemplateRequest();
+        request.setTemplateCode("BAD_ENVELOPE_ENGINE");
+        request.setTemplateName("bad envelope engine");
+        request.setTitle("bad envelope engine");
+        request.setDesignerEngine("FORMILY");
+        request.setNormalizedSchemaJson("""
+                {
+                  "schemaVersion": "SERVICE_FORM_SCHEMA_V1",
+                  "designerEngine": "HOMEGROWN_HEAVY_EDITOR",
+                  "schema": {"type": "object", "properties": {}}
+                }
+                """);
+
+        assertThatThrownBy(() -> service.saveTemplateDraft(request, context("ADMIN", "ALL", null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不支持");
+        verify(jdbcTemplate, never()).update(ArgumentMatchers.anyString(), ArgumentMatchers.<Object[]>any());
+    }
+
+    @Test
     void saveDraftShouldRejectElectronicSignatureComponent() {
         ServiceFormTemplateDtos.SaveTemplateRequest request = new ServiceFormTemplateDtos.SaveTemplateRequest();
         request.setTemplateCode("BAD_SIGNATURE");

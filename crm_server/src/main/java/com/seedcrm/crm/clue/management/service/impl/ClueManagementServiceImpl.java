@@ -107,13 +107,13 @@ public class ClueManagementServiceImpl implements ClueManagementService {
     public DedupConfigResponse saveDedupConfig(DedupConfigRequest request, PermissionRequestContext context) {
         int enabled = normalizeFlag(request == null ? null : request.getEnabled(), 1);
         int windowDays = normalizeDedupWindowDays(request == null ? null : request.getWindowDays());
-        systemConfigService.saveConfig(configRequest(
+        systemConfigService.saveLegacyConfig(configRequest(
                 CLUE_DEDUP_ENABLED_KEY,
                 enabled == 1 ? "true" : "false",
                 "BOOLEAN",
                 "客资入库启用按客户身份去重，默认开启",
                 "更新客资去重开关"), context);
-        systemConfigService.saveConfig(configRequest(
+        systemConfigService.saveLegacyConfig(configRequest(
                 CLUE_DEDUP_WINDOW_DAYS_KEY,
                 String.valueOf(windowDays),
                 "NUMBER",

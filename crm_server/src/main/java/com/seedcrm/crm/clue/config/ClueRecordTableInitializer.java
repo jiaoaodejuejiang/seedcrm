@@ -16,6 +16,8 @@ public class ClueRecordTableInitializer {
     private static final String INDEX_CLUE = "idx_clue_record_clue_id";
     private static final String INDEX_RECORD_KEY = "uk_clue_record_clue_key";
     private static final String INDEX_RECORD_TIME = "idx_clue_record_clue_time";
+    private static final String INDEX_SOURCE_RECORD = "idx_clue_record_source_record";
+    private static final String INDEX_SOURCE_ORDER = "idx_clue_record_source_order";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -71,6 +73,10 @@ public class ClueRecordTableInitializer {
                 + " ADD UNIQUE KEY " + INDEX_RECORD_KEY + " (clue_id, record_key)");
         ensureIndex(INDEX_RECORD_TIME, "ALTER TABLE " + TABLE_NAME
                 + " ADD INDEX " + INDEX_RECORD_TIME + " (clue_id, occurred_at, id)");
+        ensureIndex(INDEX_SOURCE_RECORD, "ALTER TABLE " + TABLE_NAME
+                + " ADD INDEX " + INDEX_SOURCE_RECORD + " (source_channel, external_record_id)");
+        ensureIndex(INDEX_SOURCE_ORDER, "ALTER TABLE " + TABLE_NAME
+                + " ADD INDEX " + INDEX_SOURCE_ORDER + " (source_channel, external_order_id)");
     }
 
     private void ensureIndex(String indexName, String sql) {
@@ -105,7 +111,9 @@ public class ClueRecordTableInitializer {
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     KEY idx_clue_record_clue_id (clue_id),
                     UNIQUE KEY uk_clue_record_clue_key (clue_id, record_key),
-                    KEY idx_clue_record_clue_time (clue_id, occurred_at, id)
+                    KEY idx_clue_record_clue_time (clue_id, occurred_at, id),
+                    KEY idx_clue_record_source_record (source_channel, external_record_id),
+                    KEY idx_clue_record_source_order (source_channel, external_order_id)
                 )
                 """;
     }

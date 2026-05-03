@@ -18,6 +18,7 @@ import com.seedcrm.crm.distributor.mapper.DistributorMapper;
 import com.seedcrm.crm.distributor.mapper.DistributorWithdrawMapper;
 import com.seedcrm.crm.distributor.service.DistributorService;
 import com.seedcrm.crm.order.entity.Order;
+import com.seedcrm.crm.order.entity.OrderActionRecord;
 import com.seedcrm.crm.order.mapper.OrderActionRecordMapper;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.planorder.mapper.OrderRoleRecordMapper;
@@ -29,6 +30,7 @@ import com.seedcrm.crm.wecom.mapper.WecomTouchLogMapper;
 import com.seedcrm.crm.wecom.service.WecomConsoleService;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CluePageResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.OrderItemResponse;
 import com.seedcrm.crm.workbench.service.StaffDirectoryService;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -238,6 +240,55 @@ class WorkbenchServiceImplTest {
         assertThat(response.getQueueStatusCounts().get("ALL")).isEqualTo(2L);
         assertThat(response.getQueueStatusCounts().get("WAIT_ASSIGN")).isEqualTo(1L);
         assertThat(response.getQueueStatusCounts().get("WAIT_FOLLOW_UP")).isEqualTo(1L);
+    }
+
+    @Test
+    void listOrdersShouldAttachFulfillmentRecordsAndKeepMoreThanTwentyRows() {
+        List<Order> orders = new ArrayList<>();
+        for (long index = 1; index <= 25; index++) {
+            Order order = new Order();
+            order.setId(index);
+            order.setClueId(index);
+            order.setCustomerId(1000L + index);
+            order.setOrderNo("SO" + index);
+            order.setType(1);
+            order.setStatus("PAID_DEPOSIT");
+            order.setVerificationStatus("UNVERIFIED");
+            order.setCreateTime(LocalDateTime.now().minusMinutes(index));
+            orders.add(order);
+        }
+        OrderActionRecord record = new OrderActionRecord();
+        record.setId(101L);
+        record.setOrderId(3L);
+        record.setActionType("DIRECT_DEPOSIT_VERIFY");
+        record.setFromStatus("PAID_DEPOSIT");
+        record.setToStatus("PAID_DEPOSIT");
+        record.setOperatorUserId(9001L);
+        record.setRemark("DIRECT-DEPOSIT-3");
+        record.setExtraJson("{\"verificationMethod\":\"DIRECT_DEPOSIT\",\"responsePayload\":\"secret payload\"}");
+        record.setCreateTime(LocalDateTime.now());
+
+        when(orderMapper.selectList(any())).thenReturn(orders);
+        when(customerMapper.selectList(any())).thenReturn(List.of());
+        when(clueProfileService.listByClueIds(any())).thenReturn(List.of());
+        when(planOrderMapper.selectList(any())).thenReturn(List.of());
+        when(orderActionRecordMapper.selectList(any())).thenReturn(List.of(), List.of(record));
+        when(staffDirectoryService.getUserName(9001L)).thenReturn("Store Service A");
+
+        List<OrderItemResponse> responses = workbenchService.listOrders(null, null, null);
+
+        assertThat(responses).hasSize(25);
+        OrderItemResponse target = responses.stream()
+                .filter(item -> item.getId().equals(3L))
+                .findFirst()
+                .orElseThrow();
+        assertThat(target.getFulfillmentRecords()).hasSize(1);
+        assertThat(target.getFulfillmentRecords().get(0).getStage()).isEqualTo("VERIFY");
+        assertThat(target.getFulfillmentRecords().get(0).getOperatorUserName()).isEqualTo("Store Service A");
+        assertThat(target.getFulfillmentRecords().get(0).getSummary()).isEqualTo("定金免码确认");
+        assertThat(target.getFulfillmentRecords().get(0).getDetailItems()).contains("核销方式：DIRECT_DEPOSIT");
+        assertThat(target.getFulfillmentRecords().get(0).getRemark()).isNull();
+        assertThat(target.getFulfillmentRecords().get(0).getExtraJson()).isNull();
     }
 
     private void mockCluePage(List<Clue> clues) {

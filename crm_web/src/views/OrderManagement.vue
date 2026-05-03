@@ -71,6 +71,20 @@
             <el-tag :type="serviceConfirmationTagType(row)">{{ serviceConfirmationLabel(row) }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="最近履约记录" min-width="220">
+          <template #default="{ row }">
+            <div v-if="latestFulfillmentRecord(row)" class="fulfillment-record-preview">
+              <div class="fulfillment-record-preview__head">
+                <el-tag size="small" :type="fulfillmentStageTagType(latestFulfillmentRecord(row)?.stage)" effect="light">
+                  {{ fulfillmentStageLabel(latestFulfillmentRecord(row)?.stage) }}
+                </el-tag>
+                <strong>{{ fulfillmentActionLabel(latestFulfillmentRecord(row)?.actionType) }}</strong>
+              </div>
+              <span>{{ fulfillmentRecordSummary(latestFulfillmentRecord(row)) }}</span>
+            </div>
+            <span v-else class="text-secondary">暂无履约记录</span>
+          </template>
+        </el-table-column>
         <el-table-column label="付款时间" min-width="170">
           <template #default="{ row }">
             {{ formatDateTime(row.createTime) }}
@@ -447,6 +461,75 @@ function serviceConfirmationTagType(row) {
   return 'info'
 }
 
+function fulfillmentRecords(row) {
+  return Array.isArray(row?.fulfillmentRecords) ? row.fulfillmentRecords : []
+}
+
+function latestFulfillmentRecord(row) {
+  return fulfillmentRecords(row)[0] || null
+}
+
+function fulfillmentStageLabel(stage) {
+  const labels = {
+    SCHEDULE: '排档',
+    VERIFY: '核销',
+    SERVICE_FORM: '确认单',
+    SERVICE: '服务',
+    FINANCE: '财务'
+  }
+  return labels[normalize(stage)] || '履约'
+}
+
+function fulfillmentStageTagType(stage) {
+  const types = {
+    SCHEDULE: 'primary',
+    VERIFY: 'success',
+    SERVICE_FORM: 'warning',
+    SERVICE: 'success',
+    FINANCE: 'info'
+  }
+  return types[normalize(stage)] || 'info'
+}
+
+function fulfillmentActionLabel(actionType) {
+  const labels = {
+    APPOINTMENT_CREATE: '已约档',
+    APPOINTMENT_CHANGE: '已改档',
+    APPOINTMENT_CANCEL: '取消预约',
+    DIRECT_DEPOSIT_VERIFY: '定金免码确认',
+    EXTERNAL_VOUCHER_VERIFY: '团购券核销',
+    VOUCHER_VERIFY: '团购券核销',
+    VOUCHER_VERIFY_FAILED: '核销失败',
+    SERVICE_FORM_PRINT: '打印确认单',
+    SERVICE_FORM_CONFIRM: '确认纸质单',
+    SERVICE_FINISH: '服务完成',
+    ORDER_COMPLETE: '订单完成',
+    REFUND_REGISTER: '退款冲正'
+  }
+  return labels[normalize(actionType)] || '履约记录'
+}
+
+function fulfillmentRecordSummary(record) {
+  if (!record) {
+    return '--'
+  }
+  const parts = []
+  const actor = record.operatorUserName || (record.operatorUserId ? `ID ${record.operatorUserId}` : '')
+  if (actor) {
+    parts.push(actor)
+  }
+  const safeDetails = Array.isArray(record.detailItems) ? record.detailItems.map((item) => String(item || '').trim()).filter(Boolean) : []
+  if (record.summary && fulfillmentActionLabel(record.actionType) === '履约记录') {
+    safeDetails.unshift(String(record.summary).trim())
+  }
+  parts.push(...safeDetails.slice(0, 2))
+  const time = formatDateTime(record.createTime)
+  if (time) {
+    parts.push(time)
+  }
+  return parts.join(' / ') || '--'
+}
+
 function canRefundOrder(row) {
   return ['COMPLETED', 'FINISHED', 'USED'].includes(normalize(row?.status)) && Number(resolveServiceConfirmAmount(row) || 0) > 0
 }
@@ -723,6 +806,31 @@ onMounted(loadOrders)
 
 .action-group--wrap {
   flex-wrap: wrap;
+}
+
+.fulfillment-record-preview {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fulfillment-record-preview__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fulfillment-record-preview__head strong,
+.fulfillment-record-preview span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fulfillment-record-preview span {
+  color: #64748b;
+  font-size: 12px;
 }
 
 .wecom-dialog {

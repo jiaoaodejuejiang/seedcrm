@@ -155,6 +155,7 @@ public final class WorkbenchResponses {
         private LocalDateTime verificationTime;
         private Long verificationOperatorId;
         private List<AppointmentRecordResponse> appointmentRecords;
+        private List<FulfillmentRecordResponse> fulfillmentRecords;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime createTime;
     }
@@ -168,6 +169,24 @@ public final class WorkbenchResponses {
         private String toStatus;
         private Long operatorUserId;
         private String operatorUserName;
+        private String remark;
+        private String extraJson;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime createTime;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class FulfillmentRecordResponse {
+        private String actionType;
+        private String stage;
+        private String fromStatus;
+        private String toStatus;
+        private Long operatorUserId;
+        private String operatorUserName;
+        private String summary;
+        private List<String> detailItems;
         private String remark;
         private String extraJson;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

@@ -83,6 +83,10 @@ export function refreshSystemConfigRuntime(publishNo) {
   return http.post(`/system-config/publish-records/${encodeURIComponent(publishNo)}/runtime-refresh`)
 }
 
+export function processSystemConfigRuntimeEvents(publishNo) {
+  return http.post(`/system-config/publish-records/${encodeURIComponent(publishNo)}/runtime-events/process`)
+}
+
 export function rollbackPreviewSystemConfig(changeLogId) {
   return http.post(`/system-config/change-logs/${changeLogId}/rollback-preview`)
 }

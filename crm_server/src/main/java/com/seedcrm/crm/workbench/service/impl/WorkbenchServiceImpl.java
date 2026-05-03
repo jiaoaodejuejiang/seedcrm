@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.entity.ClueRecord;
 import com.seedcrm.crm.clue.dto.ClueProfileDtos.ClueProfileResponse;
@@ -62,6 +64,7 @@ import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FinanceMonthlyStatRespon
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FinanceOverviewResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FinanceTeamStatResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FlowTraceItemResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FulfillmentRecordResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.OrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderWorkbenchResponse;
@@ -103,10 +106,39 @@ import org.springframework.web.client.RestClient;
 @Service
 public class WorkbenchServiceImpl implements WorkbenchService {
 
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
     private static final int CLUE_LIST_BATCH_SIZE = 200;
     private static final int CLUE_LIST_DEFAULT_LIMIT = 1000;
     private static final int CLUE_LIST_SCAN_LIMIT = 2000;
     private static final int CLUE_PAGE_MAX_PAGE_SIZE = 200;
+    private static final int ORDER_LIST_DEFAULT_LIMIT = 1000;
+    private static final int ORDER_LIST_FULFILLMENT_RECORD_LIMIT = 3;
+    private static final Set<String> FULFILLMENT_ACTION_TYPES = Set.of(
+            "APPOINTMENT_CREATE",
+            "APPOINTMENT_CHANGE",
+            "APPOINTMENT_CANCEL",
+            "DIRECT_DEPOSIT_VERIFY",
+            "EXTERNAL_VOUCHER_VERIFY",
+            "VOUCHER_VERIFY",
+            "VOUCHER_VERIFY_FAILED",
+            "SERVICE_FORM_PRINT",
+            "SERVICE_FORM_CONFIRM",
+            "SERVICE_FINISH",
+            "ORDER_COMPLETE",
+            "REFUND_REGISTER");
+    private static final Map<String, String> FULFILLMENT_STAGE_BY_ACTION = Map.ofEntries(
+            Map.entry("APPOINTMENT_CREATE", "SCHEDULE"),
+            Map.entry("APPOINTMENT_CHANGE", "SCHEDULE"),
+            Map.entry("APPOINTMENT_CANCEL", "SCHEDULE"),
+            Map.entry("DIRECT_DEPOSIT_VERIFY", "VERIFY"),
+            Map.entry("EXTERNAL_VOUCHER_VERIFY", "VERIFY"),
+            Map.entry("VOUCHER_VERIFY", "VERIFY"),
+            Map.entry("VOUCHER_VERIFY_FAILED", "VERIFY"),
+            Map.entry("SERVICE_FORM_PRINT", "SERVICE_FORM"),
+            Map.entry("SERVICE_FORM_CONFIRM", "SERVICE_FORM"),
+            Map.entry("SERVICE_FINISH", "SERVICE"),
+            Map.entry("ORDER_COMPLETE", "SERVICE"),
+            Map.entry("REFUND_REGISTER", "FINANCE"));
 
     private final ClueMapper clueMapper;
     private final ClueProfileService clueProfileService;
@@ -510,7 +542,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 .filter(order -> matchesWorkbenchOrderStatus(order, normalizedStatus))
                 .filter(order -> matchesCustomerName(order, customerMap.get(order.getCustomerId()), normalizedCustomerName))
                 .filter(order -> matchesCustomerPhone(order, customerMap.get(order.getCustomerId()), normalizedCustomerPhone))
-                .limit(20)
+                .limit(ORDER_LIST_DEFAULT_LIMIT)
                 .toList();
         return buildOrderResponses(filteredOrders);
     }
@@ -705,6 +737,8 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 summary == null ? null : summary.getPlanOrderStatus(), customer);
         if (orderResponse != null && order != null && order.getId() != null) {
             orderResponse.setAppointmentRecords(loadAppointmentRecordsByOrderId(List.of(order.getId()))
+                    .getOrDefault(order.getId(), List.of()));
+            orderResponse.setFulfillmentRecords(loadFulfillmentRecordsByOrderId(List.of(order.getId()))
                     .getOrDefault(order.getId(), List.of()));
         }
 
@@ -947,13 +981,16 @@ public class WorkbenchServiceImpl implements WorkbenchService {
         if (orders.isEmpty()) {
             return List.of();
         }
+        List<Long> orderIds = orders.stream().map(Order::getId).filter(Objects::nonNull).toList();
         List<Long> customerIds = orders.stream().map(Order::getCustomerId).filter(Objects::nonNull).distinct().toList();
         Map<Long, Customer> customerMap = loadCustomers(customerIds);
         Map<Long, ClueProfileResponse> profileByClueId = loadClueProfilesByClueId(
                 orders.stream().map(Order::getClueId).filter(Objects::nonNull).distinct().toList());
-        Map<Long, PlanOrder> planOrderByOrderId = loadPlanOrderByOrderId(orders.stream().map(Order::getId).toList());
+        Map<Long, PlanOrder> planOrderByOrderId = loadPlanOrderByOrderId(orderIds);
         Map<Long, List<AppointmentRecordResponse>> appointmentRecordsByOrderId =
-                loadAppointmentRecordsByOrderId(orders.stream().map(Order::getId).filter(Objects::nonNull).toList());
+                loadAppointmentRecordsByOrderId(orderIds);
+        Map<Long, List<FulfillmentRecordResponse>> fulfillmentRecordsByOrderId =
+                loadFulfillmentRecordsByOrderId(orderIds, ORDER_LIST_FULFILLMENT_RECORD_LIMIT);
 
         return orders.stream()
                 .map(order -> {
@@ -965,6 +1002,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                             customer,
                             profileByClueId.get(order.getClueId()));
                     response.setAppointmentRecords(appointmentRecordsByOrderId.getOrDefault(order.getId(), List.of()));
+                    response.setFulfillmentRecords(fulfillmentRecordsByOrderId.getOrDefault(order.getId(), List.of()));
                     return response;
                 })
                 .toList();
@@ -982,6 +1020,9 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                         "APPOINTMENT_CANCEL"))
                 .orderByDesc(OrderActionRecord::getCreateTime)
                 .orderByDesc(OrderActionRecord::getId));
+        if (records == null || records.isEmpty()) {
+            return Map.of();
+        }
         return records.stream()
                 .collect(Collectors.groupingBy(
                         OrderActionRecord::getOrderId,
@@ -999,6 +1040,234 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 record.getRemark(),
                 record.getExtraJson(),
                 record.getCreateTime());
+    }
+
+    private Map<Long, List<FulfillmentRecordResponse>> loadFulfillmentRecordsByOrderId(List<Long> orderIds) {
+        return loadFulfillmentRecordsByOrderId(orderIds, Integer.MAX_VALUE);
+    }
+
+    private Map<Long, List<FulfillmentRecordResponse>> loadFulfillmentRecordsByOrderId(List<Long> orderIds,
+                                                                                       int maxRecordsPerOrder) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return Map.of();
+        }
+        int safeMaxRecordsPerOrder = maxRecordsPerOrder <= 0 ? Integer.MAX_VALUE : maxRecordsPerOrder;
+        List<OrderActionRecord> records = orderActionRecordMapper.selectList(Wrappers.<OrderActionRecord>lambdaQuery()
+                .in(OrderActionRecord::getOrderId, orderIds)
+                .in(OrderActionRecord::getActionType, FULFILLMENT_ACTION_TYPES)
+                .orderByDesc(OrderActionRecord::getCreateTime)
+                .orderByDesc(OrderActionRecord::getId));
+        if (records == null || records.isEmpty()) {
+            return Map.of();
+        }
+        return records.stream()
+                .collect(Collectors.groupingBy(
+                        OrderActionRecord::getOrderId,
+                        LinkedHashMap::new,
+                        Collectors.collectingAndThen(
+                                Collectors.toList(),
+                                items -> items.stream()
+                                        .limit(safeMaxRecordsPerOrder)
+                                        .map(this::buildFulfillmentRecordResponse)
+                                        .toList())));
+    }
+
+    private FulfillmentRecordResponse buildFulfillmentRecordResponse(OrderActionRecord record) {
+        String actionType = normalize(record == null ? null : record.getActionType());
+        return new FulfillmentRecordResponse(
+                actionType,
+                FULFILLMENT_STAGE_BY_ACTION.getOrDefault(actionType, "OTHER"),
+                record.getFromStatus(),
+                record.getToStatus(),
+                record.getOperatorUserId(),
+                staffDirectoryService.getUserName(record.getOperatorUserId()),
+                fulfillmentActionSummary(actionType),
+                buildFulfillmentDetailItems(record),
+                null,
+                null,
+                record.getCreateTime());
+    }
+
+    private String fulfillmentActionSummary(String actionType) {
+        return switch (normalize(actionType)) {
+            case "APPOINTMENT_CREATE" -> "新增预约";
+            case "APPOINTMENT_CHANGE" -> "修改预约";
+            case "APPOINTMENT_CANCEL" -> "取消预约";
+            case "DIRECT_DEPOSIT_VERIFY" -> "定金免码确认";
+            case "EXTERNAL_VOUCHER_VERIFY", "VOUCHER_VERIFY" -> "团购券核销";
+            case "VOUCHER_VERIFY_FAILED" -> "核销失败";
+            case "SERVICE_FORM_PRINT" -> "打印服务确认单";
+            case "SERVICE_FORM_CONFIRM" -> "确认纸质服务单";
+            case "SERVICE_FINISH" -> "服务完成";
+            case "ORDER_COMPLETE" -> "订单完成";
+            case "REFUND_REGISTER" -> "退款冲正登记";
+            default -> "履约记录";
+        };
+    }
+
+    private List<String> buildFulfillmentDetailItems(OrderActionRecord record) {
+        if (record == null) {
+            return List.of();
+        }
+        String actionType = normalize(record.getActionType());
+        JsonNode extra = parseActionExtra(record.getExtraJson());
+        List<String> items = new ArrayList<>();
+        addAppointmentDetailItems(items, extra);
+        addVoucherDetailItems(items, actionType, extra);
+        addServiceFormDetailItems(items, actionType, extra);
+        addRefundDetailItems(items, actionType, extra);
+        addSafeRemarkDetail(items, actionType, record.getRemark(), extra);
+        return items;
+    }
+
+    private void addAppointmentDetailItems(List<String> items, JsonNode extra) {
+        if (extra == null || extra.isMissingNode() || extra.isNull()) {
+            return;
+        }
+        String storeNameBefore = textValue(extra, "storeNameBefore");
+        String appointmentTimeBefore = textValue(extra, "appointmentTimeBefore");
+        String storeNameAfter = textValue(extra, "storeNameAfter");
+        String appointmentTimeAfter = textValue(extra, "appointmentTimeAfter");
+        if (StringUtils.hasText(storeNameBefore) || StringUtils.hasText(appointmentTimeBefore)) {
+            items.add("原档：" + joinNonBlank(storeNameBefore, appointmentTimeBefore));
+        }
+        if (StringUtils.hasText(storeNameAfter) || StringUtils.hasText(appointmentTimeAfter)) {
+            items.add("新档：" + joinNonBlank(storeNameAfter, appointmentTimeAfter));
+        }
+        String headcountBefore = textValue(extra, "headcountBefore");
+        String headcountAfter = textValue(extra, "headcountAfter");
+        if (StringUtils.hasText(headcountBefore) || StringUtils.hasText(headcountAfter)) {
+            items.add("到店人数：" + joinArrow(headcountBefore, headcountAfter));
+        }
+    }
+
+    private void addVoucherDetailItems(List<String> items, String actionType, JsonNode extra) {
+        if (!StringUtils.hasText(actionType)) {
+            return;
+        }
+        if (!List.of("DIRECT_DEPOSIT_VERIFY", "EXTERNAL_VOUCHER_VERIFY", "VOUCHER_VERIFY", "VOUCHER_VERIFY_FAILED")
+                .contains(actionType)) {
+            return;
+        }
+        String verificationMethod = textValue(extra, "verificationMethod");
+        if (StringUtils.hasText(verificationMethod)) {
+            items.add("核销方式：" + verificationMethod);
+        }
+        if ("VOUCHER_VERIFY_FAILED".equals(actionType)) {
+            String traceId = textValue(extra, "traceId");
+            items.add(StringUtils.hasText(traceId) ? "失败记录：" + traceId : "失败记录已留存");
+        }
+    }
+
+    private void addServiceFormDetailItems(List<String> items, String actionType, JsonNode extra) {
+        if (!StringUtils.hasText(actionType)
+                || !List.of("SERVICE_FORM_PRINT", "SERVICE_FORM_CONFIRM").contains(actionType)
+                || extra == null) {
+            return;
+        }
+        JsonNode printAudit = extra.path("printAudit");
+        String printCount = textValue(printAudit, "printCount");
+        String printedAt = textValue(printAudit, "printedAt");
+        if (StringUtils.hasText(printCount)) {
+            items.add("打印次数：" + printCount);
+        }
+        if (StringUtils.hasText(printedAt)) {
+            items.add("打印时间：" + printedAt);
+        }
+    }
+
+    private void addRefundDetailItems(List<String> items, String actionType, JsonNode extra) {
+        if (!"REFUND_REGISTER".equals(actionType)) {
+            return;
+        }
+        items.add("资金处理：仅记账，不动资金");
+        String scope = textValue(extra, "scope");
+        if (StringUtils.hasText(scope)) {
+            items.add("冲正范围：" + scope);
+        }
+        if (booleanValue(extra, "reverseStorePerformance")) {
+            items.add("门店绩效冲正");
+        }
+        if (booleanValue(extra, "reverseCustomerService")) {
+            items.add("客服绩效冲正");
+        }
+        if (booleanValue(extra, "reverseDistributor")) {
+            items.add("分销记账冲正");
+        }
+    }
+
+    private void addSafeRemarkDetail(List<String> items, String actionType, String remark, JsonNode extra) {
+        if (!StringUtils.hasText(actionType)) {
+            return;
+        }
+        if (!StringUtils.hasText(remark)) {
+            String extraRemark = textValue(extra, "remark");
+            if (List.of("APPOINTMENT_CREATE", "APPOINTMENT_CHANGE", "APPOINTMENT_CANCEL").contains(actionType)
+                    && StringUtils.hasText(extraRemark)) {
+                items.add("备注：" + extraRemark);
+            }
+            return;
+        }
+        String trimmed = remark.trim();
+        if (List.of("DIRECT_DEPOSIT_VERIFY", "EXTERNAL_VOUCHER_VERIFY", "VOUCHER_VERIFY", "VOUCHER_VERIFY_FAILED",
+                "REFUND_REGISTER").contains(actionType)) {
+            return;
+        }
+        if (List.of("service confirmation form printed", "paper service confirmation form signed").contains(trimmed)) {
+            return;
+        }
+        items.add("备注：" + trimmed);
+    }
+
+    private JsonNode parseActionExtra(String extraJson) {
+        if (!StringUtils.hasText(extraJson)) {
+            return null;
+        }
+        try {
+            return JSON_MAPPER.readTree(extraJson);
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    private String textValue(JsonNode node, String fieldName) {
+        if (node == null || !StringUtils.hasText(fieldName)) {
+            return null;
+        }
+        JsonNode value = node.path(fieldName);
+        if (value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+        if (value.isNumber() || value.isBoolean()) {
+            return value.asText();
+        }
+        String text = value.asText();
+        return StringUtils.hasText(text) ? text.trim() : null;
+    }
+
+    private boolean booleanValue(JsonNode node, String fieldName) {
+        if (node == null || !StringUtils.hasText(fieldName)) {
+            return false;
+        }
+        JsonNode value = node.path(fieldName);
+        return value.isBoolean() ? value.asBoolean() : "true".equalsIgnoreCase(value.asText());
+    }
+
+    private String joinNonBlank(String left, String right) {
+        List<String> values = new ArrayList<>();
+        if (StringUtils.hasText(left)) {
+            values.add(left.trim());
+        }
+        if (StringUtils.hasText(right)) {
+            values.add(right.trim());
+        }
+        return String.join(" ", values);
+    }
+
+    private String joinArrow(String before, String after) {
+        String left = StringUtils.hasText(before) ? before.trim() : "--";
+        String right = StringUtils.hasText(after) ? after.trim() : "--";
+        return left + " -> " + right;
     }
 
     private OrderItemResponse buildOrderResponse(Order order,
@@ -1036,6 +1305,7 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 order.getVerificationCode(),
                 order.getVerificationTime(),
                 order.getVerificationOperatorId(),
+                List.of(),
                 List.of(),
                 order.getCreateTime());
     }

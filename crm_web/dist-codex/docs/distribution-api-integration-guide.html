@@ -1,0 +1,1075 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM 鍒嗛攢鎺ュ彛鑱旇皟璇存槑</title>
+  <style>
+    :root {
+      --ink: #17231f;
+      --muted: #64736d;
+      --soft: #f6f8f5;
+      --panel: #ffffff;
+      --line: #dfe7e2;
+      --brand: #176b54;
+      --brand-weak: #e6f3ee;
+      --warn: #9a5b00;
+      --warn-weak: #fff4df;
+      --danger: #9f2f2f;
+      --danger-weak: #fff0f0;
+      --ok: #25734f;
+      --ok-weak: #edf8f2;
+      --code-bg: #10231d;
+      --code-fg: #dff7ee;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(23, 107, 84, 0.13), transparent 34rem),
+        linear-gradient(135deg, #fbfcf8 0%, #edf4ef 100%);
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+      line-height: 1.7;
+    }
+
+    a {
+      color: var(--brand);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 288px minmax(0, 1fr);
+      gap: 28px;
+      width: min(1320px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 32px 0 52px;
+    }
+
+    .toc {
+      position: sticky;
+      top: 18px;
+      align-self: start;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.90);
+      box-shadow: 0 20px 60px rgba(21, 48, 38, 0.08);
+    }
+
+    .toc strong {
+      display: block;
+      margin-bottom: 14px;
+      color: var(--brand);
+      font-size: 18px;
+    }
+
+    .toc a {
+      display: block;
+      margin: 7px 0;
+      padding: 7px 10px;
+      border-radius: 12px;
+      color: #335047;
+      font-size: 14px;
+    }
+
+    .toc a:hover {
+      background: var(--brand-weak);
+      text-decoration: none;
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    .hero {
+      padding: 34px;
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 24px 80px rgba(21, 48, 38, 0.10);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--brand);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.15;
+    }
+
+    h2 {
+      margin: 0 0 18px;
+      padding-top: 8px;
+      font-size: 26px;
+      line-height: 1.25;
+    }
+
+    h3 {
+      margin: 22px 0 10px;
+      font-size: 19px;
+    }
+
+    p {
+      margin: 10px 0;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: var(--brand-weak);
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .section {
+      margin-top: 24px;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 16px 50px rgba(21, 48, 38, 0.06);
+    }
+
+    .notice {
+      margin: 18px 0;
+      padding: 16px 18px;
+      border-left: 4px solid var(--brand);
+      border-radius: 16px;
+      background: var(--brand-weak);
+    }
+
+    .notice.warn {
+      border-left-color: var(--warn);
+      background: var(--warn-weak);
+      color: #5d3900;
+    }
+
+    .notice.danger {
+      border-left-color: var(--danger);
+      background: var(--danger-weak);
+      color: #5d1f1f;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin: 18px 0;
+    }
+
+    .step {
+      min-height: 112px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--soft);
+      font-size: 14px;
+    }
+
+    .step b {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--brand);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+    }
+
+    table {
+      width: 100%;
+      margin: 14px 0 4px;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #eef5f1;
+      color: #25483d;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    code,
+    pre {
+      font-family: Consolas, "SFMono-Regular", Menlo, monospace;
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: #edf2ef;
+      color: #10231d;
+    }
+
+    pre {
+      overflow: auto;
+      margin: 14px 0;
+      padding: 16px;
+      border-radius: 18px;
+      background: var(--code-bg);
+      color: var(--code-fg);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .tag {
+      display: inline-flex;
+      margin: 2px 4px 2px 0;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: #edf2ef;
+      color: #29493f;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .tag.ok {
+      background: var(--ok-weak);
+      color: var(--ok);
+    }
+
+    .tag.warn {
+      background: var(--warn-weak);
+      color: var(--warn);
+    }
+
+    .tag.danger {
+      background: var(--danger-weak);
+      color: var(--danger);
+    }
+
+    .checklist {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .checklist li {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--soft);
+    }
+
+    .endpoint {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--soft);
+    }
+
+    .method {
+      display: inline-flex;
+      justify-content: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--brand);
+      color: white;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    footer {
+      margin-top: 24px;
+      padding: 20px 8px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    @media (max-width: 1080px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .toc {
+        position: static;
+      }
+
+      .flow,
+      .grid,
+      .checklist {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="toc">
+      <strong>鐩綍</strong>
+      <a href="#overview">1. 鎺ュ叆姒傝</a>
+      <a href="#environment">2. 鐜涓庢潈闄?/a>
+      <a href="#inbound">3. 宸叉敮浠樿鍗曞叆绔?/a>
+      <a href="#signature">4. 绛惧悕涓庨槻閲嶆斁</a>
+      <a href="#idempotency">5. 闃查噸澶嶈鍒?/a>
+      <a href="#outbox">6. 灞ョ害鍥炴帹</a>
+      <a href="#reconcile">7. 鐘舵€佸洖鏌ヤ笌瀵硅处</a>
+      <a href="#debug">8. 璋冭瘯涓庤瘖鏂?/a>
+      <a href="#errors">9. 閿欒鐮佷笌鎺掗殰</a>
+      <a href="#acceptance">10. 涓婄嚎楠屾敹</a>
+    </aside>
+
+    <main>
+      <header class="hero">
+        <p class="eyebrow">SEEDCRM DISTRIBUTION API</p>
+        <h1>鍒嗛攢鎺ュ彛鑱旇皟璇存槑</h1>
+        <p>
+          鏈枃闈㈠悜澶栭儴鍒嗛攢 / 鐢靛晢绯荤粺鐮斿彂銆丼eedCRM 闆嗘垚绠＄悊鍛樺拰鑱旇皟浜哄憳锛岃鏄庢柟妗?B 鐨勫叆绔欎簨浠躲€佺鍚嶃€侀槻閲嶅銆丱utbox 鍥炴帹銆佸紓甯搁槦鍒椼€佸洖鏌ュ璐﹀拰楠屾敹鏍锋湰銆?        </p>
+        <div class="meta">
+          <span class="pill">閫傜敤鐗堟湰锛氭柟妗?B V1</span>
+          <span class="pill">鏈€鍚庢洿鏂帮細2026-05-01</span>
+          <span class="pill">鍝嶅簲鍖咃細code / message / data</span>
+        </div>
+      </header>
+
+      <section id="overview" class="section">
+        <h2>1. 鎺ュ叆姒傝</h2>
+        <div class="notice">
+          鍒嗛攢鏂规 B 鐨勬帴鍙ｇ洰鏍囨槸锛氬閮ㄥ垎閿€绯荤粺鎶婂凡鏀粯鎴愪氦璁㈠崟鎺ㄩ€佺粰 SeedCRM锛汼eedCRM 瀹屾垚棰勭害鎺掓。鍜岄棬搴楀饱绾﹀悗锛屽啀鎶?<code>crm.order.used</code> 寮傛鍥炴帹缁欏閮ㄥ垎閿€绯荤粺銆?        </div>
+        <div class="flow">
+          <div class="step">
+            <b>1. 澶栭儴鏀粯</b>
+            鍒嗛攢灏忕▼搴忔垨鐢靛晢绯荤粺瀹屾垚浠樻銆?          </div>
+          <div class="step">
+            <b>2. 鍏ョ珯浜嬩欢</b>
+            璋冪敤 <code>POST /open/distribution/events</code>銆?          </div>
+          <div class="step">
+            <b>3. 鍏ョ珯鏈嶅姟</b>
+            缁熶竴缁?<code>DistributionEventIngestService</code>銆?          </div>
+          <div class="step">
+            <b>4. 鏈湴涓婚摼</b>
+            鍒涘缓鎴栧尮閰?<code>Customer</code>锛屽垱寤?<code>Order(paid)</code>銆?          </div>
+          <div class="step">
+            <b>5. 闂ㄥ簵灞ョ害</b>
+            棰勭害鎺掓。锛岀敓鎴愬苟瀹屾垚 <code>PlanOrder</code>銆?          </div>
+          <div class="step">
+            <b>6. 鍥炴帹瀹屾垚</b>
+            Outbox 寮傛鍥炴帹 <code>crm.order.used</code>銆?          </div>
+        </div>
+        <pre><code>ExternalDistributionPaidOrder -> Customer -> Order(paid) -> PlanOrder -> scheduler_outbox_event -> crm.order.used</code></pre>
+        <div class="notice danger">
+          鍒嗛攢宸叉敮浠樿鍗曚笉杩涘叆 <code>Clue</code>锛汼eedCRM 涓嶅鐞嗗閮ㄥ垎閿€浣ｉ噾銆佹彁鐜般€侀€€娆捐祫閲戞祦锛汷pen API / Scheduler 閮戒笉寰楃粫杩囧叆绔欐湇鍔＄洿鎺ュ啓 <code>Customer / Order / PlanOrder</code>銆?        </div>
+      </section>
+
+      <section id="environment" class="section">
+        <h2>2. 鐜涓庢潈闄?/h2>
+        <table>
+          <thead>
+            <tr>
+              <th>椤圭洰</th>
+              <th>璇存槑</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>鍚庡彴鎺ュ彛鍓嶇紑</td>
+              <td>鏈湴榛樿 <code>http://127.0.0.1:8004</code>锛涘墠绔唬鐞嗛粯璁?<code>/api</code>銆?/td>
+            </tr>
+            <tr>
+              <td>Open API 鍏ュ彛</td>
+              <td>澶栭儴鍒嗛攢绯荤粺璋冪敤 <code>/open/distribution/events</code>锛屼笉闇€瑕佸悗鍙扮櫥褰?token锛屼絾闇€瑕佹笭閬撻厤缃拰绛惧悕瑙勫垯銆?/td>
+            </tr>
+            <tr>
+              <td>鍚庡彴璋冭瘯鎺ュ彛</td>
+              <td>鍚庡彴鐢ㄦ埛鐧诲綍鍚庝娇鐢?<code>X-Auth-Token</code> 璋冪敤 <code>/scheduler/*</code> 鎺ュ彛銆?/td>
+            </tr>
+            <tr>
+              <td>閰嶇疆鍏ュ彛</td>
+              <td>绯荤粺璁剧疆 -> 璋冨害涓績 -> 鍒嗛攢鎺ュ彛 -> 鎺ュ叆閰嶇疆銆?/td>
+            </tr>
+            <tr>
+              <td>鑱旇皟瑙掕壊</td>
+              <td><code>INTEGRATION_ADMIN</code> 閰嶇疆鍜屾墽琛屽叏灞€澶勭悊锛?code>INTEGRATION_OPERATOR</code> 鏌ョ湅鏃ュ織銆佸紓甯稿拰鑴辨晱缁撴灉銆?/td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>2.1 MOCK 涓?LIVE</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>妯″紡</th>
+              <th>鐢ㄩ€?/th>
+              <th>瀹夊叏瑙勫垯</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>MOCK</code></td>
+              <td>鏈湴鑱旇皟銆佸洖褰掓祴璇曘€侀獙鏀舵牱鏈敓鎴愩€?/td>
+              <td>鍏ョ珯浠嶉渶瑕?<code>X-Idempotency-Key</code> 鍜屼簨浠跺瓧娈碉紱绛惧悕鍙烦杩囥€?/td>
+            </tr>
+            <tr>
+              <td><code>LIVE</code></td>
+              <td>鐪熷疄澶栭儴鍒嗛攢绯荤粺鑱旇皟鎴栫敓浜ф帴鍏ャ€?/td>
+              <td>蹇呴』閰嶇疆 <code>AppId</code>銆?code>AppSecret</code>銆佸洖鎺ㄥ湴鍧€銆佺姸鎬佸洖鏌ヨ矾寰勩€佸璐﹁矾寰勶紝骞舵惡甯︾鍚嶅ご銆?/td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>2.2 涓婄嚎鍩熷悕涓?OpenAPI</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>閰嶇疆椤?/th>
+              <th>鐢ㄩ€?/th>
+              <th>涓婄嚎瑕佹眰</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>SEEDCRM_SYSTEM_BASE_URL</code></td>
+              <td>绯荤粺鍚庡彴璁块棶鍩熷悕锛岀敤浜庨〉闈㈣烦杞€佹壂鐮佹湇鍔″崟绛夊墠绔叆鍙ｃ€?/td>
+              <td>鐢熶骇鐜蹇呴』閰嶇疆涓哄彲璁块棶鐨?HTTPS 鍩熷悕銆?/td>
+            </tr>
+            <tr>
+              <td><code>SEEDCRM_API_BASE_URL</code></td>
+              <td>API 鍩熷悕锛岀敤浜庡垎閿€鍏ョ珯銆佸洖璋冨湴鍧€銆丼wagger/OpenAPI 绀轰緥鍦板潃銆?/td>
+              <td>鐢熶骇鐜蹇呴』閰嶇疆涓哄閮ㄥ垎閿€绯荤粺鍙闂殑 HTTPS 鍦板潃銆?/td>
+            </tr>
+            <tr>
+              <td><code>SEEDCRM_OPENAPI_ENABLED</code></td>
+              <td>鏄惁鍚敤 Swagger UI 鍜?<code>/v3/api-docs/*</code>銆?/td>
+              <td>鐢熶骇鍙惎鐢紝浣嗗繀椤婚€氳繃鍚庡彴 token 璁块棶锛涙湭鎺堟潈鐢ㄦ埛涓嶈兘鐪嬪埌鎺ュ彛瀹氫箟銆?/td>
+            </tr>
+            <tr>
+              <td><code>SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN</code></td>
+              <td>鏈湴璁块棶 Swagger 鏄惁鍏佽鍏?token銆?/td>
+              <td>鐢熶骇鐜寤鸿璁剧疆涓?<code>false</code>銆?/td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="notice warn">
+          Swagger UI 鐢ㄤ簬鏌ョ湅鎺ュ彛瀹氫箟锛涙寮忚仈璋冭浼樺厛浣跨敤鈥滆仈璋冨伐浣滃彴鈥濊繘琛?dry-run 楠岃瘉銆傜敓浜х幆澧冧笉瑕佹妸 Swagger/OpenAPI 鐩存帴鏆撮湶缁欏叕缃戞湭鎺堟潈璁块棶銆?        </div>
+      </section>
+
+      <section id="inbound" class="section">
+        <h2>3. 宸叉敮浠樿鍗曞叆绔?/h2>
+        <div class="endpoint">
+          <span class="method">POST</span>
+          <code>/open/distribution/events</code>
+        </div>
+        <p>璇ユ帴鍙ｆ帴鏀跺閮ㄥ垎閿€宸叉敮浠樿鍗曘€佸彇娑堛€侀€€娆惧緟澶勭悊銆佸凡閫€娆剧瓑浜嬩欢銆傛墍鏈夊啓鍏ュ姩浣滅粺涓€杩涘叆鍏ョ珯涓氬姟鏈嶅姟銆?/p>
+
+        <h3>3.1 璇锋眰澶?/h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Header</th>
+              <th>鏄惁蹇呭～</th>
+              <th>璇存槑</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>X-Partner-Code</code></td>
+              <td>寤鸿蹇呭～</td>
+              <td>娓犻亾缂栫爜锛岄粯璁?<code>DISTRIBUTION</code>銆傚璇锋眰澶村拰鎶ユ枃 <code>partnerCode</code> 鍚屾椂瀛樺湪锛屽繀椤讳竴鑷淬€?/td>
+            </tr>
+            <tr>
+              <td><code>X-Idempotency-Key</code></td>
+              <td>蹇呭～</td>
+              <td>骞傜瓑閿紝椤甸潰灞曠ず涓衡€滈槻閲嶅缂栧彿鈥濄€傜姝娇鐢ㄦ墜鏈哄彿浣滀负璁㈠崟骞傜瓑渚濇嵁銆?/td>
+            </tr>
+            <tr>
+              <td><code>X-Timestamp</code></td>
+              <td>LIVE 蹇呭～</td>
+              <td>绛惧悕鏃堕棿锛屽厑璁?10 鍒嗛挓绐楀彛銆傚缓璁?ISO-8601 UTC 鏃堕棿銆?/td>
+            </tr>
+            <tr>
+              <td><code>X-Nonce</code></td>
+              <td>LIVE 蹇呭～</td>
+              <td>闅忔満涓诧紝鐢ㄤ簬闃查噸鏀俱€傚悓娓犻亾宸查獙璇?nonce 涓嶈兘閲嶅浣跨敤銆?/td>
+            </tr>
+            <tr>
+              <td><code>X-Signature</code></td>
+              <td>LIVE 蹇呭～</td>
+              <td>HMAC-SHA256 绛惧悕锛岃鍒欒鈥滅鍚嶄笌闃查噸鏀锯€濄€?/td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>3.2 鏀寔浜嬩欢</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>eventType</th>
+              <th>SeedCRM 琛屼负</th>
+              <th>澶囨敞</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>distribution.order.paid</code></td>
+              <td>鍒涘缓鎴栧尮閰?<code>Customer</code>锛屽垱寤?<code>Order(paid)</code>銆?/td>
+              <td>鍞竴鍏佽鍒涘缓璁㈠崟鐨勪簨浠躲€?/td>
+            </tr>
+            <tr>
+              <td><code>distribution.order.cancelled</code></td>
+              <td>鍙兘鏇存柊宸叉湁璁㈠崟鐨勫閮ㄧ姸鎬佹垨杩涘叆寮傚父闃熷垪銆?/td>
+              <td>涓嶈兘鍙嶅悜鍒涘缓璁㈠崟銆?/td>
+            </tr>
+            <tr>
+              <td><code>distribution.order.refund_pending</code></td>
+              <td>璁板綍澶栭儴閫€娆惧緟澶勭悊鐘舵€侊紝蹇呰鏃惰繘鍏ュ紓甯搁槦鍒椼€?/td>
+              <td>澶栭儴閫€娆捐祫閲戞祦浠嶇敱澶栭儴鍒嗛攢绯荤粺澶勭悊銆?/td>
+            </tr>
+            <tr>
+              <td><code>distribution.order.refunded</code></td>
+              <td>鏇存柊宸叉湁璁㈠崟澶栭儴閫€娆剧姸鎬侊紝鎴栨寜鍐茬獊杩涘叆寮傚父闃熷垪銆?/td>
+              <td>涓嶅緱缁曡繃鍏ョ珯鏈嶅姟鐩存帴鏀规牳蹇冭〃銆?/td>
+            </tr>
+            <tr>
+              <td><code>distribution.promoter.synced</code> / <code>distribution.member.updated</code></td>
+              <td>V1 浠呰褰曚簨浠舵棩蹇椼€?/td>
+              <td>涓嶅垱寤烘牳蹇冩ā鍨嬶紝涓嶈Е鍙戝垎浣ｆ彁鐜般€?/td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>3.3 璇锋眰浣撳瓧娈?/h3>
+        <table>
+          <thead>
+            <tr>
+              <th>瀛楁</th>
+              <th>蹇呭～</th>
+              <th>璇存槑</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>eventType</code></td>
+              <td>鏄?/td>
+              <td>浜嬩欢绫诲瀷锛屼緥濡?<code>distribution.order.paid</code>銆?/td>
+            </tr>
+            <tr>
+              <td><code>eventId</code></td>
+              <td>鏄?/td>
+              <td>澶栭儴浜嬩欢 ID锛岀敤浜庢棩蹇楄拷韪拰閲嶅浜嬩欢璇嗗埆銆?/td>
+            </tr>
+            <tr>
+              <td><code>partnerCode</code></td>
+              <td>寤鸿</td>
+              <td>娓犻亾缂栫爜锛岄粯璁?<code>DISTRIBUTION</code>銆?/td>
+            </tr>
+            <tr>
+              <td><code>member.externalMemberId</code></td>
+              <td>paid 蹇呭～</td>
+              <td>澶栭儴浼氬憳 ID锛屼笌 <code>partnerCode</code> 涓€璧风敤浜庝細鍛樿韩浠藉尮閰嶃€?/td>
+            </tr>
+            <tr>
+              <td><code>member.phone</code></td>
+              <td>paid 蹇呭～</td>
+              <td>浼氬憳鎵嬫満鍙凤紝鐢ㄤ簬 Customer 鍖归厤銆備笉鑳戒綔涓鸿鍗曞箓绛夐敭銆?/td>
+            </tr>
+            <tr>
+              <td><code>member.role</code></td>
+              <td>鍚?/td>
+              <td>浼氬憳韬唤灞曠ず瀛楁锛屼緥濡?<code>leader</code>銆?code>member</code>锛屼粎鐢ㄤ簬灞曠ず / 鐢诲儚銆?/td>
+            </tr>
+            <tr>
+              <td><code>promoter.externalPromoterId</code></td>
+              <td>鍚?/td>
+              <td>澶栭儴鍒嗛攢鑰?ID锛屼粎璁板綍澶栭儴蹇収锛屼笉鍙備笌 SeedCRM 鍒嗕剑鎻愮幇銆?/td>
+            </tr>
+            <tr>
+              <td><code>order.externalOrderId</code></td>
+              <td>paid 蹇呭～</td>
+              <td>澶栭儴璁㈠崟鍙凤紝涓?<code>partnerCode</code> 鍏卞悓浣滀负璁㈠崟鍞竴渚濇嵁銆?/td>
+            </tr>
+            <tr>
+              <td><code>order.externalTradeNo</code></td>
+              <td>寤鸿</td>
+              <td>澶栭儴鏀粯娴佹按鍙凤紝鐢ㄤ簬瀵硅处鍜屽啿绐佹帓鏌ャ€?/td>
+            </tr>
+            <tr>
+              <td><code>order.type</code></td>
+              <td>寤鸿</td>
+              <td><code>deposit</code> 鎴?<code>coupon</code>锛孷1 鏈湴榛樿鍙槧灏勪负鍥㈣喘鍒?/ 瀹氶噾绫昏鍗曘€?/td>
+            </tr>
+            <tr>
+              <td><code>order.amount</code></td>
+              <td>paid 蹇呭～</td>
+              <td>宸叉敮浠橀噾棰濓紝鍗曚綅涓哄垎銆傜郴缁熷叆搴撴椂杞崲涓哄厓骞朵繚鐣欎袱浣嶅皬鏁般€?/td>
+            </tr>
+            <tr>
+              <td><code>order.status</code></td>
+              <td>寤鸿</td>
+              <td>澶栭儴鐘舵€侊紝渚嬪 <code>paid</code>銆?code>cancelled</code>銆?code>refund_pending</code>銆?code>refunded</code>銆?/td>
+            </tr>
+            <tr>
+              <td><code>rawData</code></td>
+              <td>鏄?/td>
+              <td>澶栭儴鍘熷鎶ユ枃蹇収锛岀敤浜庤拷韪€佽ˉ鍋裤€佸璐﹀拰瀹¤銆?/td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>3.4 paid 鏍蜂緥</h3>
+        <pre><code>POST /open/distribution/events
+X-Partner-Code: DISTRIBUTION
+X-Idempotency-Key: DISTRIBUTION:ORDER_PAID:o_202605010001
+Content-Type: application/json
+
+{
+  "eventType": "distribution.order.paid",
+  "eventId": "evt_202605010001",
+  "partnerCode": "DISTRIBUTION",
+  "occurredAt": "2026-05-01T10:30:00+08:00",
+  "member": {
+    "externalMemberId": "m_10001",
+    "name": "寮犱笁",
+    "phone": "13800000000",
+    "role": "member"
+  },
+  "promoter": {
+    "externalPromoterId": "p_90001",
+    "role": "leader"
+  },
+  "order": {
+    "externalOrderId": "o_202605010001",
+    "externalTradeNo": "pay_202605010001",
+    "type": "coupon",
+    "amount": 19900,
+    "paidAt": "2026-05-01T10:29:40+08:00",
+    "status": "paid"
+  },
+  "rawData": {
+    "source": "external-distribution",
+    "originalStatus": "paid"
+  }
+}</code></pre>
+
+        <h3>3.5 鎴愬姛鍝嶅簲</h3>
+        <pre><code>{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "traceId": "b3455c9f-cf34-4860-a63f-c26b723c7ff1",
+    "idempotencyResult": "CREATED",
+    "customerId": 101,
+    "orderId": 202,
+    "processStatus": "SUCCESS",
+    "message": "distribution paid order created"
+  }
+}</code></pre>
+      </section>
+
+      <section id="signature" class="section">
+        <h2>4. 绛惧悕涓庨槻閲嶆斁</h2>
+        <p>LIVE 妯″紡涓嬶紝鍏ョ珯浜嬩欢蹇呴』鎼哄甫鏃堕棿鎴炽€侀殢鏈轰覆鍜岀鍚嶃€?/p>
+        <table>
+          <thead>
+            <tr>
+              <th>椤圭洰</th>
+              <th>瑙勫垯</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>绛惧悕绠楁硶</td>
+              <td><code>HMAC-SHA256</code></td>
+            </tr>
+            <tr>
+              <td>绛惧悕瀵嗛挜</td>
+              <td>鍒嗛攢鎺ュ彛閰嶇疆涓殑 <code>AppSecret</code> / <code>clientSecret</code></td>
+            </tr>
+            <tr>
+              <td>鍏ョ珯绛惧悕鍘熸枃</td>
+              <td><code>X-Timestamp + "|" + X-Nonce + "|" + X-Idempotency-Key + "|" + rawRequestBody</code></td>
+            </tr>
+            <tr>
+              <td>鏃堕棿绐楀彛</td>
+              <td>鍏佽 10 鍒嗛挓鍋忓樊锛岃秴鍑轰細杩斿洖鏃堕棿鎴冲紓甯搞€?/td>
+            </tr>
+            <tr>
+              <td>nonce 闃查噸鏀?/td>
+              <td>鍚屾笭閬撳凡楠岃瘉 nonce 涓嶈兘閲嶅浣跨敤銆?/td>
+            </tr>
+          </tbody>
+        </table>
+        <pre><code>// 浼唬鐮?source = timestamp + "|" + nonce + "|" + idempotencyKey + "|" + rawJsonBody
+signature = hmacSha256Hex(clientSecret, source)
+
+headers = {
+  "X-Partner-Code": "DISTRIBUTION",
+  "X-Idempotency-Key": idempotencyKey,
+  "X-Timestamp": timestamp,
+  "X-Nonce": nonce,
+  "X-Signature": signature
+}</code></pre>
+        <div class="notice warn">
+          鐢熸垚绛惧悕鏃跺繀椤讳娇鐢ㄥ師濮嬭姹備綋瀛楃涓层€傚瓧娈甸『搴忋€佺┖鏍笺€佹崲琛屽彉鍖栭兘浼氭敼鍙樼鍚嶇粨鏋滐紝鑱旇皟鏃跺缓璁厛鍥哄畾 JSON 搴忓垪鍖栨柟寮忋€?        </div>
+      </section>
+
+      <section id="idempotency" class="section">
+        <h2>5. 闃查噸澶嶈鍒?/h2>
+        <table>
+          <thead>
+            <tr>
+              <th>鍦烘櫙</th>
+              <th>缁撴灉</th>
+              <th>璇存槑</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>鍚?<code>X-Idempotency-Key</code> 鎴栧悓 <code>eventId</code>锛屾姤鏂囦竴鑷?/td>
+              <td><span class="tag ok">DUPLICATE</span></td>
+              <td>绯荤粺杩斿洖鎴愬姛骞跺拷鐣ラ噸澶嶄簨浠讹紝涓嶉噸澶嶅垱寤鸿鍗曘€?/td>
+            </tr>
+            <tr>
+              <td>鍚?<code>X-Idempotency-Key</code> 鎴栧悓 <code>eventId</code>锛屾姤鏂囦笉涓€鑷?/td>
+              <td><span class="tag danger">EXCEPTION_QUEUED</span></td>
+              <td>杩涘叆寮傚父闃熷垪锛屽紓甯哥被鍨嬩负閲嶅鎶ユ枃鍐茬獊锛岄渶瑕佷汉宸ユ牳瀵瑰唴瀹规寚绾广€?/td>
+            </tr>
+            <tr>
+              <td>鍚?<code>partnerCode + externalOrderId</code> 宸插瓨鍦紝鍏抽敭瀛楁涓€鑷?/td>
+              <td><span class="tag ok">EXISTING</span></td>
+              <td>鍒锋柊澶栭儴鐘舵€佸揩鐓э紝涓嶉噸澶嶅垱寤鸿鍗曘€?/td>
+            </tr>
+            <tr>
+              <td>鍚屽閮ㄨ鍗曞彿宸插瓨鍦紝浣嗕氦鏄撳彿銆佷細鍛樸€佺被鍨嬫垨閲戦鍐茬獊</td>
+              <td><span class="tag danger">EXCEPTION_QUEUED</span></td>
+              <td>杩涘叆寮傚父闃熷垪锛屾樉绀哄啿绐佸瓧娈点€佹湰鍦板€笺€佸閮ㄥ€煎拰澶勭悊寤鸿銆?/td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="notice danger">
+          涓婄嚎鍓嶈妫€鏌モ€滃箓绛夊仴搴封€濄€傝嫢鍘嗗彶閲嶅鎺ュ彛鎺ユ敹鏃ュ織瀵艰嚧鍞竴绱㈠紩鏆傛湭鐢熸晥锛岄渶瑕佸厛瀵煎嚭銆佷汉宸ョ‘璁ゃ€佹不鐞嗛噸澶嶈褰曪紝鍐嶇敱绠＄悊鍛樻垨 DBA 閲嶅缓鍞竴绱㈠紩銆傜姝㈢洿鎺ュ垹闄?<code>Customer / Order / PlanOrder</code> 鏁版嵁銆?        </div>
+      </section>
+
+      <section id="outbox" class="section">
+        <h2>6. 灞ョ害鍥炴帹</h2>
+        <p>
+          闂ㄥ簵鏈嶅姟瀹屾垚鍚庯紝SeedCRM 鍏堝湪鏈湴瀹屾垚 <code>PlanOrder finished -> Order used</code>锛屽啀鍐欏叆 <code>scheduler_outbox_event</code>锛岀敱璋冨害鍣ㄥ紓姝ヨ皟鐢ㄥ閮ㄥ垎閿€绯荤粺銆?        </p>
+        <h3>6.1 鍥炴帹浜嬩欢</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>椤圭洰</th>
+              <th>鍊?/th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>浜嬩欢绫诲瀷</td>
+              <td><code>crm.order.used</code></td>
+            </tr>
+            <tr>
+              <td>鍥炴帹鍦板潃</td>
+              <td>鍒嗛攢鎺ュ彛閰嶇疆涓殑 <code>callbackUrl</code>锛屾垨 <code>baseUrl + endpointPath</code></td>
+            </tr>
+            <tr>
+              <td>骞傜瓑閿?/td>
+              <td><code>providerCode:eventType:orderId:planOrderId</code></td>
+            </tr>
+            <tr>
+              <td>绛惧悕鍘熸枃</td>
+              <td><code>timestamp + "|" + nonce + "|" + idempotencyKey + "|" + payload</code></td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>6.2 鍥炴帹 Header</h3>
+        <pre><code>X-Partner-Code: DISTRIBUTION
+X-Idempotency-Key: DISTRIBUTION:crm.order.used:202:301
+X-Trace-Id: outbox-188
+X-Event-Type: crm.order.used
+X-Timestamp: 2026-05-01T02:30:00Z
+X-Nonce: 7f29c40a-91e7-4e58-b38b-bb2cb6a3401c
+X-Signature: hmac_sha256_hex</code></pre>
+        <h3>6.3 鍥炴帹 Body</h3>
+        <pre><code>{
+  "eventType": "crm.order.used",
+  "eventId": "crm.order.used_202_301",
+  "occurredAt": "2026-05-01T10:30:00",
+  "partnerCode": "DISTRIBUTION",
+  "order": {
+    "externalOrderId": "o_202605010001",
+    "internalOrderId": 202,
+    "orderStatus": "used",
+    "localOrderStatus": "COMPLETED",
+    "usedAt": "2026-05-01T10:29:58"
+  },
+  "planOrder": {
+    "planOrderId": 301,
+    "planOrderStatus": "finished",
+    "finishedAt": "2026-05-01T10:29:58"
+  }
+}</code></pre>
+        <div class="notice">
+          Outbox 鏄紓姝ユ満鍒躲€傚閮ㄧ郴缁熺煭鏃朵笉鍙敤涓嶄細鍥炴粴鏈湴灞ョ害锛屽け璐ヤ細杩涘叆澶辫触鎴栨淇＄姸鎬侊紝寰呬慨姝ｉ厤缃垨澶栭儴鎺ュ彛鍚庨噸鏂板叆闃熴€?        </div>
+      </section>
+
+      <section id="reconcile" class="section">
+        <h2>7. 鐘舵€佸洖鏌ヤ笌瀵硅处</h2>
+        <p>
+          Scheduler 璐熻矗鐘舵€佸洖鏌ャ€佸璐︽媺鍙栥€佸け璐ラ噸璇曞拰琛ュ伩鍚屾銆傚畠鍙兘璇诲彇澶栭儴鐘舵€佹垨鏈湴 MOCK 鏁版嵁锛涜嫢闇€瑕佹敼鍙樿鍗曠姸鎬侊紝蹇呴』鐢熸垚 <code>distribution.order.*</code> 浜嬩欢骞惰皟鐢?<code>DistributionEventIngestService.replayFromScheduler</code>銆?        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>浠诲姟</th>
+              <th>鍚庡彴瑙﹀彂鎺ュ彛</th>
+              <th>璇存槑</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>灞ョ害鍥炴帹闃熷垪澶勭悊</td>
+              <td><code>POST /scheduler/outbox/process?limit=20</code></td>
+              <td>澶勭悊 <code>PENDING</code> / 鍒版湡 <code>FAILED</code> 鍥炴帹浜嬩欢銆?/td>
+            </tr>
+            <tr>
+              <td>寮傚父閲嶈瘯闃熷垪澶勭悊</td>
+              <td><code>POST /scheduler/distribution/exceptions/process?limit=10</code></td>
+              <td>澶勭悊 <code>RETRY_QUEUED</code> 寮傚父锛屽彲淇￠噸鏀惧叆绔欐湇鍔°€?/td>
+            </tr>
+            <tr>
+              <td>鐘舵€佸洖鏌?/td>
+              <td><code>POST /scheduler/distribution/status-check/process?limit=20</code></td>
+              <td>璇诲彇澶栭儴璁㈠崟鐘舵€侊紝鐢熸垚鐘舵€佷簨浠堕噸鏀俱€?/td>
+            </tr>
+            <tr>
+              <td>瀵硅处鎷夊彇</td>
+              <td><code>POST /scheduler/distribution/reconcile/process?limit=20</code></td>
+              <td>鎷夊彇澶栭儴瀵硅处璁板綍锛岀粺涓€杞垚鍏ョ珯浜嬩欢澶勭悊銆?/td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>7.1 LIVE 澶栭儴鎺ュ彛瑕佹眰</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>鑳藉姏</th>
+              <th>閰嶇疆瀛楁</th>
+              <th>澶栭儴鎺ュ彛鏈熸湜</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>鐘舵€佸洖鏌?/td>
+              <td><code>statusQueryPath</code></td>
+              <td>SeedCRM POST 澶栭儴鍦板潃锛岃杩斿洖鐘舵€佹垨鏍囧噯浜嬩欢銆傛敮鎸?<code>paid/cancelled/refund_pending/refunded</code> 鏄犲皠銆?/td>
+            </tr>
+            <tr>
+              <td>瀵硅处鎷夊彇</td>
+              <td><code>reconciliationPullPath</code></td>
+              <td>SeedCRM POST 澶栭儴鍦板潃锛岃杩斿洖 <code>items / records / list / orders</code> 鎴栧崟鏉″璞°€?/td>
+            </tr>
+            <tr>
+              <td>灞ョ害鍥炴帹</td>
+              <td><code>callbackUrl</code> 鎴?<code>baseUrl + endpointPath</code></td>
+              <td>澶栭儴鍒嗛攢绯荤粺鎺ユ敹 <code>crm.order.used</code>锛屽苟鎸夊箓绛夐敭鍘婚噸銆?/td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="debug" class="section">
+        <h2>8. 璋冭瘯涓庤瘖鏂?/h2>
+        <div class="grid">
+          <div class="card">
+            <h3>鑱旇皟宸ヤ綔鍙?dry-run</h3>
+            <p>鍏ュ彛锛氱郴缁熻缃?-> 璋冨害涓績 -> 鑱旇皟宸ヤ綔鍙般€?/p>
+            <p>鐢ㄩ€旓細棰勮瀛楁鏄犲皠銆佺姸鎬佹槧灏勩€丆ustomer 鍖归厤銆丱rder 骞傜瓑缁撴灉锛屼笉钀藉簱銆?/p>
+            <p>鍚庡彴鎺ュ彛锛?code>POST /scheduler/interface/debug</code>銆?/p>
+          </div>
+          <div class="card">
+            <h3>楠屾敹鏍锋湰</h3>
+            <p>鍏ュ彛锛氱郴缁熻缃?-> 璋冨害涓績 -> 鍒嗛攢鎺ュ彛 -> 楠屾敹鏍锋湰銆?/p>
+            <p>瑕嗙洊鎴愬姛鍥炴帹銆佸け璐ュ洖鎺ㄣ€佹淇°€佸紓甯稿緟澶勭悊銆佸璐﹀け璐ユ牱鏈€?/p>
+          </div>
+          <div class="card">
+            <h3>骞傜瓑鍋ュ悍</h3>
+            <p>鍚庡彴鎺ュ彛锛?code>GET /scheduler/idempotency-health?providerCode=DISTRIBUTION</code>銆?/p>
+            <p>鐢ㄤ簬鏌ョ湅鍞竴绱㈠紩鐘舵€併€侀噸澶嶅垎缁勩€佸缓璁繚鐣欒褰曘€侀渶鏍稿璁板綍鍜屾棩蹇楁牱渚嬨€?/p>
+          </div>
+          <div class="card">
+            <h3>鐩戞帶鎽樿</h3>
+            <p>鍚庡彴鎺ュ彛锛?code>GET /scheduler/monitor/summary?providerCode=DISTRIBUTION</code>銆?/p>
+            <p>杩斿洖 Outbox銆佸紓甯搁槦鍒椼€佸箓绛夊仴搴枫€佹渶杩戣皟搴︽壒娆″拰楠屾敹鏍锋湰銆?/p>
+          </div>
+        </div>
+        <h3>8.1 鍚庡彴鎺ュ彛閴存潈</h3>
+        <pre><code>POST /auth/login
+Content-Type: application/json
+
+{
+  "username": "integration_admin",
+  "password": "123456"
+}
+
+鍚庣画璇锋眰锛?X-Auth-Token: 鐧诲綍鍝嶅簲涓殑 token</code></pre>
+      </section>
+
+      <section id="errors" class="section">
+        <h2>9. 閿欒鐮佷笌鎺掗殰</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>閿欒绫诲瀷</th>
+              <th>甯歌鍘熷洜</th>
+              <th>澶勭悊寤鸿</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>PROVIDER_INVALID</code></td>
+              <td>鍒嗛攢娓犻亾鏈厤缃€佽鍋滅敤鎴?partnerCode 涓嶅尮閰嶃€?/td>
+              <td>妫€鏌ュ垎閿€鎺ュ彛閰嶇疆銆佸惎鐢ㄧ姸鎬併€佽姹傚ご鍜屾姤鏂囦腑鐨勬笭閬撶紪鐮併€?/td>
+            </tr>
+            <tr>
+              <td><code>SIGNATURE_MISSING</code> / <code>SIGNATURE_INVALID</code></td>
+              <td>LIVE 璇锋眰缂哄皯绛惧悕澶达紝鎴栫鍚嶅師鏂?/ 瀵嗛挜涓嶄竴鑷淬€?/td>
+              <td>鏍稿 AppSecret銆佸師濮嬭姹備綋銆乼imestamp銆乶once銆乮dempotencyKey銆?/td>
+            </tr>
+            <tr>
+              <td><code>TIMESTAMP_INVALID</code></td>
+              <td>鏃堕棿鎴虫牸寮忛敊璇垨瓒呭嚭 10 鍒嗛挓绐楀彛銆?/td>
+              <td>缁熶竴鏈嶅姟鍣ㄦ椂闂达紝浣跨敤 ISO-8601 鎴栫 / 姣鏃堕棿鎴炽€?/td>
+            </tr>
+            <tr>
+              <td><code>IDEMPOTENCY_MISSING</code></td>
+              <td>缂哄皯 <code>X-Idempotency-Key</code>銆?/td>
+              <td>澶栭儴绯荤粺涓烘瘡涓笟鍔′簨浠剁敓鎴愮ǔ瀹氶槻閲嶅缂栧彿銆?/td>
+            </tr>
+            <tr>
+              <td><code>DUPLICATE_PAYLOAD_CONFLICT</code></td>
+              <td>鍚屽箓绛夐敭鎴栧悓浜嬩欢 ID 鍙戦€佷簡涓嶅悓鎶ユ枃銆?/td>
+              <td>鏍稿鍐呭鎸囩汗锛屽閮ㄧ郴缁熶慨姝ｆ姤鏂囨垨鐢熸垚鏂扮殑骞傜瓑閿悗閲嶆帹銆?/td>
+            </tr>
+            <tr>
+              <td><code>EXTERNAL_ORDER_CONFLICT</code></td>
+              <td>鍚屽閮ㄨ鍗曞彿宸插瓨鍦紝浣嗕氦鏄撳彿銆佷細鍛樸€佺被鍨嬫垨閲戦鍐茬獊銆?/td>
+              <td>鏌ョ湅寮傚父闃熷垪鍐茬獊瀛楁锛岀‘璁や互鏈湴鍊兼垨澶栭儴鍊间负鍑嗗悗鍐嶅鐞嗐€?/td>
+            </tr>
+            <tr>
+              <td><code>EXTERNAL_STATUS_CONFLICT</code></td>
+              <td>澶栭儴鍙栨秷 / 閫€娆句簨浠朵笌鏈湴灞ョ害鐘舵€佸啿绐併€?/td>
+              <td>鐢变笟鍔′汉鍛樼‘璁ゆ槸鍚﹂渶瑕侀€€娆俱€佸啿姝ｇ哗鏁堟垨浠呰褰曞閮ㄧ姸鎬併€?/td>
+            </tr>
+          </tbody>
+        </table>
+        <h3>9.1 寮傚父澶勭悊鏍囧噯娴佺▼</h3>
+        <div class="flow">
+          <div class="step">
+            <b>鏌ョ湅寮傚父</b>
+            杩涘叆鍒嗛攢鎺ュ彛 -> 寮傚父闃熷垪銆?          </div>
+          <div class="step">
+            <b>瀹氫綅璁㈠崟</b>
+            澶嶅埗澶栭儴璁㈠崟鍙枫€佹湰鍦拌鍗曞彿銆佽拷韪紪鍙枫€?          </div>
+          <div class="step">
+            <b>鏍稿瀛楁</b>
+            鏌ョ湅鍐茬獊瀛楁銆佹湰鍦板€笺€佸閮ㄥ€笺€?          </div>
+          <div class="step">
+            <b>淇婧愬ご</b>
+            淇澶栭儴鏁版嵁銆佹帴鍙ｉ厤缃垨鐘舵€佹槧灏勩€?          </div>
+          <div class="step">
+            <b>閲嶆柊鍏ラ槦</b>
+            绠＄悊鍛樿Е鍙戦噸璇曪紝绯荤粺鍙俊閲嶆斁銆?          </div>
+          <div class="step">
+            <b>鍏抽棴璁板綍</b>
+            鎴愬姛鍚庤嚜鍔ㄥ凡澶勭悊锛屾垨浜哄伐鏍囪澶勭悊銆?          </div>
+        </div>
+      </section>
+
+      <section id="acceptance" class="section">
+        <h2>10. 涓婄嚎楠屾敹</h2>
+        <ul class="checklist">
+          <li><code>distribution.order.paid</code> 鍙垱寤?/ 鍖归厤 <code>Customer</code> 骞跺垱寤?<code>Order(paid)</code>銆?/li>
+          <li>鍒嗛攢宸叉敮浠樿鍗曚笉杩涘叆 <code>Clue</code>锛屼笉鍙備笌鍏捣鍜屽璧勫垎閰嶃€?/li>
+          <li>閲嶅鍚屾姤鏂囪繑鍥炴垚鍔熶笖涓嶉噸澶嶅垱寤鸿鍗曘€?/li>
+          <li>鍚屽箓绛夐敭涓嶅悓鎶ユ枃杩涘叆寮傚父闃熷垪銆?/li>
+          <li>鍚屽閮ㄨ鍗曞彿鍏抽敭瀛楁鍐茬獊杩涘叆寮傚父闃熷垪骞舵樉绀哄啿绐佸瓧娈点€?/li>
+          <li>闂ㄥ簵瀹屾垚 <code>PlanOrder</code> 鍚庣敓鎴?<code>crm.order.used</code> Outbox銆?/li>
+          <li>MOCK 妯″紡 Outbox 鍙ā鎷熸垚鍔燂紝LIVE 妯″紡鎸夌鍚嶈皟鐢ㄥ閮ㄥ洖璋冨湴鍧€銆?/li>
+          <li>澶辫触鍥炴帹鍙噸鏂板叆闃燂紝瓒呰繃閲嶈瘯杩涘叆姝讳俊銆?/li>
+          <li>鐘舵€佸洖鏌?/ 瀵硅处鎷夊彇鍙兘鐢熸垚浜嬩欢閲嶆斁锛屼笉鐩存帴鏇存柊鏍稿績琛ㄣ€?/li>
+          <li>寮傚父 OPEN / RETRY_QUEUED / HANDLED 鐘舵€佸彲闂幆銆?/li>
+          <li>骞傜瓑鍋ュ悍鑳芥樉绀哄敮涓€绱㈠紩椋庨櫓鍜岄噸澶嶆暟鎹不鐞嗗缓璁€?/li>
+          <li><code>INTEGRATION_OPERATOR</code> 鏌ョ湅鏁忔劅瀛楁涓鸿劚鏁忕粨鏋溿€?/li>
+          <li><code>PARTNER_APP</code> 鍙兘璁块棶鑷韩 <code>partner_code</code> 鑼冨洿锛屼笉鑳借Е鍙戝叏灞€鎵瑰鐞嗐€?/li>
+          <li>楠屾敹鏍锋湰椤?5 绫绘牱鏈彲灞曠ず锛氭垚鍔熴€佸け璐ャ€佹淇°€佸紓甯搞€佸璐﹀け璐ャ€?/li>
+          <li>绯荤粺璁剧疆 -> 鍩虹閰嶇疆 -> 鍩熷悕閰嶇疆淇濆瓨鍚庯紝鍒嗛攢鎺ュ彛椤靛睍绀虹殑鍏ョ珯銆佸洖鏌ャ€佸璐﹀拰 Swagger 鍦板潃鍚屾鏇存柊銆?/li>
+          <li>Swagger UI / OpenAPI JSON 浠呭厑璁哥鐞嗗憳銆侀泦鎴愮鐞嗗憳鎴栭泦鎴愭搷浣滃憳璁块棶锛涙櫘閫氫笟鍔¤鑹插拰澶栭儴鍒嗛攢搴旂敤涓嶈兘璁块棶銆?/li>
+          <li>鐢熶骇鐜鍙橀噺宸查厤缃細<code>SEEDCRM_SYSTEM_BASE_URL</code>銆?code>SEEDCRM_API_BASE_URL</code>銆?code>SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN=false</code>銆?/li>
+        </ul>
+        <div class="notice warn">
+          鑻ュ箓绛夊敮涓€绱㈠紩鍥犲巻鍙查噸澶嶆帴鏀舵棩蹇楁殏鏈敓鏁堬紝涓婄嚎鍓嶅繀椤诲畬鎴愭暟鎹不鐞嗘垨褰㈡垚涔﹂潰椋庨櫓纭銆傛不鐞嗗師鍒欐槸瀵煎嚭銆佷汉宸ョ‘璁ゃ€佸浠?/ 褰掓。銆侀噸寤虹储寮曘€佸鏌ワ紝绂佹鐩存帴鍒犻櫎鏍稿績涓氬姟鏁版嵁銆傜姝㈢洿鎺ュ垹闄?Customer / Order / PlanOrder 鏁版嵁銆?        </div>
+      </section>
+
+      <section class="section">
+        <h2>闄勫綍锛氬凡搴熷純瀹㈣祫杈撳嚭鎺ュ彛</h2>
+        <div class="endpoint">
+          <span class="method">GET/POST</span>
+          <code>/open/distribution/leads</code>
+        </div>
+        <p>
+          璇ユ帴鍙ｄ繚鐣欎负鍏煎鍏滃簳锛屽綋鍓嶆柟妗?B 涓嶅啀鍚戝閮ㄥ垎閿€绯荤粺杈撳嚭 Clue 瀹㈣祫銆傝皟鐢ㄥ悗浼氳繑鍥炵┖鍒楄〃鍜屽簾寮冩彁绀猴紝涓嶄細鍒涘缓 <code>Clue / Customer / Order</code>銆?        </p>
+      </section>
+
+      <footer>
+        SeedCRM 鍒嗛攢鎺ュ彛鑱旇皟璇存槑銆傛湰鏂囨。鐢辩郴缁熷綋鍓嶅疄鐜板拰 AGENT.md / CONTEXT.md 绾︽潫鐢熸垚锛岄€傜敤浜?2026-05-01 褰撳墠椤圭洰鐘舵€併€?      </footer>
+    </main>
+  </div>
+</body>
+</html>
+

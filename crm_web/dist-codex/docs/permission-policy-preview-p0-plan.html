@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM P0-2 权限策略预览详细落地方案</title>
+  <style>
+    body { margin: 0; background: #f6f8fb; color: #172033; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; line-height: 1.75; }
+    main { max-width: 1180px; margin: 0 auto; padding: 34px 22px 72px; }
+    header, section { margin-top: 18px; padding: 24px; border: 1px solid #e5eaf3; border-radius: 22px; background: #fff; box-shadow: 0 18px 45px rgba(23, 32, 51, .06); }
+    h1, h2, h3 { margin: 0; line-height: 1.35; }
+    h1 { font-size: 30px; }
+    h2 { margin-bottom: 12px; font-size: 22px; }
+    h3 { margin-top: 16px; font-size: 17px; }
+    p { margin: 8px 0 0; color: #64748b; }
+    ul, ol { margin: 10px 0 0; padding-left: 22px; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    code { color: #0f766e; }
+    pre { overflow: auto; padding: 14px; border-radius: 14px; background: #101827; color: #e5edf8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5eaf3; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    .badge { display: inline-block; margin: 10px 8px 0 0; padding: 5px 10px; border-radius: 999px; background: #e8f4ff; color: #075985; font-size: 12px; font-weight: 700; }
+    .ok { border-left: 4px solid #10b981; }
+    .warn { border-left: 4px solid #f59e0b; }
+    .danger { border-left: 4px solid #ef4444; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card { padding: 14px; border: 1px solid #e5eaf3; border-radius: 16px; background: #fbfdff; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SeedCRM P0-2 权限策略预览详细落地方案</h1>
+    <p>权限策略预览不是新的业务权限体系，而是发布前的“最终权限试算器”。它把菜单、角色、权限点、接口能力、数据范围、字段脱敏和用户上下文合并计算，回答一个最关键的问题：某个用户或角色上线后到底能看到什么、能点什么、能查到哪些数据。</p>
+    <span class="badge">P0-2</span>
+    <span class="badge">Permission</span>
+    <span class="badge">RBAC + ABAC</span>
+    <span class="badge">配置发布前预览</span>
+    <span class="badge">不新增核心业务模型</span>
+  </header>
+
+  <section class="danger">
+    <h2>1. 目标与边界</h2>
+    <ul>
+      <li>目标是解决菜单管理、角色管理、权限管理修改前不可预判的问题，避免“配置以后才发现登录不了、看不到菜单、能看到但点不了、接口越权”。</li>
+      <li>预览页只读，不直接修改 Clue、Customer、Order、PlanOrder、Scheduler、Salary、WeCom 的业务数据。</li>
+      <li>权限预览必须复用正式 RBAC + ABAC 判定口径，不能只做前端菜单隐藏模拟。</li>
+      <li>按角色预览只能展示角色默认能力；涉及 self、team、store、partner 的实际数据集合时，必须选择用户或上下文，不能默认扩大到 all。</li>
+      <li>权限配置不能绕过主链路：标准链路仍为 <code>Clue -&gt; Customer -&gt; Order -&gt; PlanOrder</code>；分销 B 链路仍为 <code>ExternalDistributionPaidOrder -&gt; Customer -&gt; Order(paid) -&gt; PlanOrder</code>。</li>
+      <li>分销已支付订单不得通过权限配置进入 Clue、公海、分配、回收或线索转化率统计。</li>
+      <li>预览结果不能替代运行时鉴权；每个后端接口仍必须做 RBAC 校验和 ABAC 数据过滤。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>2. 当前系统现状</h2>
+    <table>
+      <thead><tr><th>能力</th><th>现状</th><th>P0-2 需要补齐</th></tr></thead>
+      <tbody>
+        <tr><td>菜单 / 角色快照</td><td>已有 <code>/system-access/snapshot</code>，返回菜单、角色、权限点。</td><td>补充变更草稿、影响预览、父子菜单诊断、发布审计。</td></tr>
+        <tr><td>菜单保存</td><td>已有 <code>/system-access/menu/save</code>，目前菜单分组、路由、权限码仍偏表单式。</td><td>改成树选择父级菜单、自动带出模块和权限码候选，保存前先预览影响。</td></tr>
+        <tr><td>角色保存</td><td>已有 <code>/system-access/role/save</code>，可绑定菜单和权限码。</td><td>增加角色视角预览，展示菜单、按钮、接口、数据范围、字段脱敏的最终效果。</td></tr>
+        <tr><td>权限策略</td><td>已有 <code>permission_policy</code> 和 <code>/permission/check</code>。</td><td>在不替换运行时表的前提下，增加草稿、批量试算、发布校验、审计和回滚。</td></tr>
+        <tr><td>前端权限中心</td><td>历史页面存在乱码和表单顶部编辑问题。</td><td>实现时需作为体验风险处理：中文修复、抽屉编辑、配置和预览同屏。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="ok">
+    <h2>3. 数据结构</h2>
+    <p>P0-2 不替换现有运行时表，新增治理表承载“草稿、试算、发布、审计”。运行时仍以 <code>sys_role</code>、<code>sys_menu</code>、<code>sys_permission</code>、<code>sys_role_menu</code>、<code>sys_role_permission</code>、<code>permission_policy</code> 为准。</p>
+    <pre><code>permission_policy_draft
+- id
+- draft_no
+- base_version
+- policy_snapshot_json
+- menu_snapshot_json
+- role_snapshot_json
+- status: DRAFT | VALIDATED | PUBLISHED | DISCARDED
+- validate_result_json
+- created_by
+- created_at
+- updated_at
+
+permission_preview_case
+- id
+- draft_no
+- scenario_code
+- role_code
+- data_scope
+- module_code
+- action_code
+- route_path
+- resource_type
+- resource_id
+- context_json
+- expected_allowed
+- actual_allowed
+- matched_policy
+- result_reason
+- created_at
+
+permission_publish_record
+- id
+- publish_no
+- draft_no
+- before_snapshot_json
+- after_snapshot_json
+- diff_json
+- validate_result_json
+- published_by
+- published_at
+- rollback_ref_publish_no
+
+permission_audit_log
+- id
+- actor_user_id
+- actor_role_code
+- action_code: PREVIEW | VALIDATE | PUBLISH | ROLLBACK | EXPORT
+- target_key
+- request_json
+- result_json
+- ip
+- user_agent
+- created_at</code></pre>
+    <h3>结构约束</h3>
+    <ul>
+      <li><code>permission_policy</code> 是唯一运行时生效策略表，草稿不得直接写入该表。</li>
+      <li>草稿使用 JSON 快照承载菜单、角色、权限策略差异，降低 P0 阶段对现有登录链路的侵入。</li>
+      <li>发布记录必须保存前后快照和 diff，支持回滚与审计。</li>
+      <li>审计日志不得保存完整手机号、raw_data、密钥、签名原文等敏感内容。</li>
+      <li>字段脱敏结果建议使用 <code>VISIBLE</code>、<code>MASKED</code>、<code>HIDDEN</code> 三态表达。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>4. 接口定义</h2>
+    <table>
+      <thead><tr><th>接口</th><th>用途</th><th>权限</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /permission/preview/baseline</code></td><td>读取当前生效权限快照：角色、菜单树、接口权限、策略、数据范围。</td><td><code>permission:view</code></td></tr>
+        <tr><td><code>POST /permission/preview/drafts</code></td><td>创建权限预览草稿，输入 menuDiff、roleDiff、policyDiff。</td><td><code>permission:update</code></td></tr>
+        <tr><td><code>GET /permission/preview/drafts/{draftNo}</code></td><td>查看草稿详情、差异和校验结果。</td><td><code>permission:view</code></td></tr>
+        <tr><td><code>POST /permission/preview/calculate</code></td><td>计算单个用户、角色或资源场景的最终权限，不落库。</td><td><code>permission:check</code></td></tr>
+        <tr><td><code>POST /permission/preview/batch-calculate</code></td><td>批量计算角色 × 菜单 × 接口 × 数据范围矩阵。</td><td><code>permission:check</code></td></tr>
+        <tr><td><code>POST /permission/preview/validate</code></td><td>发布前校验草稿，输出阻断项、警告项、影响范围。</td><td><code>permission:update</code></td></tr>
+        <tr><td><code>POST /permission/preview/publish</code></td><td>发布已校验草稿，事务内写入运行时权限表。</td><td><code>permission:update</code></td></tr>
+        <tr><td><code>POST /permission/preview/rollback</code></td><td>按 publishNo 回滚到上一快照。</td><td><code>permission:update</code></td></tr>
+        <tr><td><code>GET /permission/preview/audit-logs</code></td><td>查询预览、校验、发布、回滚审计记录。</td><td><code>permission:view</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>预览请求示例</h3>
+    <pre><code>{
+  "draftNo": "optional",
+  "roleCode": "STORE_SERVICE",
+  "dataScope": "STORE",
+  "moduleCode": "ORDER",
+  "actionCode": "VIEW",
+  "routePath": "/store-service/orders",
+  "resource": {
+    "resourceType": "ORDER",
+    "resourceId": 1001,
+    "resourceOwnerId": 12,
+    "resourceStoreId": 3,
+    "resourcePartnerCode": "partner_demo",
+    "orderStatus": "finished"
+  },
+  "context": {
+    "currentUserId": 8,
+    "currentStoreId": 3,
+    "teamMemberIds": [8, 12],
+    "boundCustomerUserId": 12,
+    "currentPartnerCode": "partner_demo"
+  }
+}</code></pre>
+
+    <h3>预览响应示例</h3>
+    <pre><code>{
+  "allowed": true,
+  "finalDataScope": "STORE",
+  "menuVisible": true,
+  "interfaceAllowed": true,
+  "dataAllowed": true,
+  "matchedPolicies": ["ORDER:VIEW:STORE_SERVICE:STORE"],
+  "denyReasons": [],
+  "masking": {
+    "rawData": "MASKED",
+    "phone": "MASKED",
+    "amount": "VISIBLE"
+  }
+}</code></pre>
+  </section>
+
+  <section class="warn">
+    <h2>5. 权限规则</h2>
+    <h3>最终权限计算</h3>
+    <pre><code>最终允许 = 菜单可见 AND 接口可调用 AND 数据范围命中 AND 字段策略允许</code></pre>
+    <ul>
+      <li>菜单来自 <code>sys_menu + sys_role_menu</code>，菜单可见只代表入口可见，不代表接口一定可调用。</li>
+      <li>接口权限来自 <code>sys_permission + sys_role_permission</code> 与 <code>permission_policy</code> 的双重约束。</li>
+      <li>父级菜单只作为导航容器，由子菜单聚合生成，不单独授予业务能力。</li>
+      <li>后台管理类能力必须走 <code>PERMISSION:VIEW/UPDATE/CHECK</code> 或同等权限点，不能开放给普通业务角色。</li>
+      <li><code>partner_app</code> 是外部应用身份，不进入后台菜单树，只能命中 partner 数据范围。</li>
+    </ul>
+
+    <h3>ABAC 数据范围</h3>
+    <table>
+      <thead><tr><th>范围</th><th>命中规则</th><th>预览要求</th></tr></thead>
+      <tbody>
+        <tr><td><code>SELF</code></td><td><code>currentUserId == resourceOwnerId</code> 或绑定客户命中。</td><td>必须展示绑定依据，缺少用户上下文时显示“不确定”。</td></tr>
+        <tr><td><code>TEAM</code></td><td><code>resourceOwnerId in teamMemberIds</code>。</td><td>必须展示团队成员范围或提示团队上下文缺失。</td></tr>
+        <tr><td><code>STORE</code></td><td><code>currentStoreId == resourceStoreId</code>。</td><td>必须展示门店 ID 和门店名称。</td></tr>
+        <tr><td><code>ALL</code></td><td>仅显式授权角色可用。</td><td>非 admin 获得 ALL 必须标为高风险。</td></tr>
+        <tr><td><code>PARTNER</code></td><td><code>currentPartnerCode == resourcePartnerCode</code>。</td><td>必须展示 partner_code，禁止显示后台菜单。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>高风险变更</h3>
+    <ul>
+      <li>给非 admin 开全量数据、导出、raw_data 完整查看、接口配置、回放、对账、重试。</li>
+      <li>删除或停用 admin 的系统管理、权限管理、回滚能力。</li>
+      <li>把 integration_operator 扩大为配置渠道、签名、字段映射或直接写核心业务数据。</li>
+      <li>把 partner_app 扩大为非 PARTNER 数据范围或后台菜单能力。</li>
+      <li>让 PlanOrder 出现独立创建、独立履约、绕过 Order 的入口。</li>
+      <li>让 distribution paid order 出现在 Clue、公海、分配、回收、线索转化率场景。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>6. 流程</h2>
+    <ol>
+      <li>读取当前生效快照：从 <code>sys_role</code>、<code>sys_menu</code>、<code>sys_permission</code>、授权关联表和 <code>permission_policy</code> 生成 baseline。</li>
+      <li>创建草稿：保存菜单、角色、权限策略 diff，不写运行时表。</li>
+      <li>权限模拟：使用草稿快照构建内存策略，逐项计算菜单可见、接口权限、ABAC 数据范围、字段脱敏。</li>
+      <li>批量矩阵：覆盖角色集合、模块集合、关键路由、关键动作、典型资源上下文，输出允许、拒绝和原因。</li>
+      <li>冲突诊断：识别菜单有入口但接口无权限、接口有权限但菜单不可见、数据范围为空、敏感字段未脱敏、父子菜单不一致。</li>
+      <li>发布前校验：检查是否会锁死管理员、是否导致登录后无菜单、是否暴露核心业务接口、是否破坏主链路。</li>
+      <li>发布：事务内更新菜单、角色授权、接口授权、<code>permission_policy</code>，写发布记录和审计。</li>
+      <li>缓存失效：发布成功后失效权限策略缓存、菜单树缓存、用户授权快照缓存。</li>
+      <li>回滚：按发布记录的 before 快照恢复，仍需走校验和审计。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>7. 前端体验方案</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>角色视角</h3>
+        <p>选择角色后，同屏展示可见菜单、按钮、接口、数据范围、字段脱敏和高风险能力摘要。进入编辑模式后原地打开右侧抽屉，不跳到页面顶部。</p>
+      </div>
+      <div class="card">
+        <h3>菜单视角</h3>
+        <p>新增菜单时通过树选择父级菜单，自动带出模块、路由和权限码候选；不允许手填顶级菜单名称，避免录入不确定性。</p>
+      </div>
+      <div class="card">
+        <h3>变更预览</h3>
+        <p>保存前展示配置前后差异：影响哪些角色、菜单、接口、字段、数据范围。高风险变更必须填写原因和确认词。</p>
+      </div>
+      <div class="card">
+        <h3>冲突面板</h3>
+        <p>红色为阻断项，橙色为高风险确认项，蓝色为信息提示。每条问题必须说明原因和修复建议，不能只弹 toast。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="warn">
+    <h2>8. 发布前强制校验</h2>
+    <ul>
+      <li>至少一个 admin 保留 <code>PERMISSION:VIEW/UPDATE/CHECK</code>、系统管理菜单和回滚能力。</li>
+      <li>登录、刷新登录态、获取当前用户信息接口不能被预览草稿阻断。</li>
+      <li>Clue、Customer、Order、PlanOrder 主链路关键动作不能形成无授权孤岛。</li>
+      <li>PlanOrder 创建必须绑定已有 Order 上下文，不能独立存在。</li>
+      <li>Scheduler 只能做队列、重试、补偿和对账，不得通过权限配置绕过入站服务直接写 Customer、Order、PlanOrder。</li>
+      <li>integration_operator 不得获得配置修改和核心业务写入权限。</li>
+      <li>partner_app 不得获得后台菜单和非 partner 数据范围。</li>
+      <li>raw_data、手机号、金额、外部会员 ID 等敏感字段必须有脱敏策略。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>9. 测试与验收</h2>
+    <table>
+      <thead><tr><th>测试项</th><th>验收标准</th></tr></thead>
+      <tbody>
+        <tr><td>按用户预览</td><td>能选择真实用户，生成最终菜单树、按钮、接口、数据范围和字段脱敏结果。</td></tr>
+        <tr><td>按角色预览</td><td>能选择角色生成默认能力，并提示缺少用户上下文时无法判断实际 self/team/store/partner 数据集合。</td></tr>
+        <tr><td>ABAC 正反例</td><td>self、team、store、all、partner 每类范围至少有一个允许和一个拒绝用例。</td></tr>
+        <tr><td>菜单接口一致性</td><td>菜单可见但接口不可调用、接口可调用但菜单不可见都能被诊断出来。</td></tr>
+        <tr><td>分销 B 约束</td><td>distribution paid order 不进入 Clue，不参与公海、分配、回收、线索转化率。</td></tr>
+        <tr><td>PlanOrder 约束</td><td>预览里不能出现独立创建 PlanOrder 的能力，必须绑定 Order 和服务流程。</td></tr>
+        <tr><td>集成角色约束</td><td>integration_admin 与 integration_operator 能力边界清晰，operator 不能改配置或写核心业务数据。</td></tr>
+        <tr><td>partner_app 隔离</td><td>只能访问自身 partner_code 范围数据，无后台菜单。</td></tr>
+        <tr><td>敏感字段</td><td>手机号、raw_data、金额、外部会员 ID 能预览可见、脱敏、隐藏效果。</td></tr>
+        <tr><td>发布事务</td><td>发布失败时运行时权限不变；发布成功后缓存即时失效。</td></tr>
+        <tr><td>审计</td><td>预览、校验、发布、回滚都有审计记录，敏感字段脱敏。</td></tr>
+        <tr><td>体验</td><td>编辑角色或菜单不跳顶部，新增菜单父级必须树选择，冲突可停留查看并逐条处理。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>10. 落地顺序</h2>
+    <ol>
+      <li>先修复权限中心现有中文乱码和编辑体验问题，避免在坏体验上叠新能力。</li>
+      <li>实现 baseline 快照接口增强和前端只读预览页面。</li>
+      <li>实现单场景 calculate，不落库，复用现有 <code>PermissionService.check</code> 口径。</li>
+      <li>实现批量矩阵和冲突诊断，覆盖菜单、接口、数据范围、字段脱敏。</li>
+      <li>实现草稿、校验、发布、审计和缓存失效。</li>
+      <li>实现回滚能力和发布记录查询。</li>
+      <li>接入菜单管理、角色管理、权限管理的保存前预览入口。</li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

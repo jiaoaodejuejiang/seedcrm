@@ -75,10 +75,16 @@ public class SystemConfigSchemaInitializer {
                     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     published_at DATETIME,
                     discarded_at DATETIME,
+                    last_dry_run_hash VARCHAR(64),
+                    last_dry_run_status VARCHAR(32),
+                    last_dry_run_at DATETIME,
+                    last_dry_run_by_role_code VARCHAR(64),
+                    last_dry_run_by_user_id BIGINT,
                     UNIQUE KEY uk_system_config_draft_no (draft_no),
                     KEY idx_system_config_draft_status (status, create_time)
                 )
                 """);
+        ensureDraftDryRunColumns();
         jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS system_config_draft_item (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -151,12 +157,19 @@ public class SystemConfigSchemaInitializer {
                     status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
                     payload_json TEXT,
                     error_message VARCHAR(1000),
+                    retry_count INT DEFAULT 0,
+                    max_retry_count INT DEFAULT 3,
+                    next_retry_at DATETIME,
+                    locked_by VARCHAR(128),
+                    locked_at DATETIME,
+                    last_attempt_at DATETIME,
                     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                     handled_at DATETIME,
                     KEY idx_system_config_runtime_publish (publish_no),
                     KEY idx_system_config_runtime_status (status, create_time)
                 )
                 """);
+        ensureRuntimeEventColumns();
         seedCapability("SYSTEM_DOMAIN", "system.domain.%", "SYSTEM_SETTING", "URL", "HIGH", false, "DOMAIN_URL", "MODULE_CALLBACK");
         seedCapability("WORKFLOW_SWITCH", "workflow.%", "SYSTEM_FLOW", "BOOLEAN", "HIGH", false, "BOOLEAN", "MODULE_CALLBACK");
         seedCapability("DEPOSIT_DIRECT", "deposit.direct.%", "STORE_SERVICE", "BOOLEAN", "MEDIUM", false, "BOOLEAN", "CACHE_EVICT");
@@ -203,6 +216,23 @@ public class SystemConfigSchemaInitializer {
         addColumnIfMissing("system_config_change_log", "change_type", "VARCHAR(32)");
         addColumnIfMissing("system_config_change_log", "risk_level", "VARCHAR(16)");
         addColumnIfMissing("system_config_change_log", "impact_modules_json", "TEXT");
+    }
+
+    private void ensureDraftDryRunColumns() {
+        addColumnIfMissing("system_config_draft", "last_dry_run_hash", "VARCHAR(64)");
+        addColumnIfMissing("system_config_draft", "last_dry_run_status", "VARCHAR(32)");
+        addColumnIfMissing("system_config_draft", "last_dry_run_at", "DATETIME");
+        addColumnIfMissing("system_config_draft", "last_dry_run_by_role_code", "VARCHAR(64)");
+        addColumnIfMissing("system_config_draft", "last_dry_run_by_user_id", "BIGINT");
+    }
+
+    private void ensureRuntimeEventColumns() {
+        addColumnIfMissing("system_config_runtime_event", "retry_count", "INT DEFAULT 0");
+        addColumnIfMissing("system_config_runtime_event", "max_retry_count", "INT DEFAULT 3");
+        addColumnIfMissing("system_config_runtime_event", "next_retry_at", "DATETIME");
+        addColumnIfMissing("system_config_runtime_event", "locked_by", "VARCHAR(128)");
+        addColumnIfMissing("system_config_runtime_event", "locked_at", "DATETIME");
+        addColumnIfMissing("system_config_runtime_event", "last_attempt_at", "DATETIME");
     }
 
     private void addColumnIfMissing(String tableName, String columnName, String columnDefinition) {

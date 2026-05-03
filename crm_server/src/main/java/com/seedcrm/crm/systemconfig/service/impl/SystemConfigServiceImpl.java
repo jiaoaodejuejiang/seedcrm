@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -50,8 +51,29 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     private static final String DRAFT_SOURCE_ROLLBACK = "ROLLBACK";
     private static final String PUBLISH_STATUS_SUCCESS = "SUCCESS";
     private static final String PUBLISH_STATUS_FAILED = "FAILED";
+    private static final String RUNTIME_EVENT_STATUS_PENDING = "PENDING";
+    private static final String RUNTIME_EVENT_STATUS_RETRYING = "RETRYING";
+    private static final String RUNTIME_EVENT_STATUS_SUCCESS = "SUCCESS";
+    private static final String RUNTIME_EVENT_STATUS_FAILED = "FAILED";
+    private static final String RUNTIME_EVENT_STATUS_TERMINATED = "TERMINATED";
+    private static final int DEFAULT_RUNTIME_EVENT_MAX_RETRY = 3;
+    private static final int RUNTIME_EVENT_LOCK_TIMEOUT_MINUTES = 5;
     private static final String NULL_HASH_MARKER = "<NULL>";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final Set<String> SUPPORTED_RUNTIME_EVENT_TYPES = Set.of(
+            "CONFIG_PUBLISHED",
+            "RUNTIME_REFRESH",
+            "CACHE_EVICT");
+    private static final Set<String> SUPPORTED_RUNTIME_MODULES = Set.of(
+            "CLUE",
+            "FINANCE",
+            "PLANORDER",
+            "SCHEDULER",
+            "STORE_SERVICE",
+            "SYSTEM_CONFIG",
+            "SYSTEM_FLOW",
+            "SYSTEM_SETTING",
+            "WECOM");
     private static final List<String> ALLOWED_CONFIG_PREFIXES = List.of(
             "system.domain.",
             "workflow.",
@@ -136,7 +158,9 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         StringBuilder sql = new StringBuilder("""
                 SELECT id, draft_no, status, source_type, source_change_log_id, risk_level,
                        impact_modules_json, created_by_role_code, created_by_user_id, summary,
-                       create_time, update_time, published_at, discarded_at
+                       create_time, update_time, published_at, discarded_at,
+                       last_dry_run_hash, last_dry_run_status, last_dry_run_at,
+                       last_dry_run_by_role_code, last_dry_run_by_user_id
                 FROM system_config_draft
                 """);
         if (StringUtils.hasText(status)) {
@@ -174,6 +198,18 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         response.setPublishSuccessCount(countOf("system_config_publish_record", "status = 'SUCCESS'"));
         response.setPublishFailedCount(countOf("system_config_publish_record", "status = 'FAILED'"));
         response.setRuntimeEventPendingCount(countOf("system_config_runtime_event", "status = 'PENDING'"));
+        response.setRuntimeEventRetryingCount(countOf("system_config_runtime_event", "status = 'RETRYING'"));
+        response.setRuntimeEventSuccessCount(countOf("system_config_runtime_event", "status = 'SUCCESS'"));
+        response.setRuntimeEventFailedCount(countOf("system_config_runtime_event", "status = 'FAILED'"));
+        response.setRuntimeEventTerminatedCount(countOf("system_config_runtime_event", "status = 'TERMINATED'"));
+        List<LocalDateTime> runtimeRows = jdbcTemplate.query("""
+                SELECT handled_at
+                FROM system_config_runtime_event
+                WHERE status = 'SUCCESS' AND handled_at IS NOT NULL
+                ORDER BY handled_at DESC, id DESC
+                LIMIT 1
+                """, (rs, rowNum) -> toLocalDateTime(rs.getTimestamp("handled_at")));
+        response.setLatestRuntimeHandledAt(runtimeRows.isEmpty() ? null : runtimeRows.get(0));
         List<LocalDateTime> rows = jdbcTemplate.query("""
                 SELECT published_at
                 FROM system_config_publish_record
@@ -205,6 +241,16 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     @Override
     public SystemConfigDtos.DryRunResponse dryRunDraft(String draftNo) {
+        return dryRunDraft(draftNo, null);
+    }
+
+    @Override
+    @Transactional
+    public SystemConfigDtos.DryRunResponse dryRunDraft(String draftNo, PermissionRequestContext context) {
+        RawDraft draft = loadDraft(draftNo);
+        if (!DRAFT_STATUS_DRAFT.equals(draft.status())) {
+            throw new BusinessException("只有草稿状态可以执行发布预检查");
+        }
         SystemConfigDtos.ValidationResponse validation = validateDraft(draftNo);
         SystemConfigDtos.DryRunResponse response = new SystemConfigDtos.DryRunResponse();
         response.setDraftNo(validation.getDraftNo());
@@ -212,17 +258,19 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         response.setItems(validation.getItems());
         if (!Boolean.TRUE.equals(validation.getValid())) {
             response.setSummary("发布预检查被校验阻断");
+            persistDryRunResult(draft, response, context);
             return response;
         }
         List<String> events = new ArrayList<>();
         for (String module : ownerModulesForDraft(validation.getDraftNo())) {
-            events.add("CONFIG_PUBLISHED -> " + module);
-            events.add("RUNTIME_REFRESH -> " + module);
+            events.add("配置发布事件 -> " + moduleLabel(module));
+            events.add("运行态刷新事件 -> " + moduleLabel(module));
         }
         response.setRuntimeEvents(events);
         response.setSummary(events.isEmpty()
                 ? "无需记录运行态刷新事件"
                 : "发布预检查通过；发布后会记录运行态刷新事件");
+        persistDryRunResult(draft, response, context);
         return response;
     }
 
@@ -265,6 +313,31 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     @Override
     @Transactional
+    public SystemConfigDtos.PublishRecordResponse processPublishRuntimeEvents(String publishNo,
+                                                                              PermissionRequestContext context) {
+        RawPublishRecord record = loadPublishRecord(publishNo);
+        if (!PUBLISH_STATUS_SUCCESS.equals(record.status())) {
+            throw new BusinessException("只有发布成功的批次可以处理运行态刷新事件");
+        }
+        for (RawRuntimeEvent event : loadRuntimeEventsForManualProcess(record.publishNo())) {
+            processRuntimeEvent(event, context, true);
+        }
+        return getPublishRecord(record.publishNo());
+    }
+
+    @Override
+    @Transactional
+    public List<SystemConfigDtos.RuntimeEventResponse> processDueRuntimeEvents(Integer limit) {
+        List<SystemConfigDtos.RuntimeEventResponse> processed = new ArrayList<>();
+        for (RawRuntimeEvent event : loadDueRuntimeEvents(limit)) {
+            processRuntimeEvent(event, null, false);
+            processed.add(toRuntimeEventResponse(loadRuntimeEventRecord(event.id())));
+        }
+        return processed;
+    }
+
+    @Override
+    @Transactional
     public SystemConfigDtos.DraftResponse createDraft(SystemConfigDtos.SaveConfigRequest request,
                                                       PermissionRequestContext context) {
         return createDraftInternal(request, context, DRAFT_SOURCE_MANUAL, null);
@@ -286,6 +359,13 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             recordFailedPublish(nextPublishNo(), draft, items, validation,
                     "草稿校验存在阻断项，发布已停止", context);
             throw new BusinessException("草稿校验未通过，请先处理阻断项后再发布");
+        }
+        String currentDraftHash = draftContentHash(items);
+        if (!"PASS".equalsIgnoreCase(draft.lastDryRunStatus())
+                || !Objects.equals(currentDraftHash, draft.lastDryRunHash())) {
+            recordFailedPublish(nextPublishNo(), draft, items, validation,
+                    "发布预检查未通过或已失效，发布已停止", context);
+            throw new BusinessException("发布预检查未通过或已失效，请重新执行发布预检查后再发布");
         }
         for (RawDraftItem item : items) {
             String currentValue = findValue(item.configKey(), item.scopeType(), item.scopeId());
@@ -627,16 +707,45 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     }
 
     private SystemConfigDtos.RuntimeEventResponse mapRuntimeEvent(ResultSet rs) throws SQLException {
+        return toRuntimeEventResponse(mapRawRuntimeEvent(rs));
+    }
+
+    private RawRuntimeEvent mapRawRuntimeEvent(ResultSet rs) throws SQLException {
+        return new RawRuntimeEvent(
+                rs.getLong("id"),
+                rs.getString("publish_no"),
+                rs.getString("module_code"),
+                rs.getString("event_type"),
+                rs.getString("status"),
+                rs.getString("payload_json"),
+                rs.getString("error_message"),
+                toLocalDateTime(rs.getTimestamp("create_time")),
+                toLocalDateTime(rs.getTimestamp("handled_at")),
+                rs.getInt("retry_count"),
+                rs.getInt("max_retry_count"),
+                toLocalDateTime(rs.getTimestamp("next_retry_at")),
+                rs.getString("locked_by"),
+                toLocalDateTime(rs.getTimestamp("locked_at")),
+                toLocalDateTime(rs.getTimestamp("last_attempt_at")));
+    }
+
+    private SystemConfigDtos.RuntimeEventResponse toRuntimeEventResponse(RawRuntimeEvent event) {
         SystemConfigDtos.RuntimeEventResponse item = new SystemConfigDtos.RuntimeEventResponse();
-        item.setId(rs.getLong("id"));
-        item.setPublishNo(rs.getString("publish_no"));
-        item.setModuleCode(rs.getString("module_code"));
-        item.setEventType(rs.getString("event_type"));
-        item.setStatus(rs.getString("status"));
-        item.setPayloadJson(rs.getString("payload_json"));
-        item.setErrorMessage(rs.getString("error_message"));
-        item.setCreateTime(toLocalDateTime(rs.getTimestamp("create_time")));
-        item.setHandledAt(toLocalDateTime(rs.getTimestamp("handled_at")));
+        item.setId(event.id());
+        item.setPublishNo(event.publishNo());
+        item.setModuleCode(event.moduleCode());
+        item.setEventType(event.eventType());
+        item.setStatus(event.status());
+        item.setPayloadJson(event.payloadJson());
+        item.setErrorMessage(event.errorMessage());
+        item.setRetryCount(event.retryCount());
+        item.setMaxRetryCount(event.maxRetryCount());
+        item.setNextRetryAt(event.nextRetryAt());
+        item.setLockedBy(event.lockedBy());
+        item.setLockedAt(event.lockedAt());
+        item.setLastAttemptAt(event.lastAttemptAt());
+        item.setCreateTime(event.createTime());
+        item.setHandledAt(event.handledAt());
         return item;
     }
 
@@ -655,7 +764,12 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 toLocalDateTime(rs.getTimestamp("create_time")),
                 toLocalDateTime(rs.getTimestamp("update_time")),
                 toLocalDateTime(rs.getTimestamp("published_at")),
-                toLocalDateTime(rs.getTimestamp("discarded_at")));
+                toLocalDateTime(rs.getTimestamp("discarded_at")),
+                rs.getString("last_dry_run_hash"),
+                rs.getString("last_dry_run_status"),
+                toLocalDateTime(rs.getTimestamp("last_dry_run_at")),
+                rs.getString("last_dry_run_by_role_code"),
+                getLongOrNull(rs, "last_dry_run_by_user_id"));
         return toDraftResponse(draft, includeItems);
     }
 
@@ -675,6 +789,10 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         response.setUpdateTime(draft.updateTime());
         response.setPublishedAt(draft.publishedAt());
         response.setDiscardedAt(draft.discardedAt());
+        response.setLastDryRunStatus(draft.lastDryRunStatus());
+        response.setLastDryRunAt(draft.lastDryRunAt());
+        response.setLastDryRunByRoleCode(draft.lastDryRunByRoleCode());
+        response.setLastDryRunByUserId(draft.lastDryRunByUserId());
         if (includeItems) {
             response.setItems(loadDraftItems(draft.draftNo()).stream()
                     .map(this::toDraftItemResponse)
@@ -710,7 +828,9 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         List<RawDraft> rows = jdbcTemplate.query("""
                 SELECT id, draft_no, status, source_type, source_change_log_id, risk_level,
                        impact_modules_json, created_by_role_code, created_by_user_id, summary,
-                       create_time, update_time, published_at, discarded_at
+                       create_time, update_time, published_at, discarded_at,
+                       last_dry_run_hash, last_dry_run_status, last_dry_run_at,
+                       last_dry_run_by_role_code, last_dry_run_by_user_id
                 FROM system_config_draft
                 WHERE draft_no = ?
                 LIMIT 1
@@ -728,7 +848,12 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 toLocalDateTime(rs.getTimestamp("create_time")),
                 toLocalDateTime(rs.getTimestamp("update_time")),
                 toLocalDateTime(rs.getTimestamp("published_at")),
-                toLocalDateTime(rs.getTimestamp("discarded_at"))), draftNo.trim());
+                toLocalDateTime(rs.getTimestamp("discarded_at")),
+                rs.getString("last_dry_run_hash"),
+                rs.getString("last_dry_run_status"),
+                toLocalDateTime(rs.getTimestamp("last_dry_run_at")),
+                rs.getString("last_dry_run_by_role_code"),
+                getLongOrNull(rs, "last_dry_run_by_user_id")), draftNo.trim());
         if (rows.isEmpty()) {
             throw new BusinessException("草稿不存在");
         }
@@ -845,11 +970,153 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     private List<SystemConfigDtos.RuntimeEventResponse> loadRuntimeEvents(String publishNo) {
         return jdbcTemplate.query("""
                 SELECT id, publish_no, module_code, event_type, status, payload_json,
-                       error_message, create_time, handled_at
+                       error_message, retry_count, max_retry_count, next_retry_at,
+                       locked_by, locked_at, last_attempt_at, create_time, handled_at
                 FROM system_config_runtime_event
                 WHERE publish_no = ?
                 ORDER BY create_time ASC, id ASC
                 """, (rs, rowNum) -> mapRuntimeEvent(rs), publishNo);
+    }
+
+    private List<RawRuntimeEvent> loadRuntimeEventsForManualProcess(String publishNo) {
+        return jdbcTemplate.query("""
+                SELECT id, publish_no, module_code, event_type, status, payload_json,
+                       error_message, retry_count, max_retry_count, next_retry_at,
+                       locked_by, locked_at, last_attempt_at, create_time, handled_at
+                FROM system_config_runtime_event
+                WHERE publish_no = ?
+                  AND status IN ('PENDING', 'FAILED', 'RETRYING', 'TERMINATED')
+                ORDER BY create_time ASC, id ASC
+                """, (rs, rowNum) -> mapRawRuntimeEvent(rs), publishNo);
+    }
+
+    private List<RawRuntimeEvent> loadDueRuntimeEvents(Integer limit) {
+        int safeLimit = limit == null ? 20 : Math.max(1, Math.min(limit, 100));
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime staleBefore = now.minusMinutes(RUNTIME_EVENT_LOCK_TIMEOUT_MINUTES);
+        return jdbcTemplate.query("""
+                SELECT id, publish_no, module_code, event_type, status, payload_json,
+                       error_message, retry_count, max_retry_count, next_retry_at,
+                       locked_by, locked_at, last_attempt_at, create_time, handled_at
+                FROM system_config_runtime_event
+                WHERE (
+                    status IN ('PENDING', 'FAILED')
+                    AND (next_retry_at IS NULL OR next_retry_at <= ?)
+                ) OR (
+                    status = 'RETRYING'
+                    AND (locked_at IS NULL OR locked_at < ?)
+                )
+                ORDER BY create_time ASC, id ASC
+                LIMIT ?
+                """, (rs, rowNum) -> mapRawRuntimeEvent(rs), now, staleBefore, safeLimit);
+    }
+
+    private RawRuntimeEvent loadRuntimeEventRecord(Long eventId) {
+        List<RawRuntimeEvent> rows = jdbcTemplate.query("""
+                SELECT id, publish_no, module_code, event_type, status, payload_json,
+                       error_message, retry_count, max_retry_count, next_retry_at,
+                       locked_by, locked_at, last_attempt_at, create_time, handled_at
+                FROM system_config_runtime_event
+                WHERE id = ?
+                LIMIT 1
+                """, (rs, rowNum) -> mapRawRuntimeEvent(rs), eventId);
+        if (rows.isEmpty()) {
+            throw new BusinessException("runtime event not found");
+        }
+        return rows.get(0);
+    }
+
+    private void processRuntimeEvent(RawRuntimeEvent event,
+                                     PermissionRequestContext context,
+                                     boolean manual) {
+        LocalDateTime startedAt = LocalDateTime.now();
+        String worker = runtimeWorkerId(context);
+        if (!tryClaimRuntimeEvent(event.id(), startedAt, worker, manual)) {
+            return;
+        }
+        RawRuntimeEvent current = loadRuntimeEventRecord(event.id());
+        try {
+            handleRuntimeEvent(current);
+            jdbcTemplate.update("""
+                    UPDATE system_config_runtime_event
+                    SET status = ?, error_message = NULL, next_retry_at = NULL,
+                        locked_by = NULL, locked_at = NULL, handled_at = ?
+                    WHERE id = ?
+                    """, RUNTIME_EVENT_STATUS_SUCCESS, LocalDateTime.now(), current.id());
+        } catch (RuntimeException exception) {
+            int retryCount = current.retryCount() == null ? 1 : current.retryCount();
+            int maxRetryCount = current.maxRetryCount() == null || current.maxRetryCount() <= 0
+                    ? DEFAULT_RUNTIME_EVENT_MAX_RETRY
+                    : current.maxRetryCount();
+            boolean exhausted = retryCount >= maxRetryCount;
+            jdbcTemplate.update("""
+                    UPDATE system_config_runtime_event
+                    SET status = ?, error_message = ?, next_retry_at = ?,
+                        locked_by = NULL, locked_at = NULL, handled_at = NULL
+                    WHERE id = ?
+                    """,
+                    exhausted ? RUNTIME_EVENT_STATUS_TERMINATED : RUNTIME_EVENT_STATUS_FAILED,
+                    truncate(exception.getMessage(), 1000),
+                    exhausted ? null : LocalDateTime.now().plusMinutes(Math.min(retryCount, 15)),
+                    current.id());
+        }
+    }
+
+    private boolean tryClaimRuntimeEvent(Long eventId,
+                                         LocalDateTime startedAt,
+                                         String worker,
+                                         boolean manual) {
+        LocalDateTime staleBefore = startedAt.minusMinutes(RUNTIME_EVENT_LOCK_TIMEOUT_MINUTES);
+        if (manual) {
+            return jdbcTemplate.update("""
+                    UPDATE system_config_runtime_event
+                    SET status = ?, retry_count = COALESCE(retry_count, 0) + 1,
+                        locked_by = ?, locked_at = ?, last_attempt_at = ?
+                    WHERE id = ?
+                      AND (
+                          status IN ('PENDING', 'FAILED', 'TERMINATED')
+                          OR (status = 'RETRYING' AND (locked_at IS NULL OR locked_at < ?))
+                      )
+                    """, RUNTIME_EVENT_STATUS_RETRYING, worker, startedAt, startedAt, eventId, staleBefore) > 0;
+        }
+        return jdbcTemplate.update("""
+                UPDATE system_config_runtime_event
+                SET status = ?, retry_count = COALESCE(retry_count, 0) + 1,
+                    locked_by = ?, locked_at = ?, last_attempt_at = ?
+                WHERE id = ?
+                  AND (
+                      (
+                          status IN ('PENDING', 'FAILED')
+                          AND (next_retry_at IS NULL OR next_retry_at <= ?)
+                      )
+                      OR (status = 'RETRYING' AND (locked_at IS NULL OR locked_at < ?))
+                  )
+                """, RUNTIME_EVENT_STATUS_RETRYING, worker, startedAt, startedAt,
+                eventId, startedAt, staleBefore) > 0;
+    }
+
+    private void handleRuntimeEvent(RawRuntimeEvent event) {
+        RawPublishRecord record = loadPublishRecord(event.publishNo());
+        if (!PUBLISH_STATUS_SUCCESS.equals(record.status())) {
+            throw new BusinessException("runtime event publish record is not successful");
+        }
+        String eventType = normalizeOrDefault(event.eventType(), "");
+        if (!SUPPORTED_RUNTIME_EVENT_TYPES.contains(eventType)) {
+            throw new BusinessException("unsupported runtime event type: " + event.eventType());
+        }
+        String moduleCode = normalizeOrDefault(event.moduleCode(), "SYSTEM_CONFIG");
+        if (!SUPPORTED_RUNTIME_MODULES.contains(moduleCode)) {
+            throw new BusinessException("unsupported runtime module: " + event.moduleCode());
+        }
+        // P0 local adapter only confirms runtime configuration visibility; core business data is not mutated here.
+    }
+
+    private String runtimeWorkerId(PermissionRequestContext context) {
+        if (context == null) {
+            return "SYSTEM_CONFIG_SCHEDULER";
+        }
+        return "USER:" + firstNonBlank(context.getRoleCode(), "UNKNOWN")
+                + ":" + (context.getCurrentUserId() == null ? "0" : context.getCurrentUserId());
     }
 
     private Long countOf(String table, String condition) {
@@ -866,6 +1133,14 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                     "SELECT COUNT(1) FROM system_config_publish_record WHERE status = 'FAILED'";
             case "system_config_runtime_event|status = 'PENDING'" ->
                     "SELECT COUNT(1) FROM system_config_runtime_event WHERE status = 'PENDING'";
+            case "system_config_runtime_event|status = 'RETRYING'" ->
+                    "SELECT COUNT(1) FROM system_config_runtime_event WHERE status = 'RETRYING'";
+            case "system_config_runtime_event|status = 'SUCCESS'" ->
+                    "SELECT COUNT(1) FROM system_config_runtime_event WHERE status = 'SUCCESS'";
+            case "system_config_runtime_event|status = 'FAILED'" ->
+                    "SELECT COUNT(1) FROM system_config_runtime_event WHERE status = 'FAILED'";
+            case "system_config_runtime_event|status = 'TERMINATED'" ->
+                    "SELECT COUNT(1) FROM system_config_runtime_event WHERE status = 'TERMINATED'";
             default -> throw new BusinessException("不支持的系统配置统计查询");
         };
         Long count = jdbcTemplate.queryForObject(sql, Long.class);
@@ -1077,6 +1352,48 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         return modules;
     }
 
+    private void persistDryRunResult(RawDraft draft,
+                                     SystemConfigDtos.DryRunResponse response,
+                                     PermissionRequestContext context) {
+        List<RawDraftItem> items = loadDraftItems(draft.draftNo());
+        jdbcTemplate.update("""
+                UPDATE system_config_draft
+                SET last_dry_run_hash = ?,
+                    last_dry_run_status = ?,
+                    last_dry_run_at = ?,
+                    last_dry_run_by_role_code = ?,
+                    last_dry_run_by_user_id = ?,
+                    update_time = ?
+                WHERE draft_no = ? AND status = ?
+                """, draftContentHash(items),
+                Boolean.TRUE.equals(response.getRunnable()) ? "PASS" : "BLOCK",
+                LocalDateTime.now(),
+                context == null ? null : context.getRoleCode(),
+                context == null ? null : context.getCurrentUserId(),
+                LocalDateTime.now(),
+                draft.draftNo(),
+                DRAFT_STATUS_DRAFT);
+    }
+
+    private String draftContentHash(List<RawDraftItem> items) {
+        return hashValue(snapshotJson(items, true, false));
+    }
+
+    private String moduleLabel(String moduleCode) {
+        return switch (String.valueOf(moduleCode)) {
+            case "SYSTEM_SETTING" -> "系统设置";
+            case "SYSTEM_FLOW" -> "系统流程";
+            case "STORE_SERVICE" -> "门店服务";
+            case "FINANCE" -> "财务管理";
+            case "CLUE" -> "客资中心";
+            case "PLANORDER" -> "门店排档";
+            case "SCHEDULER" -> "调度中心";
+            case "WECOM" -> "私域客服";
+            case "SYSTEM_CONFIG" -> "系统配置";
+            default -> moduleCode;
+        };
+    }
+
     private String nextPublishNo() {
         return "PUB-" + UUID.randomUUID().toString()
                 .replace("-", "")
@@ -1153,11 +1470,13 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         eventPayload.put("message", payload);
         jdbcTemplate.update("""
                 INSERT INTO system_config_runtime_event(
-                    publish_no, module_code, event_type, status, payload_json, error_message, create_time
+                    publish_no, module_code, event_type, status, payload_json, error_message,
+                    retry_count, max_retry_count, create_time
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, publishNo, moduleCode, eventType, status,
-                toJsonObject(eventPayload), truncate(errorMessage, 1000), LocalDateTime.now());
+                toJsonObject(eventPayload), truncate(errorMessage, 1000),
+                0, DEFAULT_RUNTIME_EVENT_MAX_RETRY, LocalDateTime.now());
     }
 
     private SystemConfigDtos.SaveConfigRequest rollbackRequest(ChangeLogRecord changeLog) {
@@ -1381,7 +1700,12 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             LocalDateTime createTime,
             LocalDateTime updateTime,
             LocalDateTime publishedAt,
-            LocalDateTime discardedAt) {
+            LocalDateTime discardedAt,
+            String lastDryRunHash,
+            String lastDryRunStatus,
+            LocalDateTime lastDryRunAt,
+            String lastDryRunByRoleCode,
+            Long lastDryRunByUserId) {
     }
 
     private record RawDraftItem(
@@ -1429,6 +1753,24 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             String publishedByRoleCode,
             Long publishedByUserId,
             LocalDateTime publishedAt) {
+    }
+
+    private record RawRuntimeEvent(
+            Long id,
+            String publishNo,
+            String moduleCode,
+            String eventType,
+            String status,
+            String payloadJson,
+            String errorMessage,
+            LocalDateTime createTime,
+            LocalDateTime handledAt,
+            Integer retryCount,
+            Integer maxRetryCount,
+            LocalDateTime nextRetryAt,
+            String lockedBy,
+            LocalDateTime lockedAt,
+            LocalDateTime lastAttemptAt) {
     }
 
     private record RawCapability(

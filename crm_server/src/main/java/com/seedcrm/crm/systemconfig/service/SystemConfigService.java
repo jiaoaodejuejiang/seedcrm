@@ -36,6 +36,10 @@ public interface SystemConfigService {
         throw new UnsupportedOperationException("system config draft dry-run is not supported");
     }
 
+    default SystemConfigDtos.DryRunResponse dryRunDraft(String draftNo, PermissionRequestContext context) {
+        return dryRunDraft(draftNo);
+    }
+
     default List<SystemConfigDtos.PublishRecordResponse> listPublishRecords(Integer limit) {
         return List.of();
     }
@@ -47,6 +51,15 @@ public interface SystemConfigService {
     default SystemConfigDtos.PublishRecordResponse refreshPublishRuntime(String publishNo,
                                                                          PermissionRequestContext context) {
         throw new UnsupportedOperationException("system config runtime refresh is not supported");
+    }
+
+    default SystemConfigDtos.PublishRecordResponse processPublishRuntimeEvents(String publishNo,
+                                                                               PermissionRequestContext context) {
+        throw new UnsupportedOperationException("system config runtime event processing is not supported");
+    }
+
+    default List<SystemConfigDtos.RuntimeEventResponse> processDueRuntimeEvents(Integer limit) {
+        return List.of();
     }
 
     default SystemConfigDtos.ConfigPreviewResponse previewConfig(SystemConfigDtos.SaveConfigRequest request) {

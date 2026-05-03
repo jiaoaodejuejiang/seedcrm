@@ -258,6 +258,7 @@ class SystemConfigServiceImplTest {
         request.setValueType("NUMBER");
         request.setSummary("publish dedup window");
         SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+        service.dryRunDraft(draft.getDraftNo(), adminContext());
 
         SystemConfigDtos.DraftResponse published = service.publishDraft(draft.getDraftNo(), adminContext());
 
@@ -271,6 +272,27 @@ class SystemConfigServiceImplTest {
     }
 
     @Test
+    void shouldRequirePassedDryRunBeforePublishingDraft() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('clue.dedup.window_days', '90', 'NUMBER', 'GLOBAL', 'GLOBAL', 1, 'dedup window')
+                """);
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("clue.dedup.window_days");
+        request.setConfigValue("120");
+        request.setValueType("NUMBER");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        assertThatThrownBy(() -> service.publishDraft(draft.getDraftNo(), adminContext()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("发布预检查");
+
+        List<SystemConfigDtos.PublishRecordResponse> records = service.listPublishRecords(10);
+        assertThat(records).hasSize(1);
+        assertThat(records.get(0).getStatus()).isEqualTo("FAILED");
+    }
+
+    @Test
     void shouldRejectDraftPublishWhenRuntimeConfigChangedAfterDraftCreation() {
         jdbcTemplate.update("""
                 INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
@@ -281,6 +303,7 @@ class SystemConfigServiceImplTest {
         request.setConfigValue("120");
         request.setValueType("NUMBER");
         SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+        service.dryRunDraft(draft.getDraftNo(), adminContext());
         SystemConfigDtos.SaveConfigRequest directSave = new SystemConfigDtos.SaveConfigRequest();
         directSave.setConfigKey("clue.dedup.window_days");
         directSave.setConfigValue("180");
@@ -350,7 +373,8 @@ class SystemConfigServiceImplTest {
         assertThat(validation.getItems().get(0).getCapabilityCode()).isEqualTo("CLUE_DEDUP");
         assertThat(validation.getItems().get(0).getStatus()).isEqualTo("PASS");
         assertThat(dryRun.getRunnable()).isTrue();
-        assertThat(dryRun.getRuntimeEvents()).anyMatch(item -> item.contains("CLUE"));
+        assertThat(dryRun.getRuntimeEvents()).anyMatch(item -> item.contains("客资中心"));
+        assertThat(service.getDraft(draft.getDraftNo()).getLastDryRunStatus()).isEqualTo("PASS");
         assertThat(valueOf("clue.dedup.window_days")).isEqualTo("90");
     }
 
@@ -365,6 +389,7 @@ class SystemConfigServiceImplTest {
         request.setConfigValue("120");
         request.setValueType("NUMBER");
         SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+        service.dryRunDraft(draft.getDraftNo(), adminContext());
 
         service.publishDraft(draft.getDraftNo(), adminContext());
 
@@ -389,6 +414,7 @@ class SystemConfigServiceImplTest {
         SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
 
         SystemConfigDtos.ValidationResponse validation = service.validateDraft(draft.getDraftNo());
+        service.dryRunDraft(draft.getDraftNo(), adminContext());
 
         assertThat(validation.getValid()).isFalse();
         assertThat(validation.getItems().get(0).getStatus()).isEqualTo("BLOCK");
@@ -408,6 +434,7 @@ class SystemConfigServiceImplTest {
         request.setConfigValue("super-secret");
         request.setValueType("STRING");
         SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+        service.dryRunDraft(draft.getDraftNo(), adminContext());
 
         service.publishDraft(draft.getDraftNo(), adminContext());
 
@@ -427,6 +454,7 @@ class SystemConfigServiceImplTest {
         request.setConfigValue("120");
         request.setValueType("NUMBER");
         SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+        service.dryRunDraft(draft.getDraftNo(), adminContext());
         service.publishDraft(draft.getDraftNo(), adminContext());
         String publishNo = service.listPublishRecords(10).get(0).getPublishNo();
 
@@ -434,6 +462,91 @@ class SystemConfigServiceImplTest {
 
         assertThat(refreshed.getEvents()).extracting(SystemConfigDtos.RuntimeEventResponse::getEventType)
                 .contains("CACHE_EVICT");
+    }
+
+    @Test
+    void shouldProcessPendingRuntimeEventsForPublishRecord() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('clue.dedup.window_days', '90', 'NUMBER', 'GLOBAL', 'GLOBAL', 1, 'dedup window')
+                """);
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("clue.dedup.window_days");
+        request.setConfigValue("120");
+        request.setValueType("NUMBER");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+        service.dryRunDraft(draft.getDraftNo(), adminContext());
+        service.publishDraft(draft.getDraftNo(), adminContext());
+        String publishNo = service.listPublishRecords(10).get(0).getPublishNo();
+
+        SystemConfigDtos.PublishRecordResponse processed = service.processPublishRuntimeEvents(publishNo, adminContext());
+
+        assertThat(processed.getEvents()).extracting(SystemConfigDtos.RuntimeEventResponse::getStatus)
+                .containsOnly("SUCCESS");
+        assertThat(processed.getEvents()).allSatisfy(event -> {
+            assertThat(event.getHandledAt()).isNotNull();
+            assertThat(event.getRetryCount()).isEqualTo(1);
+        });
+        SystemConfigDtos.RuntimeOverviewResponse overview = service.getRuntimeOverview();
+        assertThat(overview.getRuntimeEventPendingCount()).isZero();
+        assertThat(overview.getRuntimeEventSuccessCount()).isEqualTo(2);
+        assertThat(overview.getLatestRuntimeHandledAt()).isNotNull();
+    }
+
+    @Test
+    void shouldMarkUnsupportedRuntimeEventFailedWithoutMutatingPublishedConfig() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('clue.dedup.window_days', '90', 'NUMBER', 'GLOBAL', 'GLOBAL', 1, 'dedup window')
+                """);
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("clue.dedup.window_days");
+        request.setConfigValue("120");
+        request.setValueType("NUMBER");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+        service.dryRunDraft(draft.getDraftNo(), adminContext());
+        service.publishDraft(draft.getDraftNo(), adminContext());
+        String publishNo = service.listPublishRecords(10).get(0).getPublishNo();
+        jdbcTemplate.update("""
+                INSERT INTO system_config_runtime_event(
+                    publish_no, module_code, event_type, status, payload_json,
+                    retry_count, max_retry_count, create_time
+                )
+                VALUES (?, 'CLUE', 'BUSINESS_WRITE', 'PENDING', '{}', 0, 3, CURRENT_TIMESTAMP)
+                """, publishNo);
+
+        SystemConfigDtos.PublishRecordResponse processed = service.processPublishRuntimeEvents(publishNo, adminContext());
+
+        SystemConfigDtos.RuntimeEventResponse failed = processed.getEvents().stream()
+                .filter(event -> "BUSINESS_WRITE".equals(event.getEventType()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(failed.getStatus()).isEqualTo("FAILED");
+        assertThat(failed.getErrorMessage()).contains("unsupported runtime event type");
+        assertThat(failed.getNextRetryAt()).isNotNull();
+        assertThat(valueOf("clue.dedup.window_days")).isEqualTo("120");
+    }
+
+    @Test
+    void shouldEnqueueManualRuntimeRefreshAndProcessIt() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('clue.dedup.window_days', '90', 'NUMBER', 'GLOBAL', 'GLOBAL', 1, 'dedup window')
+                """);
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("clue.dedup.window_days");
+        request.setConfigValue("120");
+        request.setValueType("NUMBER");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+        service.dryRunDraft(draft.getDraftNo(), adminContext());
+        service.publishDraft(draft.getDraftNo(), adminContext());
+        String publishNo = service.listPublishRecords(10).get(0).getPublishNo();
+
+        service.refreshPublishRuntime(publishNo, adminContext());
+        SystemConfigDtos.PublishRecordResponse processed = service.processPublishRuntimeEvents(publishNo, adminContext());
+
+        assertThat(processed.getEvents()).filteredOn(event -> "CACHE_EVICT".equals(event.getEventType()))
+                .allSatisfy(event -> assertThat(event.getStatus()).isEqualTo("SUCCESS"));
     }
 
     private void createSchema() {
@@ -485,6 +598,11 @@ class SystemConfigServiceImplTest {
                     update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                     published_at DATETIME,
                     discarded_at DATETIME,
+                    last_dry_run_hash VARCHAR(64),
+                    last_dry_run_status VARCHAR(32),
+                    last_dry_run_at DATETIME,
+                    last_dry_run_by_role_code VARCHAR(64),
+                    last_dry_run_by_user_id BIGINT,
                     UNIQUE KEY uk_system_config_draft_no (draft_no)
                 )
                 """);
@@ -553,6 +671,12 @@ class SystemConfigServiceImplTest {
                     status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
                     payload_json TEXT,
                     error_message VARCHAR(1000),
+                    retry_count INT DEFAULT 0,
+                    max_retry_count INT DEFAULT 3,
+                    next_retry_at DATETIME,
+                    locked_by VARCHAR(128),
+                    locked_at DATETIME,
+                    last_attempt_at DATETIME,
                     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                     handled_at DATETIME
                 )

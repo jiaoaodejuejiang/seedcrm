@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM 快速部署与上线联调手册</title>
+  <style>
+    body { margin: 0; background: #f6f8fb; color: #172033; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; line-height: 1.75; }
+    main { max-width: 1040px; margin: 0 auto; padding: 34px 20px 64px; }
+    header, section { background: #fff; border: 1px solid #e5eaf3; border-radius: 22px; padding: 24px; margin-top: 18px; box-shadow: 0 18px 45px rgba(23, 32, 51, .06); }
+    h1, h2 { margin: 0; line-height: 1.35; }
+    h1 { font-size: 30px; }
+    h2 { margin-bottom: 12px; font-size: 22px; }
+    p { margin: 8px 0 0; color: #64748b; }
+    ul, ol { margin: 10px 0 0; padding-left: 22px; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    pre { overflow: auto; padding: 14px; border-radius: 14px; background: #101827; color: #e5edf8; }
+    .badge { display: inline-block; margin: 10px 8px 0 0; padding: 5px 10px; border-radius: 999px; background: #e8f4ff; color: #075985; font-size: 12px; font-weight: 700; }
+    .warn { border-left: 4px solid #f59e0b; }
+    .danger { border-left: 4px solid #ef4444; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5eaf3; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SeedCRM 快速部署与上线联调手册</h1>
+    <p>覆盖 Docker Compose 部署、线上域名、OpenAPI/Swagger、上线工具、Scheme B 分销联调和回滚检查。</p>
+    <span class="badge">Docker Compose</span>
+    <span class="badge">上线工具</span>
+    <span class="badge">dry-run 不入库</span>
+  </header>
+
+  <section>
+    <h2>1. Docker 快速启动</h2>
+    <p>复制根目录 <code>.env.example</code> 为 <code>.env</code>，修改数据库密码和线上域名后执行：</p>
+    <pre><code>docker compose build
+docker compose up -d
+docker compose logs -f backend
+docker compose logs -f frontend</code></pre>
+  </section>
+
+  <section>
+    <h2>2. 必填环境变量</h2>
+    <table>
+      <thead><tr><th>变量</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>SEEDCRM_SYSTEM_BASE_URL</code></td><td>后台页面域名，用于扫码服务单、页面跳转。</td></tr>
+        <tr><td><code>SEEDCRM_API_BASE_URL</code></td><td>API 域名，用于分销入站、企微/抖音/支付回调、Swagger/OpenAPI。</td></tr>
+        <tr><td><code>SEEDCRM_OPENAPI_ENABLED</code></td><td>正式环境建议 <code>false</code>，需要联调时短期开启。</td></tr>
+        <tr><td><code>SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN</code></td><td>正式环境必须 <code>false</code>。</td></tr>
+        <tr><td><code>SEEDCRM_ALLOW_CLEAR_TEST_DATA</code></td><td>默认 <code>false</code>。只在确认是测试库、完成备份且需要真实清理时临时改为 <code>true</code>。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>3. 上线工具</h2>
+    <ol>
+      <li>管理员进入 <strong>系统设置 / 基础配置 / 上线工具</strong>。</li>
+      <li>先看上线预检，确认 API 域名、系统域名、调度任务、分销配置、抖音配置。</li>
+      <li>测试/预发初始化确认词：<code>INIT_SYSTEM</code>；正式环境确认词：<code>INIT_PROD_SYSTEM</code>。</li>
+      <li>清理测试数据先 dry-run，真实清理必须输入 <code>CLEAR_TEST_DATA</code>，并显式开启 <code>SEEDCRM_ALLOW_CLEAR_TEST_DATA=true</code>；PROD 环境后端会阻断。</li>
+    </ol>
+  </section>
+
+  <section class="warn">
+    <h2>4. Scheme B 联调顺序</h2>
+    <ol>
+      <li>配置分销 partner、签名密钥、状态映射、订单类型映射、状态回查路径、对账路径。</li>
+      <li>先执行 dry-run 入站映射，确认不会写 Customer / Order / PlanOrder。</li>
+      <li>用 MOCK 正式链路验证 paid 事件创建或匹配 Customer，并创建 Order(paid)，不得进入 Clue。</li>
+      <li>验证 duplicate paid 不重复建单，cancelled/refund_pending/refunded 不反向创建订单。</li>
+      <li>PlanOrder 完成后写 <code>crm.order.used</code> Outbox，再由调度异步回推外部分销系统。</li>
+    </ol>
+  </section>
+
+  <section class="danger">
+    <h2>5. 不可上线条件</h2>
+    <ul>
+      <li>正式环境仍使用 <code>127.0.0.1</code>、<code>localhost</code> 或 HTTP 回调域名。</li>
+      <li>Swagger/OpenAPI 与本地免 Token 在正式环境开启且未做访问限制。</li>
+      <li>分销 dry-run 会写核心业务表或真实调用外部接口。</li>
+      <li>异常队列可以绕过入站服务直接修改 Customer / Order / PlanOrder。</li>
+      <li>抖音 auth_code 已过期但仍继续换 token 或执行真实拉取。</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

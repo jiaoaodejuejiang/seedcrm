@@ -76,7 +76,9 @@
           </span>
         </div>
         <div class="capability-strip__meta">
-          <span>待处理运行态事件 {{ runtimeOverview.runtimeEventPendingCount ?? 0 }}</span>
+          <span>待处理运行态事件 {{ runtimePendingCount }}</span>
+          <span>失败/终止 {{ runtimeFailedCount }}</span>
+          <span>最近刷新 {{ runtimeOverview.latestRuntimeHandledAt ? formatDate(runtimeOverview.latestRuntimeHandledAt) : '--' }}</span>
         </div>
       </div>
 
@@ -227,8 +229,8 @@
             </el-table-column>
             <el-table-column label="发布预检查" width="120">
               <template #default="{ row }">
-                <el-tag :type="dryRunTagType(dryRunMap[row.draftNo]?.runnable)">
-                  {{ dryRunLabel(dryRunMap[row.draftNo]?.runnable) }}
+                <el-tag :type="dryRunTagType(draftDryRunState(row))">
+                  {{ dryRunLabel(draftDryRunState(row)) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -300,17 +302,17 @@
             <el-table-column label="发布时间" width="180">
               <template #default="{ row }">{{ formatDate(row.publishedAt) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="170" fixed="right">
+            <el-table-column label="操作" width="190" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click="openPublishRecord(row)">详情</el-button>
                 <el-button
                   link
                   type="success"
                   :disabled="row.status !== 'SUCCESS'"
-                  :loading="refreshingPublishNo === row.publishNo"
+                  :loading="refreshingPublishNo === row.publishNo || processingRuntimePublishNo === row.publishNo"
                   @click="handleRefreshRuntime(row)"
                 >
-                  刷新运行态
+                  刷新并处理
                 </el-button>
               </template>
             </el-table-column>
@@ -431,12 +433,19 @@
       <template v-if="selectedPublishRecord">
         <div class="drawer-actions">
           <el-button
+            :disabled="selectedPublishRecord.status !== 'SUCCESS'"
+            :loading="processingRuntimePublishNo === selectedPublishRecord.publishNo"
+            @click="handleProcessRuntimeEvents(selectedPublishRecord)"
+          >
+            处理待刷新事件
+          </el-button>
+          <el-button
             type="success"
             :disabled="selectedPublishRecord.status !== 'SUCCESS'"
-            :loading="refreshingPublishNo === selectedPublishRecord.publishNo"
+            :loading="refreshingPublishNo === selectedPublishRecord.publishNo || processingRuntimePublishNo === selectedPublishRecord.publishNo"
             @click="handleRefreshRuntime(selectedPublishRecord)"
           >
-            刷新运行态
+            新增刷新并处理
           </el-button>
         </div>
         <dl class="diff-list drawer-diff">
@@ -481,6 +490,13 @@
                   {{ eventStatusLabel(event.status) }}
                 </el-tag>
               </span>
+              <div class="runtime-event-meta">
+                <small>尝试 {{ event.retryCount ?? 0 }}/{{ event.maxRetryCount ?? 3 }}</small>
+                <small v-if="event.lastAttemptAt">最近尝试 {{ formatDate(event.lastAttemptAt) }}</small>
+                <small v-if="event.handledAt">完成 {{ formatDate(event.handledAt) }}</small>
+                <small v-if="event.nextRetryAt">下次重试 {{ formatDate(event.nextRetryAt) }}</small>
+              </div>
+              <p v-if="event.errorMessage" class="runtime-event-error">{{ event.errorMessage }}</p>
             </el-timeline-item>
           </el-timeline>
         </div>
@@ -555,6 +571,7 @@ import {
   fetchSystemConfigPublishRecords,
   fetchSystemConfigRuntimeOverview,
   previewSystemConfig,
+  processSystemConfigRuntimeEvents,
   publishSystemConfigDraft,
   refreshSystemConfigRuntime,
   rollbackPreviewSystemConfig,
@@ -617,6 +634,7 @@ const discardingDraftNo = ref('')
 const validatingDraftNo = ref('')
 const dryRunningDraftNo = ref('')
 const refreshingPublishNo = ref('')
+const processingRuntimePublishNo = ref('')
 
 const logs = ref([])
 const drafts = ref([])
@@ -743,6 +761,10 @@ const draftCount = computed(() => drafts.value.length)
 const highRiskDraftCount = computed(() => drafts.value.filter((item) => item.riskLevel === 'HIGH').length)
 const publishSuccessCount = computed(() => publishRecords.value.filter((item) => item.status === 'SUCCESS').length)
 const publishFailedCount = computed(() => publishRecords.value.filter((item) => item.status === 'FAILED').length)
+const runtimePendingCount = computed(() => runtimeOverview.value.runtimeEventPendingCount ?? 0)
+const runtimeFailedCount = computed(() =>
+  (runtimeOverview.value.runtimeEventFailedCount ?? 0) + (runtimeOverview.value.runtimeEventTerminatedCount ?? 0)
+)
 const visibleCapabilities = computed(() => capabilities.value.slice(0, 7))
 const capabilityCards = computed(() => capabilities.value.slice(0, 10))
 const currentStepIndex = computed(() => {
@@ -755,15 +777,19 @@ const currentStepIndex = computed(() => {
   return map[activeTab.value] ?? 0
 })
 const pageStatusTitle = computed(() => {
+  if (runtimeFailedCount.value > 0) return '有运行态刷新失败'
   if (highRiskDraftCount.value > 0) return '有高风险草稿待处理'
-  if ((runtimeOverview.value.runtimeEventPendingCount ?? 0) > 0) return '有运行态事件待处理'
+  if (runtimePendingCount.value > 0) return '有运行态事件待处理'
   return '配置治理链路正常'
 })
 const pageStatusText = computed(() => {
+  if (runtimeFailedCount.value > 0) {
+    return '运行态刷新失败不会改动客户、订单、排档或财务数据；可在发布批次详情中手动重试刷新。'
+  }
   if (highRiskDraftCount.value > 0) {
     return '高风险配置必须完成校验和发布预检查，确认发布后才会生效。'
   }
-  if ((runtimeOverview.value.runtimeEventPendingCount ?? 0) > 0) {
+  if (runtimePendingCount.value > 0) {
     return '发布已写入运行态事件，后续由模块感知或手工刷新处理。'
   }
   return '受控配置会按预览、草稿、校验、发布预检查、发布、审计回滚的顺序流转。'
@@ -919,6 +945,7 @@ async function handleDryRunDraft(row) {
     } else {
       ElMessage.warning('发布预检查未通过，请先处理校验项')
     }
+    await loadDrafts()
     return result
   } finally {
     dryRunningDraftNo.value = ''
@@ -997,22 +1024,48 @@ async function handleDiscardDraft(row) {
 async function handleRefreshRuntime(row) {
   if (!row?.publishNo) return
   await ElMessageBox.confirm(
-    `确认刷新发布批次 ${row.publishNo} 的运行态配置？该操作只刷新配置感知，不会修改客户、订单、排档或账务数据。`,
+    `确认为发布批次 ${row.publishNo} 新增一次刷新事件并立即处理？该操作只刷新配置感知，不会修改客户、订单、排档或账务数据。`,
     '刷新运行态配置',
     {
       type: 'warning',
-      confirmButtonText: '刷新运行态配置',
+      confirmButtonText: '刷新并处理',
       cancelButtonText: '取消'
     }
   )
   refreshingPublishNo.value = row.publishNo
+  processingRuntimePublishNo.value = row.publishNo
   try {
-    const detail = await refreshSystemConfigRuntime(row.publishNo)
+    await refreshSystemConfigRuntime(row.publishNo)
+    const detail = await processSystemConfigRuntimeEvents(row.publishNo)
     selectedPublishRecord.value = detail
-    ElMessage.success('运行态刷新事件已记录')
+    publishDrawerVisible.value = true
+    ElMessage.success('运行态刷新已处理')
     await Promise.all([loadPublishRecords(), loadRuntimeOverview()])
   } finally {
     refreshingPublishNo.value = ''
+    processingRuntimePublishNo.value = ''
+  }
+}
+
+async function handleProcessRuntimeEvents(row) {
+  if (!row?.publishNo) return
+  await ElMessageBox.confirm(
+    `确认处理发布批次 ${row.publishNo} 的待刷新或失败事件？本操作只重新加载已发布配置，不会改动业务数据。`,
+    '处理运行态刷新事件',
+    {
+      type: 'warning',
+      confirmButtonText: '处理刷新事件',
+      cancelButtonText: '取消'
+    }
+  )
+  processingRuntimePublishNo.value = row.publishNo
+  try {
+    const detail = await processSystemConfigRuntimeEvents(row.publishNo)
+    selectedPublishRecord.value = detail
+    ElMessage.success('运行态刷新事件已处理')
+    await Promise.all([loadPublishRecords(), loadRuntimeOverview()])
+  } finally {
+    processingRuntimePublishNo.value = ''
   }
 }
 
@@ -1114,7 +1167,30 @@ function firstDraftItem(row) {
 }
 
 function moduleText(items = []) {
-  return items.length ? items.join('、') : '相关模块'
+  return items.length ? items.map((item) => moduleLabel(item)).join('、') : '相关模块'
+}
+
+function moduleLabel(value) {
+  return moduleNameMap[value] || value || '--'
+}
+
+function capabilityLabel(item) {
+  return capabilityMeta[item?.capabilityCode]?.label || item?.capabilityCode || '--'
+}
+
+function capabilityDescription(item) {
+  return capabilityMeta[item?.capabilityCode]?.description || '受控配置能力，发布前必须完成校验和发布预检查'
+}
+
+function valueTypeLabel(value) {
+  const map = {
+    STRING: '文本',
+    BOOLEAN: '开关',
+    NUMBER: '数字',
+    URL: '地址',
+    JSON: 'JSON'
+  }
+  return map[value] || value || '--'
 }
 
 function sourceTypeLabel(value) {
@@ -1157,6 +1233,26 @@ function validationTagType(value) {
   return 'info'
 }
 
+function dryRunLabel(value) {
+  if (value === true) return '已通过'
+  if (value === false) return '未通过'
+  return '未预检'
+}
+
+function dryRunTagType(value) {
+  if (value === true) return 'success'
+  if (value === false) return 'danger'
+  return 'info'
+}
+
+function draftDryRunState(row) {
+  if (dryRunMap[row.draftNo]?.runnable === true) return true
+  if (dryRunMap[row.draftNo]?.runnable === false) return false
+  if (row.lastDryRunStatus === 'PASS') return true
+  if (row.lastDryRunStatus === 'BLOCK') return false
+  return null
+}
+
 function publishStatusLabel(value) {
   const map = {
     SUCCESS: '成功',
@@ -1168,6 +1264,36 @@ function publishStatusLabel(value) {
 function publishStatusType(value) {
   if (value === 'SUCCESS') return 'success'
   if (value === 'FAILED') return 'danger'
+  return 'info'
+}
+
+function eventTypeLabel(value) {
+  const map = {
+    CONFIG_PUBLISHED: '配置发布事件',
+    RUNTIME_REFRESH: '运行态刷新事件',
+    CACHE_EVICT: '缓存刷新事件'
+  }
+  return map[value] || value || '--'
+}
+
+function eventStatusLabel(value) {
+  const map = {
+    PENDING: '待处理',
+    RETRYING: '处理中',
+    SUCCESS: '成功',
+    FAILED: '失败',
+    TERMINATED: '已终止',
+    RECORDED: '已记录'
+  }
+  return map[value] || value || '--'
+}
+
+function eventStatusType(value) {
+  if (value === 'SUCCESS') return 'success'
+  if (value === 'FAILED') return 'danger'
+  if (value === 'TERMINATED') return 'danger'
+  if (value === 'RETRYING') return 'warning'
+  if (value === 'PENDING') return 'warning'
   return 'info'
 }
 
@@ -1190,6 +1316,35 @@ function formatDate(value) {
 .config-alert {
   margin-bottom: 16px;
   border-radius: 8px;
+}
+
+.publish-flow {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.publish-flow :deep(.el-steps--simple) {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #eef6ff 100%);
+}
+
+.page-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 13px;
+}
+
+.page-status strong {
+  color: #0f172a;
 }
 
 .capability-strip {
@@ -1225,6 +1380,56 @@ function formatDate(value) {
 .muted {
   color: #64748b;
   font-size: 13px;
+}
+
+.capability-catalog {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.capability-card {
+  min-width: 0;
+  min-height: 118px;
+  padding: 12px;
+  border: 1px solid #dbe4f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.capability-card:hover,
+.capability-card.is-active {
+  border-color: #2563eb;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12);
+  transform: translateY(-1px);
+}
+
+.capability-card__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.capability-card strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.capability-card span,
+.capability-card small {
+  display: block;
+}
+
+.capability-card small {
+  margin-top: 8px;
+  color: #64748b;
 }
 
 .preview-layout {
@@ -1368,6 +1573,23 @@ function formatDate(value) {
   color: #475569;
 }
 
+.runtime-event-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  color: #64748b;
+}
+
+.runtime-event-error {
+  margin: 8px 0 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #b91c1c;
+  overflow-wrap: anywhere;
+}
+
 .validation-list {
   display: grid;
   gap: 8px;
@@ -1388,10 +1610,26 @@ function formatDate(value) {
   color: #334155;
 }
 
+.validation-row__suggestion {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+}
+
+@media (max-width: 1280px) {
+  .capability-catalog {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 980px) {
   .preview-layout,
   .log-toolbar,
   .validation-row {
+    grid-template-columns: 1fr;
+  }
+
+  .capability-catalog {
     grid-template-columns: 1fr;
   }
 

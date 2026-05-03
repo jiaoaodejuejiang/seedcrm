@@ -807,13 +807,16 @@ const timelineItems = computed(() => [
   { label: '开始服务', value: formatDateTime(detail.value?.summary?.startTime) || '--' },
   { label: '完成服务', value: formatDateTime(detail.value?.summary?.finishTime) || '--' }
 ])
+const fulfillmentTimelineItems = computed(() => normalizeFulfillmentRecords(detail.value?.order?.fulfillmentRecords))
 const appointmentTimelineItems = computed(() => normalizeAppointmentRecords(detail.value?.order?.appointmentRecords))
 const flowTraceItems = computed(() => normalizeFlowTrace(detail.value?.flowTrace))
 const flowTraceHint = computed(() =>
-  appointmentTimelineItems.value.length || flowTraceItems.value.length ? '来自已记录的业务动作。' : '暂无详细操作记录，按当前订单状态展示。'
+  fulfillmentTimelineItems.value.length || appointmentTimelineItems.value.length || flowTraceItems.value.length
+    ? '来自已记录的业务动作。'
+    : '暂无详细操作记录，按当前订单状态展示。'
 )
 const displayTimelineItems = computed(() => {
-  const items = [...appointmentTimelineItems.value, ...flowTraceItems.value]
+  const items = mergeTimelineItems([...fulfillmentTimelineItems.value, ...appointmentTimelineItems.value, ...flowTraceItems.value])
   return items.length ? items : timelineItems.value
 })
 const serviceProcessSteps = computed(() => {
@@ -948,15 +951,93 @@ function fieldText(value) {
   return String(value || '').trim() || '未填写'
 }
 
+function normalizeFulfillmentRecords(records) {
+  if (!Array.isArray(records) || !records.length) {
+    return []
+  }
+  return records
+    .map((record) => {
+      const actionType = normalize(record?.actionType)
+      const createTime = record?.createTime
+      return {
+        label: `${fulfillmentStageLabel(record?.stage)} - ${fulfillmentActionLabel(actionType)}`,
+        value: buildFulfillmentRecordText(record),
+        sortTime: createTime,
+        dedupeKeys: [timelineDedupeKey(actionType, createTime), timelineDedupeKey(fulfillmentFlowTraceAction(actionType), createTime)]
+      }
+    })
+    .filter((item) => item.label && item.value)
+}
+
+function fulfillmentStageLabel(stage) {
+  const labels = {
+    SCHEDULE: '排档',
+    VERIFY: '核销',
+    SERVICE_FORM: '确认单',
+    SERVICE: '服务',
+    FINANCE: '财务'
+  }
+  return labels[normalize(stage)] || '履约'
+}
+
+function fulfillmentActionLabel(actionType) {
+  const labels = {
+    APPOINTMENT_CREATE: '已约档',
+    APPOINTMENT_CHANGE: '已改档',
+    APPOINTMENT_CANCEL: '取消预约',
+    DIRECT_DEPOSIT_VERIFY: '定金免码确认',
+    EXTERNAL_VOUCHER_VERIFY: '团购券核销',
+    VOUCHER_VERIFY: '团购券核销',
+    VOUCHER_VERIFY_FAILED: '核销失败',
+    SERVICE_FORM_PRINT: '打印确认单',
+    SERVICE_FORM_CONFIRM: '确认纸质单',
+    SERVICE_FINISH: '服务完成',
+    ORDER_COMPLETE: '订单完成',
+    REFUND_REGISTER: '退款冲正'
+  }
+  return labels[normalize(actionType)] || '履约记录'
+}
+
+function buildFulfillmentRecordText(record) {
+  if (!record) {
+    return '--'
+  }
+  const parts = []
+  const actor = record.operatorUserName || (record.operatorUserId ? `ID ${record.operatorUserId}` : '')
+  if (actor) {
+    parts.push(`操作人：${actor}`)
+  }
+  const safeDetails = Array.isArray(record.detailItems) ? record.detailItems.map((item) => String(item || '').trim()).filter(Boolean) : []
+  if (record.summary && fulfillmentActionLabel(record.actionType) === '履约记录') {
+    safeDetails.unshift(String(record.summary).trim())
+  }
+  const fromStatus = formatOrderStatus(record.fromStatus)
+  const toStatus = formatOrderStatus(record.toStatus)
+  if (fromStatus && toStatus && fromStatus !== '--' && toStatus !== '--' && fromStatus !== toStatus) {
+    parts.push(`状态：${fromStatus} -> ${toStatus}`)
+  }
+  parts.push(...safeDetails)
+  const time = formatDateTime(record.createTime)
+  if (time) {
+    parts.push(time)
+  }
+  return parts.join(' / ') || '--'
+}
+
 function normalizeAppointmentRecords(records) {
   if (!Array.isArray(records) || !records.length) {
     return []
   }
   return records
-    .map((record) => ({
-      label: appointmentRecordLabel(record?.actionType),
-      value: buildAppointmentRecordText(record)
-    }))
+    .map((record) => {
+      const actionType = normalize(record?.actionType)
+      return {
+        label: appointmentRecordLabel(actionType),
+        value: buildAppointmentRecordText(record),
+        sortTime: record?.createTime,
+        dedupeKeys: [timelineDedupeKey(actionType, record?.createTime)]
+      }
+    })
     .filter((item) => item.label && item.value)
 }
 
@@ -998,10 +1079,16 @@ function normalizeFlowTrace(items) {
     return []
   }
   return items
-    .map((item) => ({
-      label: formatFlowTraceAction(item?.actionCode),
-      value: buildFlowTraceText(item)
-    }))
+    .map((item) => {
+      const actionCode = normalize(item?.actionCode)
+      const eventTime = item?.eventTime
+      return {
+        label: formatFlowTraceAction(actionCode),
+        value: buildFlowTraceText(item),
+        sortTime: eventTime,
+        dedupeKeys: [timelineDedupeKey(actionCode, eventTime), timelineDedupeKey(flowTraceFulfillmentAction(actionCode), eventTime)]
+      }
+    })
     .filter((item) => item.label && item.value)
 }
 
@@ -1034,6 +1121,78 @@ function buildFlowTraceText(item) {
     parts.push(time)
   }
   return parts.join(' / ') || '--'
+}
+
+function fulfillmentFlowTraceAction(actionType) {
+  const labels = {
+    APPOINTMENT_CREATE: 'ORDER_APPOINTMENT',
+    APPOINTMENT_CHANGE: 'ORDER_APPOINTMENT',
+    APPOINTMENT_CANCEL: 'ORDER_APPOINTMENT_CANCEL',
+    DIRECT_DEPOSIT_VERIFY: 'ORDER_VERIFY',
+    EXTERNAL_VOUCHER_VERIFY: 'ORDER_VERIFY',
+    VOUCHER_VERIFY: 'ORDER_VERIFY',
+    SERVICE_FORM_PRINT: 'SERVICE_FORM_PRINT',
+    SERVICE_FORM_CONFIRM: 'SERVICE_FORM_CONFIRM',
+    SERVICE_FINISH: 'PLAN_FINISH',
+    ORDER_COMPLETE: 'ORDER_COMPLETE'
+  }
+  return labels[normalize(actionType)] || ''
+}
+
+function flowTraceFulfillmentAction(actionCode) {
+  const labels = {
+    ORDER_APPOINTMENT: 'APPOINTMENT_CREATE',
+    ORDER_APPOINTMENT_CANCEL: 'APPOINTMENT_CANCEL',
+    ORDER_VERIFY: isDepositOrder.value ? 'DIRECT_DEPOSIT_VERIFY' : 'VOUCHER_VERIFY',
+    SERVICE_FORM_PRINT: 'SERVICE_FORM_PRINT',
+    SERVICE_FORM_CONFIRM: 'SERVICE_FORM_CONFIRM',
+    PLAN_FINISH: 'SERVICE_FINISH',
+    ORDER_COMPLETE: 'ORDER_COMPLETE'
+  }
+  return labels[normalize(actionCode)] || ''
+}
+
+function mergeTimelineItems(items) {
+  const seen = new Set()
+  return items
+    .map((item, index) => ({ ...item, index }))
+    .filter((item) => {
+      const keys = (item.dedupeKeys || []).filter(Boolean)
+      if (!keys.length) {
+        return true
+      }
+      if (keys.some((key) => seen.has(key))) {
+        return false
+      }
+      keys.forEach((key) => seen.add(key))
+      return true
+    })
+    .sort((left, right) => {
+      const diff = timelineTimestamp(right.sortTime) - timelineTimestamp(left.sortTime)
+      return diff || left.index - right.index
+    })
+}
+
+function timelineDedupeKey(actionType, time) {
+  const action = normalize(actionType)
+  if (!action) {
+    return ''
+  }
+  return `${action}:${normalizeTimelineTime(time)}`
+}
+
+function normalizeTimelineTime(value) {
+  const formatted = formatDateTime(value)
+  return formatted || String(value || '').trim()
+}
+
+function timelineTimestamp(value) {
+  const text = normalizeTimelineTime(value)
+  if (!text) {
+    return 0
+  }
+  const timestamp = Date.parse(text.replace(' ', 'T'))
+  return Number.isFinite(timestamp) ? timestamp : 0
 }
 
 function toAmount(value) {

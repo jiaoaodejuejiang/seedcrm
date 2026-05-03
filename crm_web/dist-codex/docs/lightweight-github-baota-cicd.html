@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM 轻量 CI/CD 到宝塔服务器部署说明</title>
+  <style>
+    body { margin: 0; background: #f6f8fb; color: #172033; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; line-height: 1.75; }
+    main { max-width: 1120px; margin: 0 auto; padding: 34px 22px 68px; }
+    header, section { margin-top: 18px; padding: 24px; border: 1px solid #e5eaf3; border-radius: 22px; background: #fff; box-shadow: 0 18px 45px rgba(23, 32, 51, .06); }
+    h1, h2, h3 { margin: 0; line-height: 1.35; }
+    h1 { font-size: 30px; }
+    h2 { margin-bottom: 12px; font-size: 22px; }
+    h3 { margin-top: 16px; font-size: 17px; }
+    p { margin: 8px 0 0; color: #64748b; }
+    ul, ol { margin: 10px 0 0; padding-left: 22px; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    code { color: #0f766e; }
+    pre { overflow: auto; padding: 14px; border-radius: 14px; background: #101827; color: #e5edf8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5eaf3; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    .badge { display: inline-block; margin: 10px 8px 0 0; padding: 5px 10px; border-radius: 999px; background: #e8f4ff; color: #075985; font-size: 12px; font-weight: 700; }
+    .warn { border-left: 4px solid #f59e0b; }
+    .danger { border-left: 4px solid #ef4444; }
+    .ok { border-left: 4px solid #10b981; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SeedCRM 轻量 CI/CD 到宝塔服务器部署说明</h1>
+    <p>推荐流程：本地安装依赖并完整测试，确认没问题后推送 GitHub；GitHub Actions 构建前后端 Docker 镜像并推送镜像仓库；宝塔服务器通过 SSH 拉取新镜像并重启容器。</p>
+    <span class="badge">本地先验收</span>
+    <span class="badge">GitHub Actions</span>
+    <span class="badge">Docker Compose</span>
+    <span class="badge">宝塔服务器拉镜像</span>
+  </header>
+
+  <section>
+    <h2>1. 总体流程</h2>
+    <ol>
+      <li>开发者本地运行后端测试、前端构建、关键页面联调。</li>
+      <li>确认无问题后执行 <code>git push</code> 到 GitHub。</li>
+      <li>GitHub Actions 自动运行测试与构建。</li>
+      <li>测试通过后构建 <code>seedcrm-backend</code> 和 <code>seedcrm-frontend</code> 镜像。</li>
+      <li>镜像推送到镜像仓库，例如 GitHub Container Registry、阿里云镜像仓库或腾讯云 TCR。</li>
+      <li>GitHub Actions 通过 SSH 登录宝塔服务器，执行部署脚本。</li>
+      <li>宝塔服务器执行 <code>docker compose pull</code> 和 <code>docker compose up -d</code>。</li>
+      <li>部署脚本做健康检查，失败则保留日志并提示人工回滚。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>2. 推荐目录结构</h2>
+    <p>服务器上建议只保留部署文件、环境变量和数据卷，不在服务器上编译源码。</p>
+    <pre><code>/www/wwwroot/seedcrm-deploy/
+  docker-compose.yml
+  .env
+  deploy.sh
+  rollback.sh
+  logs/
+  backups/</code></pre>
+    <p>源码仍在 GitHub；宝塔服务器只拉镜像，减少服务器压力，也方便快速回滚。</p>
+  </section>
+
+  <section>
+    <h2>3. 本地发布前检查</h2>
+    <p>每次准备推送前，在本地先跑一遍：</p>
+    <pre><code>cd E:\studio\test\seedcrm\crm_server
+mvn -q test
+
+cd E:\studio\test\seedcrm\crm_web
+npm install
+npm run build</code></pre>
+    <p>本地联调建议至少检查：</p>
+    <ul>
+      <li>登录是否正常。</li>
+      <li>菜单和角色权限是否正常。</li>
+      <li>方案 B 分销入站 dry-run 是否不写核心业务表。</li>
+      <li>上线工具摘要是否显示前端 <code>8003</code>、后端 <code>8004</code>。</li>
+      <li>清理测试数据真实执行是否默认被 <code>SEEDCRM_ALLOW_CLEAR_TEST_DATA=false</code> 阻断。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>4. 镜像仓库选择</h2>
+    <table>
+      <thead><tr><th>方案</th><th>优点</th><th>注意事项</th></tr></thead>
+      <tbody>
+        <tr><td>GitHub Container Registry</td><td>和 GitHub Actions 集成最简单。</td><td>国内服务器拉取可能较慢，需要测试宝塔服务器访问速度。</td></tr>
+        <tr><td>阿里云镜像仓库</td><td>国内服务器拉取速度较好。</td><td>需要配置仓库账号、命名空间和登录密码。</td></tr>
+        <tr><td>腾讯云 TCR</td><td>国内拉取速度较好，适合腾讯云服务器。</td><td>需要配置访问凭证和网络权限。</td></tr>
+      </tbody>
+    </table>
+    <p>当前轻量化优先建议：如果宝塔服务器能稳定访问 GitHub 镜像仓库，就先用 GitHub Container Registry；如果拉取慢，再切到阿里云镜像仓库。</p>
+  </section>
+
+  <section>
+    <h2>5. 宝塔服务器准备</h2>
+    <ol>
+      <li>宝塔面板安装 Docker 和 Docker Compose。</li>
+      <li>服务器放行前端端口 <code>8003</code> 和后端端口 <code>8004</code>，MySQL 不对公网放行。</li>
+      <li>创建部署目录：<code>/www/wwwroot/seedcrm-deploy</code>。</li>
+      <li>把部署专用 <code>docker-compose.yml</code>、<code>.env</code>、<code>deploy.sh</code> 放到该目录。</li>
+      <li>登录镜像仓库，例如 <code>docker login ghcr.io</code> 或 <code>docker login registry.cn-hangzhou.aliyuncs.com</code>。</li>
+    </ol>
+  </section>
+
+  <section class="warn">
+    <h2>6. 服务器 .env 示例</h2>
+    <p>正式环境的 <code>.env</code> 不要提交到 GitHub，只放在服务器部署目录。</p>
+    <pre><code>SEEDCRM_MYSQL_DATABASE=seedcrm
+SEEDCRM_MYSQL_USERNAME=seedcrm
+SEEDCRM_MYSQL_PASSWORD=请替换为强随机密码
+SEEDCRM_MYSQL_ROOT_PASSWORD=请替换为另一个强随机密码
+SEEDCRM_MYSQL_PORT=3306
+
+SEEDCRM_SYSTEM_BASE_URL=https://crm.example.com
+SEEDCRM_API_BASE_URL=https://api.example.com
+SEEDCRM_SERVER_PORT=8004
+
+SEEDCRM_FRONTEND_PORT=8003
+SEEDCRM_BACKEND_PORT=8004
+
+SEEDCRM_OPENAPI_ENABLED=false
+SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN=false
+SEEDCRM_ALLOW_CLEAR_TEST_DATA=false
+
+IMAGE_REGISTRY=ghcr.io/your-org/seedcrm
+IMAGE_TAG=latest</code></pre>
+    <p>密码建议至少 24 位，包含大小写字母、数字和特殊字符。生产环境必须保持 <code>SEEDCRM_ALLOW_CLEAR_TEST_DATA=false</code>。</p>
+  </section>
+
+  <section>
+    <h2>7. 部署版 docker-compose.yml 示例</h2>
+    <p>服务器部署时建议使用镜像，不在服务器上 build。</p>
+    <pre><code>services:
+  mysql:
+    image: mysql:8.4
+    container_name: seedcrm-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${SEEDCRM_MYSQL_DATABASE:-seedcrm}
+      MYSQL_USER: ${SEEDCRM_MYSQL_USERNAME:-seedcrm}
+      MYSQL_PASSWORD: ${SEEDCRM_MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${SEEDCRM_MYSQL_ROOT_PASSWORD}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --default-time-zone=+08:00
+    ports:
+      - "127.0.0.1:${SEEDCRM_MYSQL_PORT:-3306}:3306"
+    volumes:
+      - seedcrm-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    image: ${IMAGE_REGISTRY}/seedcrm-backend:${IMAGE_TAG:-latest}
+    container_name: seedcrm-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SEEDCRM_DATASOURCE_URL: jdbc:mysql://mysql:3306/${SEEDCRM_MYSQL_DATABASE:-seedcrm}?useUnicode=true&amp;characterEncoding=UTF-8&amp;connectionCollation=utf8mb4_general_ci&amp;serverTimezone=Asia/Shanghai
+      SEEDCRM_DATASOURCE_USERNAME: ${SEEDCRM_MYSQL_USERNAME:-seedcrm}
+      SEEDCRM_DATASOURCE_PASSWORD: ${SEEDCRM_MYSQL_PASSWORD}
+      SEEDCRM_SERVER_PORT: 8004
+      SEEDCRM_SYSTEM_BASE_URL: ${SEEDCRM_SYSTEM_BASE_URL}
+      SEEDCRM_API_BASE_URL: ${SEEDCRM_API_BASE_URL}
+      SEEDCRM_OPENAPI_ENABLED: ${SEEDCRM_OPENAPI_ENABLED:-false}
+      SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN: ${SEEDCRM_OPENAPI_ALLOW_LOCAL_WITHOUT_TOKEN:-false}
+      SEEDCRM_ALLOW_CLEAR_TEST_DATA: ${SEEDCRM_ALLOW_CLEAR_TEST_DATA:-false}
+      TZ: Asia/Shanghai
+    ports:
+      - "${SEEDCRM_BACKEND_PORT:-8004}:8004"
+
+  frontend:
+    image: ${IMAGE_REGISTRY}/seedcrm-frontend:${IMAGE_TAG:-latest}
+    container_name: seedcrm-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${SEEDCRM_FRONTEND_PORT:-8003}:80"
+
+volumes:
+  seedcrm-mysql-data:</code></pre>
+  </section>
+
+  <section>
+    <h2>8. deploy.sh 示例</h2>
+    <p>放在宝塔服务器 <code>/www/wwwroot/seedcrm-deploy/deploy.sh</code>。</p>
+    <pre><code>#!/usr/bin/env bash
+set -euo pipefail
+
+cd /www/wwwroot/seedcrm-deploy
+
+echo "[1/5] 检查 Docker Compose 配置"
+docker compose config >/tmp/seedcrm-compose-check.yml
+
+echo "[2/5] 拉取最新镜像"
+docker compose pull
+
+echo "[3/5] 启动容器"
+docker compose up -d
+
+echo "[4/5] 等待后端启动"
+sleep 20
+
+echo "[5/5] 健康检查"
+curl -fsS http://127.0.0.1:${SEEDCRM_FRONTEND_PORT:-8003}/ >/dev/null
+curl -fsS http://127.0.0.1:${SEEDCRM_BACKEND_PORT:-8004}/v3/api-docs >/dev/null || true
+docker compose ps
+
+echo "SeedCRM 部署完成"</code></pre>
+    <p>如果正式环境关闭 Swagger/OpenAPI，<code>/v3/api-docs</code> 可能不可访问，这是安全预期；后续可以补一个专用健康检查接口。</p>
+  </section>
+
+  <section>
+    <h2>9. GitHub Secrets 配置</h2>
+    <p>在 GitHub 仓库进入 <strong>Settings / Secrets and variables / Actions</strong>，新增：</p>
+    <table>
+      <thead><tr><th>Secret 名称</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td><code>REGISTRY_USERNAME</code></td><td>镜像仓库登录用户名。</td></tr>
+        <tr><td><code>REGISTRY_PASSWORD</code></td><td>镜像仓库登录密码或 Token。</td></tr>
+        <tr><td><code>BAOTA_HOST</code></td><td>宝塔服务器公网 IP 或域名。</td></tr>
+        <tr><td><code>BAOTA_SSH_USER</code></td><td>SSH 用户，建议使用非 root 部署用户。</td></tr>
+        <tr><td><code>BAOTA_SSH_KEY</code></td><td>部署用户私钥。</td></tr>
+        <tr><td><code>BAOTA_SSH_PORT</code></td><td>SSH 端口，例如 <code>22</code>。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>10. GitHub Actions 示例</h2>
+    <p>文件位置：<code>.github/workflows/deploy.yml</code>。下面以 GitHub Container Registry 为例。</p>
+    <pre><code>name: Deploy SeedCRM
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: your-org/seedcrm
+  IMAGE_TAG: latest
+
+jobs:
+  test-build-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Backend tests
+        working-directory: crm_server
+        run: mvn -q test
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: crm_web/package-lock.json
+
+      - name: Frontend build
+        working-directory: crm_web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Login registry
+        run: echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.REGISTRY_USERNAME }}" --password-stdin
+
+      - name: Build backend image
+        run: docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/seedcrm-backend:${{ env.IMAGE_TAG }} ./crm_server
+
+      - name: Build frontend image
+        run: docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/seedcrm-frontend:${{ env.IMAGE_TAG }} ./crm_web
+
+      - name: Push images
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/seedcrm-backend:${{ env.IMAGE_TAG }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/seedcrm-frontend:${{ env.IMAGE_TAG }}
+
+      - name: Deploy to Baota server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.BAOTA_HOST }}
+          username: ${{ secrets.BAOTA_SSH_USER }}
+          key: ${{ secrets.BAOTA_SSH_KEY }}
+          port: ${{ secrets.BAOTA_SSH_PORT }}
+          script: |
+            cd /www/wwwroot/seedcrm-deploy
+            export IMAGE_TAG=${{ env.IMAGE_TAG }}
+            bash deploy.sh</code></pre>
+  </section>
+
+  <section class="warn">
+    <h2>11. 正式环境发布门禁</h2>
+    <ul>
+      <li>GitHub Actions 后端测试必须通过。</li>
+      <li>前端构建必须通过。</li>
+      <li>宝塔服务器 <code>docker compose config</code> 必须通过。</li>
+      <li>生产环境 <code>SPRING_PROFILES_ACTIVE=prod</code>。</li>
+      <li>生产环境 <code>SEEDCRM_OPENAPI_ENABLED=false</code>，需要联调时短期开启并加权限控制。</li>
+      <li>生产环境 <code>SEEDCRM_ALLOW_CLEAR_TEST_DATA=false</code>。</li>
+      <li>外部回调必须使用 API 域名，例如 <code>https://api.example.com</code>，不能使用前端页面域名。</li>
+      <li>上线前先备份数据库。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>12. 回滚方式</h2>
+    <p>轻量化第一版建议保留最近 3 到 5 个镜像 tag。回滚时改服务器 <code>.env</code> 的 <code>IMAGE_TAG</code>，然后执行：</p>
+    <pre><code>cd /www/wwwroot/seedcrm-deploy
+docker compose pull
+docker compose up -d
+docker compose logs -f backend</code></pre>
+    <p>更稳妥的版本策略是使用 Git tag，例如 <code>v1.0.3</code>，正式环境不要只依赖 <code>latest</code>。</p>
+  </section>
+
+  <section class="danger">
+    <h2>13. 常见风险</h2>
+    <ul>
+      <li>不要把服务器 <code>.env</code> 提交到 GitHub。</li>
+      <li>不要开放 MySQL <code>3306</code> 到公网。</li>
+      <li>不要在正式环境打开 <code>SEEDCRM_ALLOW_CLEAR_TEST_DATA</code>。</li>
+      <li>不要让 GitHub Actions 使用 root 密码登录数据库。</li>
+      <li>不要让外部平台回调前端域名，回调必须走 API 域名。</li>
+      <li>不要只推送 <code>latest</code> 却没有可回滚版本。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>14. 当前推荐落地顺序</h2>
+    <ol>
+      <li>先在宝塔服务器手工部署一次，确认 Compose、端口、域名和数据库都正常。</li>
+      <li>再接入 GitHub Actions，只做测试和镜像构建，不自动部署。</li>
+      <li>镜像能正常拉取后，再打开 SSH 自动部署。</li>
+      <li>最后把正式发布从 <code>main</code> 自动部署升级为 tag 发布，例如 <code>v1.0.3</code>。</li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

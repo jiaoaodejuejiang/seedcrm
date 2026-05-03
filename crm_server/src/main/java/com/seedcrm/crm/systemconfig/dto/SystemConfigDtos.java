@@ -113,6 +113,10 @@ public final class SystemConfigDtos {
         private LocalDateTime updateTime;
         private LocalDateTime publishedAt;
         private LocalDateTime discardedAt;
+        private String lastDryRunStatus;
+        private LocalDateTime lastDryRunAt;
+        private String lastDryRunByRoleCode;
+        private Long lastDryRunByUserId;
         private List<DraftItemResponse> items = new ArrayList<>();
     }
 
@@ -218,6 +222,12 @@ public final class SystemConfigDtos {
         private String status;
         private String payloadJson;
         private String errorMessage;
+        private Integer retryCount;
+        private Integer maxRetryCount;
+        private LocalDateTime nextRetryAt;
+        private String lockedBy;
+        private LocalDateTime lockedAt;
+        private LocalDateTime lastAttemptAt;
         private LocalDateTime createTime;
         private LocalDateTime handledAt;
     }
@@ -231,6 +241,11 @@ public final class SystemConfigDtos {
         private Long publishSuccessCount;
         private Long publishFailedCount;
         private Long runtimeEventPendingCount;
+        private Long runtimeEventRetryingCount;
+        private Long runtimeEventSuccessCount;
+        private Long runtimeEventFailedCount;
+        private Long runtimeEventTerminatedCount;
+        private LocalDateTime latestRuntimeHandledAt;
         private LocalDateTime lastPublishedAt;
     }
 

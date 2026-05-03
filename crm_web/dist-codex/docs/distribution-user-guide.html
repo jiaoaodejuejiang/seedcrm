@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM 分销本系统使用说明</title>
+  <style>
+    :root {
+      --ink: #17231f;
+      --muted: #64736d;
+      --soft: #f6f8f5;
+      --panel: #ffffff;
+      --line: #dfe7e2;
+      --brand: #176b54;
+      --brand-weak: #e6f3ee;
+      --warn: #9a5b00;
+      --warn-weak: #fff4df;
+      --danger: #9f2f2f;
+      --danger-weak: #fff0f0;
+      --ok: #25734f;
+      --ok-weak: #edf8f2;
+      --code: #10231d;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(23, 107, 84, 0.12), transparent 34rem),
+        linear-gradient(135deg, #fbfcf8 0%, #eef4ef 100%);
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+      line-height: 1.7;
+    }
+
+    a {
+      color: var(--brand);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 28px;
+      width: min(1280px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 32px 0 48px;
+    }
+
+    .toc {
+      position: sticky;
+      top: 18px;
+      align-self: start;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 20px 60px rgba(21, 48, 38, 0.08);
+    }
+
+    .toc strong {
+      display: block;
+      margin-bottom: 14px;
+      color: var(--brand);
+      font-size: 18px;
+    }
+
+    .toc a {
+      display: block;
+      margin: 7px 0;
+      padding: 7px 10px;
+      border-radius: 12px;
+      color: #335047;
+      font-size: 14px;
+    }
+
+    .toc a:hover {
+      background: var(--brand-weak);
+      text-decoration: none;
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    .hero {
+      padding: 34px;
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 24px 80px rgba(21, 48, 38, 0.10);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--brand);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.15;
+    }
+
+    h2 {
+      margin: 0 0 18px;
+      padding-top: 8px;
+      font-size: 26px;
+      line-height: 1.25;
+    }
+
+    h3 {
+      margin: 22px 0 10px;
+      font-size: 19px;
+    }
+
+    p {
+      margin: 10px 0;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: var(--brand-weak);
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .section {
+      margin-top: 24px;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 16px 50px rgba(21, 48, 38, 0.06);
+    }
+
+    .notice {
+      margin: 18px 0;
+      padding: 16px 18px;
+      border-left: 4px solid var(--brand);
+      border-radius: 16px;
+      background: var(--brand-weak);
+    }
+
+    .notice.warn {
+      border-left-color: var(--warn);
+      background: var(--warn-weak);
+      color: #5d3900;
+    }
+
+    .notice.danger {
+      border-left-color: var(--danger);
+      background: var(--danger-weak);
+      color: #5d1f1f;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    .step {
+      min-height: 116px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--soft);
+    }
+
+    .step b {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--brand);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+    }
+
+    table {
+      width: 100%;
+      margin: 14px 0 4px;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #eef5f1;
+      color: #25483d;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    code,
+    pre {
+      font-family: Consolas, "SFMono-Regular", Menlo, monospace;
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: #edf2ef;
+      color: var(--code);
+    }
+
+    pre {
+      overflow: auto;
+      margin: 14px 0;
+      padding: 16px;
+      border-radius: 18px;
+      background: #10231d;
+      color: #dff7ee;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .tag {
+      display: inline-flex;
+      margin: 2px 4px 2px 0;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: #edf2ef;
+      color: #29493f;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .tag.ok {
+      background: var(--ok-weak);
+      color: var(--ok);
+    }
+
+    .tag.warn {
+      background: var(--warn-weak);
+      color: var(--warn);
+    }
+
+    .tag.danger {
+      background: var(--danger-weak);
+      color: var(--danger);
+    }
+
+    .checklist {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .checklist li {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--soft);
+    }
+
+    footer {
+      margin-top: 24px;
+      padding: 20px 8px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    @media (max-width: 980px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .toc {
+        position: static;
+      }
+
+      .flow,
+      .grid,
+      .checklist {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="toc">
+      <strong>目录</strong>
+      <a href="#overview">1. 使用边界</a>
+      <a href="#flow">2. 业务主链路</a>
+      <a href="#roles">3. 角色与权限</a>
+      <a href="#menus">4. 页面入口</a>
+      <a href="#daily">5. 日常操作流程</a>
+      <a href="#queues">6. 队列与异常处理</a>
+      <a href="#health">7. 防重复健康</a>
+      <a href="#acceptance">8. 验收清单</a>
+      <a href="#faq">9. 常见问题</a>
+    </aside>
+
+    <main>
+      <header class="hero">
+        <p class="eyebrow">SEEDCRM DISTRIBUTION SCHEME B</p>
+        <h1>分销本系统使用说明</h1>
+        <p>
+          本文面向 SeedCRM 后台使用人员，说明外部分销成交数据进入本系统后，如何查看会员、处理预约排档、完成门店履约、查看回推结果和处理异常。
+        </p>
+        <div class="meta">
+          <span class="pill">适用版本：方案 B V1</span>
+          <span class="pill">最后更新：2026-05-01</span>
+          <span class="pill">文档格式：HTML</span>
+        </div>
+      </header>
+
+      <section id="overview" class="section">
+        <h2>1. 使用边界</h2>
+        <div class="notice">
+          分销方案 B 的定位是：外部分销系统负责商品、小程序、会员注册、分销关系、分佣、提现和外部资金流；SeedCRM 只承接已支付成交数据、预约排档、门店履约和履约状态回推。
+        </div>
+        <div class="notice warn">
+          关键红线：分销已支付订单不进入 Clue。SeedCRM 不处理外部分销佣金、提现、退款资金流。异常重试由 DistributionEventIngestService.replayFromScheduler 可信重放。禁止直接删除 Customer / Order / PlanOrder 数据。
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>事项</th>
+              <th>SeedCRM 内处理</th>
+              <th>外部分销系统处理</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>已支付订单入站</td>
+              <td><span class="tag ok">处理</span> 创建或匹配 <code>Customer</code>，创建 <code>Order(paid)</code></td>
+              <td>推送 <code>distribution.order.paid</code> 事件</td>
+            </tr>
+            <tr>
+              <td>线索 / 客资池</td>
+              <td><span class="tag danger">不处理</span> 分销已支付订单不进入 <code>Clue</code></td>
+              <td>外部成交前的推广、浏览、下单由外部系统负责</td>
+            </tr>
+            <tr>
+              <td>预约排档与门店履约</td>
+              <td><span class="tag ok">处理</span> 进入 <code>PlanOrder</code>，完成服务后回推</td>
+              <td>接收 SeedCRM 的履约完成状态</td>
+            </tr>
+            <tr>
+              <td>佣金、提现、外部分销退款资金流</td>
+              <td><span class="tag danger">不处理</span> 仅记录必要状态和内部绩效影响</td>
+              <td>负责计算分佣、提现审核、外部资金退款</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="notice danger">
+          禁止把 <code>ExternalDistributionPaidOrder</code> 当成新的核心模型；它只是入站事件。禁止绕过 <code>Customer / Order / PlanOrder</code> 建立平行履约链路。
+        </div>
+      </section>
+
+      <section id="flow" class="section">
+        <h2>2. 业务主链路</h2>
+        <div class="flow">
+          <div class="step">
+            <b>1. 外部已支付</b>
+            外部分销系统完成会员购买，推送已支付成交事件。
+          </div>
+          <div class="step">
+            <b>2. Customer</b>
+            系统按手机号或外部会员身份创建 / 匹配会员客户。
+          </div>
+          <div class="step">
+            <b>3. Order(paid)</b>
+            创建已支付订单，记录外部订单号、交易号、原始报文。
+          </div>
+          <div class="step">
+            <b>4. PlanOrder</b>
+            客服预约排档，门店核销和服务确认后进入履约。
+          </div>
+          <div class="step">
+            <b>5. Outbox 回推</b>
+            服务完成后异步回推 <code>crm.order.used</code> 给外部分销系统。
+          </div>
+        </div>
+        <pre><code>ExternalDistributionPaidOrder -> Customer -> Order(paid) -> PlanOrder -> Order(used) -> Outbox(crm.order.used)</code></pre>
+        <p>
+          标准抖音或普通客资仍遵循 <code>Clue -> Customer -> Order -> PlanOrder</code>。分销已支付成交是例外入口，但进入系统后仍必须回到 <code>Customer -> Order -> PlanOrder</code> 主链。
+        </p>
+      </section>
+
+      <section id="roles" class="section">
+        <h2>3. 角色与权限</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>角色</th>
+              <th>主要职责</th>
+              <th>可操作范围</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>PRIVATE_DOMAIN_SERVICE</code></td>
+              <td>查看会员信息、客户画像、标签与企微触达</td>
+              <td>默认只能查看授权范围内会员；原始报文和敏感字段脱敏</td>
+            </tr>
+            <tr>
+              <td><code>STORE_SERVICE</code></td>
+              <td>门店订单核销、服务确认、服务完成</td>
+              <td>按门店数据范围查看和处理订单，不配置接口</td>
+            </tr>
+            <tr>
+              <td><code>INTEGRATION_OPERATOR</code></td>
+              <td>查看接口日志、异常队列、回推结果、重试结果</td>
+              <td>只能看结果和脱敏诊断，不可修改核心业务数据，不可执行全局核心重放</td>
+            </tr>
+            <tr>
+              <td><code>INTEGRATION_ADMIN</code></td>
+              <td>配置分销接口、签名密钥、状态映射、调度策略</td>
+              <td>可执行全局队列处理、异常重试、回查对账和完整诊断</td>
+            </tr>
+            <tr>
+              <td><code>ADMIN</code></td>
+              <td>系统管理、权限配置、风险确认</td>
+              <td>拥有全局权限，需要负责上线前风险确认和数据治理审批</td>
+            </tr>
+            <tr>
+              <td><code>PARTNER_APP</code></td>
+              <td>外部分销系统或合作应用访问自身数据</td>
+              <td>仅限自身 <code>partner_code</code> 范围，不能触发全局批处理</td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          权限同时受 RBAC 和 ABAC 控制。敏感字段包括手机号、金额、原始报文、签名、token、防重复编号、外部会员 ID、外部交易号等，非授权角色默认脱敏。
+        </p>
+      </section>
+
+      <section id="menus" class="section">
+        <h2>4. 页面入口</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>私域客服 -> 会员信息</h3>
+            <p>这是 <code>Customer</code> 视图，不是新模型。使用“分销来源 / 抖音来源”切换，分销来源展示外部分销已支付成交客户。</p>
+            <p><span class="tag warn">注意</span> 会员信息页不能直接创建 Customer、Order，也不能触发分佣、提现、退款资金处理。</p>
+          </div>
+          <div class="card">
+            <h3>客资中心 -> 顾客排档</h3>
+            <p>已支付订单可以进入预约排档。客服根据门店档期安排客户到店，排档后进入门店服务流程。</p>
+          </div>
+          <div class="card">
+            <h3>门店服务 -> 订单列表</h3>
+            <p>门店人员处理核销、服务确认单、服务中、订单完成等动作。完成后本地订单进入已履约状态。</p>
+          </div>
+          <div class="card">
+            <h3>系统设置 -> 调度中心 -> 分销接口</h3>
+            <p>集成角色查看接入配置、履约回推队列、异常队列、回查对账结果、幂等健康和验收样本。</p>
+          </div>
+          <div class="card">
+            <h3>系统设置 -> 基础配置 -> 域名配置</h3>
+            <p>管理员配置系统基础域名和 API 域名。分销入站、回查、对账、Swagger/OpenAPI 和回调地址都从这里生成，避免上线后仍显示本地地址。</p>
+          </div>
+          <div class="card">
+            <h3>分销接口 -> 生产联调信息</h3>
+            <p>首屏可以复制入站地址、查看使用说明、查看联调说明、打开 Swagger 接口定义，并进入联调工作台做 dry-run 验证。</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="daily" class="section">
+        <h2>5. 日常操作流程</h2>
+        <h3>5.1 查看分销成交会员</h3>
+        <table>
+          <tbody>
+            <tr>
+              <th>入口</th>
+              <td>私域客服 -> 会员信息 -> 分销来源</td>
+            </tr>
+            <tr>
+              <th>适用场景</th>
+              <td>确认外部分销已支付客户是否进入 SeedCRM，查看最近订单、来源、外部身份、标签和企微绑定。</td>
+            </tr>
+            <tr>
+              <th>结果判断</th>
+              <td>能看到 <code>source=distribution</code> 的会员和关联订单，说明已支付入站链路已生效。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>5.2 预约排档</h3>
+        <table>
+          <tbody>
+            <tr>
+              <th>入口</th>
+              <td>客资中心 -> 顾客排档</td>
+            </tr>
+            <tr>
+              <th>适用场景</th>
+              <td>客服对已支付订单安排门店档期，或修改 / 取消已预约档期。</td>
+            </tr>
+            <tr>
+              <th>结果判断</th>
+              <td>订单与门店档期关联后，后续门店服务可以基于订单进入核销与服务确认。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>5.3 门店履约与服务完成</h3>
+        <table>
+          <tbody>
+            <tr>
+              <th>入口</th>
+              <td>门店服务 -> 订单列表 -> 服务确认单 / 查看服务单</td>
+            </tr>
+            <tr>
+              <th>适用场景</th>
+              <td>门店人员核销线上团购券或定金，填写服务确认单，客户签字确认，进入服务中并最终完成订单。</td>
+            </tr>
+            <tr>
+              <th>结果判断</th>
+              <td><code>PlanOrder</code> 完成后，本地 <code>Order</code> 进入已履约，系统写入 <code>scheduler_outbox_event</code> 等待异步回推。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="queues" class="section">
+        <h2>6. 队列与异常处理</h2>
+        <h3>6.1 履约回推队列</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>含义</th>
+              <th>处理建议</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="tag warn">待推送 PENDING</span></td>
+              <td>已生成履约回推事件，等待调度处理。</td>
+              <td>一般等待自动调度；管理员可手动处理队列。</td>
+            </tr>
+            <tr>
+              <td><span class="tag">推送中 PROCESSING</span></td>
+              <td>调度器正在调用外部分销系统。</td>
+              <td>稍后刷新查看结果。</td>
+            </tr>
+            <tr>
+              <td><span class="tag ok">成功 SUCCESS</span></td>
+              <td>外部分销系统已收到履约完成回推。</td>
+              <td>无需处理，可复制追踪编号核对。</td>
+            </tr>
+            <tr>
+              <td><span class="tag danger">失败 FAILED</span></td>
+              <td>回推失败但仍可重试。</td>
+              <td>检查回推地址、签名密钥、外部接口响应后重新入队。</td>
+            </tr>
+            <tr>
+              <td><span class="tag danger">死信 DEAD_LETTER</span></td>
+              <td>多次失败后停止自动重试。</td>
+              <td>需管理员排查配置或外部接口，再手动重新入队。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>6.2 异常队列</h3>
+        <p>异常队列用于处理入站失败、重复报文冲突、外部订单冲突、状态冲突、签名失败、防重复编号缺失等问题。</p>
+        <div class="flow">
+          <div class="step">
+            <b>发现失败</b>
+            查看异常类型、外部订单号、本地订单号、追踪编号。
+          </div>
+          <div class="step">
+            <b>核对冲突</b>
+            查看冲突字段、失败原因、处理建议。
+          </div>
+          <div class="step">
+            <b>修正数据</b>
+            修正外部报文、接口配置或状态映射。
+          </div>
+          <div class="step">
+            <b>重新入队</b>
+            管理员触发异常重试，系统可信重放入站服务。
+          </div>
+          <div class="step">
+            <b>确认闭环</b>
+            成功后变为已处理；无需处理时标记处理。
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>异常状态</th>
+              <th>说明</th>
+              <th>下一步</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>OPEN</code></td>
+              <td>待人工核对。</td>
+              <td>修正外部数据或配置后重新入队，或确认无需处理后标记处理。</td>
+            </tr>
+            <tr>
+              <td><code>RETRY_QUEUED</code></td>
+              <td>已重新入队，等待调度器可信重放。</td>
+              <td>等待处理完成；失败会回到 OPEN。</td>
+            </tr>
+            <tr>
+              <td><code>HANDLED</code></td>
+              <td>已处理或人工确认无需处理。</td>
+              <td>保留记录用于审计。</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="notice warn">
+          异常重试只能通过调度器重新调用 <code>DistributionEventIngestService.replayFromScheduler</code>，禁止人工绕过服务直接写 <code>Customer / Order / PlanOrder</code>。
+        </div>
+
+        <h3>6.3 回查对账结果</h3>
+        <p>
+          状态回查和对账拉取用于补偿外部分销订单取消、退款、对账失败等情况。若需要改变本地状态，调度器必须生成 <code>distribution.order.*</code> 事件并重放入站服务，不直接更新核心表。
+        </p>
+      </section>
+
+      <section id="health" class="section">
+        <h2>7. 防重复健康</h2>
+        <p>
+          分销入站依赖 <code>X-Idempotency-Key</code>、<code>eventId</code> 和外部订单唯一键防止重复创建订单。页面上“防重复编号”对应接口联调中的幂等键。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>检查项</th>
+              <th>正常结果</th>
+              <th>风险处理</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>唯一索引</td>
+              <td>幂等唯一索引已生效。</td>
+              <td>若存在历史重复接收日志，索引暂未生效，上线前需完成数据治理或风险确认。</td>
+            </tr>
+            <tr>
+              <td>重复分组</td>
+              <td>重复分组为 0。</td>
+              <td>按页面“建议保留、需核对记录、治理口径、处理建议”执行人工治理。</td>
+            </tr>
+            <tr>
+              <td>日志样例</td>
+              <td>可查看接收记录、追踪编号、处理状态、内容指纹、关联订单。</td>
+              <td>非授权角色看到脱敏内容；完整诊断仅管理员和集成管理员可见。</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="notice danger">
+          历史重复日志治理是只读诊断和人工确认流程，不提供一键删除。禁止直接删除 <code>Customer / Order / PlanOrder</code> 数据。
+        </div>
+      </section>
+
+      <section id="acceptance" class="section">
+        <h2>8. 验收清单</h2>
+        <ul class="checklist">
+          <li>分销已支付订单不进入 <code>Clue</code>。</li>
+          <li>入站后创建或匹配 <code>Customer</code>，并创建 <code>Order(paid)</code>。</li>
+          <li>会员信息页能在分销来源看到会员和最近订单。</li>
+          <li>订单可预约排档并进入 <code>PlanOrder</code>。</li>
+          <li>门店完成服务后写入履约回推 Outbox。</li>
+          <li>回推成功、失败、死信均可在分销接口页查看。</li>
+          <li>异常 OPEN、重新入队、已处理状态可闭环。</li>
+          <li>回查 / 对账失败可以定位追踪编号和处理建议。</li>
+          <li>幂等健康能显示重复分组和治理建议。</li>
+          <li>操作员敏感字段脱敏，管理员可查看完整诊断。</li>
+          <li>域名配置保存后，分销接口页展示的入站地址、状态回查地址、对账地址和 Swagger 地址同步更新。</li>
+          <li>Swagger/OpenAPI 只对管理员、集成管理员和集成操作员开放，不能对公网未授权访问。</li>
+          <li>真实模式保存前已补齐 API 域名、签名密钥、回推目标、状态回查路径和对账路径。</li>
+        </ul>
+      </section>
+
+      <section id="faq" class="section">
+        <h2>9. 常见问题</h2>
+        <h3>为什么分销成交不进入 Clue？</h3>
+        <p>Clue 表示未成交或待转化客资。分销入站的数据已经在外部系统完成付款，所以直接进入 <code>Customer + Order(paid)</code>，不参与公海、分配、线索转化率统计。</p>
+
+        <h3>为什么 SeedCRM 不做分佣和提现？</h3>
+        <p>方案 B 选择由外部分销 / 电商系统负责完整分销体系和资金流，SeedCRM 只负责门店履约和状态回推，避免两个系统重复计算佣金和资金状态。</p>
+
+        <h3>回推失败会不会回滚门店服务完成？</h3>
+        <p>不会。履约完成先在本地事务内落库，再通过 Outbox 异步回推外部系统。外部接口失败只影响回推队列状态，不回滚本地履约。</p>
+
+        <h3>看到唯一索引未生效怎么办？</h3>
+        <p>先导出并核对重复接收日志，按建议保留记录和需核对记录进行人工治理。治理完成后由管理员或 DBA 重建唯一索引，期间禁止直接删除业务主链数据。</p>
+      </section>
+
+      <footer>
+        SeedCRM 分销方案 B 使用说明。本文档由系统当前实现和 AGENT.md / CONTEXT.md 约束生成，适用于 2026-05-01 当前项目状态。
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

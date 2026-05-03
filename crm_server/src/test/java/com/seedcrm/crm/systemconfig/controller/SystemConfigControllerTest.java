@@ -208,7 +208,7 @@ class SystemConfigControllerTest {
 
         verify(settingModuleGuard, org.mockito.Mockito.times(2)).checkConfigDraft(context);
         verify(systemConfigService).validateDraft("CFG-001");
-        verify(systemConfigService).dryRunDraft("CFG-001");
+        verify(systemConfigService).dryRunDraft("CFG-001", context);
     }
 
     @Test
@@ -220,6 +220,17 @@ class SystemConfigControllerTest {
 
         verify(settingModuleGuard).checkConfigPublish(context);
         verify(systemConfigService).refreshPublishRuntime("PUB-001", context);
+    }
+
+    @Test
+    void shouldUseConfigPublishPermissionForRuntimeEventProcessing() {
+        PermissionRequestContext context = context("ADMIN");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.processRuntimeEvents("PUB-001", request);
+
+        verify(settingModuleGuard).checkConfigPublish(context);
+        verify(systemConfigService).processPublishRuntimeEvents("PUB-001", context);
     }
 
     private PermissionRequestContext context(String roleCode) {

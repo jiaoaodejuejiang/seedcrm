@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SeedCRM P0-3 配置版本和回滚详细落地方案</title>
+  <style>
+    body { margin: 0; background: #f6f8fb; color: #172033; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; line-height: 1.75; }
+    main { max-width: 1180px; margin: 0 auto; padding: 34px 22px 72px; }
+    header, section { margin-top: 18px; padding: 24px; border: 1px solid #e5eaf3; border-radius: 22px; background: #fff; box-shadow: 0 18px 45px rgba(23, 32, 51, .06); }
+    h1, h2, h3 { margin: 0; line-height: 1.35; }
+    h1 { font-size: 30px; }
+    h2 { margin-bottom: 12px; font-size: 22px; }
+    h3 { margin-top: 16px; font-size: 17px; }
+    p { margin: 8px 0 0; color: #64748b; }
+    ul, ol { margin: 10px 0 0; padding-left: 22px; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    code { color: #0f766e; }
+    pre { overflow: auto; padding: 14px; border-radius: 14px; background: #101827; color: #e5edf8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 10px; border-bottom: 1px solid #e5eaf3; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    .badge { display: inline-block; margin: 10px 8px 0 0; padding: 5px 10px; border-radius: 999px; background: #e8f4ff; color: #075985; font-size: 12px; font-weight: 700; }
+    .ok { border-left: 4px solid #10b981; }
+    .warn { border-left: 4px solid #f59e0b; }
+    .danger { border-left: 4px solid #ef4444; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card { padding: 14px; border: 1px solid #e5eaf3; border-radius: 16px; background: #fbfdff; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SeedCRM P0-3 配置版本和回滚详细落地方案</h1>
+    <p>配置版本和回滚是系统配置的发布安全层。它不替代业务模块，也不改变核心链路，而是让域名、Provider、回调、调度、权限、字典高风险项、支付和企微配置都具备草稿、差异、dry-run、发布、回滚、审计和敏感值保护。</p>
+    <span class="badge">P0-3</span>
+    <span class="badge">SystemConfig</span>
+    <span class="badge">配置发布中心</span>
+    <span class="badge">高风险先预览</span>
+    <span class="badge">不新增核心业务模型</span>
+  </header>
+
+  <section class="danger">
+    <h2>1. 目标与边界</h2>
+    <ul>
+      <li>目标是解决高风险配置“直接保存生效、难以回滚、差异不可见、敏感值容易泄露、上线联调不确定”的问题。</li>
+      <li>配置版本中心只回滚配置，不回滚已经发生的 Clue、Customer、Order、PlanOrder、薪酬、服务单、回调日志和异常队列业务数据。</li>
+      <li>标准主链路仍为 <code>Clue -&gt; Customer -&gt; Order -&gt; PlanOrder</code>；分销 B 链路仍为 <code>ExternalDistributionPaidOrder -&gt; Customer -&gt; Order(paid) -&gt; PlanOrder</code>。</li>
+      <li>Scheduler、Open API、Provider 配置不得允许任何链路绕过统一入站服务直接写 Customer、Order、PlanOrder。</li>
+      <li>distribution paid order 在任何配置版本下都不能进入 Clue、公海、分配、回收或线索转化率统计。</li>
+      <li>外部分销佣金、提现、退款资金流不进入 SeedCRM；配置中心只管理必要的接口、回调、状态展示和履约回推配置。</li>
+      <li>密钥、token、auth_code、raw_data、手机号、支付流水等敏感信息在列表、差异、审计、日志中默认脱敏。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>2. 当前系统现状</h2>
+    <table>
+      <thead><tr><th>能力</th><th>现状</th><th>P0-3 补齐方向</th></tr></thead>
+      <tbody>
+        <tr><td>基础配置</td><td>已有 <code>system_config</code> 和 <code>system_config_change_log</code>。</td><td>增强为可发布版本：草稿、差异、回滚、发布记录、敏感值脱敏。</td></tr>
+        <tr><td>域名配置</td><td>已有系统基础域名和 API 域名，并可派生分销入站、Swagger/OpenAPI 地址。</td><td>域名改动必须版本化；其他页面只展示拼接结果，不到处编辑基础域名。</td></tr>
+        <tr><td>Provider 配置</td><td>已有 <code>integration_provider_config</code>，包含抖音/分销接口、auth_code、token、退款路径、核销路径等字段。</td><td>Provider 从 MOCK 到 LIVE 必须 dry-run 和校验；auth_code 必须检查时效和状态。</td></tr>
+        <tr><td>回调配置</td><td>已有 <code>integration_callback_config</code>，包含回调地址、签名、token、aes_key。</td><td>回调路径和签名配置必须版本化；敏感字段只展示指纹或是否已设置。</td></tr>
+        <tr><td>支付配置</td><td>已有微信支付/代付测试服务，能校验必填和回调拼接。</td><td>支付相关回调、商户号、证书、密钥引用纳入版本治理，但不进入外部分销资金流。</td></tr>
+        <tr><td>企微配置</td><td>已有 <code>wecom_app_config</code>，包含 app_secret、auth_code、suite_ticket、回调 token 等。</td><td>企微配置必须支持敏感值脱敏、auth_code 时效、回调地址由 API 域名拼接。</td></tr>
+        <tr><td>上线工具</td><td>已有上线检查和初始化/清理测试数据能力。</td><td>配置发布中心应与上线检查联动，PROD 禁止清理测试数据，LIVE 发布必须先预检。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="ok">
+    <h2>3. 数据结构</h2>
+    <p>P0-3 保留现有运行时表，只新增配置治理表。运行时读取仍来自 <code>system_config</code>、<code>integration_provider_config</code>、<code>integration_callback_config</code>、企微和支付配置表；版本表负责草稿、差异、发布、回滚、审计。</p>
+    <pre><code>config_version
+- id
+- version_no
+- version_name
+- environment: LOCAL | DEV | TEST | STAGING | PROD
+- status: DRAFT | VALIDATED | PUBLISHED | ROLLED_BACK | DISCARDED
+- base_version_no
+- scope_type
+- scope_id
+- impact_modules
+- config_snapshot_json
+- provider_snapshot_json
+- callback_snapshot_json
+- validate_result_json
+- dry_run_result_json
+- created_by
+- created_at
+- published_by
+- published_at
+- rolled_back_by
+- rolled_back_at
+
+config_version_item
+- id
+- version_no
+- config_key
+- target_table: system_config | integration_provider_config | integration_callback_config | wecom_app_config | payment_config
+- target_key
+- before_value_cipher
+- after_value_cipher
+- before_value_masked
+- after_value_masked
+- value_type
+- sensitive_level: NORMAL | SECRET | TOKEN | AUTH_CODE | RAW_DATA
+- change_type: CREATE | UPDATE | DISABLE | DELETE
+- impact_scope_json
+- created_at
+
+config_publish_record
+- id
+- publish_no
+- version_no
+- from_version_no
+- to_version_no
+- publish_status: SUCCESS | FAILED | ROLLED_BACK
+- before_snapshot_json
+- after_snapshot_json
+- failure_reason
+- created_by
+- created_at
+
+config_audit_log
+- id
+- actor_user_id
+- actor_role_code
+- action_code: CREATE_DRAFT | DRY_RUN | VALIDATE | PUBLISH | ROLLBACK | SWITCH_ENV
+- target_key
+- request_json_masked
+- result_json_masked
+- ip
+- user_agent
+- created_at</code></pre>
+
+    <h3>敏感值策略</h3>
+    <ul>
+      <li>密钥、token、auth_code、证书私钥、签名 key 必须加密存储；应用主密钥来自环境变量或密钥管理服务，不进入数据库。</li>
+      <li>差异预览只展示“未设置、已设置、已变更、尾号/指纹”，不展示完整明文。</li>
+      <li><code>auth_code</code> 必须带状态、接收时间、过期时间或 TTL 计算，过期或重复使用时阻断 LIVE 发布。</li>
+      <li>dry-run 结果只保存摘要，不写 Customer、Order、PlanOrder，也不触发真实外部写接口。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>4. 接口定义</h2>
+    <table>
+      <thead><tr><th>接口</th><th>用途</th><th>权限</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /system-config/versioning/current</code></td><td>读取当前环境已发布配置版本和环境条信息。</td><td><code>setting:view</code></td></tr>
+        <tr><td><code>GET /system-config/versioning/versions</code></td><td>查询版本列表、状态、发布人、影响范围。</td><td><code>setting:view</code></td></tr>
+        <tr><td><code>POST /system-config/versioning/drafts</code></td><td>创建配置草稿，包含 systemConfigDiff、providerDiff、callbackDiff。</td><td><code>setting:update</code> 或 <code>integration:config</code></td></tr>
+        <tr><td><code>GET /system-config/versioning/drafts/{versionNo}</code></td><td>查看草稿详情、差异和校验结果，敏感值脱敏。</td><td><code>setting:view</code></td></tr>
+        <tr><td><code>POST /system-config/versioning/dry-run</code></td><td>预演配置影响，不落库、不触发真实外部写入。</td><td><code>setting:debug</code> 或 <code>integration:debug</code></td></tr>
+        <tr><td><code>POST /system-config/versioning/validate</code></td><td>发布前校验域名、Provider、签名、auth_code 时效、调度影响。</td><td><code>setting:update</code></td></tr>
+        <tr><td><code>POST /system-config/versioning/publish</code></td><td>发布 VALIDATED 草稿，事务内更新运行时配置表并写发布记录。</td><td><code>setting:update</code></td></tr>
+        <tr><td><code>POST /system-config/versioning/rollback</code></td><td>按 publishNo 或 versionNo 生成回滚草稿并发布新版本。</td><td><code>setting:update</code></td></tr>
+        <tr><td><code>POST /system-config/versioning/environment/switch</code></td><td>切换 LOCAL/DEV/TEST/STAGING/PROD 环境配置。</td><td><code>setting:update</code></td></tr>
+        <tr><td><code>GET /system-config/versioning/audit-logs</code></td><td>查询配置治理审计。</td><td><code>setting:view</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>dry-run 请求示例</h3>
+    <pre><code>{
+  "versionNo": "cfg-20260502-001",
+  "dryRun": true,
+  "providerCode": "DISTRIBUTION",
+  "executionMode": "LIVE",
+  "validateSignature": true,
+  "simulateCallback": true,
+  "payloadSample": {},
+  "context": {
+    "environment": "STAGING",
+    "currentUserId": 1
+  }
+}</code></pre>
+
+    <h3>dry-run 响应示例</h3>
+    <pre><code>{
+  "willPersist": false,
+  "environment": "STAGING",
+  "impactModules": ["SCHEDULER", "ORDER"],
+  "providerCheck": {
+    "modeAllowed": true,
+    "authCodeValid": false,
+    "authCodeExpiresAt": "2026-05-02 20:00:00",
+    "signatureConfigValid": true
+  },
+  "businessImpact": {
+    "writesCoreTables": false,
+    "usesInboundServiceOnly": true,
+    "schedulerJobsAffected": ["DISTRIBUTION_STATUS_CHECK"]
+  }
+}</code></pre>
+  </section>
+
+  <section class="warn">
+    <h2>5. 权限规则</h2>
+    <table>
+      <thead><tr><th>角色</th><th>允许能力</th><th>限制</th></tr></thead>
+      <tbody>
+        <tr><td><code>admin</code></td><td>查看、创建草稿、dry-run、校验、发布、回滚、环境切换。</td><td>PROD 高风险操作仍需确认词和审计。</td></tr>
+        <tr><td><code>integration_admin</code></td><td>维护 Provider、回调、Scheduler 集成配置，可 dry-run 和校验。</td><td>发布到 PROD 建议仍需 admin 审批或复核。</td></tr>
+        <tr><td><code>integration_operator</code></td><td>查看配置摘要、调试结果、dry-run 结果、异常和重试结果。</td><td>不可保存密钥、不可发布、不可回滚。</td></tr>
+        <tr><td><code>partner_app</code></td><td>无后台配置版本权限。</td><td>只能访问自身 partner_code 范围 Open API。</td></tr>
+        <tr><td>门店、客服、财务</td><td>仅可读取运行时必要开关，且必须脱敏。</td><td>不可进入配置发布中心。</td></tr>
+      </tbody>
+    </table>
+
+    <h3>ABAC 规则</h3>
+    <ul>
+      <li><code>scope_type</code>、<code>scope_id</code> 必须参与配置读取和发布，禁止用前端请求参数提升到 GLOBAL。</li>
+      <li>Provider 配置按 <code>provider_code</code>、<code>partner_code</code> 隔离；PARTNER 范围只能看自身。</li>
+      <li>PROD 发布、回滚、环境切换、清理测试数据必须有确认词和审计；PROD 禁止清理测试数据。</li>
+      <li>配置版本接口不得影响登录、鉴权、菜单加载；登录所需基础配置必须保留安全默认值。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>6. 流程</h2>
+    <ol>
+      <li>创建草稿：读取当前运行时配置快照，保存 diff，敏感字段立即加密和脱敏。</li>
+      <li>保存草稿：草稿不生效，页面明确显示“未发布变更”。</li>
+      <li>差异预览：展示新增、修改、停用、删除、风险等级、影响页面、影响接口、影响调度任务、最终拼接 URL。</li>
+      <li>dry-run：只做格式校验、签名模拟、auth_code 时效检查、调度影响分析、主链路写入风险检查，不落业务库。</li>
+      <li>发布前校验：检查环境、域名、URL、密钥存在性、auth_code、Provider、Scheduler、权限和字典引用。</li>
+      <li>发布：事务内写配置版本状态、更新目标配置表、写发布记录、写审计；失败整体回滚。</li>
+      <li>缓存失效：事务提交后失效 system_config、Provider、Scheduler 客户端、Open API 签名配置缓存。</li>
+      <li>回滚：选择历史版本后先生成回滚草稿，再预览差异和风险，通过校验后发布为新版本。</li>
+      <li>环境切换：LOCAL/DEV/TEST/STAGING 可按权限切换；PROD 必须确认词，并阻断测试数据清理。</li>
+      <li>上线检查：LIVE 模式发布后联动上线检查，验证域名、OpenAPI、Provider、回调、调度、权限预览是否通过。</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>7. 版本化范围</h2>
+    <table>
+      <thead><tr><th>配置类型</th><th>处理方式</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>系统基础域名、API 域名、回调基础地址</td><td>必须版本化</td><td>影响登录、扫码服务单、OpenAPI、回调、Swagger 展示。</td></tr>
+        <tr><td>抖音、分销、企微 Provider</td><td>必须版本化</td><td>影响外部入站、回推、授权、签名、核销、状态回查。</td></tr>
+        <tr><td>字段映射、状态映射、订单类型映射</td><td>必须版本化</td><td>影响 Customer 匹配、Order 幂等和异常队列。</td></tr>
+        <tr><td>Scheduler 任务参数</td><td>必须版本化</td><td>影响同步频率、重试、对账、回推量。</td></tr>
+        <tr><td>权限策略发布</td><td>必须版本化</td><td>必须调用 P0-2 权限预览。</td></tr>
+        <tr><td>字典高风险项</td><td>必须版本化</td><td>来源、订单状态、PlanOrder 状态、脱敏规则等。</td></tr>
+        <tr><td>支付回调和商户配置</td><td>必须版本化</td><td>只管理 SeedCRM 识别和回调，不承接外部分销资金流。</td></tr>
+        <tr><td>普通展示文案、颜色、排序</td><td>只审计</td><td>不影响业务流转，可低风险保存。</td></tr>
+        <tr><td>个人偏好、列表列宽、查询默认项</td><td>只审计或不审计</td><td>不进入配置发布中心。</td></tr>
+        <tr><td>数据库连接、加密主密钥、核心模型定义</td><td>禁止在线改</td><td>通过部署和运维流程处理。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>8. 前端体验方案</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>环境条</h3>
+        <p>页面顶部固定展示环境、运行模式、当前版本、未发布变更数、最近发布人和最近发布时间。</p>
+      </div>
+      <div class="card">
+        <h3>配置卡片</h3>
+        <p>主视图按业务分组展示配置卡片，不以 key/value 表格为核心。技术 key 放到“技术详情”折叠区。</p>
+      </div>
+      <div class="card">
+        <h3>差异预览</h3>
+        <p>按“变更摘要、字段对比、影响范围、风险检查”四段展示；拼接地址展示最终变化并支持复制。</p>
+      </div>
+      <div class="card">
+        <h3>回滚中心</h3>
+        <p>回滚从发布记录详情进入，先生成回滚草稿，不能一键直接覆盖线上。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="danger">
+    <h2>9. 发布前阻断项</h2>
+    <ul>
+      <li>PROD 环境 API 域名仍是 <code>127.0.0.1</code>、<code>localhost</code> 或内网不可访问地址。</li>
+      <li>LIVE Provider 缺少 appId、secret、baseUrl、签名配置、有效 auth_code 或 token。</li>
+      <li>auth_code 已过期、重复使用、来源回调无 traceId 或 partner_code 缺失。</li>
+      <li>Scheduler 真实执行未 dry-run，或预计调用量异常放大。</li>
+      <li>状态映射会让 distribution paid order 进入 Clue。</li>
+      <li>字段映射缺少幂等键 <code>external_partner_code + external_order_id</code>。</li>
+      <li>权限策略会导致 admin 无法进入系统管理、权限管理或回滚中心。</li>
+      <li>敏感字段将在审计、差异、日志或列表中明文展示。</li>
+    </ul>
+  </section>
+
+  <section class="ok">
+    <h2>10. 测试与验收</h2>
+    <table>
+      <thead><tr><th>测试项</th><th>验收标准</th></tr></thead>
+      <tbody>
+        <tr><td>草稿隔离</td><td>创建和保存草稿不改变 system_config、Provider、Callback 生效值。</td></tr>
+        <tr><td>差异预览</td><td>能展示字段级差异、影响范围、风险等级和最终拼接 URL。</td></tr>
+        <tr><td>dry-run</td><td>全程不落核心业务表，不触发真实外部写入。</td></tr>
+        <tr><td>敏感值</td><td>数据库加密，列表、差异、审计和日志均脱敏。</td></tr>
+        <tr><td>auth_code</td><td>过期、重复使用、状态异常会阻断 LIVE 发布或换 token。</td></tr>
+        <tr><td>发布事务</td><td>发布成功后新配置生效并失效缓存；发布失败时旧配置保持不变。</td></tr>
+        <tr><td>回滚</td><td>回滚生成新版本和审计记录，不覆盖历史版本。</td></tr>
+        <tr><td>权限</td><td>integration_operator 只能查看和 dry-run，不可 publish/rollback。</td></tr>
+        <tr><td>PROD 安全</td><td>PROD 发布必须确认词，PROD 禁止清理测试数据。</td></tr>
+        <tr><td>主链路保护</td><td>配置变更不能让 Scheduler 或 Open API 绕过入站服务直接写核心表。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>11. 落地顺序</h2>
+    <ol>
+      <li>修复系统配置、支付、企微、调度相关页面中的历史中文乱码和敏感字段展示问题。</li>
+      <li>实现配置版本 baseline 和当前环境条，只读展示当前已发布版本。</li>
+      <li>实现配置草稿和差异预览，先覆盖域名、Provider、回调、Scheduler 四类高风险配置。</li>
+      <li>实现 dry-run 和 validate，重点覆盖 auth_code 时效、域名、签名、幂等键、状态映射、调度影响。</li>
+      <li>实现发布事务、审计、缓存失效和失败回滚。</li>
+      <li>实现历史版本、回滚草稿和回滚发布。</li>
+      <li>接入 P0-1 字典高风险项和 P0-2 权限策略发布。</li>
+      <li>接入上线检查、Docker/宝塔部署文档和 OpenAPI/Swagger 地址展示。</li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>

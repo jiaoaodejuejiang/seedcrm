@@ -177,7 +177,7 @@ public class SystemConfigController {
                                                                     HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         settingModuleGuard.checkConfigDraft(context);
-        return ApiResponse.success(systemConfigService.dryRunDraft(draftNo));
+        return ApiResponse.success(systemConfigService.dryRunDraft(draftNo, context));
     }
 
     @PostMapping("/drafts/{draftNo}/publish")
@@ -240,6 +240,18 @@ public class SystemConfigController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         settingModuleGuard.checkConfigPublish(context);
         return ApiResponse.success(systemConfigService.refreshPublishRuntime(publishNo, context));
+    }
+
+    @PostMapping("/publish-records/{publishNo}/runtime-events/process")
+    @Operation(
+            summary = "处理运行态刷新事件",
+            description = "执行发布批次下待处理或失败的运行态刷新事件，仅刷新配置感知状态，不修改客户、订单、排档或财务数据。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SystemConfigDtos.PublishRecordResponse> processRuntimeEvents(@PathVariable String publishNo,
+                                                                                   HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkConfigPublish(context);
+        return ApiResponse.success(systemConfigService.processPublishRuntimeEvents(publishNo, context));
     }
 
     @PostMapping("/change-logs/{id}/rollback-preview")

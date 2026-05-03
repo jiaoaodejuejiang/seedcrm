@@ -569,7 +569,7 @@ import {
   simulateSystemFlow,
   startSystemFlowRuntime
 } from '../api/systemFlow'
-import { fetchSystemConfigs, saveSystemConfig } from '../api/systemConfig'
+import { createSystemConfigDraft, fetchSystemConfigs, saveSystemConfig } from '../api/systemConfig'
 import { formatDateTime } from '../utils/format'
 
 const flows = ref([])
@@ -667,16 +667,33 @@ async function loadCapabilityConfigs() {
 async function toggleCapabilityConfig(row, value) {
   savingConfigKey.value = row.configKey
   try {
-    const saved = await saveSystemConfig({
+    const payload = {
       ...row,
       configValue: String(Boolean(value)),
       summary: '流程配置页更新能力开关'
-    })
+    }
+    if (requiresConfigDraft(row.configKey)) {
+      await createSystemConfigDraft(payload)
+      ElMessage.success('已生成配置草稿，请到配置发布中心完成发布预检查并发布')
+      await loadCapabilityConfigs()
+      return
+    }
+    const saved = await saveSystemConfig(payload)
     capabilityConfigs.value = capabilityConfigs.value.map((item) => (item.id === saved.id ? saved : item))
     ElMessage.success('能力开关已更新')
   } finally {
     savingConfigKey.value = ''
   }
+}
+
+function requiresConfigDraft(configKey) {
+  const key = String(configKey || '').toLowerCase()
+  return key.startsWith('workflow.')
+    || key.startsWith('amount.')
+    || key.startsWith('system.domain.')
+    || key.startsWith('douyin.')
+    || key.startsWith('wecom.')
+    || key.startsWith('payment.')
 }
 
 async function loadDetail(flowCode, versionId) {

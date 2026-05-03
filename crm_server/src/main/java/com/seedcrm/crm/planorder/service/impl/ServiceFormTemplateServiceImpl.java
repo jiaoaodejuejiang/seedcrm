@@ -674,7 +674,10 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
         if (!StringUtils.hasText(normalized.path("schemaVersion").asText(null))) {
             normalized.put("schemaVersion", SCHEMA_VERSION);
         }
-        if (!StringUtils.hasText(normalized.path("designerEngine").asText(null))) {
+        String envelopeDesignerEngine = normalized.path("designerEngine").asText(null);
+        if (StringUtils.hasText(envelopeDesignerEngine)) {
+            normalized.put("designerEngine", normalizeDesignerEngine(envelopeDesignerEngine));
+        } else {
             normalized.put("designerEngine", designerEngine);
         }
         if (!StringUtils.hasText(normalized.path("designerEngineVersion").asText(null))) {

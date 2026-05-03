@@ -26,6 +26,39 @@ export function fetchSystemConfigChangeLogs(params = {}) {
   })
 }
 
+export function fetchSystemConfigDrafts(params = {}) {
+  return http.get('/system-config/drafts', {
+    params: {
+      status: params.status || undefined,
+      limit: params.limit || undefined
+    }
+  })
+}
+
+export function fetchSystemConfigDraft(draftNo) {
+  return http.get(`/system-config/drafts/${encodeURIComponent(draftNo)}`)
+}
+
+export function createSystemConfigDraft(payload) {
+  return http.post('/system-config/drafts', payload)
+}
+
+export function publishSystemConfigDraft(draftNo) {
+  return http.post(`/system-config/drafts/${encodeURIComponent(draftNo)}/publish`)
+}
+
+export function discardSystemConfigDraft(draftNo) {
+  return http.post(`/system-config/drafts/${encodeURIComponent(draftNo)}/discard`)
+}
+
+export function rollbackPreviewSystemConfig(changeLogId) {
+  return http.post(`/system-config/change-logs/${changeLogId}/rollback-preview`)
+}
+
+export function createRollbackSystemConfigDraft(changeLogId) {
+  return http.post(`/system-config/change-logs/${changeLogId}/rollback-draft`)
+}
+
 export function fetchDomainSettings() {
   return http.get('/system-config/domain-settings')
 }

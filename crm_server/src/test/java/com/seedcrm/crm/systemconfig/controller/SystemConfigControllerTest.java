@@ -3,6 +3,7 @@ package com.seedcrm.crm.systemconfig.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -139,6 +140,44 @@ class SystemConfigControllerTest {
         verify(schedulerModuleGuard).checkView(context);
         verify(settingModuleGuard, never()).checkView(context);
         verify(systemConfigService).listChangeLogs("distribution.order.type.", null, 50);
+    }
+
+    @Test
+    void shouldUseSettingViewPermissionForDraftList() {
+        PermissionRequestContext context = context("ADMIN");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.drafts("DRAFT", 50, request);
+
+        verify(settingModuleGuard).checkView(context);
+        verify(systemConfigService).listDrafts("DRAFT", 50);
+    }
+
+    @Test
+    void shouldUseSettingUpdatePermissionForDraftCreation() {
+        PermissionRequestContext context = context("ADMIN");
+        SystemConfigDtos.SaveConfigRequest body = new SystemConfigDtos.SaveConfigRequest();
+        body.setConfigKey("clue.dedup.window_days");
+        body.setConfigValue("120");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.createDraft(body, request);
+
+        verify(settingModuleGuard).checkUpdate(context);
+        verify(systemConfigService).createDraft(body, context);
+    }
+
+    @Test
+    void shouldUseSettingUpdatePermissionForDraftPublishAndRollbackDraft() {
+        PermissionRequestContext context = context("ADMIN");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.publishDraft("CFG-001", request);
+        controller.createRollbackDraft(10L, request);
+
+        verify(settingModuleGuard, times(2)).checkUpdate(context);
+        verify(systemConfigService).publishDraft("CFG-001", context);
+        verify(systemConfigService).createRollbackDraft(10L, context);
     }
 
     private PermissionRequestContext context(String roleCode) {

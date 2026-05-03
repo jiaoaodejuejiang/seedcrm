@@ -195,6 +195,115 @@ class SystemConfigServiceImplTest {
                 .hasMessageContaining("coupon 或 deposit");
     }
 
+    @Test
+    void shouldCreateDraftWithoutMutatingRuntimeConfigOrAuditLog() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('clue.dedup.window_days', '90', 'NUMBER', 'GLOBAL', 'GLOBAL', 1, 'dedup window')
+                """);
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("clue.dedup.window_days");
+        request.setConfigValue("120");
+        request.setValueType("NUMBER");
+        request.setSummary("draft dedup window");
+
+        SystemConfigDtos.DraftResponse response = service.createDraft(request, adminContext());
+
+        assertThat(response.getDraftNo()).startsWith("CFG-");
+        assertThat(response.getStatus()).isEqualTo("DRAFT");
+        assertThat(response.getRiskLevel()).isEqualTo("MEDIUM");
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).getBeforeValue()).isEqualTo("90");
+        assertThat(response.getItems().get(0).getAfterValue()).isEqualTo("120");
+        assertThat(valueOf("clue.dedup.window_days")).isEqualTo("90");
+        Integer logCount = jdbcTemplate.queryForObject("SELECT COUNT(1) FROM system_config_change_log", Integer.class);
+        assertThat(logCount).isZero();
+    }
+
+    @Test
+    void shouldPublishDraftAndWriteAuditLog() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('clue.dedup.window_days', '90', 'NUMBER', 'GLOBAL', 'GLOBAL', 1, 'dedup window')
+                """);
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("clue.dedup.window_days");
+        request.setConfigValue("120");
+        request.setValueType("NUMBER");
+        request.setSummary("publish dedup window");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        SystemConfigDtos.DraftResponse published = service.publishDraft(draft.getDraftNo(), adminContext());
+
+        assertThat(published.getStatus()).isEqualTo("PUBLISHED");
+        assertThat(published.getPublishedAt()).isNotNull();
+        assertThat(valueOf("clue.dedup.window_days")).isEqualTo("120");
+        Integer logCount = jdbcTemplate.queryForObject("SELECT COUNT(1) FROM system_config_change_log", Integer.class);
+        assertThat(logCount).isEqualTo(1);
+        String summary = jdbcTemplate.queryForObject("SELECT summary FROM system_config_change_log", String.class);
+        assertThat(summary).contains(draft.getDraftNo());
+    }
+
+    @Test
+    void shouldRejectDraftPublishWhenRuntimeConfigChangedAfterDraftCreation() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('clue.dedup.window_days', '90', 'NUMBER', 'GLOBAL', 'GLOBAL', 1, 'dedup window')
+                """);
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("clue.dedup.window_days");
+        request.setConfigValue("120");
+        request.setValueType("NUMBER");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+        SystemConfigDtos.SaveConfigRequest directSave = new SystemConfigDtos.SaveConfigRequest();
+        directSave.setConfigKey("clue.dedup.window_days");
+        directSave.setConfigValue("180");
+        directSave.setValueType("NUMBER");
+        service.saveConfig(directSave, adminContext());
+
+        assertThatThrownBy(() -> service.publishDraft(draft.getDraftNo(), adminContext()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Current config changed");
+        assertThat(valueOf("clue.dedup.window_days")).isEqualTo("180");
+    }
+
+    @Test
+    void shouldCreateRollbackDraftWithoutMutatingRuntimeConfig() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('clue.dedup.window_days', '90', 'NUMBER', 'GLOBAL', 'GLOBAL', 1, 'dedup window')
+                """);
+        SystemConfigDtos.SaveConfigRequest directSave = new SystemConfigDtos.SaveConfigRequest();
+        directSave.setConfigKey("clue.dedup.window_days");
+        directSave.setConfigValue("120");
+        directSave.setValueType("NUMBER");
+        service.saveConfig(directSave, adminContext());
+        Long logId = jdbcTemplate.queryForObject("SELECT id FROM system_config_change_log", Long.class);
+
+        SystemConfigDtos.ConfigPreviewResponse preview = service.rollbackPreview(logId);
+        SystemConfigDtos.DraftResponse rollbackDraft = service.createRollbackDraft(logId, adminContext());
+
+        assertThat(preview.getAfterValue()).isEqualTo("90");
+        assertThat(rollbackDraft.getSourceType()).isEqualTo("ROLLBACK");
+        assertThat(rollbackDraft.getSourceChangeLogId()).isEqualTo(logId);
+        assertThat(rollbackDraft.getItems().get(0).getAfterValue()).isEqualTo("90");
+        assertThat(valueOf("clue.dedup.window_days")).isEqualTo("120");
+    }
+
+    @Test
+    void shouldMaskSensitiveValuesInDraftResponses() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("wecom.clientSecret");
+        request.setConfigValue("super-secret");
+        request.setValueType("STRING");
+
+        SystemConfigDtos.DraftResponse response = service.createDraft(request, adminContext());
+
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).getSensitive()).isTrue();
+        assertThat(response.getItems().get(0).getAfterValue()).isEqualTo("******");
+    }
+
     private void createSchema() {
         jdbcTemplate.execute("""
                 CREATE TABLE system_config (
@@ -222,6 +331,45 @@ class SystemConfigServiceImplTest {
                     actor_role_code VARCHAR(64),
                     actor_user_id BIGINT,
                     summary VARCHAR(500),
+                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE system_config_draft (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    draft_no VARCHAR(64) NOT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'DRAFT',
+                    source_type VARCHAR(32) NOT NULL DEFAULT 'MANUAL',
+                    source_change_log_id BIGINT,
+                    risk_level VARCHAR(16),
+                    impact_modules_json TEXT,
+                    created_by_role_code VARCHAR(64),
+                    created_by_user_id BIGINT,
+                    summary VARCHAR(500),
+                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    update_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    published_at DATETIME,
+                    discarded_at DATETIME,
+                    UNIQUE KEY uk_system_config_draft_no (draft_no)
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE system_config_draft_item (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    draft_no VARCHAR(64) NOT NULL,
+                    config_key VARCHAR(128) NOT NULL,
+                    scope_type VARCHAR(32) NOT NULL DEFAULT 'GLOBAL',
+                    scope_id VARCHAR(64) NOT NULL DEFAULT 'GLOBAL',
+                    value_type VARCHAR(32) NOT NULL DEFAULT 'STRING',
+                    before_value TEXT,
+                    after_value TEXT,
+                    base_current_value_hash VARCHAR(64),
+                    enabled TINYINT DEFAULT 1,
+                    description VARCHAR(500),
+                    change_type VARCHAR(32),
+                    sensitive_flag TINYINT DEFAULT 0,
+                    validation_status VARCHAR(32) DEFAULT 'PASS',
+                    validation_message VARCHAR(500),
                     create_time DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
                 """);

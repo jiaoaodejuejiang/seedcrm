@@ -9,13 +9,19 @@ import com.seedcrm.crm.systemconfig.dto.SystemConfigDtos;
 import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +35,12 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     private static final String DEFAULT_SYSTEM_BASE_URL = "http://127.0.0.1:8003";
     private static final String DEFAULT_API_BASE_URL = "http://127.0.0.1:8004";
     private static final String MASKED_VALUE = "******";
+    private static final String DRAFT_STATUS_DRAFT = "DRAFT";
+    private static final String DRAFT_STATUS_PUBLISHED = "PUBLISHED";
+    private static final String DRAFT_STATUS_DISCARDED = "DISCARDED";
+    private static final String DRAFT_SOURCE_MANUAL = "MANUAL";
+    private static final String DRAFT_SOURCE_ROLLBACK = "ROLLBACK";
+    private static final String NULL_HASH_MARKER = "<NULL>";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final List<String> ALLOWED_CONFIG_PREFIXES = List.of(
             "system.domain.",
@@ -98,6 +110,107 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     }
 
     @Override
+    public List<SystemConfigDtos.DraftResponse> listDrafts(String status, Integer limit) {
+        int safeLimit = limit == null ? 50 : Math.max(1, Math.min(limit, 200));
+        List<Object> args = new ArrayList<>();
+        StringBuilder sql = new StringBuilder("""
+                SELECT id, draft_no, status, source_type, source_change_log_id, risk_level,
+                       impact_modules_json, created_by_role_code, created_by_user_id, summary,
+                       create_time, update_time, published_at, discarded_at
+                FROM system_config_draft
+                """);
+        if (StringUtils.hasText(status)) {
+            sql.append("WHERE status = ?\n");
+            args.add(status.trim().toUpperCase(Locale.ROOT));
+        }
+        sql.append("ORDER BY create_time DESC, id DESC LIMIT ?");
+        args.add(safeLimit);
+        return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> mapDraft(rs, true), args.toArray());
+    }
+
+    @Override
+    public SystemConfigDtos.DraftResponse getDraft(String draftNo) {
+        return toDraftResponse(loadDraft(draftNo), true);
+    }
+
+    @Override
+    @Transactional
+    public SystemConfigDtos.DraftResponse createDraft(SystemConfigDtos.SaveConfigRequest request,
+                                                      PermissionRequestContext context) {
+        return createDraftInternal(request, context, DRAFT_SOURCE_MANUAL, null);
+    }
+
+    @Override
+    @Transactional
+    public SystemConfigDtos.DraftResponse publishDraft(String draftNo, PermissionRequestContext context) {
+        RawDraft draft = loadDraft(draftNo);
+        if (!DRAFT_STATUS_DRAFT.equals(draft.status())) {
+            throw new BusinessException("Only draft status can be published");
+        }
+        List<RawDraftItem> items = loadDraftItems(draft.draftNo());
+        if (items.isEmpty()) {
+            throw new BusinessException("Draft has no config item");
+        }
+        for (RawDraftItem item : items) {
+            String currentValue = findValue(item.configKey(), item.scopeType(), item.scopeId());
+            String currentHash = hashValue(currentValue);
+            if (!Objects.equals(currentHash, item.baseCurrentValueHash())) {
+                throw new BusinessException("Current config changed after draft creation, please preview again");
+            }
+        }
+        for (RawDraftItem item : items) {
+            SystemConfigDtos.SaveConfigRequest saveRequest = new SystemConfigDtos.SaveConfigRequest();
+            saveRequest.setConfigKey(item.configKey());
+            saveRequest.setConfigValue(item.afterValue());
+            saveRequest.setValueType(item.valueType());
+            saveRequest.setScopeType(item.scopeType());
+            saveRequest.setScopeId(item.scopeId());
+            saveRequest.setEnabled(item.enabled());
+            saveRequest.setDescription(item.description());
+            saveRequest.setSummary(buildPublishSummary(draft, item));
+            saveConfig(saveRequest, context);
+        }
+        jdbcTemplate.update("""
+                UPDATE system_config_draft
+                SET status = ?, published_at = ?, update_time = ?
+                WHERE draft_no = ? AND status = ?
+                """, DRAFT_STATUS_PUBLISHED, LocalDateTime.now(), LocalDateTime.now(),
+                draft.draftNo(), DRAFT_STATUS_DRAFT);
+        return getDraft(draft.draftNo());
+    }
+
+    @Override
+    @Transactional
+    public SystemConfigDtos.DraftResponse discardDraft(String draftNo, PermissionRequestContext context) {
+        RawDraft draft = loadDraft(draftNo);
+        if (!DRAFT_STATUS_DRAFT.equals(draft.status())) {
+            throw new BusinessException("Only draft status can be discarded");
+        }
+        jdbcTemplate.update("""
+                UPDATE system_config_draft
+                SET status = ?, discarded_at = ?, update_time = ?
+                WHERE draft_no = ? AND status = ?
+                """, DRAFT_STATUS_DISCARDED, LocalDateTime.now(), LocalDateTime.now(),
+                draft.draftNo(), DRAFT_STATUS_DRAFT);
+        return getDraft(draft.draftNo());
+    }
+
+    @Override
+    public SystemConfigDtos.ConfigPreviewResponse rollbackPreview(Long changeLogId) {
+        ChangeLogRecord changeLog = loadChangeLog(changeLogId);
+        SystemConfigDtos.SaveConfigRequest request = rollbackRequest(changeLog);
+        return previewConfig(request);
+    }
+
+    @Override
+    @Transactional
+    public SystemConfigDtos.DraftResponse createRollbackDraft(Long changeLogId, PermissionRequestContext context) {
+        ChangeLogRecord changeLog = loadChangeLog(changeLogId);
+        SystemConfigDtos.SaveConfigRequest request = rollbackRequest(changeLog);
+        return createDraftInternal(request, context, DRAFT_SOURCE_ROLLBACK, changeLog.id());
+    }
+
+    @Override
     public SystemConfigDtos.ConfigPreviewResponse previewConfig(SystemConfigDtos.SaveConfigRequest request) {
         NormalizedConfigInput input = normalizeConfigRequest(request);
         String beforeValue = findValue(input.key(), input.scopeType(), input.scopeId());
@@ -162,6 +275,45 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 .filter(item -> input.scopeId().equals(item.getScopeId()))
                 .findFirst()
                 .orElseThrow(() -> new BusinessException("config save failed"));
+    }
+
+    private SystemConfigDtos.DraftResponse createDraftInternal(SystemConfigDtos.SaveConfigRequest request,
+                                                               PermissionRequestContext context,
+                                                               String sourceType,
+                                                               Long sourceChangeLogId) {
+        NormalizedConfigInput input = normalizeConfigRequest(request);
+        String beforeValue = findValue(input.key(), input.scopeType(), input.scopeId());
+        if (Objects.equals(beforeValue, input.configValue())) {
+            throw new BusinessException("Config value has not changed, no draft is required");
+        }
+        SystemConfigDtos.ConfigPreviewResponse preview = previewConfig(request);
+        String draftNo = nextDraftNo();
+        LocalDateTime now = LocalDateTime.now();
+        jdbcTemplate.update("""
+                INSERT INTO system_config_draft(
+                    draft_no, status, source_type, source_change_log_id, risk_level, impact_modules_json,
+                    created_by_role_code, created_by_user_id, summary, create_time, update_time
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, draftNo, DRAFT_STATUS_DRAFT, sourceType, sourceChangeLogId,
+                preview.getRiskLevel(), toJson(preview.getImpactModules()),
+                context == null ? null : context.getRoleCode(),
+                context == null ? null : context.getCurrentUserId(),
+                StringUtils.hasText(request.getSummary()) ? request.getSummary().trim() : "Create config draft",
+                now, now);
+        jdbcTemplate.update("""
+                INSERT INTO system_config_draft_item(
+                    draft_no, config_key, scope_type, scope_id, value_type, before_value, after_value,
+                    base_current_value_hash, enabled, description, change_type, sensitive_flag,
+                    validation_status, validation_message, create_time
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, draftNo, input.key(), input.scopeType(), input.scopeId(), input.valueType(),
+                beforeValue, input.configValue(), hashValue(beforeValue), input.enabled(),
+                request.getDescription(), preview.getChangeType(), Boolean.TRUE.equals(preview.getSensitive()) ? 1 : 0,
+                Boolean.TRUE.equals(preview.getValidationPassed()) ? "PASS" : "FAIL",
+                preview.getValidationMessage(), now);
+        return getDraft(draftNo);
     }
 
     @Override
@@ -254,6 +406,182 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         item.setSummary(rs.getString("summary"));
         item.setCreateTime(rs.getTimestamp("create_time") == null ? null : rs.getTimestamp("create_time").toLocalDateTime());
         return item;
+    }
+
+    private SystemConfigDtos.DraftResponse mapDraft(ResultSet rs, boolean includeItems) throws SQLException {
+        RawDraft draft = new RawDraft(
+                rs.getLong("id"),
+                rs.getString("draft_no"),
+                rs.getString("status"),
+                rs.getString("source_type"),
+                getLongOrNull(rs, "source_change_log_id"),
+                rs.getString("risk_level"),
+                rs.getString("impact_modules_json"),
+                rs.getString("created_by_role_code"),
+                getLongOrNull(rs, "created_by_user_id"),
+                rs.getString("summary"),
+                toLocalDateTime(rs.getTimestamp("create_time")),
+                toLocalDateTime(rs.getTimestamp("update_time")),
+                toLocalDateTime(rs.getTimestamp("published_at")),
+                toLocalDateTime(rs.getTimestamp("discarded_at")));
+        return toDraftResponse(draft, includeItems);
+    }
+
+    private SystemConfigDtos.DraftResponse toDraftResponse(RawDraft draft, boolean includeItems) {
+        SystemConfigDtos.DraftResponse response = new SystemConfigDtos.DraftResponse();
+        response.setId(draft.id());
+        response.setDraftNo(draft.draftNo());
+        response.setStatus(draft.status());
+        response.setSourceType(draft.sourceType());
+        response.setSourceChangeLogId(draft.sourceChangeLogId());
+        response.setRiskLevel(draft.riskLevel());
+        response.setImpactModules(fromJsonList(draft.impactModulesJson()));
+        response.setCreatedByRoleCode(draft.createdByRoleCode());
+        response.setCreatedByUserId(draft.createdByUserId());
+        response.setSummary(draft.summary());
+        response.setCreateTime(draft.createTime());
+        response.setUpdateTime(draft.updateTime());
+        response.setPublishedAt(draft.publishedAt());
+        response.setDiscardedAt(draft.discardedAt());
+        if (includeItems) {
+            response.setItems(loadDraftItems(draft.draftNo()).stream()
+                    .map(this::toDraftItemResponse)
+                    .toList());
+        }
+        return response;
+    }
+
+    private SystemConfigDtos.DraftItemResponse toDraftItemResponse(RawDraftItem item) {
+        SystemConfigDtos.DraftItemResponse response = new SystemConfigDtos.DraftItemResponse();
+        response.setId(item.id());
+        response.setDraftNo(item.draftNo());
+        response.setConfigKey(item.configKey());
+        response.setScopeType(item.scopeType());
+        response.setScopeId(item.scopeId());
+        response.setValueType(item.valueType());
+        response.setBeforeValue(maskIfSensitive(item.configKey(), item.beforeValue()));
+        response.setAfterValue(maskIfSensitive(item.configKey(), item.afterValue()));
+        response.setBaseCurrentValueHash(item.baseCurrentValueHash());
+        response.setEnabled(item.enabled());
+        response.setDescription(item.description());
+        response.setChangeType(item.changeType());
+        response.setSensitive(item.sensitive());
+        response.setValidationStatus(item.validationStatus());
+        response.setValidationMessage(item.validationMessage());
+        return response;
+    }
+
+    private RawDraft loadDraft(String draftNo) {
+        if (!StringUtils.hasText(draftNo)) {
+            throw new BusinessException("draftNo is required");
+        }
+        List<RawDraft> rows = jdbcTemplate.query("""
+                SELECT id, draft_no, status, source_type, source_change_log_id, risk_level,
+                       impact_modules_json, created_by_role_code, created_by_user_id, summary,
+                       create_time, update_time, published_at, discarded_at
+                FROM system_config_draft
+                WHERE draft_no = ?
+                LIMIT 1
+                """, (rs, rowNum) -> new RawDraft(
+                rs.getLong("id"),
+                rs.getString("draft_no"),
+                rs.getString("status"),
+                rs.getString("source_type"),
+                getLongOrNull(rs, "source_change_log_id"),
+                rs.getString("risk_level"),
+                rs.getString("impact_modules_json"),
+                rs.getString("created_by_role_code"),
+                getLongOrNull(rs, "created_by_user_id"),
+                rs.getString("summary"),
+                toLocalDateTime(rs.getTimestamp("create_time")),
+                toLocalDateTime(rs.getTimestamp("update_time")),
+                toLocalDateTime(rs.getTimestamp("published_at")),
+                toLocalDateTime(rs.getTimestamp("discarded_at"))), draftNo.trim());
+        if (rows.isEmpty()) {
+            throw new BusinessException("Draft not found");
+        }
+        return rows.get(0);
+    }
+
+    private List<RawDraftItem> loadDraftItems(String draftNo) {
+        return jdbcTemplate.query("""
+                SELECT id, draft_no, config_key, scope_type, scope_id, value_type, before_value,
+                       after_value, base_current_value_hash, enabled, description, change_type,
+                       sensitive_flag, validation_status, validation_message
+                FROM system_config_draft_item
+                WHERE draft_no = ?
+                ORDER BY id ASC
+                """, (rs, rowNum) -> new RawDraftItem(
+                rs.getLong("id"),
+                rs.getString("draft_no"),
+                rs.getString("config_key"),
+                rs.getString("scope_type"),
+                rs.getString("scope_id"),
+                rs.getString("value_type"),
+                rs.getString("before_value"),
+                rs.getString("after_value"),
+                rs.getString("base_current_value_hash"),
+                rs.getInt("enabled"),
+                rs.getString("description"),
+                rs.getString("change_type"),
+                rs.getInt("sensitive_flag") == 1,
+                rs.getString("validation_status"),
+                rs.getString("validation_message")), draftNo);
+    }
+
+    private ChangeLogRecord loadChangeLog(Long changeLogId) {
+        if (changeLogId == null) {
+            throw new BusinessException("changeLogId is required");
+        }
+        List<ChangeLogRecord> rows = jdbcTemplate.query("""
+                SELECT id, config_key, scope_type, scope_id, before_value, after_value,
+                       actor_role_code, actor_user_id, summary, create_time
+                FROM system_config_change_log
+                WHERE id = ?
+                LIMIT 1
+                """, (rs, rowNum) -> new ChangeLogRecord(
+                rs.getLong("id"),
+                rs.getString("config_key"),
+                rs.getString("scope_type"),
+                rs.getString("scope_id"),
+                rs.getString("before_value"),
+                rs.getString("after_value"),
+                rs.getString("summary"),
+                toLocalDateTime(rs.getTimestamp("create_time"))), changeLogId);
+        if (rows.isEmpty()) {
+            throw new BusinessException("Change log not found");
+        }
+        return rows.get(0);
+    }
+
+    private SystemConfigDtos.SaveConfigRequest rollbackRequest(ChangeLogRecord changeLog) {
+        if (changeLog.beforeValue() == null) {
+            throw new BusinessException("Create change log has no previous value to rollback");
+        }
+        ConfigMeta meta = findConfigMeta(changeLog.configKey(), changeLog.scopeType(), changeLog.scopeId());
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey(changeLog.configKey());
+        request.setConfigValue(changeLog.beforeValue());
+        request.setValueType(meta.valueType());
+        request.setScopeType(changeLog.scopeType());
+        request.setScopeId(changeLog.scopeId());
+        request.setEnabled(meta.enabled());
+        request.setDescription(meta.description());
+        request.setSummary("Rollback from change log #" + changeLog.id());
+        return request;
+    }
+
+    private ConfigMeta findConfigMeta(String key, String scopeType, String scopeId) {
+        List<ConfigMeta> rows = jdbcTemplate.query("""
+                SELECT value_type, enabled, description
+                FROM system_config
+                WHERE config_key = ? AND scope_type = ? AND scope_id = ?
+                LIMIT 1
+                """, (rs, rowNum) -> new ConfigMeta(
+                rs.getString("value_type"),
+                rs.getInt("enabled"),
+                rs.getString("description")), key, scopeType, scopeId);
+        return rows.isEmpty() ? new ConfigMeta("STRING", 1, "Rollback system config") : rows.get(0);
     }
 
     private NormalizedConfigInput normalizeConfigRequest(SystemConfigDtos.SaveConfigRequest request) {
@@ -364,6 +692,117 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     private String normalizeConfigKey(String key) {
         return key == null ? "" : key.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String nextDraftNo() {
+        return "CFG-" + UUID.randomUUID().toString()
+                .replace("-", "")
+                .substring(0, 12)
+                .toUpperCase(Locale.ROOT);
+    }
+
+    private String buildPublishSummary(RawDraft draft, RawDraftItem item) {
+        String summary = StringUtils.hasText(draft.summary()) ? draft.summary().trim() : "Publish system config draft";
+        return summary + " (draftNo=" + draft.draftNo() + ", configKey=" + item.configKey() + ")";
+    }
+
+    private String toJson(List<String> values) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(values == null ? List.of() : values);
+        } catch (Exception exception) {
+            return "[]";
+        }
+    }
+
+    private List<String> fromJsonList(String json) {
+        if (!StringUtils.hasText(json)) {
+            return new ArrayList<>();
+        }
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(json);
+            List<String> values = new ArrayList<>();
+            if (root != null && root.isArray()) {
+                root.forEach(node -> {
+                    if (node != null && node.isTextual()) {
+                        values.add(node.asText());
+                    }
+                });
+            }
+            return values;
+        } catch (Exception exception) {
+            return new ArrayList<>();
+        }
+    }
+
+    private String hashValue(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest((value == null ? NULL_HASH_MARKER : value).getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(bytes);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new BusinessException("SHA-256 is not available");
+        }
+    }
+
+    private Long getLongOrNull(ResultSet rs, String columnName) throws SQLException {
+        Object value = rs.getObject(columnName);
+        return value == null ? null : rs.getLong(columnName);
+    }
+
+    private LocalDateTime toLocalDateTime(Timestamp timestamp) {
+        return timestamp == null ? null : timestamp.toLocalDateTime();
+    }
+
+    private record RawDraft(
+            Long id,
+            String draftNo,
+            String status,
+            String sourceType,
+            Long sourceChangeLogId,
+            String riskLevel,
+            String impactModulesJson,
+            String createdByRoleCode,
+            Long createdByUserId,
+            String summary,
+            LocalDateTime createTime,
+            LocalDateTime updateTime,
+            LocalDateTime publishedAt,
+            LocalDateTime discardedAt) {
+    }
+
+    private record RawDraftItem(
+            Long id,
+            String draftNo,
+            String configKey,
+            String scopeType,
+            String scopeId,
+            String valueType,
+            String beforeValue,
+            String afterValue,
+            String baseCurrentValueHash,
+            Integer enabled,
+            String description,
+            String changeType,
+            Boolean sensitive,
+            String validationStatus,
+            String validationMessage) {
+    }
+
+    private record ChangeLogRecord(
+            Long id,
+            String configKey,
+            String scopeType,
+            String scopeId,
+            String beforeValue,
+            String afterValue,
+            String summary,
+            LocalDateTime createTime) {
+    }
+
+    private record ConfigMeta(
+            String valueType,
+            Integer enabled,
+            String description) {
     }
 
     private record NormalizedConfigInput(

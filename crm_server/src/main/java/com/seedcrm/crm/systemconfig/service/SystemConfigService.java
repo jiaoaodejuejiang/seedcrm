@@ -12,8 +12,37 @@ public interface SystemConfigService {
         return List.of();
     }
 
+    default List<SystemConfigDtos.DraftResponse> listDrafts(String status, Integer limit) {
+        return List.of();
+    }
+
+    default SystemConfigDtos.DraftResponse getDraft(String draftNo) {
+        throw new UnsupportedOperationException("system config draft is not supported");
+    }
+
     default SystemConfigDtos.ConfigPreviewResponse previewConfig(SystemConfigDtos.SaveConfigRequest request) {
         throw new UnsupportedOperationException("system config preview is not supported");
+    }
+
+    default SystemConfigDtos.DraftResponse createDraft(SystemConfigDtos.SaveConfigRequest request,
+                                                       PermissionRequestContext context) {
+        throw new UnsupportedOperationException("system config draft is not supported");
+    }
+
+    default SystemConfigDtos.DraftResponse publishDraft(String draftNo, PermissionRequestContext context) {
+        throw new UnsupportedOperationException("system config draft publish is not supported");
+    }
+
+    default SystemConfigDtos.DraftResponse discardDraft(String draftNo, PermissionRequestContext context) {
+        throw new UnsupportedOperationException("system config draft discard is not supported");
+    }
+
+    default SystemConfigDtos.ConfigPreviewResponse rollbackPreview(Long changeLogId) {
+        throw new UnsupportedOperationException("system config rollback preview is not supported");
+    }
+
+    default SystemConfigDtos.DraftResponse createRollbackDraft(Long changeLogId, PermissionRequestContext context) {
+        throw new UnsupportedOperationException("system config rollback draft is not supported");
     }
 
     SystemConfigDtos.ConfigResponse saveConfig(SystemConfigDtos.SaveConfigRequest request, PermissionRequestContext context);

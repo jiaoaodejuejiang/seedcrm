@@ -55,6 +55,115 @@ public class SystemConfigSchemaInitializer {
                     KEY idx_system_config_log_key (config_key, create_time)
                 )
                 """);
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS system_config_draft (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    draft_no VARCHAR(64) NOT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'DRAFT',
+                    source_type VARCHAR(32) NOT NULL DEFAULT 'MANUAL',
+                    source_change_log_id BIGINT,
+                    risk_level VARCHAR(16),
+                    impact_modules_json TEXT,
+                    created_by_role_code VARCHAR(64),
+                    created_by_user_id BIGINT,
+                    summary VARCHAR(500),
+                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    published_at DATETIME,
+                    discarded_at DATETIME,
+                    UNIQUE KEY uk_system_config_draft_no (draft_no),
+                    KEY idx_system_config_draft_status (status, create_time)
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS system_config_draft_item (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    draft_no VARCHAR(64) NOT NULL,
+                    config_key VARCHAR(128) NOT NULL,
+                    scope_type VARCHAR(32) NOT NULL DEFAULT 'GLOBAL',
+                    scope_id VARCHAR(64) NOT NULL DEFAULT 'GLOBAL',
+                    value_type VARCHAR(32) NOT NULL DEFAULT 'STRING',
+                    before_value TEXT,
+                    after_value TEXT,
+                    base_current_value_hash VARCHAR(64),
+                    enabled TINYINT DEFAULT 1,
+                    description VARCHAR(500),
+                    change_type VARCHAR(32),
+                    sensitive_flag TINYINT DEFAULT 0,
+                    validation_status VARCHAR(32) DEFAULT 'PASS',
+                    validation_message VARCHAR(500),
+                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    KEY idx_system_config_draft_item_no (draft_no),
+                    KEY idx_system_config_draft_item_key (config_key)
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS system_config_capability (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    capability_code VARCHAR(64) NOT NULL,
+                    config_key_pattern VARCHAR(128) NOT NULL,
+                    owner_module VARCHAR(64) NOT NULL,
+                    value_type VARCHAR(32) NOT NULL DEFAULT 'STRING',
+                    scope_type_allowed_json TEXT,
+                    risk_level VARCHAR(16) NOT NULL DEFAULT 'LOW',
+                    sensitive_flag TINYINT DEFAULT 0,
+                    validator_code VARCHAR(64) NOT NULL DEFAULT 'NONE',
+                    runtime_reload_strategy VARCHAR(64) NOT NULL DEFAULT 'NONE',
+                    enabled TINYINT DEFAULT 1,
+                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_system_config_capability_code (capability_code),
+                    KEY idx_system_config_capability_pattern (config_key_pattern, enabled)
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS system_config_publish_record (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    publish_no VARCHAR(64) NOT NULL,
+                    draft_no VARCHAR(64) NOT NULL,
+                    status VARCHAR(32) NOT NULL,
+                    risk_level VARCHAR(16),
+                    impact_modules_json TEXT,
+                    before_hash VARCHAR(64),
+                    after_hash VARCHAR(64),
+                    before_snapshot_masked_json TEXT,
+                    after_snapshot_masked_json TEXT,
+                    validation_result_json TEXT,
+                    failure_reason VARCHAR(1000),
+                    published_by_role_code VARCHAR(64),
+                    published_by_user_id BIGINT,
+                    published_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_system_config_publish_no (publish_no),
+                    KEY idx_system_config_publish_draft (draft_no),
+                    KEY idx_system_config_publish_status (status, published_at)
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS system_config_runtime_event (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    publish_no VARCHAR(64) NOT NULL,
+                    module_code VARCHAR(64) NOT NULL,
+                    event_type VARCHAR(64) NOT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+                    payload_json TEXT,
+                    error_message VARCHAR(1000),
+                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    handled_at DATETIME,
+                    KEY idx_system_config_runtime_publish (publish_no),
+                    KEY idx_system_config_runtime_status (status, create_time)
+                )
+                """);
+        seedCapability("SYSTEM_DOMAIN", "system.domain.%", "SYSTEM_SETTING", "URL", "HIGH", false, "DOMAIN_URL", "MODULE_CALLBACK");
+        seedCapability("WORKFLOW_SWITCH", "workflow.%", "SYSTEM_FLOW", "BOOLEAN", "HIGH", false, "BOOLEAN", "MODULE_CALLBACK");
+        seedCapability("DEPOSIT_DIRECT", "deposit.direct.%", "STORE_SERVICE", "BOOLEAN", "MEDIUM", false, "BOOLEAN", "CACHE_EVICT");
+        seedCapability("AMOUNT_VISIBILITY", "amount.visibility.%", "FINANCE", "STRING", "HIGH", false, "FINANCE_VISIBILITY", "CACHE_EVICT");
+        seedCapability("CLUE_DEDUP", "clue.dedup.%", "CLUE", "STRING", "MEDIUM", false, "CLUE_DEDUP", "CACHE_EVICT");
+        seedCapability("SERVICE_FORM_DESIGNER", "form_designer.%", "PLANORDER", "STRING", "MEDIUM", false, "FORM_DESIGNER", "MODULE_CALLBACK");
+        seedCapability("DISTRIBUTION_MAPPING", DistributionOrderTypeMappingResolver.CONFIG_KEY, "SCHEDULER", "JSON", "MEDIUM", false, "DISTRIBUTION_MAPPING", "MODULE_CALLBACK");
+        seedCapability("SCHEDULER_INTEGRATION", "scheduler.%", "SCHEDULER", "STRING", "MEDIUM", false, "STRING", "CACHE_EVICT");
+        seedCapability("DOUYIN_INTEGRATION", "douyin.%", "SCHEDULER", "STRING", "HIGH", true, "STRING", "MODULE_CALLBACK");
+        seedCapability("WECOM_INTEGRATION", "wecom.%", "WECOM", "STRING", "HIGH", true, "STRING", "MODULE_CALLBACK");
+        seedCapability("PAYMENT_BLOCKED", "payment.%", "FINANCE", "STRING", "BLOCKED", true, "BLOCKED", "NONE");
         seedDefault("workflow.system_flow_runtime.enabled", "false", "BOOLEAN", "启用系统流程运行态旁路记录，默认关闭，灰度确认后再开启");
         seedDefault("workflow.service_order.enabled", "false", "BOOLEAN", "服务单正式接管轻量流程引擎开关，默认关闭");
         seedDefault("workflow.scheduling.enabled", "false", "BOOLEAN", "排档正式接管轻量流程引擎开关，默认关闭");
@@ -99,6 +208,48 @@ public class SystemConfigSchemaInitializer {
                 INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
                 VALUES (?, ?, ?, 'GLOBAL', 'GLOBAL', 1, ?)
                 """, key, value, valueType, description);
+    }
+
+    private void seedCapability(String code,
+                                String pattern,
+                                String ownerModule,
+                                String valueType,
+                                String riskLevel,
+                                boolean sensitive,
+                                String validatorCode,
+                                String reloadStrategy) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM system_config_capability
+                WHERE capability_code = ?
+                """, Integer.class, code);
+        String scopeTypes = "[\"GLOBAL\"]";
+        if (count != null && count > 0) {
+            jdbcTemplate.update("""
+                    UPDATE system_config_capability
+                    SET config_key_pattern = ?,
+                        owner_module = ?,
+                        value_type = ?,
+                        scope_type_allowed_json = ?,
+                        risk_level = ?,
+                        sensitive_flag = ?,
+                        validator_code = ?,
+                        runtime_reload_strategy = ?,
+                        enabled = 1,
+                        update_time = CURRENT_TIMESTAMP
+                    WHERE capability_code = ?
+                    """, pattern, ownerModule, valueType, scopeTypes, riskLevel,
+                    sensitive ? 1 : 0, validatorCode, reloadStrategy, code);
+            return;
+        }
+        jdbcTemplate.update("""
+                INSERT INTO system_config_capability(
+                    capability_code, config_key_pattern, owner_module, value_type, scope_type_allowed_json,
+                    risk_level, sensitive_flag, validator_code, runtime_reload_strategy, enabled
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                """, code, pattern, ownerModule, valueType, scopeTypes, riskLevel,
+                sensitive ? 1 : 0, validatorCode, reloadStrategy);
     }
 
     private void migrateLegacyLocalDomainDefaults() {

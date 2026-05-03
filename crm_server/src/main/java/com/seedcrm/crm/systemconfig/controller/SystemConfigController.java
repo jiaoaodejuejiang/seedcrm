@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -75,8 +76,8 @@ public class SystemConfigController {
 
     @GetMapping("/change-logs")
     @Operation(
-            summary = "Query system config change logs",
-            description = "Returns config before and after values, actor, risk level and impact modules. Sensitive values are masked.",
+            summary = "查询系统配置发布记录",
+            description = "返回配置变更前后值、操作人、风险等级和影响模块；敏感值会脱敏展示。",
             security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<List<SystemConfigDtos.ChangeLogResponse>> changeLogs(@RequestParam(required = false) String prefix,
                                                                             @RequestParam(required = false) String configKey,
@@ -92,10 +93,97 @@ public class SystemConfigController {
         return ApiResponse.success(systemConfigService.listChangeLogs(prefix, configKey, limit));
     }
 
+    @GetMapping("/drafts")
+    @Operation(
+            summary = "查询系统配置草稿",
+            description = "返回待发布配置草稿；敏感值会脱敏展示。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<List<SystemConfigDtos.DraftResponse>> drafts(@RequestParam(required = false) String status,
+                                                                    @RequestParam(required = false) Integer limit,
+                                                                    @Parameter(hidden = true)
+                                                                    HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkView(context);
+        return ApiResponse.success(systemConfigService.listDrafts(status, limit));
+    }
+
+    @GetMapping("/drafts/{draftNo}")
+    @Operation(
+            summary = "查询系统配置草稿详情",
+            description = "返回草稿差异详情；敏感值会脱敏展示。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SystemConfigDtos.DraftResponse> draft(@PathVariable String draftNo,
+                                                             @Parameter(hidden = true)
+                                                             HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkView(context);
+        return ApiResponse.success(systemConfigService.getDraft(draftNo));
+    }
+
+    @PostMapping("/drafts")
+    @Operation(
+            summary = "创建系统配置草稿",
+            description = "只创建草稿，不改变运行中的配置。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SystemConfigDtos.DraftResponse> createDraft(@RequestBody SystemConfigDtos.SaveConfigRequest requestBody,
+                                                                   HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkUpdate(context);
+        return ApiResponse.success(systemConfigService.createDraft(requestBody, context));
+    }
+
+    @PostMapping("/drafts/{draftNo}/publish")
+    @Operation(
+            summary = "发布系统配置草稿",
+            description = "发布前会检查运行时配置是否已变化，确认无冲突后才写入生效配置。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SystemConfigDtos.DraftResponse> publishDraft(@PathVariable String draftNo,
+                                                                    HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkUpdate(context);
+        return ApiResponse.success(systemConfigService.publishDraft(draftNo, context));
+    }
+
+    @PostMapping("/drafts/{draftNo}/discard")
+    @Operation(
+            summary = "作废系统配置草稿",
+            description = "作废草稿，不改变运行中的配置。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SystemConfigDtos.DraftResponse> discardDraft(@PathVariable String draftNo,
+                                                                    HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkUpdate(context);
+        return ApiResponse.success(systemConfigService.discardDraft(draftNo, context));
+    }
+
+    @PostMapping("/change-logs/{id}/rollback-preview")
+    @Operation(
+            summary = "生成系统配置回滚预览",
+            description = "基于发布记录生成回滚差异预览，不保存任何配置。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SystemConfigDtos.ConfigPreviewResponse> rollbackPreview(@PathVariable("id") Long id,
+                                                                               HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkUpdate(context);
+        return ApiResponse.success(systemConfigService.rollbackPreview(id));
+    }
+
+    @PostMapping("/change-logs/{id}/rollback-draft")
+    @Operation(
+            summary = "创建系统配置回滚草稿",
+            description = "基于发布记录创建回滚草稿；只有发布草稿后运行配置才会变化。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SystemConfigDtos.DraftResponse> createRollbackDraft(@PathVariable("id") Long id,
+                                                                          HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkUpdate(context);
+        return ApiResponse.success(systemConfigService.createRollbackDraft(id, context));
+    }
+
     @PostMapping("/preview")
     @Operation(
-            summary = "Preview system config change",
-            description = "Validates a config payload without saving it and returns diff, risk level and impact modules.",
+            summary = "预览系统配置变更",
+            description = "校验配置请求但不保存，返回差异、风险等级和影响模块。",
             security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<SystemConfigDtos.ConfigPreviewResponse> preview(@RequestBody SystemConfigDtos.SaveConfigRequest requestBody,
                                                                        HttpServletRequest request) {

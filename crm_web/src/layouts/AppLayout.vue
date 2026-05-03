@@ -452,7 +452,7 @@ const navGroups = [
         items: [
           { key: 'settings-domain', to: '/settings/base/domain', label: '域名配置', icon: icon(Link), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
           { key: 'settings-go-live', to: '/settings/base/go-live', label: '上线工具', icon: icon(Operation), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
-          { key: 'settings-config-audit', to: '/settings/base/config-audit', label: '配置审计', icon: icon(Files), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+          { key: 'settings-config-audit', to: '/settings/base/config-audit', label: '配置发布中心', icon: icon(Files), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
           {
             key: 'settings-wecom',
             to: '/settings/base/wecom',
@@ -527,7 +527,8 @@ const navGroups = [
         label: '流程配置',
         icon: icon(SetUp),
         items: [
-          { key: 'settings-system-flow', to: '/settings/system-flow', label: '系统流程', icon: icon(SetUp), moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
+          { key: 'settings-system-flow', to: '/settings/system-flow', label: '系统流程', icon: icon(SetUp), moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+          { key: 'settings-lowcode', to: '/settings/lowcode', label: '配置化平台', icon: icon(Picture), moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
         ]
       }
     ]
@@ -572,7 +573,7 @@ const routeTitleMap = {
   'settings-interface-debug': '联调工作台',
   'settings-domain': '域名配置',
   'settings-go-live': '上线工具',
-  'settings-config-audit': '配置审计',
+  'settings-config-audit': '配置发布中心',
   'settings-wecom': '企业微信',
   'settings-menu': '菜单管理',
   'settings-public-api': '对外接口',
@@ -580,7 +581,8 @@ const routeTitleMap = {
   'settings-dictionaries': '字典管理',
   'settings-parameters': '参数管理',
   'settings-payment': '支付设置',
-  'settings-system-flow': '系统流程'
+  'settings-system-flow': '系统流程',
+  'settings-lowcode': '配置化平台'
 }
 
 const routeSectionMap = {
@@ -628,7 +630,8 @@ const routeSectionMap = {
   'settings-dictionaries': '系统设置 / 基础配置',
   'settings-parameters': '系统设置 / 基础配置',
   'settings-payment': '系统设置 / 基础配置',
-  'settings-system-flow': '系统设置 / 流程配置'
+  'settings-system-flow': '系统设置 / 流程配置',
+  'settings-lowcode': '系统设置 / 流程配置'
 }
 
 const visibleGroups = computed(() =>

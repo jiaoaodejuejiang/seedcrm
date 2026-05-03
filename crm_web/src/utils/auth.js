@@ -42,7 +42,8 @@ const accessibleRoutes = [
   { path: '/settings/integration/jobs', moduleCode: 'SETTING', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'] },
   { path: '/settings/integration/debug', moduleCode: 'SETTING', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'] },
   { path: '/settings/integration/distribution-api', moduleCode: 'SETTING', roleCodes: ['ADMIN', 'INTEGRATION_ADMIN', 'INTEGRATION_OPERATOR'] },
-  { path: '/settings/system-flow', moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
+  { path: '/settings/system-flow', moduleCode: 'SETTING', roleCodes: ['ADMIN'] },
+  { path: '/settings/lowcode', moduleCode: 'SETTING', roleCodes: ['ADMIN'] }
 ]
 
 export const authState = reactive({

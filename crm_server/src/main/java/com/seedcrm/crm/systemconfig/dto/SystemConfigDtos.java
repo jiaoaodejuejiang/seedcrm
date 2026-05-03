@@ -97,6 +97,46 @@ public final class SystemConfigDtos {
     }
 
     @Data
+    @Schema(name = "SystemConfigDraftResponse", description = "待发布的系统配置草稿")
+    public static class DraftResponse {
+        private Long id;
+        private String draftNo;
+        private String status;
+        private String sourceType;
+        private Long sourceChangeLogId;
+        private String riskLevel;
+        private List<String> impactModules = new ArrayList<>();
+        private String createdByRoleCode;
+        private Long createdByUserId;
+        private String summary;
+        private LocalDateTime createTime;
+        private LocalDateTime updateTime;
+        private LocalDateTime publishedAt;
+        private LocalDateTime discardedAt;
+        private List<DraftItemResponse> items = new ArrayList<>();
+    }
+
+    @Data
+    @Schema(name = "SystemConfigDraftItemResponse", description = "系统配置草稿明细差异")
+    public static class DraftItemResponse {
+        private Long id;
+        private String draftNo;
+        private String configKey;
+        private String scopeType;
+        private String scopeId;
+        private String valueType;
+        private String beforeValue;
+        private String afterValue;
+        private String baseCurrentValueHash;
+        private Integer enabled;
+        private String description;
+        private String changeType;
+        private Boolean sensitive;
+        private String validationStatus;
+        private String validationMessage;
+    }
+
+    @Data
     @Schema(name = "DomainSettingsResponse", description = "系统基础域名和 API 域名派生结果")
     public static class DomainSettingsResponse {
         @Schema(description = "系统基础域名，面向后台页面和对外展示链接", example = "https://crm.seedcrm.com")

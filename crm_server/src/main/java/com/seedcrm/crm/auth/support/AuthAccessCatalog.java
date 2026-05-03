@@ -57,7 +57,8 @@ public final class AuthAccessCatalog {
             menu(38, "财务管理 / 薪酬结算", "退款冲正", "/finance/salary/refund-adjustments", "SALARY", "salary:update", "ADMIN", "FINANCE"),
             menu(39, "系统设置 / 流程配置", "系统流程", "/settings/system-flow", "SETTING", "setting:system-flow:view", "ADMIN"),
             menu(40, "系统设置 / 基础配置", "上线工具", "/settings/base/go-live", "SETTING", "setting:go-live:update", "ADMIN"),
-            menu(41, "系统设置 / 基础配置", "配置审计", "/settings/base/config-audit", "SETTING", "setting:config-audit:update", "ADMIN")
+            menu(41, "系统设置 / 基础配置", "配置发布中心", "/settings/base/config-audit", "SETTING", "setting:config-audit:update", "ADMIN"),
+            menu(42, "系统设置 / 流程配置", "配置化平台", "/settings/lowcode", "SETTING", "setting:lowcode:view", "ADMIN")
     );
 
     private AuthAccessCatalog() {

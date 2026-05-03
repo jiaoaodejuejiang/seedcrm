@@ -7,3 +7,4 @@ output/
 doc/
 log/
 crm_web/dist/*
+crm_web/public/docs/

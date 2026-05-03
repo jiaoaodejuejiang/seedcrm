@@ -11,6 +11,7 @@ import FinanceOverview from '../views/FinanceOverview.vue'
 import GoLiveOpsView from '../views/GoLiveOpsView.vue'
 import InterfaceDebugView from '../views/InterfaceDebugView.vue'
 import LoginView from '../views/LoginView.vue'
+import LowCodePlatformView from '../views/LowCodePlatformView.vue'
 import MemberInfoView from '../views/MemberInfoView.vue'
 import MySalaryView from '../views/MySalaryView.vue'
 import OrderManagement from '../views/OrderManagement.vue'
@@ -524,6 +525,18 @@ const routes = [
         }
       },
       {
+        path: 'settings/lowcode',
+        name: 'settings-lowcode',
+        component: LowCodePlatformView,
+        meta: {
+          title: '配置化平台',
+          sectionTitle: '系统设置 / 流程配置',
+          moduleCode: 'SETTING',
+          roleCodes: ['ADMIN'],
+          navKey: 'settings-lowcode'
+        }
+      },
+      {
         path: 'settings/base/domain',
         name: 'settings-domain',
         component: DomainSettingView,
@@ -552,7 +565,7 @@ const routes = [
         name: 'settings-config-audit',
         component: SystemConfigAuditView,
         meta: {
-          title: '配置审计',
+          title: '配置发布中心',
           sectionTitle: '系统设置 / 基础配置',
           moduleCode: 'SETTING',
           roleCodes: ['ADMIN'],

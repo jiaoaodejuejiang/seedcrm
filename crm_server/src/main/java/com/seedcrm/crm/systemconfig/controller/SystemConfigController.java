@@ -89,7 +89,7 @@ public class SystemConfigController {
             schedulerModuleGuard.checkView(context);
             return ApiResponse.success(systemConfigService.listChangeLogs(prefix, configKey, limit));
         }
-        settingModuleGuard.checkView(context);
+        settingModuleGuard.checkConfigAudit(context);
         return ApiResponse.success(systemConfigService.listChangeLogs(prefix, configKey, limit));
     }
 
@@ -103,7 +103,7 @@ public class SystemConfigController {
                                                                     @Parameter(hidden = true)
                                                                     HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
-        settingModuleGuard.checkView(context);
+        settingModuleGuard.checkConfigAudit(context);
         return ApiResponse.success(systemConfigService.listDrafts(status, limit));
     }
 
@@ -116,8 +116,32 @@ public class SystemConfigController {
                                                              @Parameter(hidden = true)
                                                              HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
-        settingModuleGuard.checkView(context);
+        settingModuleGuard.checkConfigAudit(context);
         return ApiResponse.success(systemConfigService.getDraft(draftNo));
+    }
+
+    @GetMapping("/capabilities")
+    @Operation(
+            summary = "查询受控配置能力清单",
+            description = "返回已登记的运行时配置能力，不改变客户、订单、排档或账务数据。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<List<SystemConfigDtos.CapabilityResponse>> capabilities(@Parameter(hidden = true)
+                                                                              HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkConfigAudit(context);
+        return ApiResponse.success(systemConfigService.listCapabilities());
+    }
+
+    @GetMapping("/capabilities/runtime-overview")
+    @Operation(
+            summary = "查询配置发布运行态概览",
+            description = "返回草稿、发布批次和运行态事件统计，用于配置发布中心展示。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SystemConfigDtos.RuntimeOverviewResponse> runtimeOverview(@Parameter(hidden = true)
+                                                                                HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkConfigAudit(context);
+        return ApiResponse.success(systemConfigService.getRuntimeOverview());
     }
 
     @PostMapping("/drafts")
@@ -128,8 +152,32 @@ public class SystemConfigController {
     public ApiResponse<SystemConfigDtos.DraftResponse> createDraft(@RequestBody SystemConfigDtos.SaveConfigRequest requestBody,
                                                                    HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
-        settingModuleGuard.checkUpdate(context);
+        settingModuleGuard.checkConfigDraft(context);
         return ApiResponse.success(systemConfigService.createDraft(requestBody, context));
+    }
+
+    @PostMapping("/drafts/{draftNo}/validate")
+    @Operation(
+            summary = "校验系统配置草稿",
+            description = "按能力注册表校验草稿，校验过程不会改变运行中的配置。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SystemConfigDtos.ValidationResponse> validateDraft(@PathVariable String draftNo,
+                                                                         HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkConfigDraft(context);
+        return ApiResponse.success(systemConfigService.validateDraft(draftNo));
+    }
+
+    @PostMapping("/drafts/{draftNo}/dry-run")
+    @Operation(
+            summary = "执行发布预检查",
+            description = "展示校验结果和发布后将写入的运行态事件，不改变运行中的配置。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SystemConfigDtos.DryRunResponse> dryRunDraft(@PathVariable String draftNo,
+                                                                    HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkConfigDraft(context);
+        return ApiResponse.success(systemConfigService.dryRunDraft(draftNo));
     }
 
     @PostMapping("/drafts/{draftNo}/publish")
@@ -140,7 +188,7 @@ public class SystemConfigController {
     public ApiResponse<SystemConfigDtos.DraftResponse> publishDraft(@PathVariable String draftNo,
                                                                     HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
-        settingModuleGuard.checkUpdate(context);
+        settingModuleGuard.checkConfigPublish(context);
         return ApiResponse.success(systemConfigService.publishDraft(draftNo, context));
     }
 
@@ -152,8 +200,46 @@ public class SystemConfigController {
     public ApiResponse<SystemConfigDtos.DraftResponse> discardDraft(@PathVariable String draftNo,
                                                                     HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
-        settingModuleGuard.checkUpdate(context);
+        settingModuleGuard.checkConfigPublish(context);
         return ApiResponse.success(systemConfigService.discardDraft(draftNo, context));
+    }
+
+    @GetMapping("/publish-records")
+    @Operation(
+            summary = "查询配置发布批次",
+            description = "返回发布批次、脱敏快照和发布状态。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<List<SystemConfigDtos.PublishRecordResponse>> publishRecords(@RequestParam(required = false) Integer limit,
+                                                                                   @Parameter(hidden = true)
+                                                                                   HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkConfigAudit(context);
+        return ApiResponse.success(systemConfigService.listPublishRecords(limit));
+    }
+
+    @GetMapping("/publish-records/{publishNo}")
+    @Operation(
+            summary = "查询配置发布批次详情",
+            description = "返回单个发布批次及其运行态事件。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SystemConfigDtos.PublishRecordResponse> publishRecord(@PathVariable String publishNo,
+                                                                            @Parameter(hidden = true)
+                                                                            HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkConfigAudit(context);
+        return ApiResponse.success(systemConfigService.getPublishRecord(publishNo));
+    }
+
+    @PostMapping("/publish-records/{publishNo}/runtime-refresh")
+    @Operation(
+            summary = "记录运行态刷新事件",
+            description = "为成功发布批次写入一次手工运行态刷新事件，不改变客户、订单、排档或账务数据。",
+            security = @SecurityRequirement(name = "BackendToken"))
+    public ApiResponse<SystemConfigDtos.PublishRecordResponse> refreshRuntime(@PathVariable String publishNo,
+                                                                             HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        settingModuleGuard.checkConfigPublish(context);
+        return ApiResponse.success(systemConfigService.refreshPublishRuntime(publishNo, context));
     }
 
     @PostMapping("/change-logs/{id}/rollback-preview")
@@ -164,7 +250,7 @@ public class SystemConfigController {
     public ApiResponse<SystemConfigDtos.ConfigPreviewResponse> rollbackPreview(@PathVariable("id") Long id,
                                                                                HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
-        settingModuleGuard.checkUpdate(context);
+        settingModuleGuard.checkConfigRollback(context);
         return ApiResponse.success(systemConfigService.rollbackPreview(id));
     }
 
@@ -176,7 +262,7 @@ public class SystemConfigController {
     public ApiResponse<SystemConfigDtos.DraftResponse> createRollbackDraft(@PathVariable("id") Long id,
                                                                           HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
-        settingModuleGuard.checkUpdate(context);
+        settingModuleGuard.checkConfigRollback(context);
         return ApiResponse.success(systemConfigService.createRollbackDraft(id, context));
     }
 
@@ -194,7 +280,7 @@ public class SystemConfigController {
             schedulerModuleGuard.checkUpdate(context);
             return ApiResponse.success(systemConfigService.previewConfig(requestBody));
         }
-        settingModuleGuard.checkUpdate(context);
+        settingModuleGuard.checkConfigDraft(context);
         return ApiResponse.success(systemConfigService.previewConfig(requestBody));
     }
 
@@ -224,7 +310,7 @@ public class SystemConfigController {
     @PostMapping("/save")
     @Operation(
             summary = "保存受控系统配置项",
-            description = "仅允许白名单配置 key 写入，所有保存都会记录配置变更日志。",
+            description = "兼容旧页面的直接保存入口；高风险、敏感或阻断能力会被拒绝直写，必须走草稿、发布预检查和发布链路。",
             security = @SecurityRequirement(name = "BackendToken"))
     public ApiResponse<SystemConfigDtos.ConfigResponse> save(@RequestBody SystemConfigDtos.SaveConfigRequest requestBody,
                                                             HttpServletRequest request) {
@@ -233,10 +319,10 @@ public class SystemConfigController {
                 && isDistributionIntegrationConfig(requestBody.getConfigKey())
                 && isIntegrationWriter(context)) {
             schedulerModuleGuard.checkUpdate(context);
-            return ApiResponse.success(systemConfigService.saveConfig(requestBody, context));
+            return ApiResponse.success(systemConfigService.saveLegacyConfig(requestBody, context));
         }
         settingModuleGuard.checkUpdate(context);
-        return ApiResponse.success(systemConfigService.saveConfig(requestBody, context));
+        return ApiResponse.success(systemConfigService.saveLegacyConfig(requestBody, context));
     }
 
     private void checkDomainSettingsView(PermissionRequestContext context) {

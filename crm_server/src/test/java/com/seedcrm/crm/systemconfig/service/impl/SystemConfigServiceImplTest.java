@@ -78,6 +78,20 @@ class SystemConfigServiceImplTest {
     }
 
     @Test
+    void shouldMaskSensitiveValuesByCapabilityMetadata() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('douyin.appId', 'douyin-app-id-001', 'STRING', 'GLOBAL', 'GLOBAL', 1, '抖音应用 ID')
+                """);
+
+        List<SystemConfigDtos.ConfigResponse> rows = service.listConfigs("douyin.");
+
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).getSensitive()).isTrue();
+        assertThat(rows.get(0).getConfigValue()).isEqualTo("******");
+    }
+
+    @Test
     void shouldRejectUnregisteredConfigKey() {
         SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
         request.setConfigKey("unknown.freeForm");
@@ -105,6 +119,18 @@ class SystemConfigServiceImplTest {
                 WHERE config_key = 'workflow.service_order.enabled'
                 """, String.class);
         assertThat(summary).isEqualTo("开启服务单流程灰度");
+    }
+
+    @Test
+    void shouldRejectHighRiskConfigFromLegacyDirectSaveEndpoint() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("workflow.service_order.enabled");
+        request.setConfigValue("true");
+        request.setValueType("BOOLEAN");
+
+        assertThatThrownBy(() -> service.saveLegacyConfig(request, adminContext()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("配置发布中心");
     }
 
     @Test
@@ -263,7 +289,7 @@ class SystemConfigServiceImplTest {
 
         assertThatThrownBy(() -> service.publishDraft(draft.getDraftNo(), adminContext()))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Current config changed");
+                .hasMessageContaining("运行中配置已变化");
         assertThat(valueOf("clue.dedup.window_days")).isEqualTo("180");
     }
 
@@ -304,6 +330,112 @@ class SystemConfigServiceImplTest {
         assertThat(response.getItems().get(0).getAfterValue()).isEqualTo("******");
     }
 
+    @Test
+    void shouldValidateAndDryRunDraftAgainstCapabilityRegistry() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('clue.dedup.window_days', '90', 'NUMBER', 'GLOBAL', 'GLOBAL', 1, 'dedup window')
+                """);
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("clue.dedup.window_days");
+        request.setConfigValue("120");
+        request.setValueType("NUMBER");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        SystemConfigDtos.ValidationResponse validation = service.validateDraft(draft.getDraftNo());
+        SystemConfigDtos.DryRunResponse dryRun = service.dryRunDraft(draft.getDraftNo());
+
+        assertThat(validation.getValid()).isTrue();
+        assertThat(validation.getItems()).hasSize(1);
+        assertThat(validation.getItems().get(0).getCapabilityCode()).isEqualTo("CLUE_DEDUP");
+        assertThat(validation.getItems().get(0).getStatus()).isEqualTo("PASS");
+        assertThat(dryRun.getRunnable()).isTrue();
+        assertThat(dryRun.getRuntimeEvents()).anyMatch(item -> item.contains("CLUE"));
+        assertThat(valueOf("clue.dedup.window_days")).isEqualTo("90");
+    }
+
+    @Test
+    void shouldWritePublishRecordAndRuntimeEventsWhenPublishingDraft() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('clue.dedup.window_days', '90', 'NUMBER', 'GLOBAL', 'GLOBAL', 1, 'dedup window')
+                """);
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("clue.dedup.window_days");
+        request.setConfigValue("120");
+        request.setValueType("NUMBER");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        service.publishDraft(draft.getDraftNo(), adminContext());
+
+        List<SystemConfigDtos.PublishRecordResponse> records = service.listPublishRecords(10);
+        assertThat(records).hasSize(1);
+        assertThat(records.get(0).getStatus()).isEqualTo("SUCCESS");
+        assertThat(records.get(0).getImpactModules()).contains("CLUE");
+        SystemConfigDtos.PublishRecordResponse detail = service.getPublishRecord(records.get(0).getPublishNo());
+        assertThat(detail.getEvents()).extracting(SystemConfigDtos.RuntimeEventResponse::getEventType)
+                .contains("CONFIG_PUBLISHED", "RUNTIME_REFRESH");
+        SystemConfigDtos.RuntimeOverviewResponse overview = service.getRuntimeOverview();
+        assertThat(overview.getPublishSuccessCount()).isEqualTo(1);
+        assertThat(overview.getRuntimeEventPendingCount()).isEqualTo(2);
+    }
+
+    @Test
+    void shouldBlockPaymentCapabilityPublishAndRecordFailure() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("payment.gateway.key");
+        request.setConfigValue("blocked-secret");
+        request.setValueType("STRING");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        SystemConfigDtos.ValidationResponse validation = service.validateDraft(draft.getDraftNo());
+
+        assertThat(validation.getValid()).isFalse();
+        assertThat(validation.getItems().get(0).getStatus()).isEqualTo("BLOCK");
+        assertThatThrownBy(() -> service.publishDraft(draft.getDraftNo(), adminContext()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("校验未通过");
+        List<SystemConfigDtos.PublishRecordResponse> records = service.listPublishRecords(10);
+        assertThat(records).hasSize(1);
+        assertThat(records.get(0).getStatus()).isEqualTo("FAILED");
+        assertThat(records.get(0).getFailureReason()).contains("校验");
+    }
+
+    @Test
+    void shouldMaskSensitiveValuesInPublishRecordSnapshots() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("wecom.clientSecret");
+        request.setConfigValue("super-secret");
+        request.setValueType("STRING");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        service.publishDraft(draft.getDraftNo(), adminContext());
+
+        SystemConfigDtos.PublishRecordResponse record = service.listPublishRecords(10).get(0);
+        assertThat(record.getAfterSnapshotMaskedJson()).contains("******");
+        assertThat(record.getAfterSnapshotMaskedJson()).doesNotContain("super-secret");
+    }
+
+    @Test
+    void shouldRefreshRuntimeForSuccessfulPublishRecord() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('clue.dedup.window_days', '90', 'NUMBER', 'GLOBAL', 'GLOBAL', 1, 'dedup window')
+                """);
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("clue.dedup.window_days");
+        request.setConfigValue("120");
+        request.setValueType("NUMBER");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+        service.publishDraft(draft.getDraftNo(), adminContext());
+        String publishNo = service.listPublishRecords(10).get(0).getPublishNo();
+
+        SystemConfigDtos.PublishRecordResponse refreshed = service.refreshPublishRuntime(publishNo, adminContext());
+
+        assertThat(refreshed.getEvents()).extracting(SystemConfigDtos.RuntimeEventResponse::getEventType)
+                .contains("CACHE_EVICT");
+    }
+
     private void createSchema() {
         jdbcTemplate.execute("""
                 CREATE TABLE system_config (
@@ -331,6 +463,9 @@ class SystemConfigServiceImplTest {
                     actor_role_code VARCHAR(64),
                     actor_user_id BIGINT,
                     summary VARCHAR(500),
+                    change_type VARCHAR(32),
+                    risk_level VARCHAR(16),
+                    impact_modules_json TEXT,
                     create_time DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
                 """);
@@ -373,6 +508,79 @@ class SystemConfigServiceImplTest {
                     create_time DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
                 """);
+        jdbcTemplate.execute("""
+                CREATE TABLE system_config_capability (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    capability_code VARCHAR(64) NOT NULL,
+                    config_key_pattern VARCHAR(128) NOT NULL,
+                    owner_module VARCHAR(64) NOT NULL,
+                    value_type VARCHAR(32) NOT NULL DEFAULT 'STRING',
+                    scope_type_allowed_json TEXT,
+                    risk_level VARCHAR(16) NOT NULL DEFAULT 'LOW',
+                    sensitive_flag TINYINT DEFAULT 0,
+                    validator_code VARCHAR(64) NOT NULL DEFAULT 'NONE',
+                    runtime_reload_strategy VARCHAR(64) NOT NULL DEFAULT 'NONE',
+                    enabled TINYINT DEFAULT 1,
+                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    update_time DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE system_config_publish_record (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    publish_no VARCHAR(64) NOT NULL,
+                    draft_no VARCHAR(64) NOT NULL,
+                    status VARCHAR(32) NOT NULL,
+                    risk_level VARCHAR(16),
+                    impact_modules_json TEXT,
+                    before_hash VARCHAR(64),
+                    after_hash VARCHAR(64),
+                    before_snapshot_masked_json TEXT,
+                    after_snapshot_masked_json TEXT,
+                    validation_result_json TEXT,
+                    failure_reason VARCHAR(1000),
+                    published_by_role_code VARCHAR(64),
+                    published_by_user_id BIGINT,
+                    published_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE system_config_runtime_event (
+                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    publish_no VARCHAR(64) NOT NULL,
+                    module_code VARCHAR(64) NOT NULL,
+                    event_type VARCHAR(64) NOT NULL,
+                    status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+                    payload_json TEXT,
+                    error_message VARCHAR(1000),
+                    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    handled_at DATETIME
+                )
+                """);
+        seedCapability("SYSTEM_DOMAIN", "system.domain.%", "SYSTEM_SETTING", "URL", "HIGH", 0, "DOMAIN_URL", "MODULE_CALLBACK");
+        seedCapability("WORKFLOW_SWITCH", "workflow.%", "SYSTEM_FLOW", "BOOLEAN", "HIGH", 0, "BOOLEAN", "MODULE_CALLBACK");
+        seedCapability("CLUE_DEDUP", "clue.dedup.%", "CLUE", "STRING", "MEDIUM", 0, "CLUE_DEDUP", "CACHE_EVICT");
+        seedCapability("WECOM_INTEGRATION", "wecom.%", "WECOM", "STRING", "HIGH", 1, "STRING", "MODULE_CALLBACK");
+        seedCapability("DOUYIN_INTEGRATION", "douyin.%", "SCHEDULER", "STRING", "HIGH", 1, "STRING", "MODULE_CALLBACK");
+        seedCapability("DISTRIBUTION_MAPPING", DistributionOrderTypeMappingResolver.CONFIG_KEY, "SCHEDULER", "JSON", "MEDIUM", 0, "DISTRIBUTION_MAPPING", "MODULE_CALLBACK");
+        seedCapability("PAYMENT_BLOCKED", "payment.%", "FINANCE", "STRING", "BLOCKED", 1, "BLOCKED", "NONE");
+    }
+
+    private void seedCapability(String code,
+                                String pattern,
+                                String ownerModule,
+                                String valueType,
+                                String riskLevel,
+                                int sensitive,
+                                String validatorCode,
+                                String reloadStrategy) {
+        jdbcTemplate.update("""
+                INSERT INTO system_config_capability(
+                    capability_code, config_key_pattern, owner_module, value_type, scope_type_allowed_json,
+                    risk_level, sensitive_flag, validator_code, runtime_reload_strategy, enabled
+                )
+                VALUES (?, ?, ?, ?, '["GLOBAL"]', ?, ?, ?, ?, 1)
+                """, code, pattern, ownerModule, valueType, riskLevel, sensitive, validatorCode, reloadStrategy);
     }
 
     private String valueOf(String key) {

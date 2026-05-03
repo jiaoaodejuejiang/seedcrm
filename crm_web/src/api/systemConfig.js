@@ -39,8 +39,24 @@ export function fetchSystemConfigDraft(draftNo) {
   return http.get(`/system-config/drafts/${encodeURIComponent(draftNo)}`)
 }
 
+export function fetchSystemConfigCapabilities() {
+  return http.get('/system-config/capabilities')
+}
+
+export function fetchSystemConfigRuntimeOverview() {
+  return http.get('/system-config/capabilities/runtime-overview')
+}
+
 export function createSystemConfigDraft(payload) {
   return http.post('/system-config/drafts', payload)
+}
+
+export function validateSystemConfigDraft(draftNo) {
+  return http.post(`/system-config/drafts/${encodeURIComponent(draftNo)}/validate`)
+}
+
+export function dryRunSystemConfigDraft(draftNo) {
+  return http.post(`/system-config/drafts/${encodeURIComponent(draftNo)}/dry-run`)
 }
 
 export function publishSystemConfigDraft(draftNo) {
@@ -49,6 +65,22 @@ export function publishSystemConfigDraft(draftNo) {
 
 export function discardSystemConfigDraft(draftNo) {
   return http.post(`/system-config/drafts/${encodeURIComponent(draftNo)}/discard`)
+}
+
+export function fetchSystemConfigPublishRecords(params = {}) {
+  return http.get('/system-config/publish-records', {
+    params: {
+      limit: params.limit || undefined
+    }
+  })
+}
+
+export function fetchSystemConfigPublishRecord(publishNo) {
+  return http.get(`/system-config/publish-records/${encodeURIComponent(publishNo)}`)
+}
+
+export function refreshSystemConfigRuntime(publishNo) {
+  return http.post(`/system-config/publish-records/${encodeURIComponent(publishNo)}/runtime-refresh`)
 }
 
 export function rollbackPreviewSystemConfig(changeLogId) {

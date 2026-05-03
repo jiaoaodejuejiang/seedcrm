@@ -137,6 +137,104 @@ public final class SystemConfigDtos {
     }
 
     @Data
+    @Schema(name = "SystemConfigCapabilityResponse", description = "受控配置能力元数据")
+    public static class CapabilityResponse {
+        private Long id;
+        private String capabilityCode;
+        private String configKeyPattern;
+        private String ownerModule;
+        private String valueType;
+        private List<String> scopeTypes = new ArrayList<>();
+        private String riskLevel;
+        private Boolean sensitive;
+        private String validatorCode;
+        private String runtimeReloadStrategy;
+        private Integer enabled;
+        private LocalDateTime createTime;
+        private LocalDateTime updateTime;
+    }
+
+    @Data
+    @Schema(name = "SystemConfigValidationResponse", description = "配置草稿校验结果")
+    public static class ValidationResponse {
+        private String draftNo;
+        private Boolean valid;
+        private String riskLevel;
+        private List<String> impactModules = new ArrayList<>();
+        private String summary;
+        private List<ValidationItemResponse> items = new ArrayList<>();
+    }
+
+    @Data
+    @Schema(name = "SystemConfigValidationItemResponse", description = "配置草稿校验明细")
+    public static class ValidationItemResponse {
+        private String configKey;
+        private String status;
+        private String moduleCode;
+        private String capabilityCode;
+        private String validatorCode;
+        private String message;
+        private String suggestion;
+    }
+
+    @Data
+    @Schema(name = "SystemConfigDryRunResponse", description = "配置草稿 dry-run 结果")
+    public static class DryRunResponse {
+        private String draftNo;
+        private Boolean runnable;
+        private String summary;
+        private List<ValidationItemResponse> items = new ArrayList<>();
+        private List<String> runtimeEvents = new ArrayList<>();
+    }
+
+    @Data
+    @Schema(name = "SystemConfigPublishRecordResponse", description = "配置发布记录")
+    public static class PublishRecordResponse {
+        private Long id;
+        private String publishNo;
+        private String draftNo;
+        private String status;
+        private String riskLevel;
+        private List<String> impactModules = new ArrayList<>();
+        private String beforeHash;
+        private String afterHash;
+        private String beforeSnapshotMaskedJson;
+        private String afterSnapshotMaskedJson;
+        private String validationResultJson;
+        private String failureReason;
+        private String publishedByRoleCode;
+        private Long publishedByUserId;
+        private LocalDateTime publishedAt;
+        private List<RuntimeEventResponse> events = new ArrayList<>();
+    }
+
+    @Data
+    @Schema(name = "SystemConfigRuntimeEventResponse", description = "配置运行时刷新事件")
+    public static class RuntimeEventResponse {
+        private Long id;
+        private String publishNo;
+        private String moduleCode;
+        private String eventType;
+        private String status;
+        private String payloadJson;
+        private String errorMessage;
+        private LocalDateTime createTime;
+        private LocalDateTime handledAt;
+    }
+
+    @Data
+    @Schema(name = "SystemConfigRuntimeOverviewResponse", description = "配置发布运行态概览")
+    public static class RuntimeOverviewResponse {
+        private Long capabilityCount;
+        private Long draftCount;
+        private Long highRiskDraftCount;
+        private Long publishSuccessCount;
+        private Long publishFailedCount;
+        private Long runtimeEventPendingCount;
+        private LocalDateTime lastPublishedAt;
+    }
+
+    @Data
     @Schema(name = "DomainSettingsResponse", description = "系统基础域名和 API 域名派生结果")
     public static class DomainSettingsResponse {
         @Schema(description = "系统基础域名，面向后台页面和对外展示链接", example = "https://crm.seedcrm.com")

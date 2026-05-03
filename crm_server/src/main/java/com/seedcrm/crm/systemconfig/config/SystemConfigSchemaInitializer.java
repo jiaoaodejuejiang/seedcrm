@@ -51,10 +51,14 @@ public class SystemConfigSchemaInitializer {
                     actor_role_code VARCHAR(64),
                     actor_user_id BIGINT,
                     summary VARCHAR(500),
+                    change_type VARCHAR(32),
+                    risk_level VARCHAR(16),
+                    impact_modules_json TEXT,
                     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
                     KEY idx_system_config_log_key (config_key, create_time)
                 )
                 """);
+        ensureChangeLogSnapshotColumns();
         jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS system_config_draft (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -193,6 +197,20 @@ public class SystemConfigSchemaInitializer {
         seedDefault("system.domain.systemBaseUrl", defaultSystemBaseUrl, "URL", "系统后台访问基础域名，用于页面跳转和扫码服务单地址");
         seedDefault("system.domain.apiBaseUrl", defaultApiBaseUrl, "URL", "系统 API 基础域名，用于 Open API、回调接口和三方平台联调地址");
         migrateLegacyLocalDomainDefaults();
+    }
+
+    private void ensureChangeLogSnapshotColumns() {
+        addColumnIfMissing("system_config_change_log", "change_type", "VARCHAR(32)");
+        addColumnIfMissing("system_config_change_log", "risk_level", "VARCHAR(16)");
+        addColumnIfMissing("system_config_change_log", "impact_modules_json", "TEXT");
+    }
+
+    private void addColumnIfMissing(String tableName, String columnName, String columnDefinition) {
+        try {
+            jdbcTemplate.execute("ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + columnDefinition);
+        } catch (Exception ignored) {
+            // Existing installations may already have the column; CREATE TABLE covers fresh databases.
+        }
     }
 
     private void seedDefault(String key, String value, String valueType, String description) {

@@ -17,14 +17,21 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -36,10 +43,13 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     private static final String DEFAULT_API_BASE_URL = "http://127.0.0.1:8004";
     private static final String MASKED_VALUE = "******";
     private static final String DRAFT_STATUS_DRAFT = "DRAFT";
+    private static final String DRAFT_STATUS_PUBLISHING = "PUBLISHING";
     private static final String DRAFT_STATUS_PUBLISHED = "PUBLISHED";
     private static final String DRAFT_STATUS_DISCARDED = "DISCARDED";
     private static final String DRAFT_SOURCE_MANUAL = "MANUAL";
     private static final String DRAFT_SOURCE_ROLLBACK = "ROLLBACK";
+    private static final String PUBLISH_STATUS_SUCCESS = "SUCCESS";
+    private static final String PUBLISH_STATUS_FAILED = "FAILED";
     private static final String NULL_HASH_MARKER = "<NULL>";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final List<String> ALLOWED_CONFIG_PREFIXES = List.of(
@@ -70,9 +80,18 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             "signature_key");
 
     private final JdbcTemplate jdbcTemplate;
+    private final TransactionTemplate requiresNewTransactionTemplate;
 
     public SystemConfigServiceImpl(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+        this.requiresNewTransactionTemplate = null;
+    }
+
+    @Autowired
+    public SystemConfigServiceImpl(JdbcTemplate jdbcTemplate, PlatformTransactionManager transactionManager) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.requiresNewTransactionTemplate = new TransactionTemplate(transactionManager);
+        this.requiresNewTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Override
@@ -93,7 +112,8 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         int safeLimit = limit == null ? 50 : Math.max(1, Math.min(limit, 200));
         StringBuilder sql = new StringBuilder("""
                 SELECT id, config_key, scope_type, scope_id, before_value, after_value,
-                       actor_role_code, actor_user_id, summary, create_time
+                       actor_role_code, actor_user_id, summary, change_type, risk_level,
+                       impact_modules_json, create_time
                 FROM system_config_change_log
                 """);
         List<Object> args = new ArrayList<>();
@@ -134,6 +154,116 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     }
 
     @Override
+    public List<SystemConfigDtos.CapabilityResponse> listCapabilities() {
+        return jdbcTemplate.query("""
+                SELECT id, capability_code, config_key_pattern, owner_module, value_type,
+                       scope_type_allowed_json, risk_level, sensitive_flag, validator_code,
+                       runtime_reload_strategy, enabled, create_time, update_time
+                FROM system_config_capability
+                WHERE enabled = 1
+                ORDER BY owner_module ASC, capability_code ASC
+                """, (rs, rowNum) -> mapCapability(rs));
+    }
+
+    @Override
+    public SystemConfigDtos.RuntimeOverviewResponse getRuntimeOverview() {
+        SystemConfigDtos.RuntimeOverviewResponse response = new SystemConfigDtos.RuntimeOverviewResponse();
+        response.setCapabilityCount(countOf("system_config_capability", "enabled = 1"));
+        response.setDraftCount(countOf("system_config_draft", "status = 'DRAFT'"));
+        response.setHighRiskDraftCount(countOf("system_config_draft", "status = 'DRAFT' AND risk_level = 'HIGH'"));
+        response.setPublishSuccessCount(countOf("system_config_publish_record", "status = 'SUCCESS'"));
+        response.setPublishFailedCount(countOf("system_config_publish_record", "status = 'FAILED'"));
+        response.setRuntimeEventPendingCount(countOf("system_config_runtime_event", "status = 'PENDING'"));
+        List<LocalDateTime> rows = jdbcTemplate.query("""
+                SELECT published_at
+                FROM system_config_publish_record
+                WHERE status = 'SUCCESS'
+                ORDER BY published_at DESC, id DESC
+                LIMIT 1
+                """, (rs, rowNum) -> toLocalDateTime(rs.getTimestamp("published_at")));
+        response.setLastPublishedAt(rows.isEmpty() ? null : rows.get(0));
+        return response;
+    }
+
+    @Override
+    public SystemConfigDtos.ValidationResponse validateDraft(String draftNo) {
+        RawDraft draft = loadDraft(draftNo);
+        List<RawDraftItem> items = loadDraftItems(draft.draftNo());
+        SystemConfigDtos.ValidationResponse response = new SystemConfigDtos.ValidationResponse();
+        response.setDraftNo(draft.draftNo());
+        response.setRiskLevel(draft.riskLevel());
+        response.setImpactModules(fromJsonList(draft.impactModulesJson()));
+        response.setSummary(draft.summary());
+        List<SystemConfigDtos.ValidationItemResponse> validationItems = new ArrayList<>();
+        for (RawDraftItem item : items) {
+            validationItems.add(validateDraftItem(item));
+        }
+        response.setItems(validationItems);
+        response.setValid(validationItems.stream().noneMatch(item -> "BLOCK".equals(item.getStatus())));
+        return response;
+    }
+
+    @Override
+    public SystemConfigDtos.DryRunResponse dryRunDraft(String draftNo) {
+        SystemConfigDtos.ValidationResponse validation = validateDraft(draftNo);
+        SystemConfigDtos.DryRunResponse response = new SystemConfigDtos.DryRunResponse();
+        response.setDraftNo(validation.getDraftNo());
+        response.setRunnable(Boolean.TRUE.equals(validation.getValid()));
+        response.setItems(validation.getItems());
+        if (!Boolean.TRUE.equals(validation.getValid())) {
+            response.setSummary("发布预检查被校验阻断");
+            return response;
+        }
+        List<String> events = new ArrayList<>();
+        for (String module : ownerModulesForDraft(validation.getDraftNo())) {
+            events.add("CONFIG_PUBLISHED -> " + module);
+            events.add("RUNTIME_REFRESH -> " + module);
+        }
+        response.setRuntimeEvents(events);
+        response.setSummary(events.isEmpty()
+                ? "无需记录运行态刷新事件"
+                : "发布预检查通过；发布后会记录运行态刷新事件");
+        return response;
+    }
+
+    @Override
+    public List<SystemConfigDtos.PublishRecordResponse> listPublishRecords(Integer limit) {
+        int safeLimit = limit == null ? 50 : Math.max(1, Math.min(limit, 200));
+        return jdbcTemplate.query("""
+                SELECT id, publish_no, draft_no, status, risk_level, impact_modules_json,
+                       before_hash, after_hash, before_snapshot_masked_json, after_snapshot_masked_json,
+                       validation_result_json, failure_reason, published_by_role_code, published_by_user_id, published_at
+                FROM system_config_publish_record
+                ORDER BY published_at DESC, id DESC
+                LIMIT ?
+                """, (rs, rowNum) -> mapPublishRecord(rs, false), safeLimit);
+    }
+
+    @Override
+    public SystemConfigDtos.PublishRecordResponse getPublishRecord(String publishNo) {
+        RawPublishRecord record = loadPublishRecord(publishNo);
+        return toPublishRecordResponse(record, true);
+    }
+
+    @Override
+    @Transactional
+    public SystemConfigDtos.PublishRecordResponse refreshPublishRuntime(String publishNo, PermissionRequestContext context) {
+        RawPublishRecord record = loadPublishRecord(publishNo);
+        if (!PUBLISH_STATUS_SUCCESS.equals(record.status())) {
+            throw new BusinessException("只有发布成功的批次可以记录运行态刷新事件");
+        }
+        List<String> modules = fromJsonList(record.impactModulesJson());
+        if (modules.isEmpty()) {
+            modules = ownerModulesForDraft(record.draftNo());
+        }
+        for (String module : modules) {
+            insertRuntimeEvent(record.publishNo(), module, "CACHE_EVICT", "PENDING",
+                    "手工触发运行态刷新，操作角色：" + (context == null ? "SYSTEM" : context.getRoleCode()), null);
+        }
+        return getPublishRecord(record.publishNo());
+    }
+
+    @Override
     @Transactional
     public SystemConfigDtos.DraftResponse createDraft(SystemConfigDtos.SaveConfigRequest request,
                                                       PermissionRequestContext context) {
@@ -145,37 +275,67 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     public SystemConfigDtos.DraftResponse publishDraft(String draftNo, PermissionRequestContext context) {
         RawDraft draft = loadDraft(draftNo);
         if (!DRAFT_STATUS_DRAFT.equals(draft.status())) {
-            throw new BusinessException("Only draft status can be published");
+            throw new BusinessException("只有草稿状态可以发布");
         }
         List<RawDraftItem> items = loadDraftItems(draft.draftNo());
         if (items.isEmpty()) {
-            throw new BusinessException("Draft has no config item");
+            throw new BusinessException("草稿没有配置明细，不能发布");
+        }
+        SystemConfigDtos.ValidationResponse validation = validateDraft(draft.draftNo());
+        if (!Boolean.TRUE.equals(validation.getValid())) {
+            recordFailedPublish(nextPublishNo(), draft, items, validation,
+                    "草稿校验存在阻断项，发布已停止", context);
+            throw new BusinessException("草稿校验未通过，请先处理阻断项后再发布");
         }
         for (RawDraftItem item : items) {
             String currentValue = findValue(item.configKey(), item.scopeType(), item.scopeId());
             String currentHash = hashValue(currentValue);
             if (!Objects.equals(currentHash, item.baseCurrentValueHash())) {
-                throw new BusinessException("Current config changed after draft creation, please preview again");
+                recordFailedPublish(nextPublishNo(), draft, items, validation,
+                        "草稿创建后运行中配置已变化，发布已停止", context);
+                throw new BusinessException("草稿创建后运行中配置已变化，请重新预览并生成草稿");
             }
         }
-        for (RawDraftItem item : items) {
-            SystemConfigDtos.SaveConfigRequest saveRequest = new SystemConfigDtos.SaveConfigRequest();
-            saveRequest.setConfigKey(item.configKey());
-            saveRequest.setConfigValue(item.afterValue());
-            saveRequest.setValueType(item.valueType());
-            saveRequest.setScopeType(item.scopeType());
-            saveRequest.setScopeId(item.scopeId());
-            saveRequest.setEnabled(item.enabled());
-            saveRequest.setDescription(item.description());
-            saveRequest.setSummary(buildPublishSummary(draft, item));
-            saveConfig(saveRequest, context);
-        }
-        jdbcTemplate.update("""
+        int claimedRows = jdbcTemplate.update("""
                 UPDATE system_config_draft
-                SET status = ?, published_at = ?, update_time = ?
+                SET status = ?, update_time = ?
                 WHERE draft_no = ? AND status = ?
-                """, DRAFT_STATUS_PUBLISHED, LocalDateTime.now(), LocalDateTime.now(),
-                draft.draftNo(), DRAFT_STATUS_DRAFT);
+                """, DRAFT_STATUS_PUBLISHING, LocalDateTime.now(), draft.draftNo(), DRAFT_STATUS_DRAFT);
+        if (claimedRows != 1) {
+            throw new BusinessException("草稿正在发布或状态已变化，请刷新后再试");
+        }
+        String publishNo = nextPublishNo();
+        try {
+            for (RawDraftItem item : items) {
+                SystemConfigDtos.SaveConfigRequest saveRequest = new SystemConfigDtos.SaveConfigRequest();
+                saveRequest.setConfigKey(item.configKey());
+                saveRequest.setConfigValue(item.afterValue());
+                saveRequest.setValueType(item.valueType());
+                saveRequest.setScopeType(item.scopeType());
+                saveRequest.setScopeId(item.scopeId());
+                saveRequest.setEnabled(item.enabled());
+                saveRequest.setDescription(item.description());
+                saveRequest.setSummary(buildPublishSummary(draft, item));
+                saveConfig(saveRequest, context);
+            }
+            jdbcTemplate.update("""
+                    UPDATE system_config_draft
+                    SET status = ?, published_at = ?, update_time = ?
+                    WHERE draft_no = ? AND status = ?
+                    """, DRAFT_STATUS_PUBLISHED, LocalDateTime.now(), LocalDateTime.now(),
+                    draft.draftNo(), DRAFT_STATUS_PUBLISHING);
+            insertPublishRecord(publishNo, draft, items, PUBLISH_STATUS_SUCCESS, validation, null, context);
+            for (String module : ownerModulesForDraft(draft.draftNo())) {
+                insertRuntimeEvent(publishNo, module, "CONFIG_PUBLISHED", "PENDING",
+                        "配置已发布，等待模块感知草稿 " + draft.draftNo(), null);
+                insertRuntimeEvent(publishNo, module, "RUNTIME_REFRESH", "PENDING",
+                        "等待刷新模块运行态配置：" + module, null);
+            }
+        } catch (RuntimeException exception) {
+            recordFailedPublish(publishNo, draft, items, validation,
+                    "发布写入失败：" + exception.getMessage(), context);
+            throw exception;
+        }
         return getDraft(draft.draftNo());
     }
 
@@ -184,14 +344,17 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     public SystemConfigDtos.DraftResponse discardDraft(String draftNo, PermissionRequestContext context) {
         RawDraft draft = loadDraft(draftNo);
         if (!DRAFT_STATUS_DRAFT.equals(draft.status())) {
-            throw new BusinessException("Only draft status can be discarded");
+            throw new BusinessException("只有草稿状态可以作废");
         }
-        jdbcTemplate.update("""
+        int updatedRows = jdbcTemplate.update("""
                 UPDATE system_config_draft
                 SET status = ?, discarded_at = ?, update_time = ?
                 WHERE draft_no = ? AND status = ?
                 """, DRAFT_STATUS_DISCARDED, LocalDateTime.now(), LocalDateTime.now(),
                 draft.draftNo(), DRAFT_STATUS_DRAFT);
+        if (updatedRows != 1) {
+            throw new BusinessException("草稿状态已变化，请刷新后再试");
+        }
         return getDraft(draft.draftNo());
     }
 
@@ -230,8 +393,17 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         response.setImpactModules(resolveImpactModules(input.key()));
         response.setWarnings(resolvePreviewWarnings(input.key(), beforeValue, input.configValue(), response.getRiskLevel(), sensitive));
         response.setValidationPassed(true);
-        response.setValidationMessage("validation passed");
+        response.setValidationMessage("预览校验通过");
         return response;
+    }
+
+    @Override
+    @Transactional
+    public SystemConfigDtos.ConfigResponse saveLegacyConfig(SystemConfigDtos.SaveConfigRequest request,
+                                                            PermissionRequestContext context) {
+        NormalizedConfigInput input = normalizeConfigRequest(request);
+        assertLegacyDirectSaveAllowed(input.key());
+        return saveConfig(request, context);
     }
 
     @Override
@@ -240,6 +412,9 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         NormalizedConfigInput input = normalizeConfigRequest(request);
         String beforeValue = findValue(input.key(), input.scopeType(), input.scopeId());
         LocalDateTime now = LocalDateTime.now();
+        String changeType = resolveChangeType(beforeValue, input.configValue());
+        String riskLevel = resolveRiskLevel(input.key());
+        List<String> impactModules = resolveImpactModules(input.key());
         Integer count = jdbcTemplate.queryForObject("""
                 SELECT COUNT(1)
                 FROM system_config
@@ -261,20 +436,24 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         }
         jdbcTemplate.update("""
                 INSERT INTO system_config_change_log(
-                    config_key, scope_type, scope_id, before_value, after_value, actor_role_code, actor_user_id, summary, create_time
+                    config_key, scope_type, scope_id, before_value, after_value, actor_role_code, actor_user_id,
+                    summary, change_type, risk_level, impact_modules_json, create_time
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, input.key(), input.scopeType(), input.scopeId(), beforeValue, input.configValue(),
                 context == null ? null : context.getRoleCode(),
                 context == null ? null : context.getCurrentUserId(),
                 StringUtils.hasText(request.getSummary()) ? request.getSummary().trim() : "更新系统配置",
+                changeType,
+                riskLevel,
+                toJson(impactModules),
                 now);
         return listConfigs(input.key()).stream()
                 .filter(item -> input.key().equals(item.getConfigKey()))
                 .filter(item -> input.scopeType().equals(item.getScopeType()))
                 .filter(item -> input.scopeId().equals(item.getScopeId()))
                 .findFirst()
-                .orElseThrow(() -> new BusinessException("config save failed"));
+                .orElseThrow(() -> new BusinessException("系统配置保存失败"));
     }
 
     private SystemConfigDtos.DraftResponse createDraftInternal(SystemConfigDtos.SaveConfigRequest request,
@@ -284,7 +463,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         NormalizedConfigInput input = normalizeConfigRequest(request);
         String beforeValue = findValue(input.key(), input.scopeType(), input.scopeId());
         if (Objects.equals(beforeValue, input.configValue())) {
-            throw new BusinessException("Config value has not changed, no draft is required");
+            throw new BusinessException("配置值没有变化，无需生成草稿");
         }
         SystemConfigDtos.ConfigPreviewResponse preview = previewConfig(request);
         String draftNo = nextDraftNo();
@@ -299,7 +478,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 preview.getRiskLevel(), toJson(preview.getImpactModules()),
                 context == null ? null : context.getRoleCode(),
                 context == null ? null : context.getCurrentUserId(),
-                StringUtils.hasText(request.getSummary()) ? request.getSummary().trim() : "Create config draft",
+                StringUtils.hasText(request.getSummary()) ? request.getSummary().trim() : "创建系统配置草稿",
                 now, now);
         jdbcTemplate.update("""
                 INSERT INTO system_config_draft_item(
@@ -328,7 +507,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     public SystemConfigDtos.DomainSettingsResponse saveDomainSettings(SystemConfigDtos.SaveDomainSettingsRequest request,
                                                                       PermissionRequestContext context) {
         if (request == null) {
-            throw new BusinessException("domain settings are required");
+            throw new BusinessException("域名配置不能为空");
         }
         String systemBaseUrl = normalizeBaseUrl(request.getSystemBaseUrl());
         String apiBaseUrl = normalizeBaseUrl(request.getApiBaseUrl());
@@ -398,13 +577,66 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         item.setSensitive(isSensitiveKey(key));
         item.setBeforeValue(maskIfSensitive(key, beforeValue));
         item.setAfterValue(maskIfSensitive(key, afterValue));
-        item.setChangeType(resolveChangeType(beforeValue, afterValue));
-        item.setRiskLevel(resolveRiskLevel(key));
-        item.setImpactModules(resolveImpactModules(key));
+        item.setChangeType(firstNonBlank(rs.getString("change_type"), resolveChangeType(beforeValue, afterValue)));
+        item.setRiskLevel(firstNonBlank(rs.getString("risk_level"), resolveRiskLevel(key)));
+        List<String> storedImpactModules = fromJsonList(rs.getString("impact_modules_json"));
+        item.setImpactModules(storedImpactModules.isEmpty() ? resolveImpactModules(key) : storedImpactModules);
         item.setActorRoleCode(rs.getString("actor_role_code"));
         item.setActorUserId(rs.getObject("actor_user_id") == null ? null : rs.getLong("actor_user_id"));
         item.setSummary(rs.getString("summary"));
         item.setCreateTime(rs.getTimestamp("create_time") == null ? null : rs.getTimestamp("create_time").toLocalDateTime());
+        return item;
+    }
+
+    private SystemConfigDtos.CapabilityResponse mapCapability(ResultSet rs) throws SQLException {
+        SystemConfigDtos.CapabilityResponse item = new SystemConfigDtos.CapabilityResponse();
+        item.setId(rs.getLong("id"));
+        item.setCapabilityCode(rs.getString("capability_code"));
+        item.setConfigKeyPattern(rs.getString("config_key_pattern"));
+        item.setOwnerModule(rs.getString("owner_module"));
+        item.setValueType(rs.getString("value_type"));
+        item.setScopeTypes(fromJsonList(rs.getString("scope_type_allowed_json")));
+        item.setRiskLevel(rs.getString("risk_level"));
+        item.setSensitive(rs.getInt("sensitive_flag") == 1);
+        item.setValidatorCode(rs.getString("validator_code"));
+        item.setRuntimeReloadStrategy(rs.getString("runtime_reload_strategy"));
+        item.setEnabled(rs.getInt("enabled"));
+        item.setCreateTime(toLocalDateTime(rs.getTimestamp("create_time")));
+        item.setUpdateTime(toLocalDateTime(rs.getTimestamp("update_time")));
+        return item;
+    }
+
+    private SystemConfigDtos.PublishRecordResponse mapPublishRecord(ResultSet rs, boolean includeEvents) throws SQLException {
+        RawPublishRecord record = new RawPublishRecord(
+                rs.getLong("id"),
+                rs.getString("publish_no"),
+                rs.getString("draft_no"),
+                rs.getString("status"),
+                rs.getString("risk_level"),
+                rs.getString("impact_modules_json"),
+                rs.getString("before_hash"),
+                rs.getString("after_hash"),
+                rs.getString("before_snapshot_masked_json"),
+                rs.getString("after_snapshot_masked_json"),
+                rs.getString("validation_result_json"),
+                rs.getString("failure_reason"),
+                rs.getString("published_by_role_code"),
+                getLongOrNull(rs, "published_by_user_id"),
+                toLocalDateTime(rs.getTimestamp("published_at")));
+        return toPublishRecordResponse(record, includeEvents);
+    }
+
+    private SystemConfigDtos.RuntimeEventResponse mapRuntimeEvent(ResultSet rs) throws SQLException {
+        SystemConfigDtos.RuntimeEventResponse item = new SystemConfigDtos.RuntimeEventResponse();
+        item.setId(rs.getLong("id"));
+        item.setPublishNo(rs.getString("publish_no"));
+        item.setModuleCode(rs.getString("module_code"));
+        item.setEventType(rs.getString("event_type"));
+        item.setStatus(rs.getString("status"));
+        item.setPayloadJson(rs.getString("payload_json"));
+        item.setErrorMessage(rs.getString("error_message"));
+        item.setCreateTime(toLocalDateTime(rs.getTimestamp("create_time")));
+        item.setHandledAt(toLocalDateTime(rs.getTimestamp("handled_at")));
         return item;
     }
 
@@ -473,7 +705,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     private RawDraft loadDraft(String draftNo) {
         if (!StringUtils.hasText(draftNo)) {
-            throw new BusinessException("draftNo is required");
+            throw new BusinessException("草稿号不能为空");
         }
         List<RawDraft> rows = jdbcTemplate.query("""
                 SELECT id, draft_no, status, source_type, source_change_log_id, risk_level,
@@ -498,7 +730,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 toLocalDateTime(rs.getTimestamp("published_at")),
                 toLocalDateTime(rs.getTimestamp("discarded_at"))), draftNo.trim());
         if (rows.isEmpty()) {
-            throw new BusinessException("Draft not found");
+            throw new BusinessException("草稿不存在");
         }
         return rows.get(0);
     }
@@ -531,7 +763,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     private ChangeLogRecord loadChangeLog(Long changeLogId) {
         if (changeLogId == null) {
-            throw new BusinessException("changeLogId is required");
+            throw new BusinessException("变更日志 ID 不能为空");
         }
         List<ChangeLogRecord> rows = jdbcTemplate.query("""
                 SELECT id, config_key, scope_type, scope_id, before_value, after_value,
@@ -549,14 +781,388 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 rs.getString("summary"),
                 toLocalDateTime(rs.getTimestamp("create_time"))), changeLogId);
         if (rows.isEmpty()) {
-            throw new BusinessException("Change log not found");
+            throw new BusinessException("变更日志不存在");
         }
         return rows.get(0);
     }
 
+    private RawPublishRecord loadPublishRecord(String publishNo) {
+        if (!StringUtils.hasText(publishNo)) {
+            throw new BusinessException("发布号不能为空");
+        }
+        List<RawPublishRecord> rows = jdbcTemplate.query("""
+                SELECT id, publish_no, draft_no, status, risk_level, impact_modules_json,
+                       before_hash, after_hash, before_snapshot_masked_json, after_snapshot_masked_json,
+                       validation_result_json, failure_reason, published_by_role_code, published_by_user_id, published_at
+                FROM system_config_publish_record
+                WHERE publish_no = ?
+                LIMIT 1
+                """, (rs, rowNum) -> new RawPublishRecord(
+                rs.getLong("id"),
+                rs.getString("publish_no"),
+                rs.getString("draft_no"),
+                rs.getString("status"),
+                rs.getString("risk_level"),
+                rs.getString("impact_modules_json"),
+                rs.getString("before_hash"),
+                rs.getString("after_hash"),
+                rs.getString("before_snapshot_masked_json"),
+                rs.getString("after_snapshot_masked_json"),
+                rs.getString("validation_result_json"),
+                rs.getString("failure_reason"),
+                rs.getString("published_by_role_code"),
+                getLongOrNull(rs, "published_by_user_id"),
+                toLocalDateTime(rs.getTimestamp("published_at"))), publishNo.trim());
+        if (rows.isEmpty()) {
+            throw new BusinessException("发布记录不存在");
+        }
+        return rows.get(0);
+    }
+
+    private SystemConfigDtos.PublishRecordResponse toPublishRecordResponse(RawPublishRecord record, boolean includeEvents) {
+        SystemConfigDtos.PublishRecordResponse response = new SystemConfigDtos.PublishRecordResponse();
+        response.setId(record.id());
+        response.setPublishNo(record.publishNo());
+        response.setDraftNo(record.draftNo());
+        response.setStatus(record.status());
+        response.setRiskLevel(record.riskLevel());
+        response.setImpactModules(fromJsonList(record.impactModulesJson()));
+        response.setBeforeHash(record.beforeHash());
+        response.setAfterHash(record.afterHash());
+        response.setBeforeSnapshotMaskedJson(record.beforeSnapshotMaskedJson());
+        response.setAfterSnapshotMaskedJson(record.afterSnapshotMaskedJson());
+        response.setValidationResultJson(record.validationResultJson());
+        response.setFailureReason(record.failureReason());
+        response.setPublishedByRoleCode(record.publishedByRoleCode());
+        response.setPublishedByUserId(record.publishedByUserId());
+        response.setPublishedAt(record.publishedAt());
+        if (includeEvents) {
+            response.setEvents(loadRuntimeEvents(record.publishNo()));
+        }
+        return response;
+    }
+
+    private List<SystemConfigDtos.RuntimeEventResponse> loadRuntimeEvents(String publishNo) {
+        return jdbcTemplate.query("""
+                SELECT id, publish_no, module_code, event_type, status, payload_json,
+                       error_message, create_time, handled_at
+                FROM system_config_runtime_event
+                WHERE publish_no = ?
+                ORDER BY create_time ASC, id ASC
+                """, (rs, rowNum) -> mapRuntimeEvent(rs), publishNo);
+    }
+
+    private Long countOf(String table, String condition) {
+        String sql = switch (table + "|" + condition) {
+            case "system_config_capability|enabled = 1" ->
+                    "SELECT COUNT(1) FROM system_config_capability WHERE enabled = 1";
+            case "system_config_draft|status = 'DRAFT'" ->
+                    "SELECT COUNT(1) FROM system_config_draft WHERE status = 'DRAFT'";
+            case "system_config_draft|status = 'DRAFT' AND risk_level = 'HIGH'" ->
+                    "SELECT COUNT(1) FROM system_config_draft WHERE status = 'DRAFT' AND risk_level = 'HIGH'";
+            case "system_config_publish_record|status = 'SUCCESS'" ->
+                    "SELECT COUNT(1) FROM system_config_publish_record WHERE status = 'SUCCESS'";
+            case "system_config_publish_record|status = 'FAILED'" ->
+                    "SELECT COUNT(1) FROM system_config_publish_record WHERE status = 'FAILED'";
+            case "system_config_runtime_event|status = 'PENDING'" ->
+                    "SELECT COUNT(1) FROM system_config_runtime_event WHERE status = 'PENDING'";
+            default -> throw new BusinessException("不支持的系统配置统计查询");
+        };
+        Long count = jdbcTemplate.queryForObject(sql, Long.class);
+        return count == null ? 0L : count;
+    }
+
+    private SystemConfigDtos.ValidationItemResponse validateDraftItem(RawDraftItem item) {
+        RawCapability capability = matchCapability(item.configKey());
+        if (capability == null) {
+            return validationItem(item.configKey(), "BLOCK", null, null, "NONE",
+                    "配置 Key 未登记到受控能力清单",
+                    "请先在能力注册表中登记该配置能力，再进入发布预检查。");
+        }
+        if ("BLOCKED".equalsIgnoreCase(capability.riskLevel())
+                || "BLOCKED".equalsIgnoreCase(capability.validatorCode())) {
+            return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), "该能力被明确阻断，不能通过运行时配置发布",
+                    "请使用对应业务模块的专用流程处理，不要用配置项绕过主链路。");
+        }
+        String scopeType = normalizeOrDefault(item.scopeType(), "GLOBAL");
+        if (!capability.scopeTypes().isEmpty()
+                && capability.scopeTypes().stream().noneMatch(scope -> scopeType.equalsIgnoreCase(scope))) {
+            return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), "该能力不允许使用当前作用域类型",
+                    "请使用以下作用域之一：" + String.join(", ", capability.scopeTypes()));
+        }
+        String capabilityValueType = normalizeOrDefault(capability.valueType(), "STRING");
+        String itemValueType = normalizeOrDefault(item.valueType(), "STRING");
+        if (List.of("BOOLEAN", "URL", "JSON").contains(capabilityValueType)
+                && !capabilityValueType.equals(itemValueType)) {
+            return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), "配置值类型与能力元数据不一致",
+                    "请使用值类型：" + capabilityValueType + "。");
+        }
+        try {
+            return validateDraftItemByValidator(item, capability);
+        } catch (BusinessException exception) {
+            return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), exception.getMessage(), "请修正配置值后重新执行发布预检查。");
+        }
+    }
+
+    private SystemConfigDtos.ValidationItemResponse validateDraftItemByValidator(RawDraftItem item,
+                                                                                RawCapability capability) {
+        String validator = normalizeOrDefault(capability.validatorCode(), "NONE");
+        return switch (validator) {
+            case "BOOLEAN" -> validateBooleanItem(item, capability);
+            case "DOMAIN_URL" -> {
+                validateBaseUrl(normalizeBaseUrl(item.afterValue()), item.configKey());
+                yield validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                        validator, "域名地址校验通过", null);
+            }
+            case "DISTRIBUTION_MAPPING" -> {
+                JsonNode root = parseJson(item.configKey(), item.afterValue());
+                validateDistributionOrderTypeMapping(root);
+                yield validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                        validator, "分销订单类型映射校验通过", null);
+            }
+            case "CLUE_DEDUP" -> validateClueDedupItem(item, capability);
+            case "FINANCE_VISIBILITY" -> validateFinanceVisibilityItem(item, capability);
+            case "BLOCKED" -> validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                    validator, "该能力已被阻断", "请使用专用业务流程处理。");
+            default -> validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                    validator, "能力校验通过", null);
+        };
+    }
+
+    private SystemConfigDtos.ValidationItemResponse validateBooleanItem(RawDraftItem item, RawCapability capability) {
+        if (!isBooleanText(item.afterValue())) {
+            return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), "布尔配置只允许填写 true 或 false",
+                    "请将配置值设置为 true 或 false。");
+        }
+        return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                capability.validatorCode(), "布尔配置校验通过", null);
+    }
+
+    private SystemConfigDtos.ValidationItemResponse validateClueDedupItem(RawDraftItem item, RawCapability capability) {
+        String normalizedKey = normalizeConfigKey(item.configKey());
+        if (normalizedKey.endsWith(".enabled")) {
+            return validateBooleanItem(item, capability);
+        }
+        if (normalizedKey.endsWith(".window_days")) {
+            int days;
+            try {
+                days = Integer.parseInt(String.valueOf(item.afterValue()).trim());
+            } catch (Exception exception) {
+                return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                        capability.validatorCode(), "客资去重窗口必须是数字",
+                        "请填写 1 到 3650 之间的整数。");
+            }
+            if (days < 1 || days > 3650) {
+                return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                        capability.validatorCode(), "客资去重窗口超出允许范围",
+                        "请填写 1 到 3650 之间的整数。");
+            }
+            return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), "客资去重窗口校验通过", null);
+        }
+        return validationItem(item.configKey(), "WARN", capability.ownerModule(), capability.capabilityCode(),
+                capability.validatorCode(), "该客资去重 Key 已登记但没有专用校验器",
+                "请确认消费模块能读取该配置 Key。");
+    }
+
+    private SystemConfigDtos.ValidationItemResponse validateFinanceVisibilityItem(RawDraftItem item,
+                                                                                 RawCapability capability) {
+        String normalizedKey = normalizeConfigKey(item.configKey());
+        if (normalizedKey.startsWith("payment.")
+                || normalizedKey.contains("withdraw")
+                || normalizedKey.contains("ledger")
+                || normalizedKey.contains("cash")
+                || normalizedKey.contains("fund")) {
+            return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), "资金、账本、提现和支付行为不能在这里直接配置",
+                    "请使用财务模块配置和审计流程。");
+        }
+        return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                capability.validatorCode(), "财务可见性配置校验通过", null);
+    }
+
+    private JsonNode parseJson(String key, String value) {
+        if (!StringUtils.hasText(value)) {
+            throw new BusinessException(key + " JSON 配置不能为空");
+        }
+        try {
+            return OBJECT_MAPPER.readTree(value);
+        } catch (Exception exception) {
+            throw new BusinessException(key + " 不是有效 JSON");
+        }
+    }
+
+    private boolean isBooleanText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return false;
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        return "true".equals(normalized) || "false".equals(normalized);
+    }
+
+    private SystemConfigDtos.ValidationItemResponse validationItem(String configKey,
+                                                                  String status,
+                                                                  String moduleCode,
+                                                                  String capabilityCode,
+                                                                  String validatorCode,
+                                                                  String message,
+                                                                  String suggestion) {
+        SystemConfigDtos.ValidationItemResponse response = new SystemConfigDtos.ValidationItemResponse();
+        response.setConfigKey(configKey);
+        response.setStatus(status);
+        response.setModuleCode(moduleCode);
+        response.setCapabilityCode(capabilityCode);
+        response.setValidatorCode(validatorCode);
+        response.setMessage(message);
+        response.setSuggestion(suggestion);
+        return response;
+    }
+
+    private RawCapability matchCapability(String configKey) {
+        String normalizedKey = normalizeConfigKey(configKey);
+        return loadEnabledCapabilities().stream()
+                .filter(capability -> capabilityMatches(capability.configKeyPattern(), normalizedKey))
+                .max(Comparator.comparingInt(capability -> capability.configKeyPattern().length()))
+                .orElse(null);
+    }
+
+    private boolean capabilityMatches(String pattern, String normalizedKey) {
+        String normalizedPattern = normalizeConfigKey(pattern);
+        if (normalizedPattern.endsWith("%")) {
+            return normalizedKey.startsWith(normalizedPattern.substring(0, normalizedPattern.length() - 1));
+        }
+        return normalizedKey.equals(normalizedPattern);
+    }
+
+    private List<RawCapability> loadEnabledCapabilities() {
+        return jdbcTemplate.query("""
+                SELECT id, capability_code, config_key_pattern, owner_module, value_type,
+                       scope_type_allowed_json, risk_level, sensitive_flag, validator_code,
+                       runtime_reload_strategy, enabled, create_time, update_time
+                FROM system_config_capability
+                WHERE enabled = 1
+                """, (rs, rowNum) -> new RawCapability(
+                rs.getLong("id"),
+                rs.getString("capability_code"),
+                rs.getString("config_key_pattern"),
+                rs.getString("owner_module"),
+                rs.getString("value_type"),
+                fromJsonList(rs.getString("scope_type_allowed_json")),
+                rs.getString("risk_level"),
+                rs.getInt("sensitive_flag") == 1,
+                rs.getString("validator_code"),
+                rs.getString("runtime_reload_strategy"),
+                rs.getInt("enabled"),
+                toLocalDateTime(rs.getTimestamp("create_time")),
+                toLocalDateTime(rs.getTimestamp("update_time"))));
+    }
+
+    private List<String> ownerModulesForDraft(String draftNo) {
+        List<String> modules = new ArrayList<>();
+        for (RawDraftItem item : loadDraftItems(draftNo)) {
+            RawCapability capability = matchCapability(item.configKey());
+            if (capability != null && StringUtils.hasText(capability.ownerModule())
+                    && !modules.contains(capability.ownerModule())) {
+                modules.add(capability.ownerModule());
+            }
+        }
+        if (modules.isEmpty()) {
+            modules.add("SYSTEM_CONFIG");
+        }
+        return modules;
+    }
+
+    private String nextPublishNo() {
+        return "PUB-" + UUID.randomUUID().toString()
+                .replace("-", "")
+                .substring(0, 12)
+                .toUpperCase(Locale.ROOT);
+    }
+
+    private void recordFailedPublish(String publishNo,
+                                     RawDraft draft,
+                                     List<RawDraftItem> items,
+                                     SystemConfigDtos.ValidationResponse validation,
+                                     String failureReason,
+                                     PermissionRequestContext context) {
+        if (requiresNewTransactionTemplate == null) {
+            insertPublishRecord(publishNo, draft, items, PUBLISH_STATUS_FAILED, validation, failureReason, context);
+            return;
+        }
+        requiresNewTransactionTemplate.executeWithoutResult(status ->
+                insertPublishRecord(publishNo, draft, items, PUBLISH_STATUS_FAILED, validation, failureReason, context));
+    }
+
+    private void insertPublishRecord(String publishNo,
+                                     RawDraft draft,
+                                     List<RawDraftItem> items,
+                                     String status,
+                                     SystemConfigDtos.ValidationResponse validation,
+                                     String failureReason,
+                                     PermissionRequestContext context) {
+        List<String> modules = ownerModulesForDraft(draft.draftNo());
+        String beforeRawSnapshot = snapshotJson(items, false, false);
+        String afterRawSnapshot = snapshotJson(items, true, false);
+        jdbcTemplate.update("""
+                INSERT INTO system_config_publish_record(
+                    publish_no, draft_no, status, risk_level, impact_modules_json,
+                    before_hash, after_hash, before_snapshot_masked_json, after_snapshot_masked_json,
+                    validation_result_json, failure_reason, published_by_role_code, published_by_user_id, published_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, publishNo, draft.draftNo(), status, draft.riskLevel(), toJson(modules),
+                hashValue(beforeRawSnapshot), hashValue(afterRawSnapshot),
+                snapshotJson(items, false, true), snapshotJson(items, true, true),
+                toJsonObject(validation), truncate(failureReason, 1000),
+                context == null ? null : context.getRoleCode(),
+                context == null ? null : context.getCurrentUserId(),
+                LocalDateTime.now());
+    }
+
+    private String snapshotJson(List<RawDraftItem> items, boolean after, boolean masked) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (RawDraftItem item : items) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("configKey", item.configKey());
+            row.put("scopeType", item.scopeType());
+            row.put("scopeId", item.scopeId());
+            row.put("valueType", item.valueType());
+            String value = after ? item.afterValue() : item.beforeValue();
+            row.put("value", masked ? maskIfSensitive(item.configKey(), value) : value);
+            row.put("changeType", item.changeType());
+            rows.add(row);
+        }
+        return toJsonObject(rows);
+    }
+
+    private void insertRuntimeEvent(String publishNo,
+                                    String moduleCode,
+                                    String eventType,
+                                    String status,
+                                    String payload,
+                                    String errorMessage) {
+        Map<String, Object> eventPayload = new LinkedHashMap<>();
+        eventPayload.put("publishNo", publishNo);
+        eventPayload.put("moduleCode", moduleCode);
+        eventPayload.put("eventType", eventType);
+        eventPayload.put("message", payload);
+        jdbcTemplate.update("""
+                INSERT INTO system_config_runtime_event(
+                    publish_no, module_code, event_type, status, payload_json, error_message, create_time
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, publishNo, moduleCode, eventType, status,
+                toJsonObject(eventPayload), truncate(errorMessage, 1000), LocalDateTime.now());
+    }
+
     private SystemConfigDtos.SaveConfigRequest rollbackRequest(ChangeLogRecord changeLog) {
         if (changeLog.beforeValue() == null) {
-            throw new BusinessException("Create change log has no previous value to rollback");
+            throw new BusinessException("新增类型的变更日志没有历史值，不能回滚");
         }
         ConfigMeta meta = findConfigMeta(changeLog.configKey(), changeLog.scopeType(), changeLog.scopeId());
         SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
@@ -567,7 +1173,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         request.setScopeId(changeLog.scopeId());
         request.setEnabled(meta.enabled());
         request.setDescription(meta.description());
-        request.setSummary("Rollback from change log #" + changeLog.id());
+        request.setSummary("根据变更日志 #" + changeLog.id() + " 生成回滚草稿");
         return request;
     }
 
@@ -581,12 +1187,12 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 rs.getString("value_type"),
                 rs.getInt("enabled"),
                 rs.getString("description")), key, scopeType, scopeId);
-        return rows.isEmpty() ? new ConfigMeta("STRING", 1, "Rollback system config") : rows.get(0);
+        return rows.isEmpty() ? new ConfigMeta("STRING", 1, "回滚系统配置") : rows.get(0);
     }
 
     private NormalizedConfigInput normalizeConfigRequest(SystemConfigDtos.SaveConfigRequest request) {
         if (request == null || !StringUtils.hasText(request.getConfigKey())) {
-            throw new BusinessException("configKey is required");
+            throw new BusinessException("配置 Key 不能为空");
         }
         String key = request.getConfigKey().trim();
         assertAllowedConfigKey(key);
@@ -702,8 +1308,8 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     }
 
     private String buildPublishSummary(RawDraft draft, RawDraftItem item) {
-        String summary = StringUtils.hasText(draft.summary()) ? draft.summary().trim() : "Publish system config draft";
-        return summary + " (draftNo=" + draft.draftNo() + ", configKey=" + item.configKey() + ")";
+        String summary = StringUtils.hasText(draft.summary()) ? draft.summary().trim() : "发布系统配置草稿";
+        return summary + "（草稿号=" + draft.draftNo() + "，配置Key=" + item.configKey() + "）";
     }
 
     private String toJson(List<String> values) {
@@ -711,6 +1317,14 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             return OBJECT_MAPPER.writeValueAsString(values == null ? List.of() : values);
         } catch (Exception exception) {
             return "[]";
+        }
+    }
+
+    private String toJsonObject(Object value) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(value);
+        } catch (Exception exception) {
+            return "{}";
         }
     }
 
@@ -740,7 +1354,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             byte[] bytes = digest.digest((value == null ? NULL_HASH_MARKER : value).getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(bytes);
         } catch (NoSuchAlgorithmException exception) {
-            throw new BusinessException("SHA-256 is not available");
+            throw new BusinessException("当前运行环境不支持 SHA-256");
         }
     }
 
@@ -797,6 +1411,40 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             String afterValue,
             String summary,
             LocalDateTime createTime) {
+    }
+
+    private record RawPublishRecord(
+            Long id,
+            String publishNo,
+            String draftNo,
+            String status,
+            String riskLevel,
+            String impactModulesJson,
+            String beforeHash,
+            String afterHash,
+            String beforeSnapshotMaskedJson,
+            String afterSnapshotMaskedJson,
+            String validationResultJson,
+            String failureReason,
+            String publishedByRoleCode,
+            Long publishedByUserId,
+            LocalDateTime publishedAt) {
+    }
+
+    private record RawCapability(
+            Long id,
+            String capabilityCode,
+            String configKeyPattern,
+            String ownerModule,
+            String valueType,
+            List<String> scopeTypes,
+            String riskLevel,
+            Boolean sensitive,
+            String validatorCode,
+            String runtimeReloadStrategy,
+            Integer enabled,
+            LocalDateTime createTime,
+            LocalDateTime updateTime) {
     }
 
     private record ConfigMeta(
@@ -945,6 +1593,13 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         return null;
     }
 
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
+    }
+
     private String normalizeBaseUrl(String value) {
         String normalized = StringUtils.hasText(value) ? value.trim() : "";
         while (normalized.endsWith("/") && normalized.length() > 1) {
@@ -977,6 +1632,20 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         }
     }
 
+    private void assertLegacyDirectSaveAllowed(String key) {
+        RawCapability capability = matchCapability(key);
+        if (capability == null) {
+            return;
+        }
+        String riskLevel = normalizeOrDefault(capability.riskLevel(), "LOW");
+        if ("BLOCKED".equals(riskLevel) || "BLOCKED".equalsIgnoreCase(capability.validatorCode())) {
+            throw new BusinessException("该配置能力已被阻断，不能通过旧保存入口直写，请使用对应业务模块流程");
+        }
+        if ("HIGH".equals(riskLevel) || Boolean.TRUE.equals(capability.sensitive())) {
+            throw new BusinessException("该配置属于高风险或敏感能力，请在配置发布中心生成草稿、完成发布预检查后再发布");
+        }
+    }
+
     private String maskIfSensitive(String key, String value) {
         if (!isSensitiveKey(key) || !StringUtils.hasText(value)) {
             return value;
@@ -986,6 +1655,10 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     private boolean isSensitiveKey(String key) {
         String normalized = key == null ? "" : key.trim().toLowerCase(Locale.ROOT).replace("-", "_").replace(".", "_");
-        return SENSITIVE_KEY_MARKERS.stream().anyMatch(normalized::contains);
+        if (SENSITIVE_KEY_MARKERS.stream().anyMatch(normalized::contains)) {
+            return true;
+        }
+        RawCapability capability = matchCapability(key);
+        return capability != null && Boolean.TRUE.equals(capability.sensitive());
     }
 }

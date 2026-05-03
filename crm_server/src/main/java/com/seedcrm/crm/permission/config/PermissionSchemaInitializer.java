@@ -217,6 +217,10 @@ public class PermissionSchemaInitializer {
         seedPolicy("SETTING", "VIEW", "ADMIN", "ALL", "system setting view");
         seedPolicy("SETTING", "UPDATE", "ADMIN", "ALL", "system setting update");
         seedPolicy("SETTING", "DEBUG", "ADMIN", "ALL", "system setting simulation and debug");
+        seedPolicy("SETTING", "CONFIG_AUDIT", "ADMIN", "ALL", "system config publish logs and drafts view");
+        seedPolicy("SETTING", "CONFIG_DRAFT", "ADMIN", "ALL", "system config draft preview and creation");
+        seedPolicy("SETTING", "CONFIG_PUBLISH", "ADMIN", "ALL", "system config publish and discard");
+        seedPolicy("SETTING", "CONFIG_ROLLBACK", "ADMIN", "ALL", "system config rollback preview and draft");
         seedPolicy("SETTING", "SYSTEM_FLOW_VIEW", "ADMIN", "ALL", "system flow view");
         seedPolicy("SETTING", "SYSTEM_FLOW_DRAFT", "ADMIN", "ALL", "system flow draft config");
         seedPolicy("SETTING", "SYSTEM_FLOW_PUBLISH", "ADMIN", "ALL", "system flow publish config version");

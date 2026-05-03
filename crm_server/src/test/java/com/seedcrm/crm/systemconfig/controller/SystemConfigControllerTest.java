@@ -3,7 +3,6 @@ package com.seedcrm.crm.systemconfig.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -100,6 +99,7 @@ class SystemConfigControllerTest {
 
         verify(schedulerModuleGuard).checkUpdate(context);
         verify(settingModuleGuard, never()).checkUpdate(context);
+        verify(systemConfigService).saveLegacyConfig(body, context);
     }
 
     @Test
@@ -117,7 +117,7 @@ class SystemConfigControllerTest {
     }
 
     @Test
-    void shouldUseSettingUpdatePermissionForConfigPreview() {
+    void shouldUseConfigDraftPermissionForConfigPreview() {
         PermissionRequestContext context = context("ADMIN");
         SystemConfigDtos.SaveConfigRequest body = new SystemConfigDtos.SaveConfigRequest();
         body.setConfigKey("clue.dedup.window_days");
@@ -126,7 +126,7 @@ class SystemConfigControllerTest {
 
         controller.preview(body, request);
 
-        verify(settingModuleGuard).checkUpdate(context);
+        verify(settingModuleGuard).checkConfigDraft(context);
         verify(systemConfigService).previewConfig(body);
     }
 
@@ -143,18 +143,18 @@ class SystemConfigControllerTest {
     }
 
     @Test
-    void shouldUseSettingViewPermissionForDraftList() {
+    void shouldUseConfigAuditPermissionForDraftList() {
         PermissionRequestContext context = context("ADMIN");
         when(resolver.resolve(request)).thenReturn(context);
 
         controller.drafts("DRAFT", 50, request);
 
-        verify(settingModuleGuard).checkView(context);
+        verify(settingModuleGuard).checkConfigAudit(context);
         verify(systemConfigService).listDrafts("DRAFT", 50);
     }
 
     @Test
-    void shouldUseSettingUpdatePermissionForDraftCreation() {
+    void shouldUseConfigDraftPermissionForDraftCreation() {
         PermissionRequestContext context = context("ADMIN");
         SystemConfigDtos.SaveConfigRequest body = new SystemConfigDtos.SaveConfigRequest();
         body.setConfigKey("clue.dedup.window_days");
@@ -163,21 +163,63 @@ class SystemConfigControllerTest {
 
         controller.createDraft(body, request);
 
-        verify(settingModuleGuard).checkUpdate(context);
+        verify(settingModuleGuard).checkConfigDraft(context);
         verify(systemConfigService).createDraft(body, context);
     }
 
     @Test
-    void shouldUseSettingUpdatePermissionForDraftPublishAndRollbackDraft() {
+    void shouldUseDedicatedPermissionsForDraftPublishAndRollbackDraft() {
         PermissionRequestContext context = context("ADMIN");
         when(resolver.resolve(request)).thenReturn(context);
 
         controller.publishDraft("CFG-001", request);
         controller.createRollbackDraft(10L, request);
 
-        verify(settingModuleGuard, times(2)).checkUpdate(context);
+        verify(settingModuleGuard).checkConfigPublish(context);
+        verify(settingModuleGuard).checkConfigRollback(context);
         verify(systemConfigService).publishDraft("CFG-001", context);
         verify(systemConfigService).createRollbackDraft(10L, context);
+    }
+
+    @Test
+    void shouldUseConfigAuditPermissionForCapabilityAndPublishRecordReads() {
+        PermissionRequestContext context = context("ADMIN");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.capabilities(request);
+        controller.runtimeOverview(request);
+        controller.publishRecords(20, request);
+        controller.publishRecord("PUB-001", request);
+
+        verify(settingModuleGuard, org.mockito.Mockito.times(4)).checkConfigAudit(context);
+        verify(systemConfigService).listCapabilities();
+        verify(systemConfigService).getRuntimeOverview();
+        verify(systemConfigService).listPublishRecords(20);
+        verify(systemConfigService).getPublishRecord("PUB-001");
+    }
+
+    @Test
+    void shouldUseConfigDraftPermissionForValidateAndDryRun() {
+        PermissionRequestContext context = context("ADMIN");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.validateDraft("CFG-001", request);
+        controller.dryRunDraft("CFG-001", request);
+
+        verify(settingModuleGuard, org.mockito.Mockito.times(2)).checkConfigDraft(context);
+        verify(systemConfigService).validateDraft("CFG-001");
+        verify(systemConfigService).dryRunDraft("CFG-001");
+    }
+
+    @Test
+    void shouldUseConfigPublishPermissionForRuntimeRefresh() {
+        PermissionRequestContext context = context("ADMIN");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.refreshRuntime("PUB-001", request);
+
+        verify(settingModuleGuard).checkConfigPublish(context);
+        verify(systemConfigService).refreshPublishRuntime("PUB-001", context);
     }
 
     private PermissionRequestContext context(String roleCode) {

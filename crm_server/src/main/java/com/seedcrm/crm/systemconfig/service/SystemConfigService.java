@@ -20,6 +20,35 @@ public interface SystemConfigService {
         throw new UnsupportedOperationException("system config draft is not supported");
     }
 
+    default List<SystemConfigDtos.CapabilityResponse> listCapabilities() {
+        return List.of();
+    }
+
+    default SystemConfigDtos.RuntimeOverviewResponse getRuntimeOverview() {
+        throw new UnsupportedOperationException("system config runtime overview is not supported");
+    }
+
+    default SystemConfigDtos.ValidationResponse validateDraft(String draftNo) {
+        throw new UnsupportedOperationException("system config draft validation is not supported");
+    }
+
+    default SystemConfigDtos.DryRunResponse dryRunDraft(String draftNo) {
+        throw new UnsupportedOperationException("system config draft dry-run is not supported");
+    }
+
+    default List<SystemConfigDtos.PublishRecordResponse> listPublishRecords(Integer limit) {
+        return List.of();
+    }
+
+    default SystemConfigDtos.PublishRecordResponse getPublishRecord(String publishNo) {
+        throw new UnsupportedOperationException("system config publish record is not supported");
+    }
+
+    default SystemConfigDtos.PublishRecordResponse refreshPublishRuntime(String publishNo,
+                                                                         PermissionRequestContext context) {
+        throw new UnsupportedOperationException("system config runtime refresh is not supported");
+    }
+
     default SystemConfigDtos.ConfigPreviewResponse previewConfig(SystemConfigDtos.SaveConfigRequest request) {
         throw new UnsupportedOperationException("system config preview is not supported");
     }
@@ -43,6 +72,11 @@ public interface SystemConfigService {
 
     default SystemConfigDtos.DraftResponse createRollbackDraft(Long changeLogId, PermissionRequestContext context) {
         throw new UnsupportedOperationException("system config rollback draft is not supported");
+    }
+
+    default SystemConfigDtos.ConfigResponse saveLegacyConfig(SystemConfigDtos.SaveConfigRequest request,
+                                                             PermissionRequestContext context) {
+        return saveConfig(request, context);
     }
 
     SystemConfigDtos.ConfigResponse saveConfig(SystemConfigDtos.SaveConfigRequest request, PermissionRequestContext context);

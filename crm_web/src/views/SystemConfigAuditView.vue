@@ -2,16 +2,24 @@
   <div class="stack-page config-audit-page">
     <section class="summary-strip summary-strip--compact">
       <article class="summary-pill">
+        <span>受控能力</span>
+        <strong>{{ runtimeOverview.capabilityCount ?? capabilities.length }}</strong>
+      </article>
+      <article class="summary-pill">
         <span>待发布草稿</span>
-        <strong>{{ draftCount }}</strong>
+        <strong>{{ runtimeOverview.draftCount ?? draftCount }}</strong>
       </article>
       <article class="summary-pill">
         <span>高风险待发布</span>
-        <strong>{{ highRiskDraftCount }}</strong>
+        <strong>{{ runtimeOverview.highRiskDraftCount ?? highRiskDraftCount }}</strong>
       </article>
       <article class="summary-pill">
-        <span>发布记录</span>
-        <strong>{{ logs.length }}</strong>
+        <span>发布成功</span>
+        <strong>{{ runtimeOverview.publishSuccessCount ?? publishSuccessCount }}</strong>
+      </article>
+      <article class="summary-pill">
+        <span>发布失败</span>
+        <strong>{{ runtimeOverview.publishFailedCount ?? publishFailedCount }}</strong>
       </article>
       <article class="summary-pill">
         <span>最近发布时间</span>
@@ -25,7 +33,50 @@
           <h3>配置发布中心</h3>
         </div>
         <div class="action-group">
-          <el-button :loading="loadingDrafts || loadingLogs" @click="refreshAll">刷新</el-button>
+          <el-button :loading="refreshing" @click="refreshAll">刷新</el-button>
+        </div>
+      </div>
+
+      <el-alert
+        class="config-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="硬边界：本页只发布受控配置 Key，不直接创建或修改 Customer、Order、PlanOrder、Ledger；核心对象仍通过既有业务主链路流转。"
+      />
+
+      <div class="publish-flow">
+        <el-steps :active="currentStepIndex" finish-status="success" process-status="process" simple>
+          <el-step title="预览" />
+          <el-step title="保存草稿" />
+          <el-step title="校验" />
+          <el-step title="发布预检查" />
+          <el-step title="发布" />
+          <el-step title="运行态/回滚" />
+        </el-steps>
+        <div class="page-status">
+          <strong>{{ pageStatusTitle }}</strong>
+          <span>{{ pageStatusText }}</span>
+        </div>
+      </div>
+
+      <div class="capability-strip" v-loading="loadingCapabilities || loadingRuntime">
+        <div class="capability-strip__main">
+          <span class="capability-strip__label">能力清单</span>
+          <el-tag
+            v-for="item in visibleCapabilities"
+            :key="item.capabilityCode"
+            :type="riskTagType(item.riskLevel)"
+            effect="plain"
+          >
+            {{ capabilityLabel(item) }} · {{ moduleLabel(item.ownerModule) }}
+          </el-tag>
+          <span v-if="capabilities.length > visibleCapabilities.length" class="muted">
+            +{{ capabilities.length - visibleCapabilities.length }}
+          </span>
+        </div>
+        <div class="capability-strip__meta">
+          <span>待处理运行态事件 {{ runtimeOverview.runtimeEventPendingCount ?? 0 }}</span>
         </div>
       </div>
 
@@ -36,8 +87,28 @@
             type="info"
             show-icon
             :closable="false"
-            title="预览只检查影响范围，不会改变线上业务。保存为草稿后仍需在待发布中手动发布生效。"
+            title="预览只检查影响范围，不会改变线上业务；保存为草稿后仍需在待发布中手动校验、发布预检查并发布生效。"
           />
+
+          <div class="capability-catalog" v-loading="loadingCapabilities">
+            <button
+              v-for="item in capabilityCards"
+              :key="item.capabilityCode"
+              class="capability-card"
+              :class="{ 'is-active': activeCapabilityCode === item.capabilityCode }"
+              type="button"
+              @click="applyCapability(item)"
+            >
+              <span class="capability-card__top">
+                <strong>{{ capabilityLabel(item) }}</strong>
+                <el-tag :type="riskTagType(item.riskLevel)" effect="light" size="small">
+                  {{ riskLabel(item.riskLevel) }}
+                </el-tag>
+              </span>
+              <span>{{ capabilityDescription(item) }}</span>
+              <small>{{ moduleLabel(item.ownerModule) }} · {{ valueTypeLabel(item.valueType) }}</small>
+            </button>
+          </div>
 
           <div class="preview-layout">
             <div class="config-form">
@@ -147,8 +218,19 @@
                 <el-tag :type="riskTagType(row.riskLevel)" effect="light">{{ riskLabel(row.riskLevel) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="来源" width="110">
-              <template #default="{ row }">{{ sourceTypeLabel(row.sourceType) }}</template>
+            <el-table-column label="校验" width="110">
+              <template #default="{ row }">
+                <el-tag :type="validationTagType(validationMap[row.draftNo]?.valid)">
+                  {{ validationLabel(validationMap[row.draftNo]?.valid) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="发布预检查" width="120">
+              <template #default="{ row }">
+                <el-tag :type="dryRunTagType(dryRunMap[row.draftNo]?.runnable)">
+                  {{ dryRunLabel(dryRunMap[row.draftNo]?.runnable) }}
+                </el-tag>
+              </template>
             </el-table-column>
             <el-table-column label="影响模块" min-width="150">
               <template #default="{ row }">
@@ -164,11 +246,17 @@
             <el-table-column label="创建时间" width="180">
               <template #default="{ row }">{{ formatDate(row.createTime) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="210" fixed="right">
+            <el-table-column label="操作" width="300" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click="openDraft(row)">查看</el-button>
+                <el-button link :loading="validatingDraftNo === row.draftNo" @click="handleValidateDraft(row)">
+                  校验
+                </el-button>
+                <el-button link :loading="dryRunningDraftNo === row.draftNo" @click="handleDryRunDraft(row)">
+                  预检查
+                </el-button>
                 <el-button link type="success" :loading="publishingDraftNo === row.draftNo" @click="handlePublishDraft(row)">
-                  发布生效
+                  发布
                 </el-button>
                 <el-button link type="danger" :loading="discardingDraftNo === row.draftNo" @click="handleDiscardDraft(row)">
                   作废
@@ -178,7 +266,58 @@
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane label="发布记录" name="logs">
+        <el-tab-pane label="发布批次" name="publishRecords">
+          <el-table
+            v-loading="loadingPublishRecords"
+            :data="publishRecords"
+            stripe
+            height="520"
+            empty-text="暂无配置发布批次"
+          >
+            <el-table-column prop="publishNo" label="发布号" min-width="150" />
+            <el-table-column prop="draftNo" label="草稿号" min-width="150" />
+            <el-table-column label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="publishStatusType(row.status)" effect="light">{{ publishStatusLabel(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="风险" width="100">
+              <template #default="{ row }">
+                <el-tag :type="riskTagType(row.riskLevel)" effect="light">{{ riskLabel(row.riskLevel) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="影响模块" min-width="160">
+              <template #default="{ row }">
+                <div class="tag-line">
+                  <el-tag v-for="item in row.impactModules || []" :key="item" effect="plain">{{ item }}</el-tag>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="failureReason" label="失败原因" min-width="180" show-overflow-tooltip />
+            <el-table-column label="发布人" width="150">
+              <template #default="{ row }">{{ row.publishedByRoleCode || '--' }} / {{ row.publishedByUserId || '--' }}</template>
+            </el-table-column>
+            <el-table-column label="发布时间" width="180">
+              <template #default="{ row }">{{ formatDate(row.publishedAt) }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="170" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="openPublishRecord(row)">详情</el-button>
+                <el-button
+                  link
+                  type="success"
+                  :disabled="row.status !== 'SUCCESS'"
+                  :loading="refreshingPublishNo === row.publishNo"
+                  @click="handleRefreshRuntime(row)"
+                >
+                  刷新运行态
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <el-tab-pane label="变更日志" name="logs">
           <div class="log-toolbar">
             <el-input v-model="filters.prefix" clearable placeholder="按前缀筛选，例如 clue." />
             <el-input v-model="filters.configKey" clearable placeholder="按完整 Key 筛选" />
@@ -190,7 +329,7 @@
             <el-button :loading="loadingLogs" @click="loadLogs">查询</el-button>
           </div>
 
-          <el-table v-loading="loadingLogs" :data="logs" stripe height="520" empty-text="暂无配置发布记录">
+          <el-table v-loading="loadingLogs" :data="logs" stripe height="520" empty-text="暂无配置变更日志">
             <el-table-column prop="configKey" label="配置 Key" min-width="230" />
             <el-table-column label="风险" width="100">
               <template #default="{ row }">
@@ -224,9 +363,15 @@
       </el-tabs>
     </section>
 
-    <el-drawer v-model="draftDrawerVisible" title="草稿详情" size="560px">
+    <el-drawer v-model="draftDrawerVisible" title="草稿详情" size="620px">
       <template v-if="selectedDraft">
         <div class="drawer-actions">
+          <el-button :loading="validatingDraftNo === selectedDraft.draftNo" @click="handleValidateDraft(selectedDraft)">
+            校验
+          </el-button>
+          <el-button :loading="dryRunningDraftNo === selectedDraft.draftNo" @click="handleDryRunDraft(selectedDraft)">
+            发布预检查
+          </el-button>
           <el-button type="success" :loading="publishingDraftNo === selectedDraft.draftNo" @click="handlePublishDraft(selectedDraft)">
             发布生效
           </el-button>
@@ -234,6 +379,24 @@
             作废草稿
           </el-button>
         </div>
+
+        <result-panel
+          v-if="validationMap[selectedDraft.draftNo]"
+          title="校验结果"
+          :items="validationMap[selectedDraft.draftNo].items || []"
+        />
+        <div v-if="dryRunMap[selectedDraft.draftNo]" class="runtime-box">
+          <h4>发布预检查结果</h4>
+          <p>{{ dryRunMap[selectedDraft.draftNo].summary }}</p>
+          <el-tag
+            v-for="item in dryRunMap[selectedDraft.draftNo].runtimeEvents || []"
+            :key="item"
+            effect="plain"
+          >
+            {{ item }}
+          </el-tag>
+        </div>
+
         <dl class="diff-list drawer-diff">
           <div>
             <dt>草稿号</dt>
@@ -264,7 +427,67 @@
       </template>
     </el-drawer>
 
-    <el-drawer v-model="logDrawerVisible" title="配置发布详情" size="560px">
+    <el-drawer v-model="publishDrawerVisible" title="发布批次详情" size="640px">
+      <template v-if="selectedPublishRecord">
+        <div class="drawer-actions">
+          <el-button
+            type="success"
+            :disabled="selectedPublishRecord.status !== 'SUCCESS'"
+            :loading="refreshingPublishNo === selectedPublishRecord.publishNo"
+            @click="handleRefreshRuntime(selectedPublishRecord)"
+          >
+            刷新运行态
+          </el-button>
+        </div>
+        <dl class="diff-list drawer-diff">
+          <div>
+            <dt>发布号</dt>
+            <dd>{{ selectedPublishRecord.publishNo }}</dd>
+          </div>
+          <div>
+            <dt>状态</dt>
+            <dd>
+              <el-tag :type="publishStatusType(selectedPublishRecord.status)" effect="light">
+                {{ publishStatusLabel(selectedPublishRecord.status) }}
+              </el-tag>
+            </dd>
+          </div>
+          <div>
+            <dt>变更前快照</dt>
+            <dd class="value-block">{{ selectedPublishRecord.beforeSnapshotMaskedJson || '--' }}</dd>
+          </div>
+          <div>
+            <dt>变更后快照</dt>
+            <dd class="value-block">{{ selectedPublishRecord.afterSnapshotMaskedJson || '--' }}</dd>
+          </div>
+          <div v-if="selectedPublishRecord.failureReason">
+            <dt>失败原因</dt>
+            <dd>{{ selectedPublishRecord.failureReason }}</dd>
+          </div>
+        </dl>
+        <div class="runtime-box">
+          <h4>运行态事件</h4>
+          <el-empty v-if="!selectedPublishRecord.events?.length" description="暂无运行态事件" />
+          <el-timeline v-else>
+            <el-timeline-item
+              v-for="event in selectedPublishRecord.events"
+              :key="event.id"
+              :timestamp="formatDate(event.createTime)"
+            >
+              <strong>{{ eventTypeLabel(event.eventType) }}</strong>
+              <span>
+                {{ moduleLabel(event.moduleCode) }} ·
+                <el-tag :type="eventStatusType(event.status)" effect="light" size="small">
+                  {{ eventStatusLabel(event.status) }}
+                </el-tag>
+              </span>
+            </el-timeline-item>
+          </el-timeline>
+        </div>
+      </template>
+    </el-drawer>
+
+    <el-drawer v-model="logDrawerVisible" title="配置变更详情" size="560px">
       <template v-if="selectedLog">
         <div class="drawer-actions">
           <el-button :loading="rollbackPreviewing" @click="handleRollbackPreview">生成回滚预览</el-button>
@@ -318,37 +541,180 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox, ElTag } from 'element-plus'
 import {
   createRollbackSystemConfigDraft,
   createSystemConfigDraft,
   discardSystemConfigDraft,
+  dryRunSystemConfigDraft,
+  fetchSystemConfigCapabilities,
   fetchSystemConfigChangeLogs,
   fetchSystemConfigDrafts,
+  fetchSystemConfigPublishRecord,
+  fetchSystemConfigPublishRecords,
+  fetchSystemConfigRuntimeOverview,
   previewSystemConfig,
   publishSystemConfigDraft,
-  rollbackPreviewSystemConfig
+  refreshSystemConfigRuntime,
+  rollbackPreviewSystemConfig,
+  validateSystemConfigDraft
 } from '../api/systemConfig'
 
+const ResultPanel = defineComponent({
+  props: {
+    title: { type: String, required: true },
+    items: { type: Array, default: () => [] }
+  },
+  setup(props) {
+    const typeOf = (status) => {
+      if (status === 'BLOCK') return 'danger'
+      if (status === 'WARN') return 'warning'
+      return 'success'
+    }
+    const labelOf = (status) => {
+      if (status === 'BLOCK') return '阻断'
+      if (status === 'WARN') return '提醒'
+      if (status === 'PASS') return '通过'
+      return status || '通过'
+    }
+    return () =>
+      h('div', { class: 'runtime-box' }, [
+        h('h4', props.title),
+        props.items.length
+          ? h(
+              'div',
+              { class: 'validation-list' },
+              props.items.map((item) =>
+                h('div', { class: 'validation-row', key: item.configKey }, [
+                  h(ElTag, { type: typeOf(item.status), effect: 'light' }, () => labelOf(item.status)),
+                  h('span', { class: 'validation-row__key' }, item.configKey),
+                  h('span', { class: 'validation-row__message' }, [
+                    item.message || '--',
+                    item.suggestion ? h('small', { class: 'validation-row__suggestion' }, item.suggestion) : null
+                  ])
+                ])
+              )
+            )
+          : h('span', { class: 'muted' }, '暂无校验明细')
+      ])
+  }
+})
+
 const activeTab = ref('preview')
+const refreshing = ref(false)
 const loadingLogs = ref(false)
 const loadingDrafts = ref(false)
+const loadingCapabilities = ref(false)
+const loadingRuntime = ref(false)
+const loadingPublishRecords = ref(false)
 const previewing = ref(false)
 const savingDraft = ref(false)
 const rollbackPreviewing = ref(false)
 const rollbackDrafting = ref(false)
 const publishingDraftNo = ref('')
 const discardingDraftNo = ref('')
+const validatingDraftNo = ref('')
+const dryRunningDraftNo = ref('')
+const refreshingPublishNo = ref('')
 
 const logs = ref([])
 const drafts = ref([])
+const capabilities = ref([])
+const publishRecords = ref([])
+const runtimeOverview = ref({})
 const previewResult = ref(null)
 const selectedLog = ref(null)
 const selectedDraft = ref(null)
+const selectedPublishRecord = ref(null)
 const rollbackPreviewResult = ref(null)
 const logDrawerVisible = ref(false)
 const draftDrawerVisible = ref(false)
+const publishDrawerVisible = ref(false)
+const validationMap = reactive({})
+const dryRunMap = reactive({})
+const activeCapabilityCode = ref('')
+
+const capabilityMeta = {
+  SYSTEM_DOMAIN: {
+    label: '域名与回调地址',
+    description: '统一生成系统域名、API 域名、回调和联调地址',
+    exampleKey: 'system.domain.apiBaseUrl',
+    exampleValue: 'https://api.seedcrm.com'
+  },
+  WORKFLOW_SWITCH: {
+    label: '流程开关',
+    description: '控制订单、排档、服务单等流程能力灰度启用',
+    exampleKey: 'workflow.service_order.enabled',
+    exampleValue: 'false'
+  },
+  DEPOSIT_DIRECT: {
+    label: '定金免码核销',
+    description: '控制定金订单是否允许免扫码进入服务流程',
+    exampleKey: 'deposit.direct.enabled',
+    exampleValue: 'true'
+  },
+  AMOUNT_VISIBILITY: {
+    label: '金额可见范围',
+    description: '控制门店、财务和服务角色看到哪些金额字段',
+    exampleKey: 'amount.visibility.store_staff_hidden',
+    exampleValue: 'true'
+  },
+  CLUE_DEDUP: {
+    label: '客资去重规则',
+    description: '控制客资入站去重窗口和合并策略',
+    exampleKey: 'clue.dedup.window_days',
+    exampleValue: '90'
+  },
+  SERVICE_FORM_DESIGNER: {
+    label: '服务单设计器',
+    description: '控制服务确认单模板适配和发布方式',
+    exampleKey: 'form_designer.adapter.enabled',
+    exampleValue: 'true'
+  },
+  DISTRIBUTION_MAPPING: {
+    label: '分销订单映射',
+    description: '配置外部分销订单类型、SKU 与内部订单类型映射',
+    exampleKey: 'distribution.order.type.mapping',
+    exampleValue: '{\n  "default": "coupon",\n  "aliases": {},\n  "rules": []\n}'
+  },
+  SCHEDULER_INTEGRATION: {
+    label: '调度集成参数',
+    description: '控制调度任务、重试和队列类配置',
+    exampleKey: 'scheduler.distribution.retry.max',
+    exampleValue: '3'
+  },
+  DOUYIN_INTEGRATION: {
+    label: '抖音接口配置',
+    description: '维护抖音线索拉取、回调和接口联调参数',
+    exampleKey: 'douyin.clientId',
+    exampleValue: ''
+  },
+  WECOM_INTEGRATION: {
+    label: '企业微信配置',
+    description: '维护企微活码、客户关系回调和私域能力参数',
+    exampleKey: 'wecom.corpId',
+    exampleValue: ''
+  },
+  PAYMENT_BLOCKED: {
+    label: '支付资金配置',
+    description: '资金类配置只允许走财务专用流程，本页禁止直写',
+    exampleKey: 'payment.gateway.key',
+    exampleValue: ''
+  }
+}
+
+const moduleNameMap = {
+  SYSTEM_SETTING: '系统设置',
+  SYSTEM_FLOW: '系统流程',
+  STORE_SERVICE: '门店服务',
+  FINANCE: '财务管理',
+  CLUE: '客资中心',
+  PLANORDER: '门店排档',
+  SCHEDULER: '调度中心',
+  WECOM: '私域客服',
+  SYSTEM_CONFIG: '系统配置'
+}
 
 const filters = reactive({
   prefix: '',
@@ -375,12 +741,55 @@ const previewEnabled = computed({
 
 const draftCount = computed(() => drafts.value.length)
 const highRiskDraftCount = computed(() => drafts.value.filter((item) => item.riskLevel === 'HIGH').length)
-const latestPublishTime = computed(() => (logs.value[0] ? formatDate(logs.value[0].createTime) : '--'))
+const publishSuccessCount = computed(() => publishRecords.value.filter((item) => item.status === 'SUCCESS').length)
+const publishFailedCount = computed(() => publishRecords.value.filter((item) => item.status === 'FAILED').length)
+const visibleCapabilities = computed(() => capabilities.value.slice(0, 7))
+const capabilityCards = computed(() => capabilities.value.slice(0, 10))
+const currentStepIndex = computed(() => {
+  const map = {
+    preview: previewResult.value ? 1 : 0,
+    drafts: 3,
+    publishRecords: 5,
+    logs: 5
+  }
+  return map[activeTab.value] ?? 0
+})
+const pageStatusTitle = computed(() => {
+  if (highRiskDraftCount.value > 0) return '有高风险草稿待处理'
+  if ((runtimeOverview.value.runtimeEventPendingCount ?? 0) > 0) return '有运行态事件待处理'
+  return '配置治理链路正常'
+})
+const pageStatusText = computed(() => {
+  if (highRiskDraftCount.value > 0) {
+    return '高风险配置必须完成校验和发布预检查，确认发布后才会生效。'
+  }
+  if ((runtimeOverview.value.runtimeEventPendingCount ?? 0) > 0) {
+    return '发布已写入运行态事件，后续由模块感知或手工刷新处理。'
+  }
+  return '受控配置会按预览、草稿、校验、发布预检查、发布、审计回滚的顺序流转。'
+})
+const latestPublishTime = computed(() => {
+  if (runtimeOverview.value.lastPublishedAt) {
+    return formatDate(runtimeOverview.value.lastPublishedAt)
+  }
+  return publishRecords.value[0] ? formatDate(publishRecords.value[0].publishedAt) : '--'
+})
 
 onMounted(refreshAll)
 
 async function refreshAll() {
-  await Promise.all([loadDrafts(), loadLogs()])
+  refreshing.value = true
+  try {
+    await Promise.all([
+      loadDrafts(),
+      loadLogs(),
+      loadCapabilities(),
+      loadRuntimeOverview(),
+      loadPublishRecords()
+    ])
+  } finally {
+    refreshing.value = false
+  }
 }
 
 async function handleTabChange(name) {
@@ -388,6 +797,8 @@ async function handleTabChange(name) {
     await loadDrafts()
   } else if (name === 'logs') {
     await loadLogs()
+  } else if (name === 'publishRecords') {
+    await loadPublishRecords()
   }
 }
 
@@ -410,6 +821,33 @@ async function loadLogs() {
     })
   } finally {
     loadingLogs.value = false
+  }
+}
+
+async function loadCapabilities() {
+  loadingCapabilities.value = true
+  try {
+    capabilities.value = await fetchSystemConfigCapabilities()
+  } finally {
+    loadingCapabilities.value = false
+  }
+}
+
+async function loadRuntimeOverview() {
+  loadingRuntime.value = true
+  try {
+    runtimeOverview.value = await fetchSystemConfigRuntimeOverview()
+  } finally {
+    loadingRuntime.value = false
+  }
+}
+
+async function loadPublishRecords() {
+  loadingPublishRecords.value = true
+  try {
+    publishRecords.value = await fetchSystemConfigPublishRecords({ limit: 100 })
+  } finally {
+    loadingPublishRecords.value = false
   }
 }
 
@@ -447,24 +885,66 @@ async function handleSaveDraft() {
     ElMessage.success('草稿已保存，尚未影响线上业务')
     previewResult.value = null
     activeTab.value = 'drafts'
-    await loadDrafts()
+    await Promise.all([loadDrafts(), loadRuntimeOverview()])
   } finally {
     savingDraft.value = false
   }
 }
 
+async function handleValidateDraft(row) {
+  if (!row?.draftNo) return null
+  validatingDraftNo.value = row.draftNo
+  try {
+    const result = await validateSystemConfigDraft(row.draftNo)
+    validationMap[row.draftNo] = result
+    if (result.valid) {
+      ElMessage.success('草稿校验通过')
+    } else {
+      ElMessage.warning('草稿存在阻断项，不能发布')
+    }
+    return result
+  } finally {
+    validatingDraftNo.value = ''
+  }
+}
+
+async function handleDryRunDraft(row) {
+  if (!row?.draftNo) return null
+  dryRunningDraftNo.value = row.draftNo
+  try {
+    const result = await dryRunSystemConfigDraft(row.draftNo)
+    dryRunMap[row.draftNo] = result
+    if (result.runnable) {
+      ElMessage.success('发布预检查通过')
+    } else {
+      ElMessage.warning('发布预检查未通过，请先处理校验项')
+    }
+    return result
+  } finally {
+    dryRunningDraftNo.value = ''
+  }
+}
+
 async function handlePublishDraft(row) {
-  if (!row?.draftNo) {
+  if (!row?.draftNo) return
+  const validation = validationMap[row.draftNo] || (await handleValidateDraft(row))
+  if (!validation?.valid) {
+    ElMessage.error('草稿校验未通过，已阻止发布')
+    return
+  }
+  const dryRun = dryRunMap[row.draftNo] || (await handleDryRunDraft(row))
+  if (!dryRun?.runnable) {
+    ElMessage.error('发布预检查未通过，已阻止发布')
     return
   }
   if (row.riskLevel === 'HIGH') {
     await ElMessageBox.prompt(
-      `发布后将影响 ${moduleText(row.impactModules)}。请输入 PUBLISH 确认。`,
+      `发布后将影响 ${moduleText(row.impactModules)}。请输入“确认发布”继续。`,
       '确认发布高风险配置',
       {
         type: 'warning',
-        inputPattern: /^PUBLISH$/,
-        inputErrorMessage: '请输入 PUBLISH',
+        inputPattern: /^确认发布$/,
+        inputErrorMessage: '请输入：确认发布',
         confirmButtonText: '发布生效',
         cancelButtonText: '取消'
       }
@@ -485,16 +965,15 @@ async function handlePublishDraft(row) {
     await publishSystemConfigDraft(row.draftNo)
     ElMessage.success('配置已发布，新业务将按当前配置执行')
     draftDrawerVisible.value = false
-    await Promise.all([loadDrafts(), loadLogs()])
+    await Promise.all([loadDrafts(), loadLogs(), loadPublishRecords(), loadRuntimeOverview()])
+    activeTab.value = 'publishRecords'
   } finally {
     publishingDraftNo.value = ''
   }
 }
 
 async function handleDiscardDraft(row) {
-  if (!row?.draftNo) {
-    return
-  }
+  if (!row?.draftNo) return
   await ElMessageBox.confirm(
     `作废草稿 ${row.draftNo} 后不可发布，线上配置不受影响。`,
     '作废草稿',
@@ -509,16 +988,36 @@ async function handleDiscardDraft(row) {
     await discardSystemConfigDraft(row.draftNo)
     ElMessage.success('草稿已作废，线上配置不受影响')
     draftDrawerVisible.value = false
-    await loadDrafts()
+    await Promise.all([loadDrafts(), loadRuntimeOverview()])
   } finally {
     discardingDraftNo.value = ''
   }
 }
 
-async function handleRollbackPreview() {
-  if (!selectedLog.value?.id) {
-    return
+async function handleRefreshRuntime(row) {
+  if (!row?.publishNo) return
+  await ElMessageBox.confirm(
+    `确认刷新发布批次 ${row.publishNo} 的运行态配置？该操作只刷新配置感知，不会修改客户、订单、排档或账务数据。`,
+    '刷新运行态配置',
+    {
+      type: 'warning',
+      confirmButtonText: '刷新运行态配置',
+      cancelButtonText: '取消'
+    }
+  )
+  refreshingPublishNo.value = row.publishNo
+  try {
+    const detail = await refreshSystemConfigRuntime(row.publishNo)
+    selectedPublishRecord.value = detail
+    ElMessage.success('运行态刷新事件已记录')
+    await Promise.all([loadPublishRecords(), loadRuntimeOverview()])
+  } finally {
+    refreshingPublishNo.value = ''
   }
+}
+
+async function handleRollbackPreview() {
+  if (!selectedLog.value?.id) return
   rollbackPreviewing.value = true
   try {
     rollbackPreviewResult.value = await rollbackPreviewSystemConfig(selectedLog.value.id)
@@ -529,9 +1028,7 @@ async function handleRollbackPreview() {
 }
 
 async function handleCreateRollbackDraft() {
-  if (!selectedLog.value?.id) {
-    return
-  }
+  if (!selectedLog.value?.id) return
   await ElMessageBox.confirm(
     '回滚只会生成草稿，不会立即改变线上配置。请在待发布中确认发布。',
     '生成回滚草稿',
@@ -547,7 +1044,7 @@ async function handleCreateRollbackDraft() {
     ElMessage.success('回滚草稿已生成，请在待发布中确认发布')
     logDrawerVisible.value = false
     activeTab.value = 'drafts'
-    await loadDrafts()
+    await Promise.all([loadDrafts(), loadRuntimeOverview()])
   } finally {
     rollbackDrafting.value = false
   }
@@ -565,10 +1062,46 @@ function buildPreviewPayload() {
   }
 }
 
+function applyCapability(item) {
+  const meta = capabilityMeta[item.capabilityCode] || {}
+  activeCapabilityCode.value = item.capabilityCode
+  previewForm.configKey = meta.exampleKey || defaultConfigKey(item)
+  previewForm.valueType = item.valueType || 'STRING'
+  previewForm.scopeType = item.scopeTypes?.[0] || 'GLOBAL'
+  previewForm.scopeId = 'GLOBAL'
+  previewForm.configValue = meta.exampleValue ?? defaultConfigValue(item.valueType)
+  previewForm.enabled = 1
+  previewForm.summary = `调整${capabilityLabel(item)}`
+  previewResult.value = null
+}
+
+function defaultConfigKey(item) {
+  const pattern = String(item?.configKeyPattern || '').trim()
+  if (!pattern) return ''
+  return pattern.endsWith('%') ? `${pattern.slice(0, -1)}example` : pattern
+}
+
+function defaultConfigValue(valueType) {
+  const type = String(valueType || '').toUpperCase()
+  if (type === 'BOOLEAN') return 'false'
+  if (type === 'NUMBER') return '1'
+  if (type === 'URL') return 'https://api.seedcrm.com'
+  if (type === 'JSON') return '{}'
+  return ''
+}
+
 function openLog(row) {
   selectedLog.value = row
   rollbackPreviewResult.value = null
   logDrawerVisible.value = true
+}
+
+async function openPublishRecord(row) {
+  selectedPublishRecord.value = row
+  publishDrawerVisible.value = true
+  if (row?.publishNo) {
+    selectedPublishRecord.value = await fetchSystemConfigPublishRecord(row.publishNo)
+  }
 }
 
 function openDraft(row) {
@@ -594,6 +1127,7 @@ function sourceTypeLabel(value) {
 
 function riskLabel(value) {
   const map = {
+    BLOCKED: '阻断',
     HIGH: '高',
     MEDIUM: '中',
     LOW: '低'
@@ -603,11 +1137,38 @@ function riskLabel(value) {
 
 function riskTagType(value) {
   const map = {
+    BLOCKED: 'danger',
     HIGH: 'danger',
     MEDIUM: 'warning',
     LOW: 'success'
   }
   return map[value] || 'info'
+}
+
+function validationLabel(value) {
+  if (value === true) return '通过'
+  if (value === false) return '阻断'
+  return '未校验'
+}
+
+function validationTagType(value) {
+  if (value === true) return 'success'
+  if (value === false) return 'danger'
+  return 'info'
+}
+
+function publishStatusLabel(value) {
+  const map = {
+    SUCCESS: '成功',
+    FAILED: '失败'
+  }
+  return map[value] || value || '--'
+}
+
+function publishStatusType(value) {
+  if (value === 'SUCCESS') return 'success'
+  if (value === 'FAILED') return 'danger'
+  return 'info'
 }
 
 function changeTypeLabel(value) {
@@ -620,9 +1181,7 @@ function changeTypeLabel(value) {
 }
 
 function formatDate(value) {
-  if (!value) {
-    return '--'
-  }
+  if (!value) return '--'
   return String(value).replace('T', ' ').slice(0, 19)
 }
 </script>
@@ -631,6 +1190,41 @@ function formatDate(value) {
 .config-alert {
   margin-bottom: 16px;
   border-radius: 8px;
+}
+
+.capability-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  min-height: 52px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.capability-strip__main,
+.capability-strip__meta,
+.tag-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.capability-strip__label {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.capability-strip__meta,
+.muted {
+  color: #64748b;
+  font-size: 13px;
 }
 
 .preview-layout {
@@ -689,15 +1283,11 @@ function formatDate(value) {
   background: #f8fafc;
 }
 
-.preview-result__header,
-.tag-line {
+.preview-result__header {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-}
-
-.preview-result__header {
   margin-bottom: 14px;
 }
 
@@ -757,26 +1347,61 @@ function formatDate(value) {
   gap: 16px;
 }
 
+.runtime-box,
 .rollback-preview {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid #e2e8f0;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
 }
 
+.runtime-box h4,
 .rollback-preview h4 {
   margin: 0 0 12px;
   font-size: 15px;
   color: #0f172a;
 }
 
+.runtime-box p {
+  margin: 0 0 10px;
+  color: #475569;
+}
+
+.validation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.validation-row {
+  display: grid;
+  grid-template-columns: 72px minmax(120px, 1fr) minmax(180px, 1.4fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.validation-row__key,
+.validation-row__message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #334155;
+}
+
 @media (max-width: 980px) {
   .preview-layout,
-  .log-toolbar {
+  .log-toolbar,
+  .validation-row {
     grid-template-columns: 1fr;
   }
 
   .config-form {
     grid-template-columns: 1fr;
+  }
+
+  .capability-strip {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

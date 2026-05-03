@@ -27,6 +27,22 @@ public class SettingModuleGuard {
         assertAllowed(check(context, "DEBUG"), "setting debug denied");
     }
 
+    public void checkConfigAudit(PermissionRequestContext context) {
+        assertAllowed(check(context, "CONFIG_AUDIT"), "system config audit denied");
+    }
+
+    public void checkConfigDraft(PermissionRequestContext context) {
+        assertAllowed(check(context, "CONFIG_DRAFT"), "system config draft denied");
+    }
+
+    public void checkConfigPublish(PermissionRequestContext context) {
+        assertAllowed(check(context, "CONFIG_PUBLISH"), "system config publish denied");
+    }
+
+    public void checkConfigRollback(PermissionRequestContext context) {
+        assertAllowed(check(context, "CONFIG_ROLLBACK"), "system config rollback denied");
+    }
+
     public void checkSystemFlowView(PermissionRequestContext context) {
         assertAllowed(check(context, "SYSTEM_FLOW_VIEW"), "system flow view denied");
     }

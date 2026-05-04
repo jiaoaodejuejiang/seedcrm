@@ -25,9 +25,9 @@ public class SensitiveDataProjectionService {
     private static final String DEFAULT_STORE_AMOUNT_HIDDEN_ROLES =
             "STORE_SERVICE,STORE_MANAGER,PHOTOGRAPHER,MAKEUP_ARTIST,PHOTO_SELECTOR";
     private static final String DEFAULT_SERVICE_AMOUNT_HIDDEN_ROLES =
-            "STORE_SERVICE,PHOTOGRAPHER,MAKEUP_ARTIST";
+            "STORE_SERVICE,STORE_MANAGER,PHOTOGRAPHER,MAKEUP_ARTIST,PHOTO_SELECTOR";
     private static final String DEFAULT_SERVICE_AMOUNT_EDIT_ROLES =
-            "ADMIN,FINANCE,PHOTO_SELECTOR";
+            "ADMIN,FINANCE";
     private static final Set<String> STORE_AMOUNT_RESTRICTED_ROLES = Set.of(
             "STORE_SERVICE",
             "STORE_MANAGER",
@@ -36,12 +36,13 @@ public class SensitiveDataProjectionService {
             "PHOTO_SELECTOR");
     private static final Set<String> DEFAULT_SERVICE_AMOUNT_RESTRICTED_ROLES = Set.of(
             "STORE_SERVICE",
+            "STORE_MANAGER",
             "PHOTOGRAPHER",
-            "MAKEUP_ARTIST");
+            "MAKEUP_ARTIST",
+            "PHOTO_SELECTOR");
     private static final Set<String> DEFAULT_SERVICE_AMOUNT_EDITOR_ROLES = Set.of(
             "ADMIN",
-            "FINANCE",
-            "PHOTO_SELECTOR");
+            "FINANCE");
     private static final Set<String> MEMBER_AMOUNT_VIEW_ROLES = Set.of("ADMIN", "FINANCE");
 
     private final ObjectMapper objectMapper;

@@ -75,7 +75,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private static final String REFUND_SCENE_FINANCE_PAYMENT = "FINANCE_VERIFIED_PAYMENT";
     private static final String CONFIG_DEPOSIT_DIRECT_ENABLED = "deposit.direct.enabled";
     private static final String CONFIG_SERVICE_AMOUNT_EDIT_ROLES = "amount.visibility.service_confirm_edit_roles";
-    private static final String DEFAULT_SERVICE_AMOUNT_EDIT_ROLES = "ADMIN,FINANCE,PHOTO_SELECTOR";
+    private static final String DEFAULT_SERVICE_AMOUNT_EDIT_ROLES = "ADMIN,FINANCE";
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter ACTION_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final Set<String> ACTIVE_APPOINTMENT_ACTIONS = Set.of(
@@ -91,12 +91,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             "PHOTOGRAPHER",
             "MAKEUP_ARTIST",
             "PHOTO_SELECTOR");
-    private static final Set<String> FINANCE_REVERSE_ROLES = Set.of(
+    private static final Set<String> FINANCE_CUSTOMER_SERVICE_REVERSE_ROLES = Set.of(
             "ONLINE_CUSTOMER_SERVICE",
             "CLUE_MANAGER",
-            "CONSULTANT",
-            "DISTRIBUTOR",
-            "DISTRIBUTION");
+            "CONSULTANT");
 
     private record AppointmentActionSnapshot(List<LocalDateTime> slots, Integer headcount) {
     }
@@ -1261,9 +1259,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
         String scene = resolveRefundScene(orderActionDTO);
         String scope = REFUND_SCENE_FINANCE_PAYMENT.equals(scene) ? "VERIFIED_PAYMENT" : "STORE_SERVICE_CONTENT";
-        boolean reverseStorePerformance = REFUND_SCENE_STORE_SERVICE.equals(scene)
-                && (Boolean.TRUE.equals(orderActionDTO.getReverseStorePerformance())
-                || Boolean.TRUE.equals(orderActionDTO.getReverseSalary()));
+        boolean reverseStorePerformance = REFUND_SCENE_STORE_SERVICE.equals(scene);
         boolean reverseCustomerService = REFUND_SCENE_FINANCE_PAYMENT.equals(scene)
                 && Boolean.TRUE.equals(orderActionDTO.getReverseCustomerService());
         boolean reverseDistributor = REFUND_SCENE_FINANCE_PAYMENT.equals(scene)
@@ -1532,7 +1528,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         BigDecimal refundAmount = scaleMoney(resolveRefundAmount(orderActionDTO));
         LocalDateTime now = LocalDateTime.now();
         for (SalaryDetail detail : details) {
-            if (!shouldReverseSalaryDetail(scene, detail.getRoleCode())) {
+            if (!shouldReverseSalaryDetail(scene, detail.getRoleCode(), orderActionDTO)) {
                 continue;
             }
             BigDecimal adjustmentAmount = scaleMoney(detail.getAmount()
@@ -1556,14 +1552,16 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
     }
 
-    private boolean shouldReverseSalaryDetail(String scene, String roleCode) {
+    private boolean shouldReverseSalaryDetail(String scene, String roleCode, OrderActionDTO orderActionDTO) {
         String normalizedRole = normalize(roleCode).toUpperCase(Locale.ROOT);
         if (REFUND_SCENE_STORE_SERVICE.equals(scene)) {
             return STORE_PERFORMANCE_ROLES.contains(normalizedRole);
         }
-        return FINANCE_REVERSE_ROLES.contains(normalizedRole)
-                || normalizedRole.contains("CUSTOMER_SERVICE")
-                || normalizedRole.contains("DISTRIBUT");
+        boolean customerServiceRole = FINANCE_CUSTOMER_SERVICE_REVERSE_ROLES.contains(normalizedRole)
+                || normalizedRole.contains("CUSTOMER_SERVICE");
+        boolean distributorRole = normalizedRole.contains("DISTRIBUT");
+        return (customerServiceRole && Boolean.TRUE.equals(orderActionDTO.getReverseCustomerService()))
+                || (distributorRole && Boolean.TRUE.equals(orderActionDTO.getReverseDistributor()));
     }
 
     private BigDecimal sumRegisteredRefundAmount(Long orderId, String scene) {

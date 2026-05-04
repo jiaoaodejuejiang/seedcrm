@@ -10,6 +10,7 @@ import com.seedcrm.crm.planorder.dto.PlanOrderCreateDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderDetailResponse;
 import com.seedcrm.crm.planorder.dto.PlanOrderResponse;
 import com.seedcrm.crm.planorder.dto.PlanOrderSendServiceFormDTO;
+import com.seedcrm.crm.planorder.dto.PlanOrderServiceFormStateResponse;
 import com.seedcrm.crm.planorder.service.PlanOrderService;
 import com.seedcrm.crm.wecom.entity.WecomTouchLog;
 import jakarta.servlet.http.HttpServletRequest;
@@ -113,6 +114,14 @@ public class PlanOrderController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         planOrderPermissionGuard.checkView(context, planOrderId);
         return ApiResponse.success(planOrderService.getDetail(planOrderId));
+    }
+
+    @GetMapping("/service-form-state")
+    public ApiResponse<PlanOrderServiceFormStateResponse> serviceFormState(@RequestParam Long planOrderId,
+                                                                           HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        planOrderPermissionGuard.checkView(context, planOrderId);
+        return ApiResponse.success(planOrderService.getServiceFormState(planOrderId));
     }
 
     @PostMapping("/send-service-form")

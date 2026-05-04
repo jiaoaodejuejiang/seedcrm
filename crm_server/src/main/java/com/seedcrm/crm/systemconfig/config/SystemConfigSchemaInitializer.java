@@ -192,13 +192,13 @@ public class SystemConfigSchemaInitializer {
                 "STRING",
                 "需要隐藏定金、团购和核销金额的角色编码，英文逗号分隔；服务确认单金额单独配置");
         seedDefault("amount.visibility.service_confirm_hidden_roles",
-                "STORE_SERVICE,PHOTOGRAPHER,MAKEUP_ARTIST",
+                "STORE_SERVICE,STORE_MANAGER,PHOTOGRAPHER,MAKEUP_ARTIST,PHOTO_SELECTOR",
                 "STRING",
-                "需要隐藏服务确认单金额的角色编码，英文逗号分隔；默认店长和选片负责人可看服务确认金额");
+                "需要隐藏服务确认单金额的角色编码，英文逗号分隔；默认门店角色均隐藏");
         seedDefault("amount.visibility.service_confirm_edit_roles",
-                "ADMIN,FINANCE,PHOTO_SELECTOR",
+                "ADMIN,FINANCE",
                 "STRING",
-                "允许填写或修改服务确认单金额的角色编码，英文逗号分隔；默认选片负责人填写，店长只读查看");
+                "允许填写或修改服务确认单金额的角色编码，英文逗号分隔；默认仅总部与财务可编辑");
         seedDefault("clue.dedup.enabled", "true", "BOOLEAN", "客资入库启用按客户身份去重，默认开启");
         seedDefault("clue.dedup.window_days", "90", "NUMBER", "客资去重窗口天数；窗口内同客户保留一条基础客资，多条订单/动作写入客资记录");
         seedDefault("store.schedule.configs", """
@@ -217,6 +217,7 @@ public class SystemConfigSchemaInitializer {
                 "分销外部订单类型、商品和 SKU 到内部团购 / 定金的映射配置");
         seedDefault("system.domain.systemBaseUrl", defaultSystemBaseUrl, "URL", "系统后台访问基础域名，用于页面跳转和扫码服务单地址");
         seedDefault("system.domain.apiBaseUrl", defaultApiBaseUrl, "URL", "系统 API 基础域名，用于 Open API、回调接口和三方平台联调地址");
+        migrateAmountVisibilityDefaults();
         migrateLegacyLocalDomainDefaults();
     }
 
@@ -317,6 +318,30 @@ public class SystemConfigSchemaInitializer {
         updateLegacyLocalDefault("system.domain.apiBaseUrl", defaultApiBaseUrl,
                 "http://127.0.0.1:8080",
                 "http://localhost:8080");
+    }
+
+    private void migrateAmountVisibilityDefaults() {
+        updateDefaultValueIfUnchanged(
+                "amount.visibility.service_confirm_hidden_roles",
+                "STORE_SERVICE,PHOTOGRAPHER,MAKEUP_ARTIST",
+                "STORE_SERVICE,STORE_MANAGER,PHOTOGRAPHER,MAKEUP_ARTIST,PHOTO_SELECTOR",
+                "需要隐藏服务确认单金额的角色编码，英文逗号分隔；默认门店角色均隐藏");
+        updateDefaultValueIfUnchanged(
+                "amount.visibility.service_confirm_edit_roles",
+                "ADMIN,FINANCE,PHOTO_SELECTOR",
+                "ADMIN,FINANCE",
+                "允许填写或修改服务确认单金额的角色编码，英文逗号分隔；默认仅总部与财务可编辑");
+    }
+
+    private void updateDefaultValueIfUnchanged(String key, String oldValue, String newValue, String description) {
+        jdbcTemplate.update("""
+                UPDATE system_config
+                SET config_value = ?, description = ?, update_time = CURRENT_TIMESTAMP
+                WHERE scope_type = 'GLOBAL'
+                  AND scope_id = 'GLOBAL'
+                  AND config_key = ?
+                  AND config_value = ?
+                """, newValue, description, key, oldValue);
     }
 
     private void updateLegacyLocalDefault(String key, String replacement, String... legacyValues) {

@@ -34,18 +34,14 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="定金/团购金额" width="140">
+        <el-table-column label="金额字段" width="150">
           <template #default="{ row }">
-            <el-tag :type="row.businessAmountHidden ? 'info' : 'warning'" effect="light">
-              {{ row.businessAmountHidden ? '隐藏' : '可见' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="确认单金额" width="140">
-          <template #default="{ row }">
-            <el-tag :type="row.serviceAmountHidden ? 'info' : 'warning'" effect="light">
-              {{ row.serviceAmountHidden ? '隐藏' : '可见' }}
-            </el-tag>
+            <div class="amount-policy-stack">
+              <el-tag :type="row.amountFieldsHidden ? 'info' : 'warning'" effect="light">
+                {{ row.amountFieldsHidden ? '强制隐藏' : '按配置显示' }}
+              </el-tag>
+              <small>定金/团购/确认单</small>
+            </div>
           </template>
         </el-table-column>
         <el-table-column v-for="capability in capabilityDefinitions" :key="capability.key" :label="capability.label" min-width="140">
@@ -174,7 +170,7 @@ import { loadSystemConsoleState, nextSystemId, saveSystemConsoleState } from '..
 
 const state = reactive(loadSystemConsoleState())
 const DEFAULT_BUSINESS_AMOUNT_HIDDEN_ROLES = ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR']
-const DEFAULT_SERVICE_AMOUNT_HIDDEN_ROLES = ['STORE_SERVICE', 'PHOTOGRAPHER', 'MAKEUP_ARTIST']
+const DEFAULT_SERVICE_AMOUNT_HIDDEN_ROLES = ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR']
 const entryOptions = [
   { label: '订单列表', value: '/store-service/orders' },
   { label: '服务单设计', value: '/store-service/service-design' },
@@ -211,6 +207,7 @@ const storeCapabilityRows = computed(() =>
       roleCode,
       businessAmountHidden: businessAmountHiddenRoles.value.includes(roleCode),
       serviceAmountHidden: serviceAmountHiddenRoles.value.includes(roleCode),
+      amountFieldsHidden: businessAmountHiddenRoles.value.includes(roleCode) && serviceAmountHiddenRoles.value.includes(roleCode),
       capabilities: Object.fromEntries(
         capabilityDefinitions.map((capability) => [capability.key, hasEnabledPolicy(roleCode, capability.moduleCode, capability.actionCode)])
       )
@@ -362,5 +359,17 @@ onMounted(loadRuntimePolicies)
 <style scoped>
 .panel-heading {
   align-items: center;
+}
+
+.amount-policy-stack {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.amount-policy-stack small {
+  color: var(--color-text-secondary);
+  font-size: 12px;
 }
 </style>

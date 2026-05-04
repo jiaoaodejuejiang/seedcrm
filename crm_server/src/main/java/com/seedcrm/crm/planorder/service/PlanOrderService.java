@@ -5,6 +5,7 @@ import com.seedcrm.crm.planorder.dto.PlanOrderActionDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderAssignRoleDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderCreateDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderDetailResponse;
+import com.seedcrm.crm.planorder.dto.PlanOrderServiceFormStateResponse;
 import com.seedcrm.crm.planorder.entity.OrderRoleRecord;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.wecom.entity.WecomTouchLog;
@@ -42,6 +43,8 @@ public interface PlanOrderService extends IService<PlanOrder> {
     OrderRoleRecord assignRole(PlanOrderAssignRoleDTO planOrderAssignRoleDTO);
 
     PlanOrderDetailResponse getDetail(Long planOrderId);
+
+    PlanOrderServiceFormStateResponse getServiceFormState(Long planOrderId);
 
     WecomTouchLog sendServiceForm(Long planOrderId, String message);
 }

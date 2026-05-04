@@ -38,6 +38,7 @@ import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.risk.service.DbLockService;
+import com.seedcrm.crm.salary.entity.SalaryDetail;
 import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
 import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import com.seedcrm.crm.systemflow.support.SystemFlowRuntimeBridge;
@@ -109,8 +110,8 @@ class OrderServiceImplTest {
                 voucherVerificationGateway, orderActionRecordMapper, orderRefundRecordMapper, salaryDetailMapper,
                 new ObjectMapper(), systemConfigService, systemFlowRuntimeBridge);
         lenient().when(systemConfigService.getBoolean("deposit.direct.enabled", true)).thenReturn(true);
-        lenient().when(systemConfigService.getString("amount.visibility.service_confirm_edit_roles", "ADMIN,FINANCE,PHOTO_SELECTOR"))
-                .thenReturn("ADMIN,FINANCE,PHOTO_SELECTOR");
+        lenient().when(systemConfigService.getString("amount.visibility.service_confirm_edit_roles", "ADMIN,FINANCE"))
+                .thenReturn("ADMIN,FINANCE");
         lenient().when(voucherVerificationGateway.verify(any(Order.class), any(), any()))
                 .thenReturn(OrderVoucherVerificationResult.skipped());
     }
@@ -592,6 +593,63 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void financeRefundShouldNotCreateSalaryReversalWhenFlagsAreFalse() {
+        Order order = financeRefundOrder(17L);
+        when(dbLockService.lockOrder(17L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(217L)).thenReturn(new Customer());
+        when(planOrderMapper.selectOne(any())).thenReturn(planOrder(170L, 17L));
+        when(orderRefundRecordMapper.selectList(any())).thenReturn(List.of());
+        when(orderRefundRecordMapper.insert(any(OrderRefundRecord.class))).thenAnswer(invocation -> {
+            OrderRefundRecord record = invocation.getArgument(0);
+            record.setId(701L);
+            return 1;
+        });
+        when(salaryDetailMapper.selectList(any())).thenReturn(List.of(
+                salaryDetail(1L, "ONLINE_CUSTOMER_SERVICE"),
+                salaryDetail(2L, "DISTRIBUTOR")));
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderActionDTO dto = financeRefundDto(17L);
+        dto.setReverseCustomerService(false);
+        dto.setReverseDistributor(false);
+
+        orderService.refund(dto, 9002L);
+
+        verify(salaryDetailMapper, never()).insert(any(SalaryDetail.class));
+    }
+
+    @Test
+    void financeRefundShouldReverseOnlyEnabledSalaryScopes() {
+        Order order = financeRefundOrder(18L);
+        when(dbLockService.lockOrder(18L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(218L)).thenReturn(new Customer());
+        when(planOrderMapper.selectOne(any())).thenReturn(planOrder(180L, 18L));
+        when(orderRefundRecordMapper.selectList(any())).thenReturn(List.of());
+        when(orderRefundRecordMapper.insert(any(OrderRefundRecord.class))).thenAnswer(invocation -> {
+            OrderRefundRecord record = invocation.getArgument(0);
+            record.setId(702L);
+            return 1;
+        });
+        when(salaryDetailMapper.selectList(any())).thenReturn(List.of(
+                salaryDetail(3L, "ONLINE_CUSTOMER_SERVICE"),
+                salaryDetail(4L, "DISTRIBUTOR")));
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderActionDTO dto = financeRefundDto(18L);
+        dto.setReverseCustomerService(true);
+        dto.setReverseDistributor(false);
+
+        orderService.refund(dto, 9002L);
+
+        ArgumentCaptor<SalaryDetail> salaryCaptor = ArgumentCaptor.forClass(SalaryDetail.class);
+        verify(salaryDetailMapper).insert(salaryCaptor.capture());
+        assertThat(salaryCaptor.getValue().getRoleCode()).isEqualTo("ONLINE_CUSTOMER_SERVICE");
+        assertThat(salaryCaptor.getValue().getAdjustmentType()).isEqualTo("REFUND_REVERSAL");
+        assertThat(salaryCaptor.getValue().getRefundRecordId()).isEqualTo(702L);
+        assertThat(salaryCaptor.getValue().getAmount()).isNegative();
+    }
+
+    @Test
     void refundShouldReturnExistingRecordForDuplicateIdempotencyEvenAfterRefundedStatus() {
         Order order = new Order();
         order.setId(14L);
@@ -781,7 +839,7 @@ class OrderServiceImplTest {
     }
 
     @Test
-    void updateServiceDetailShouldAllowPhotoSelectorToChangeServiceConfirmAmount() throws Exception {
+    void updateServiceDetailShouldPreserveAmountsWhenPhotoSelectorAttemptsAmountChange() throws Exception {
         Order order = new Order();
         order.setId(70L);
         order.setCustomerId(270L);
@@ -801,8 +859,8 @@ class OrderServiceImplTest {
 
         JsonNode root = new ObjectMapper().readTree(updated.getServiceDetailJson());
         assertThat(root.path("serviceRequirement").asText()).isEqualTo("updated");
-        assertThat(root.path("serviceConfirmAmount").decimalValue()).isEqualByComparingTo("2888.00");
-        assertThat(root.path("serviceTemplate").path("config").path("price").asInt()).isEqualTo(199);
+        assertThat(root.path("serviceConfirmAmount").decimalValue()).isEqualByComparingTo("1288.00");
+        assertThat(root.path("serviceTemplate").path("config").path("price").asInt()).isEqualTo(99);
     }
 
     @Test
@@ -1041,6 +1099,44 @@ class OrderServiceImplTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("direct deposit verification is disabled");
         verify(orderMapper, never()).updateById(any(Order.class));
+    }
+
+    private Order financeRefundOrder(Long orderId) {
+        Order order = new Order();
+        order.setId(orderId);
+        order.setOrderNo("ORD-FIN-" + orderId);
+        order.setCustomerId(200L + orderId);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setAmount(new BigDecimal("1000.00"));
+        order.setDeposit(new BigDecimal("200.00"));
+        return order;
+    }
+
+    private PlanOrder planOrder(Long planOrderId, Long orderId) {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(planOrderId);
+        planOrder.setOrderId(orderId);
+        return planOrder;
+    }
+
+    private SalaryDetail salaryDetail(Long id, String roleCode) {
+        SalaryDetail detail = new SalaryDetail();
+        detail.setId(id);
+        detail.setPlanOrderId(999L);
+        detail.setUserId(1000L + id);
+        detail.setRoleCode(roleCode);
+        detail.setAmount(new BigDecimal("100.00"));
+        return detail;
+    }
+
+    private OrderActionDTO financeRefundDto(Long orderId) {
+        OrderActionDTO dto = new OrderActionDTO();
+        dto.setOrderId(orderId);
+        dto.setRefundScene("FINANCE_VERIFIED_PAYMENT");
+        dto.setRefundAmount(new BigDecimal("50.00"));
+        dto.setRefundReason("finance refund register");
+        return dto;
     }
 
     private String printedServiceDetail(ObjectMapper mapper, String serviceRequirement, boolean confirmed) {

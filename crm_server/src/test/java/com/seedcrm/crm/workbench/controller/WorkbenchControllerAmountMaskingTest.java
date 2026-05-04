@@ -94,7 +94,7 @@ class WorkbenchControllerAmountMaskingTest {
     }
 
     @Test
-    void storeManagerWorkbenchDetailShouldHideBusinessAmountsButKeepServiceConfirmAmount() throws Exception {
+    void storeManagerWorkbenchDetailShouldHideBusinessAndServiceConfirmAmounts() throws Exception {
         when(permissionRequestContextResolver.resolve(request)).thenReturn(context("STORE_MANAGER"));
         when(workbenchService.getPlanOrderWorkbench(100L)).thenReturn(sampleWorkbench());
 
@@ -105,11 +105,12 @@ class WorkbenchControllerAmountMaskingTest {
         assertThat(response.getData().getOrder().getDeposit()).isNull();
         assertThat(response.getData().getOrder().getVerificationCode()).isNull();
         JsonNode serviceDetail = objectMapper.readTree(response.getData().getOrder().getServiceDetailJson());
-        assertThat(serviceDetail.path("serviceConfirmAmount").decimalValue()).isEqualByComparingTo("1288.00");
+        assertThat(serviceDetail.path("serviceConfirmAmount").isNull()).isTrue();
+        assertThat(serviceDetail.path("serviceTemplate").path("config").path("price").isNull()).isTrue();
     }
 
     @Test
-    void photoSelectorWorkbenchDetailShouldHideBusinessAmountsButKeepServiceConfirmAmount() throws Exception {
+    void photoSelectorWorkbenchDetailShouldHideBusinessAndServiceConfirmAmounts() throws Exception {
         when(permissionRequestContextResolver.resolve(request)).thenReturn(context("PHOTO_SELECTOR"));
         when(workbenchService.getPlanOrderWorkbench(100L)).thenReturn(sampleWorkbench());
 
@@ -120,7 +121,8 @@ class WorkbenchControllerAmountMaskingTest {
         assertThat(response.getData().getOrder().getDeposit()).isNull();
         assertThat(response.getData().getOrder().getVerificationCode()).isNull();
         JsonNode serviceDetail = objectMapper.readTree(response.getData().getOrder().getServiceDetailJson());
-        assertThat(serviceDetail.path("serviceConfirmAmount").decimalValue()).isEqualByComparingTo("1288.00");
+        assertThat(serviceDetail.path("serviceConfirmAmount").isNull()).isTrue();
+        assertThat(serviceDetail.path("serviceTemplate").path("config").path("price").isNull()).isTrue();
     }
 
     @Test

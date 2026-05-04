@@ -19,6 +19,7 @@ import com.seedcrm.crm.order.support.ServiceFormVersionSupport;
 import com.seedcrm.crm.planorder.dto.PlanOrderActionDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderAssignRoleDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderCreateDTO;
+import com.seedcrm.crm.planorder.dto.PlanOrderServiceFormStateResponse;
 import com.seedcrm.crm.planorder.entity.OrderRoleRecord;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
@@ -219,6 +220,77 @@ class PlanOrderServiceImplTest {
         verify(orderActionRecordMapper).insert(recordCaptor.capture());
         assertThat(recordCaptor.getValue().getActionType()).isEqualTo("SERVICE_FORM_PRINT");
         assertThat(recordCaptor.getValue().getExtraJson()).contains("serviceDetailHash");
+    }
+
+    @Test
+    void getServiceFormStateShouldExposePrintedCurrentVersion() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(56L);
+        planOrder.setOrderId(560L);
+        when(planOrderMapper.selectById(56L)).thenReturn(planOrder);
+
+        Order order = new Order();
+        order.setId(560L);
+        order.setServiceDetailJson(printedServiceDetail("current paper form"));
+        when(orderMapper.selectById(560L)).thenReturn(order);
+
+        PlanOrderServiceFormStateResponse state = planOrderService.getServiceFormState(56L);
+
+        assertThat(state.getPlanOrderId()).isEqualTo(56L);
+        assertThat(state.getOrderId()).isEqualTo(560L);
+        assertThat(state.getSaved()).isTrue();
+        assertThat(state.getPrinted()).isTrue();
+        assertThat(state.getConfirmed()).isFalse();
+        assertThat(state.getStale()).isFalse();
+        assertThat(state.getPrintStatus()).isEqualTo("PRINTED");
+        assertThat(state.getServiceDetailHash()).isNotBlank();
+        assertThat(state.getProjectionVersion()).isEqualTo(ServiceFormVersionSupport.PROJECTION_VERSION);
+    }
+
+    @Test
+    void getServiceFormStateShouldMarkChangedPrintedVersionStale() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(57L);
+        planOrder.setOrderId(570L);
+        when(planOrderMapper.selectById(57L)).thenReturn(planOrder);
+
+        Order order = new Order();
+        order.setId(570L);
+        order.setServiceDetailJson(stalePrintedServiceDetail());
+        when(orderMapper.selectById(570L)).thenReturn(order);
+
+        PlanOrderServiceFormStateResponse state = planOrderService.getServiceFormState(57L);
+
+        assertThat(state.getSaved()).isTrue();
+        assertThat(state.getPrinted()).isFalse();
+        assertThat(state.getConfirmed()).isFalse();
+        assertThat(state.getStale()).isTrue();
+        assertThat(state.getPrintStatus()).isEqualTo("PRINTED");
+    }
+
+    @Test
+    void confirmServiceFormShouldNotWriteDuplicateActionWhenCurrentVersionAlreadyConfirmed() {
+        PlanOrder planOrder = new PlanOrder();
+        planOrder.setId(58L);
+        planOrder.setOrderId(580L);
+        planOrder.setStatus(PlanOrderStatus.ARRIVED.name());
+        when(planOrderMapper.selectById(58L)).thenReturn(planOrder);
+
+        Order order = new Order();
+        order.setId(580L);
+        order.setStatus(OrderStatus.ARRIVED.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setServiceDetailJson(confirmedServiceDetail("already confirmed"));
+        when(dbLockService.lockOrder(580L)).thenReturn(order);
+
+        PlanOrderActionDTO dto = new PlanOrderActionDTO();
+        dto.setPlanOrderId(58L);
+
+        PlanOrder confirmed = planOrderService.confirmServiceForm(dto, 9001L, "STORE_SERVICE");
+
+        assertThat(confirmed).isSameAs(planOrder);
+        verify(orderMapper, never()).updateById(any(Order.class));
+        verify(orderActionRecordMapper, never()).insert(any(OrderActionRecord.class));
     }
 
     @Test
@@ -559,6 +631,26 @@ class PlanOrderServiceImplTest {
         printAudit.put("printCount", 1);
         root.set("printAudit", printAudit);
         root.put("serviceRequirement", "new content");
+        return writeJson(root);
+    }
+
+    private String confirmedServiceDetail(String serviceRequirement) {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("serviceRequirement", serviceRequirement);
+        String hash = ServiceFormVersionSupport.printableHash(root, objectMapper);
+        ObjectNode printAudit = objectMapper.createObjectNode();
+        printAudit.put("status", ServiceFormVersionSupport.PRINT_STATUS_PRINTED);
+        printAudit.put("serviceDetailHash", hash);
+        printAudit.put("projectionVersion", ServiceFormVersionSupport.PROJECTION_VERSION);
+        printAudit.put("printCount", 1);
+        root.set("printAudit", printAudit);
+        ObjectNode confirmation = objectMapper.createObjectNode();
+        confirmation.put("status", ServiceFormVersionSupport.CONFIRM_STATUS);
+        confirmation.put("signatureMode", "PAPER");
+        confirmation.put("signatureRequired", true);
+        confirmation.put("serviceDetailHash", hash);
+        root.put("serviceFormStatus", ServiceFormVersionSupport.CONFIRM_STATUS);
+        root.set("confirmation", confirmation);
         return writeJson(root);
     }
 

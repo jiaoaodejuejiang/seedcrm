@@ -48,6 +48,10 @@ export function printPlanOrderServiceForm(payload) {
   return http.post('/planOrder/print-service-form', payload)
 }
 
+export function fetchPlanOrderServiceFormState(planOrderId) {
+  return http.get('/planOrder/service-form-state', { params: { planOrderId } })
+}
+
 export function finishPlanOrder(payload) {
   return http.post('/planOrder/finish', payload)
 }

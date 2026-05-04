@@ -18,6 +18,7 @@ import com.seedcrm.crm.planorder.dto.PlanOrderAssignRoleDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderCreateDTO;
 import com.seedcrm.crm.planorder.dto.PlanOrderDetailResponse;
 import com.seedcrm.crm.planorder.dto.PlanOrderResponse;
+import com.seedcrm.crm.planorder.dto.PlanOrderServiceFormStateResponse;
 import com.seedcrm.crm.planorder.entity.OrderRoleRecord;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.enums.PlanOrderStatus;
@@ -348,6 +349,14 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     }
 
     @Override
+    public PlanOrderServiceFormStateResponse getServiceFormState(Long planOrderId) {
+        validatePlanOrderId(planOrderId);
+        PlanOrder planOrder = getPlanOrderOrThrow(planOrderId);
+        Order order = getOrderOrThrow(planOrder.getOrderId());
+        return buildServiceFormState(planOrder, order);
+    }
+
+    @Override
     @Transactional
     public WecomTouchLog sendServiceForm(Long planOrderId, String message) {
         validatePlanOrderId(planOrderId);
@@ -418,6 +427,56 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         if (!ServiceFormVersionSupport.hasCurrentConfirmation(root, currentHash)) {
             throw new BusinessException("service form content changed; print current version before " + action);
         }
+    }
+
+    private PlanOrderServiceFormStateResponse buildServiceFormState(PlanOrder planOrder, Order order) {
+        PlanOrderServiceFormStateResponse response = new PlanOrderServiceFormStateResponse();
+        response.setPlanOrderId(planOrder == null ? null : planOrder.getId());
+        response.setOrderId(order == null ? null : order.getId());
+        response.setProjectionVersion(ServiceFormVersionSupport.PROJECTION_VERSION);
+        if (order == null || !StringUtils.hasText(order.getServiceDetailJson())) {
+            return response;
+        }
+        response.setSaved(true);
+        ObjectNode root = ServiceFormVersionSupport.parseRoot(order.getServiceDetailJson(), objectMapper);
+        String currentHash = ServiceFormVersionSupport.printableHash(root, objectMapper);
+        response.setServiceDetailHash(currentHash);
+
+        JsonNode printAudit = root.path("printAudit");
+        response.setPrintStatus(textValue(printAudit, "status"));
+        response.setPrintCount(printAudit.path("printCount").asInt(0));
+        response.setPrintedAt(textValue(printAudit, "printedAt"));
+        response.setPrintedByUserId(longValue(printAudit, "printedByUserId"));
+        response.setPrintedByRoleCode(textValue(printAudit, "printedByRoleCode"));
+        boolean printedCurrentVersion = ServiceFormVersionSupport.hasCurrentPrintAudit(root, currentHash);
+        response.setPrinted(printedCurrentVersion);
+        boolean stale = ServiceFormVersionSupport.PRINT_STATUS_STALE.equalsIgnoreCase(response.getPrintStatus())
+                || (StringUtils.hasText(response.getPrintStatus()) && !printedCurrentVersion);
+        response.setStale(stale);
+        response.setStaleReason(textValue(printAudit, "staleReason"));
+
+        JsonNode confirmation = root.path("confirmation");
+        response.setConfirmationStatus(textValue(confirmation, "status"));
+        response.setConfirmedAt(textValue(confirmation, "confirmedAt"));
+        response.setConfirmedByUserId(longValue(confirmation, "confirmedByUserId"));
+        response.setConfirmedByRoleCode(textValue(confirmation, "confirmedByRoleCode"));
+        response.setConfirmed(ServiceFormVersionSupport.hasCurrentConfirmation(root, currentHash));
+        return response;
+    }
+
+    private String textValue(JsonNode node, String fieldName) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        String value = node.path(fieldName).asText(null);
+        return StringUtils.hasText(value) ? value : null;
+    }
+
+    private Long longValue(JsonNode node, String fieldName) {
+        if (node == null || node.isMissingNode() || node.isNull() || !node.path(fieldName).canConvertToLong()) {
+            return null;
+        }
+        return node.path(fieldName).asLong();
     }
 
     private boolean isServiceFormConfirmed(String serviceDetailJson) {

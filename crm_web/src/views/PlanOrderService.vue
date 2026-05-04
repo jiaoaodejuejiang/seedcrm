@@ -489,6 +489,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   assignPlanOrderRole,
   confirmPlanOrderServiceForm,
+  fetchPlanOrderServiceFormState,
   printPlanOrderServiceForm,
   sendPlanOrderServiceForm,
   startPlanOrder,
@@ -533,14 +534,15 @@ const scannerError = ref('')
 const autosaveMessage = ref('')
 const dirty = ref(false)
 const serviceTemplatePreview = ref(null)
+const serviceFormState = ref(null)
 const directDepositEnabled = ref(true)
-const serviceConfirmAmountEditRoles = ref(['ADMIN', 'FINANCE', 'PHOTO_SELECTOR'])
+const serviceConfirmAmountEditRoles = ref(['ADMIN', 'FINANCE'])
 const state = reactive(loadSystemConsoleState())
 const serviceForm = reactive(createServiceForm())
 
 const STORE_ROLE_CODES = ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR']
 const ROLE_ASSIGNMENT_MANAGER_CODES = ['ADMIN', 'STORE_MANAGER']
-const DEFAULT_SERVICE_CONFIRM_AMOUNT_EDIT_ROLES = ['ADMIN', 'FINANCE', 'PHOTO_SELECTOR']
+const DEFAULT_SERVICE_CONFIRM_AMOUNT_EDIT_ROLES = ['ADMIN', 'FINANCE']
 const VOUCHER_CONFIG_TARGETS = {
   DISTRIBUTION: {
     path: '/settings/integration/distribution-api?tab=config',
@@ -568,10 +570,11 @@ const isFinishedOrder = computed(
 )
 const hasSavedServiceDetail = computed(() => Boolean(String(detail.value?.order?.serviceDetailJson || '').trim()))
 const hasCurrentPrintedServiceForm = computed(
-  () => normalize(serviceForm.printAudit?.status || '') === 'PRINTED' && Boolean(serviceForm.printAudit?.serviceDetailHash)
+  () => serviceFormState.value?.printed === true
+    || (normalize(serviceForm.printAudit?.status || '') === 'PRINTED' && Boolean(serviceForm.printAudit?.serviceDetailHash))
 )
 const compatibilityBackfillMode = computed(() => false)
-const hasConfirmedServiceForm = computed(() => isServiceFormConfirmed(serviceForm.confirmation))
+const hasConfirmedServiceForm = computed(() => serviceFormState.value?.confirmed === true || isServiceFormConfirmed(serviceForm.confirmation))
 const canManageRoles = computed(() => ROLE_ASSIGNMENT_MANAGER_CODES.includes(normalize(currentUser.value?.roleCode || '')))
 const canViewVerificationAmounts = computed(() => canViewBusinessAmounts())
 const canViewServiceConfirmAmounts = computed(() => canViewServiceAmounts())
@@ -690,7 +693,9 @@ const serviceFormStatusLabel = computed(() => {
   if (hasCurrentPrintedServiceForm.value) {
     return '已打印待签字'
   }
-  return normalize(serviceForm.printAudit?.status || '') === 'STALE' ? '内容已变更，需重新打印' : '待打印确认'
+  return serviceFormState.value?.stale === true || normalize(serviceForm.printAudit?.status || '') === 'STALE'
+    ? '内容已变更，需重新打印'
+    : '待打印确认'
 })
 const serviceStage = computed(() => {
   if (detail.value?.summary?.finishTime) {
@@ -1267,6 +1272,7 @@ async function ensureCurrentRoleBound(planOrderId) {
 async function loadDetail(planOrderId) {
   if (!planOrderId) {
     detail.value = null
+    serviceFormState.value = null
     applyServiceForm()
     return
   }
@@ -1276,15 +1282,25 @@ async function loadDetail(planOrderId) {
     await loadServiceTemplatePreview()
     const parsed = safeParseJson(detail.value?.order?.serviceDetailJson)
     applyServiceForm(parsed)
+    await loadServiceFormState(planOrderId)
     serviceForm.currentRoleCode = normalize(serviceForm.currentRoleCode || currentUser.value?.roleCode || 'STORE_SERVICE')
     verificationCode.value = detail.value?.order?.verificationCode || ''
     await ensureCurrentRoleBound(planOrderId)
   } catch {
     detail.value = null
+    serviceFormState.value = null
     serviceTemplatePreview.value = null
     applyServiceForm()
   } finally {
     detailLoading.value = false
+  }
+}
+
+async function loadServiceFormState(planOrderId) {
+  try {
+    serviceFormState.value = await fetchPlanOrderServiceFormState(planOrderId)
+  } catch {
+    serviceFormState.value = null
   }
 }
 
@@ -1381,7 +1397,7 @@ async function handleConfirmPaperForm() {
     await ElMessageBox.confirm(
       canViewServiceConfirmAmounts.value
         ? '请确认服务确认单已经打印，客户已在线下纸质单手写签名。本操作只记录纸质确认，不会自动开始服务。'
-        : '当前角色不能查看确认单金额，请确认客户签署的是当前打印版本；如需金额确认，请由店长或选片负责人重新打印含金额版本。本操作只记录纸质确认，不会自动开始服务。',
+        : '当前角色不能查看确认单金额，请确认客户签署的是当前打印版本；如需金额确认，请由总部或财务处理。本操作只记录纸质确认，不会自动开始服务。',
       '确认纸质单',
       {
         confirmButtonText: '确认纸质单',
@@ -1537,7 +1553,7 @@ async function handlePrintServiceForm() {
   if (!canViewServiceConfirmAmounts.value) {
     try {
       await ElMessageBox.confirm(
-        '当前角色打印的纸质确认单不包含确认单金额，建议由店长或选片负责人打印含金额版本。是否继续打印？',
+        '当前角色打印的纸质确认单不包含确认单金额；如需金额确认，请由总部或财务处理。是否继续打印？',
         '确认打印',
         {
           confirmButtonText: '继续打印',

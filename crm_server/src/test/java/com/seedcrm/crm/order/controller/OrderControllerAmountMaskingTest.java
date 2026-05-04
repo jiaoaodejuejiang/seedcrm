@@ -66,7 +66,7 @@ class OrderControllerAmountMaskingTest {
     }
 
     @Test
-    void storeManagerShouldHideBusinessAmountsButKeepServiceConfirmAmount() throws Exception {
+    void storeManagerShouldHideBusinessAndServiceConfirmAmounts() throws Exception {
         when(permissionRequestContextResolver.resolve(request)).thenReturn(context("STORE_MANAGER"));
 
         ApiResponse<OrderResponse> response = controller.updateServiceDetail(null, request);
@@ -76,8 +76,8 @@ class OrderControllerAmountMaskingTest {
         assertThat(data.getDeposit()).isNull();
         assertThat(data.getVerificationCode()).isNull();
         JsonNode serviceDetail = objectMapper.readTree(data.getServiceDetailJson());
-        assertThat(serviceDetail.path("serviceConfirmAmount").decimalValue()).isEqualByComparingTo("1288.00");
-        assertThat(serviceDetail.path("serviceTemplate").path("config").path("price").asInt()).isEqualTo(99);
+        assertThat(serviceDetail.path("serviceConfirmAmount").isNull()).isTrue();
+        assertThat(serviceDetail.path("serviceTemplate").path("config").path("price").isNull()).isTrue();
     }
 
     @Test
@@ -125,7 +125,7 @@ class OrderControllerAmountMaskingTest {
     }
 
     @Test
-    void photoSelectorSaveShouldKeepServiceAmountEditable() throws Exception {
+    void photoSelectorSaveShouldMaskServiceAmountsToPreserveOriginalValues() throws Exception {
         when(permissionRequestContextResolver.resolve(request)).thenReturn(context("PHOTO_SELECTOR"));
         OrderServiceDetailDTO dto = serviceDetailRequest("2888.00");
 
@@ -134,12 +134,13 @@ class OrderControllerAmountMaskingTest {
         ArgumentCaptor<OrderServiceDetailDTO> dtoCaptor = ArgumentCaptor.forClass(OrderServiceDetailDTO.class);
         verify(orderService).updateServiceDetail(dtoCaptor.capture(), any());
         JsonNode submitted = objectMapper.readTree(dtoCaptor.getValue().getServiceDetailJson());
-        assertThat(submitted.has("_amountsMasked")).isFalse();
+        assertThat(submitted.path("_amountsMasked").asBoolean()).isTrue();
         assertThat(response.getData().getAmount()).isNull();
         assertThat(response.getData().getDeposit()).isNull();
         assertThat(response.getData().getVerificationCode()).isNull();
         JsonNode returned = objectMapper.readTree(response.getData().getServiceDetailJson());
-        assertThat(returned.path("serviceConfirmAmount").decimalValue()).isEqualByComparingTo("1288.00");
+        assertThat(returned.path("serviceConfirmAmount").isNull()).isTrue();
+        assertThat(returned.path("serviceTemplate").path("config").path("price").isNull()).isTrue();
     }
 
     private PermissionRequestContext context(String roleCode) {

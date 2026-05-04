@@ -231,7 +231,7 @@ export function canViewBusinessAmounts(roleCode = authState.currentUser?.roleCod
 }
 
 export function canViewServiceAmounts(roleCode = authState.currentUser?.roleCode) {
-  return ['ADMIN', 'FINANCE', 'STORE_MANAGER', 'PHOTO_SELECTOR'].includes(normalizeRoleCode(roleCode))
+  return ['ADMIN', 'FINANCE'].includes(normalizeRoleCode(roleCode))
 }
 
 export function hasRouteAccess(path, moduleCode, roleCodes = []) {

@@ -1,5 +1,6 @@
 package com.seedcrm.crm.permission.support;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -97,5 +99,43 @@ class OrderPermissionGuardTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("ledger-only");
         verifyNoInteractions(permissionService);
+    }
+
+    @Test
+    void shouldMapFinanceRefundSceneToPaymentPermission() {
+        when(resourceResolver.resolveOrderOwnerId(1L)).thenReturn(1001L);
+        when(authService.resolveStoreId(1001L)).thenReturn(10L);
+        when(permissionService.check(any())).thenReturn(new PermissionCheckResponse(true, "ORDER:REFUND_PAYMENT:FINANCE:ALL", "ALL", "allowed"));
+
+        PermissionRequestContext context = new PermissionRequestContext();
+        context.setRoleCode("FINANCE");
+        context.setDataScope("ALL");
+        context.setCurrentUserId(1001L);
+
+        guard.checkRefund(context, 1L, "FINANCE_VERIFIED_PAYMENT");
+
+        ArgumentCaptor<com.seedcrm.crm.permission.dto.PermissionCheckRequest> requestCaptor =
+                ArgumentCaptor.forClass(com.seedcrm.crm.permission.dto.PermissionCheckRequest.class);
+        org.mockito.Mockito.verify(permissionService).check(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getActionCode()).isEqualTo("REFUND_PAYMENT");
+    }
+
+    @Test
+    void shouldMapStoreRefundSceneToStoreRefundPermission() {
+        when(resourceResolver.resolveOrderStoreScopeOwnerId(1L)).thenReturn(1002L);
+        when(authService.resolveStoreId(1002L)).thenReturn(10L);
+        when(permissionService.check(any())).thenReturn(new PermissionCheckResponse(true, "ORDER:REFUND_STORE:STORE_SERVICE:STORE", "STORE", "allowed"));
+
+        PermissionRequestContext context = new PermissionRequestContext();
+        context.setRoleCode("STORE_SERVICE");
+        context.setDataScope("STORE");
+        context.setCurrentStoreId(10L);
+
+        guard.checkRefund(context, 1L, "STORE_SERVICE");
+
+        ArgumentCaptor<com.seedcrm.crm.permission.dto.PermissionCheckRequest> requestCaptor =
+                ArgumentCaptor.forClass(com.seedcrm.crm.permission.dto.PermissionCheckRequest.class);
+        org.mockito.Mockito.verify(permissionService).check(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getActionCode()).isEqualTo("REFUND_STORE");
     }
 }

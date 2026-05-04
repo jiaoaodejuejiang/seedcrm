@@ -75,9 +75,24 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private static final String REFUND_SCENE_FINANCE_PAYMENT = "FINANCE_VERIFIED_PAYMENT";
     private static final String CONFIG_DEPOSIT_DIRECT_ENABLED = "deposit.direct.enabled";
     private static final String CONFIG_SERVICE_AMOUNT_EDIT_ROLES = "amount.visibility.service_confirm_edit_roles";
+    private static final String CONFIG_APPOINTMENT_REASON_ALLOWED_CODES = "appointment.reason.allowed_codes";
+    private static final String CONFIG_APPOINTMENT_REASON_REQUIRED_ACTIONS = "appointment.reason.required_actions";
+    private static final String CONFIG_APPOINTMENT_REASON_DEFAULT_CREATE = "appointment.reason.default_create";
+    private static final String CONFIG_APPOINTMENT_REASON_DEFAULT_CHANGE = "appointment.reason.default_change";
+    private static final String CONFIG_APPOINTMENT_REASON_DEFAULT_CANCEL = "appointment.reason.default_cancel";
     private static final String DEFAULT_SERVICE_AMOUNT_EDIT_ROLES = "ADMIN,FINANCE";
+    private static final String DEFAULT_APPOINTMENT_REASON_ALLOWED_CODES =
+            "CUSTOMER_REQUEST,RESCHEDULE,STORE_ADJUST,TRAFFIC_DELAY,CUSTOMER_CANCEL";
+    private static final String DEFAULT_APPOINTMENT_REASON_REQUIRED_ACTIONS = "";
+    private static final String DEFAULT_APPOINTMENT_REASON_CREATE = "CUSTOMER_REQUEST";
+    private static final String DEFAULT_APPOINTMENT_REASON_CHANGE = "RESCHEDULE";
+    private static final String DEFAULT_APPOINTMENT_REASON_CANCEL = "CUSTOMER_CANCEL";
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter ACTION_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final Set<String> APPOINTMENT_ACTION_TYPES = Set.of(
+            "APPOINTMENT_CREATE",
+            "APPOINTMENT_CHANGE",
+            "APPOINTMENT_CANCEL");
     private static final Set<String> ACTIVE_APPOINTMENT_ACTIONS = Set.of(
             "APPOINTMENT_CREATE",
             "APPOINTMENT_CHANGE");
@@ -267,10 +282,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setAppointmentTime(nextAppointmentTime);
         order.setAppointmentStoreName(nextStoreName);
         updateRemark(order, orderAppointmentDTO.getRemark());
-        Order updated = updateOrderStatus(order, OrderStatus.APPOINTMENT);
         boolean reschedule = currentStatus == OrderStatus.APPOINTMENT;
+        String actionType = reschedule ? "APPOINTMENT_CHANGE" : "APPOINTMENT_CREATE";
+        String reasonType = resolveAppointmentReasonType(actionType, orderAppointmentDTO.getAppointmentReasonType());
+        Order updated = updateOrderStatus(order, OrderStatus.APPOINTMENT);
         recordOrderAction(updated.getId(),
-                reschedule ? "APPOINTMENT_CHANGE" : "APPOINTMENT_CREATE",
+                actionType,
                 currentStatus.name(),
                 OrderStatus.APPOINTMENT.name(),
                 operatorUserId,
@@ -285,9 +302,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                         previousStoreName,
                         nextStoreName,
                         orderAppointmentDTO.getRemark(),
-                        resolveAppointmentReasonType(
-                                orderAppointmentDTO.getAppointmentReasonType(),
-                                reschedule ? "RESCHEDULE" : "CUSTOMER_REQUEST"),
+                        reasonType,
                         operatorRoleCode,
                         resolveAppointmentSourceSurface(orderAppointmentDTO.getSourceSurface())));
         systemFlowRuntimeBridge.recordOrderAction(updated, "ORDER_PAID", "ORDER_APPOINTMENT",
@@ -318,6 +333,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setAppointmentTime(null);
         order.setAppointmentStoreName(null);
         updateRemark(order, orderActionDTO.getRemark());
+        String reasonType = resolveAppointmentReasonType(
+                "APPOINTMENT_CANCEL",
+                orderActionDTO == null ? null : orderActionDTO.getAppointmentReasonType());
         Order updated = updateOrderStatus(order, OrderStatus.PAID_DEPOSIT);
         recordOrderAction(updated.getId(),
                 "APPOINTMENT_CANCEL",
@@ -335,9 +353,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                         previousStoreName,
                         null,
                         orderActionDTO == null ? null : orderActionDTO.getRemark(),
-                        resolveAppointmentReasonType(
-                                orderActionDTO == null ? null : orderActionDTO.getAppointmentReasonType(),
-                                "CUSTOMER_CANCEL"),
+                        reasonType,
                         operatorRoleCode,
                         resolveAppointmentSourceSurface(orderActionDTO == null ? null : orderActionDTO.getSourceSurface())));
         systemFlowRuntimeBridge.recordOrderAction(updated, "APPOINTMENT", "ORDER_APPOINTMENT_CANCEL",
@@ -1308,12 +1324,115 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 + "}";
     }
 
-    private String resolveAppointmentReasonType(String value, String defaultValue) {
-        String raw = StringUtils.hasText(value) ? value.trim() : defaultValue;
-        if (!StringUtils.hasText(raw)) {
+    private String resolveAppointmentReasonType(String actionType, String value) {
+        String normalizedActionType = normalizeAppointmentActionType(actionType);
+        if (appointmentReasonRequiredActions().contains(normalizedActionType) && !StringUtils.hasText(value)) {
+            throw new BusinessException("appointment reason is required");
+        }
+        String raw = firstText(value, appointmentReasonDefaultForAction(normalizedActionType));
+        String normalized = normalizeAppointmentReasonCode(raw);
+        if (!StringUtils.hasText(normalized)) {
             return null;
         }
-        String normalized = raw.toUpperCase(Locale.ROOT)
+        Set<String> allowedCodes = appointmentReasonAllowedCodes();
+        if (!allowedCodes.contains(normalized)) {
+            String hardDefault = normalizeAppointmentReasonCode(hardDefaultAppointmentReasonForAction(normalizedActionType));
+            if (!StringUtils.hasText(value) && allowedCodes.contains(hardDefault)) {
+                return hardDefault;
+            }
+            if (!StringUtils.hasText(value) && !allowedCodes.isEmpty()) {
+                return allowedCodes.iterator().next();
+            }
+            throw new BusinessException("appointment reason is not allowed: " + normalized);
+        }
+        return normalized;
+    }
+
+    private Set<String> appointmentReasonAllowedCodes() {
+        Set<String> configured = parseAppointmentReasonCodes(getSystemConfigString(
+                CONFIG_APPOINTMENT_REASON_ALLOWED_CODES,
+                DEFAULT_APPOINTMENT_REASON_ALLOWED_CODES));
+        return configured.isEmpty()
+                ? parseAppointmentReasonCodes(DEFAULT_APPOINTMENT_REASON_ALLOWED_CODES)
+                : configured;
+    }
+
+    private Set<String> appointmentReasonRequiredActions() {
+        Set<String> configured = parseAppointmentActionTypes(getSystemConfigString(
+                CONFIG_APPOINTMENT_REASON_REQUIRED_ACTIONS,
+                DEFAULT_APPOINTMENT_REASON_REQUIRED_ACTIONS));
+        configured.removeIf(action -> !APPOINTMENT_ACTION_TYPES.contains(action));
+        return configured;
+    }
+
+    private String appointmentReasonDefaultForAction(String actionType) {
+        String key = switch (normalizeAppointmentActionType(actionType)) {
+            case "APPOINTMENT_CHANGE" -> CONFIG_APPOINTMENT_REASON_DEFAULT_CHANGE;
+            case "APPOINTMENT_CANCEL" -> CONFIG_APPOINTMENT_REASON_DEFAULT_CANCEL;
+            default -> CONFIG_APPOINTMENT_REASON_DEFAULT_CREATE;
+        };
+        String configured = normalizeAppointmentReasonCode(getSystemConfigString(
+                key,
+                hardDefaultAppointmentReasonForAction(actionType)));
+        return StringUtils.hasText(configured) ? configured : hardDefaultAppointmentReasonForAction(actionType);
+    }
+
+    private String hardDefaultAppointmentReasonForAction(String actionType) {
+        return switch (normalizeAppointmentActionType(actionType)) {
+            case "APPOINTMENT_CHANGE" -> DEFAULT_APPOINTMENT_REASON_CHANGE;
+            case "APPOINTMENT_CANCEL" -> DEFAULT_APPOINTMENT_REASON_CANCEL;
+            default -> DEFAULT_APPOINTMENT_REASON_CREATE;
+        };
+    }
+
+    private String getSystemConfigString(String key, String defaultValue) {
+        try {
+            String configured = systemConfigService.getString(key, defaultValue);
+            return StringUtils.hasText(configured) ? configured : defaultValue;
+        } catch (Exception exception) {
+            log.warn("failed to read system config {}, fallback to default", key, exception);
+            return defaultValue;
+        }
+    }
+
+    private Set<String> parseAppointmentReasonCodes(String value) {
+        Set<String> result = new LinkedHashSet<>();
+        if (!StringUtils.hasText(value)) {
+            return result;
+        }
+        for (String item : value.split("[,，\\s]+")) {
+            String normalized = normalizeAppointmentReasonCode(item);
+            if (StringUtils.hasText(normalized)) {
+                result.add(normalized);
+            }
+        }
+        return result;
+    }
+
+    private Set<String> parseAppointmentActionTypes(String value) {
+        Set<String> result = new LinkedHashSet<>();
+        if (!StringUtils.hasText(value)) {
+            return result;
+        }
+        for (String item : value.split("[,，\\s]+")) {
+            String normalized = normalizeAppointmentActionType(item);
+            if (StringUtils.hasText(normalized)) {
+                result.add(normalized);
+            }
+        }
+        return result;
+    }
+
+    private String normalizeAppointmentActionType(String value) {
+        return normalizeAppointmentReasonCode(value);
+    }
+
+    private String normalizeAppointmentReasonCode(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim()
+                .toUpperCase(Locale.ROOT)
                 .replace('-', '_')
                 .replace(' ', '_');
         return normalized.length() > 64 ? normalized.substring(0, 64) : normalized;

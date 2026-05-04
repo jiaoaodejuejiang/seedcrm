@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'seedcrm.system-console'
-const SYSTEM_CONSOLE_SCHEMA_VERSION = 4
+const SYSTEM_CONSOLE_SCHEMA_VERSION = 5
 const SELF_SALARY_ROLE_CODES = [
   'ADMIN',
   'FINANCE',
@@ -293,7 +293,12 @@ const DEFAULT_STATE = {
     { id: 3, paramKey: 'system.defaultStoreId', paramValue: '10', category: '系统', remark: '默认门店 ID' },
     { id: 4, paramKey: 'wecom.customerProfile.enabled', paramValue: 'true', category: '私域客服', remark: '控制客服画像是否在企业微信展示' },
     { id: 5, paramKey: 'wecom.moments.massSend.enabled', paramValue: 'true', category: '私域客服', remark: '控制朋友圈定时群发功能开关' },
-    { id: 6, paramKey: 'wecom.tag.sync.enabled', paramValue: 'true', category: '私域客服', remark: '控制企微标签同步开关' }
+    { id: 6, paramKey: 'wecom.tag.sync.enabled', paramValue: 'true', category: '私域客服', remark: '控制企微标签同步开关' },
+    { id: 7, paramKey: 'appointment.reason.allowed_codes', paramValue: 'CUSTOMER_REQUEST,RESCHEDULE,STORE_ADJUST,TRAFFIC_DELAY,CUSTOMER_CANCEL', category: '客资', remark: '顾客排档原因白名单，逗号分隔' },
+    { id: 8, paramKey: 'appointment.reason.required_actions', paramValue: '', category: '客资', remark: '需要强制选择原因的排档动作' },
+    { id: 9, paramKey: 'appointment.reason.default_create', paramValue: 'CUSTOMER_REQUEST', category: '客资', remark: '首次约档默认原因' },
+    { id: 10, paramKey: 'appointment.reason.default_change', paramValue: 'RESCHEDULE', category: '客资', remark: '改档默认原因' },
+    { id: 11, paramKey: 'appointment.reason.default_cancel', paramValue: 'CUSTOMER_CANCEL', category: '客资', remark: '取消预约默认原因' }
   ],
   wecomContacts: [
     { id: 1, contactName: '企微客服A', externalUserId: 'wx_external_a', scene: '术前咨询', isEnabled: 1 },

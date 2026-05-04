@@ -1123,15 +1123,126 @@ public class WorkbenchServiceImpl implements WorkbenchService {
     }
 
     private AppointmentRecordResponse buildAppointmentRecordResponse(OrderActionRecord record) {
+        String actionType = normalize(record == null ? null : record.getActionType());
+        JsonNode extra = parseActionExtra(record == null ? null : record.getExtraJson());
         return new AppointmentRecordResponse(
-                record.getActionType(),
+                record.getId(),
+                actionType,
                 record.getFromStatus(),
                 record.getToStatus(),
                 record.getOperatorUserId(),
                 staffDirectoryService.getUserName(record.getOperatorUserId()),
-                null,
+                appointmentActionSummary(actionType),
+                buildAppointmentRecordDetailItems(record, extra),
+                textValue(extra, "reasonType"),
+                textValue(extra, "sourceSurface"),
+                safeAppointmentRemark(record, extra),
                 buildSafeAppointmentExtraJson(record),
                 record.getCreateTime());
+    }
+
+    private String appointmentActionSummary(String actionType) {
+        return switch (normalize(actionType)) {
+            case "APPOINTMENT_CREATE" -> "约档";
+            case "APPOINTMENT_CHANGE" -> "改档";
+            case "APPOINTMENT_CANCEL" -> "取消预约";
+            default -> "排档记录";
+        };
+    }
+
+    private List<String> buildAppointmentRecordDetailItems(OrderActionRecord record, JsonNode extra) {
+        if (extra == null || extra.isMissingNode() || extra.isNull()) {
+            String remark = safeAppointmentRemark(record, extra);
+            return StringUtils.hasText(remark) ? List.of("备注：" + remark) : List.of();
+        }
+        List<String> items = new ArrayList<>();
+        addAppointmentRecordDetail(items, "原门店", textValue(extra, "storeNameBefore"));
+        addAppointmentRecordDetail(items, "新门店", firstTextValue(extra, "storeNameAfter", "storeName"));
+        addAppointmentRecordDetail(items, "原档期", firstTextValue(extra, "appointmentSlotsBefore", "appointmentTimeBefore"));
+        addAppointmentRecordDetail(items, "新档期", firstTextValue(extra, "appointmentSlotsAfter", "appointmentTimeAfter"));
+        String headcountBefore = textValue(extra, "headcountBefore");
+        String headcountAfter = textValue(extra, "headcountAfter");
+        if (StringUtils.hasText(headcountBefore) || StringUtils.hasText(headcountAfter)) {
+            addAppointmentRecordDetail(items, "到店人数", joinAppointmentChangeText(headcountBefore, headcountAfter));
+        }
+        addAppointmentRecordDetail(items, "来源入口", textValue(extra, "sourceSurface"));
+        addAppointmentRecordDetail(items, "备注", safeAppointmentRemark(record, extra));
+        return items;
+    }
+
+    private void addAppointmentRecordDetail(List<String> items, String label, String value) {
+        if (StringUtils.hasText(label) && StringUtils.hasText(value)) {
+            items.add(label + "：" + value.trim());
+        }
+    }
+
+    private String safeAppointmentRemark(OrderActionRecord record, JsonNode extra) {
+        String extraRemark = textValue(extra, "remark");
+        if (StringUtils.hasText(extraRemark)) {
+            return extraRemark;
+        }
+        String remark = record == null ? null : record.getRemark();
+        return StringUtils.hasText(remark) ? remark.trim() : null;
+    }
+
+    private String firstTextValue(JsonNode node, String... fieldNames) {
+        if (fieldNames == null) {
+            return null;
+        }
+        for (String fieldName : fieldNames) {
+            String value = listOrTextValue(node, fieldName);
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String listOrTextValue(JsonNode node, String fieldName) {
+        if (node == null || !StringUtils.hasText(fieldName)) {
+            return null;
+        }
+        JsonNode value = node.path(fieldName);
+        if (value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+        if (value.isArray()) {
+            List<String> parts = new ArrayList<>();
+            for (JsonNode item : value) {
+                if (parts.size() >= 20) {
+                    break;
+                }
+                String text = scalarTextValue(item);
+                if (StringUtils.hasText(text)) {
+                    parts.add(text);
+                }
+            }
+            return parts.isEmpty() ? null : String.join("、", parts);
+        }
+        return scalarTextValue(value);
+    }
+
+    private String scalarTextValue(JsonNode value) {
+        if (value == null || value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+        if (value.isNumber() || value.isBoolean() || value.isTextual()) {
+            String text = value.asText();
+            return StringUtils.hasText(text) ? text.trim() : null;
+        }
+        return null;
+    }
+
+    private String joinAppointmentChangeText(String before, String after) {
+        boolean hasBefore = StringUtils.hasText(before);
+        boolean hasAfter = StringUtils.hasText(after);
+        if (hasBefore && hasAfter && !before.trim().equals(after.trim())) {
+            return before.trim() + " -> " + after.trim();
+        }
+        if (hasAfter) {
+            return after.trim();
+        }
+        return hasBefore ? before.trim() : null;
     }
 
     private String buildSafeAppointmentExtraJson(OrderActionRecord record) {

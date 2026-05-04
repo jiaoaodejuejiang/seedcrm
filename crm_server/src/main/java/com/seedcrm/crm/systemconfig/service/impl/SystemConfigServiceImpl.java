@@ -41,6 +41,8 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     private static final String SYSTEM_BASE_URL_KEY = "system.domain.systemBaseUrl";
     private static final String API_BASE_URL_KEY = "system.domain.apiBaseUrl";
     private static final String STORE_SCHEDULE_CONFIG_KEY = "store.schedule.configs";
+    private static final String DEFAULT_APPOINTMENT_REASON_ALLOWED_CODES =
+            "CUSTOMER_REQUEST,RESCHEDULE,STORE_ADJUST,TRAFFIC_DELAY,CUSTOMER_CANCEL";
     private static final String DEFAULT_SYSTEM_BASE_URL = "http://127.0.0.1:8003";
     private static final String DEFAULT_API_BASE_URL = "http://127.0.0.1:8004";
     private static final String MASKED_VALUE = "******";
@@ -81,6 +83,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             "deposit.",
             "amount.",
             "clue.",
+            "appointment.",
             "store.",
             "form_designer.",
             "distribution.",
@@ -1208,6 +1211,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                         validator, "门店档期配置校验通过", null);
             }
             case "CLUE_DEDUP" -> validateClueDedupItem(item, capability);
+            case "APPOINTMENT_REASON" -> validateAppointmentReasonItem(item, capability);
             case "FINANCE_VISIBILITY" -> validateFinanceVisibilityItem(item, capability);
             case "BLOCKED" -> validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
                     validator, "该能力已被阻断", "请使用专用业务流程处理。");
@@ -1267,6 +1271,93 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         }
         return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
                 capability.validatorCode(), "财务可见性配置校验通过", null);
+    }
+
+    private SystemConfigDtos.ValidationItemResponse validateAppointmentReasonItem(RawDraftItem item,
+                                                                                 RawCapability capability) {
+        String normalizedKey = normalizeConfigKey(item.configKey());
+        if (normalizedKey.endsWith(".allowed_codes")) {
+            Set<String> codes = parseConfigCodes(item.afterValue());
+            if (codes.isEmpty()) {
+                return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                        capability.validatorCode(), "排档原因白名单不能为空",
+                        "请至少保留一个原因码，例如 CUSTOMER_REQUEST。");
+            }
+            if (codes.size() > 50) {
+                return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                        capability.validatorCode(), "排档原因白名单最多支持 50 个原因码",
+                        "请清理不再使用的原因码后重试。");
+            }
+            return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), "排档原因白名单校验通过", null);
+        }
+        if (normalizedKey.endsWith(".required_actions")) {
+            Set<String> actions = parseConfigCodes(item.afterValue());
+            Set<String> allowedActions = Set.of("APPOINTMENT_CREATE", "APPOINTMENT_CHANGE", "APPOINTMENT_CANCEL");
+            for (String action : actions) {
+                if (!allowedActions.contains(action)) {
+                    return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                            capability.validatorCode(), "排档必填动作只支持 APPOINTMENT_CREATE、APPOINTMENT_CHANGE、APPOINTMENT_CANCEL",
+                            "请移除未登记的排档动作：" + action);
+                }
+            }
+            return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), "排档必填动作校验通过", null);
+        }
+        if (normalizedKey.endsWith(".default_create")
+                || normalizedKey.endsWith(".default_change")
+                || normalizedKey.endsWith(".default_cancel")) {
+            String code = normalizeConfigCode(item.afterValue());
+            if (!StringUtils.hasText(code)) {
+                return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                        capability.validatorCode(), "排档默认原因不能为空",
+                        "请填写已登记的原因码。");
+            }
+            Set<String> allowedCodes = parseConfigCodes(findValue(
+                    "appointment.reason.allowed_codes",
+                    item.scopeType(),
+                    item.scopeId()));
+            if (allowedCodes.isEmpty()) {
+                allowedCodes = parseConfigCodes(DEFAULT_APPOINTMENT_REASON_ALLOWED_CODES);
+            }
+            if (!allowedCodes.contains(code)) {
+                return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                        capability.validatorCode(), "排档默认原因必须在白名单内",
+                        "请先把 " + code + " 加入 appointment.reason.allowed_codes。");
+            }
+            return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), "排档默认原因校验通过", null);
+        }
+        return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                capability.validatorCode(), "排档原因配置校验通过", null);
+    }
+
+    private Set<String> parseConfigCodes(String value) {
+        if (!StringUtils.hasText(value)) {
+            return Set.of();
+        }
+        Set<String> result = new java.util.LinkedHashSet<>();
+        for (String item : value.split("[,，\\s]+")) {
+            String code = normalizeConfigCode(item);
+            if (StringUtils.hasText(code)) {
+                result.add(code);
+            }
+        }
+        return result;
+    }
+
+    private String normalizeConfigCode(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String code = value.trim()
+                .toUpperCase(Locale.ROOT)
+                .replace('-', '_')
+                .replace(' ', '_');
+        if (!code.matches("[A-Z0-9_]{1,64}")) {
+            throw new BusinessException("配置码只能包含大写字母、数字和下划线，最长 64 位");
+        }
+        return code;
     }
 
     private JsonNode parseJson(String key, String value) {
@@ -1565,6 +1656,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         }
         if (normalized.startsWith("deposit.")
                 || normalized.startsWith("clue.")
+                || normalized.startsWith("appointment.")
                 || normalized.startsWith("store.")
                 || normalized.startsWith("distribution.")
                 || normalized.startsWith("form_designer.")
@@ -1577,7 +1669,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     private List<String> resolveImpactModules(String key) {
         String normalized = normalizeConfigKey(key);
         List<String> modules = new ArrayList<>();
-        if (normalized.startsWith("clue.")) {
+        if (normalized.startsWith("clue.") || normalized.startsWith("appointment.")) {
             modules.add("客资中心");
         }
         if (normalized.startsWith("deposit.") || normalized.startsWith("workflow.")
@@ -1615,6 +1707,8 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             warnings.add("金额可见规则会影响门店角色看到的定金、团购和核销金额。");
         } else if (normalized.startsWith("clue.dedup.")) {
             warnings.add("客资去重配置会影响后续接口拉取入库和客资记录合并方式。");
+        } else if (normalized.startsWith("appointment.reason.")) {
+            warnings.add("排档原因配置会影响顾客排档的原因选项、默认原因和必填校验，不改变订单状态流。");
         } else if (normalized.startsWith("deposit.direct.")) {
             warnings.add("定金免码配置会影响定金订单是否可直接进入后续服务流程。");
         } else if (normalized.startsWith("store.schedule.")) {

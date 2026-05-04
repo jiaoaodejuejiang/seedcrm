@@ -175,6 +175,7 @@ public class SystemConfigSchemaInitializer {
         seedCapability("DEPOSIT_DIRECT", "deposit.direct.%", "STORE_SERVICE", "BOOLEAN", "MEDIUM", false, "BOOLEAN", "CACHE_EVICT");
         seedCapability("AMOUNT_VISIBILITY", "amount.visibility.%", "FINANCE", "STRING", "HIGH", false, "FINANCE_VISIBILITY", "CACHE_EVICT");
         seedCapability("CLUE_DEDUP", "clue.dedup.%", "CLUE", "STRING", "MEDIUM", false, "CLUE_DEDUP", "CACHE_EVICT");
+        seedCapability("APPOINTMENT_REASON", "appointment.reason.%", "CLUE", "STRING", "MEDIUM", false, "APPOINTMENT_REASON", "CACHE_EVICT");
         seedCapability("STORE_SCHEDULE", "store.schedule.%", "STORE_SERVICE", "JSON", "MEDIUM", false, "STORE_SCHEDULE", "CACHE_EVICT");
         seedCapability("SERVICE_FORM_DESIGNER", "form_designer.%", "PLANORDER", "STRING", "MEDIUM", false, "FORM_DESIGNER", "MODULE_CALLBACK");
         seedCapability("DISTRIBUTION_MAPPING", DistributionOrderTypeMappingResolver.CONFIG_KEY, "SCHEDULER", "JSON", "MEDIUM", false, "DISTRIBUTION_MAPPING", "MODULE_CALLBACK");
@@ -201,6 +202,26 @@ public class SystemConfigSchemaInitializer {
                 "允许填写或修改服务确认单金额的角色编码，英文逗号分隔；默认仅总部与财务可编辑");
         seedDefault("clue.dedup.enabled", "true", "BOOLEAN", "客资入库启用按客户身份去重，默认开启");
         seedDefault("clue.dedup.window_days", "90", "NUMBER", "客资去重窗口天数；窗口内同客户保留一条基础客资，多条订单/动作写入客资记录");
+        seedDefault("appointment.reason.allowed_codes",
+                "CUSTOMER_REQUEST,RESCHEDULE,STORE_ADJUST,TRAFFIC_DELAY,CUSTOMER_CANCEL",
+                "STRING",
+                "Appointment reason whitelist for customer scheduling actions.");
+        seedDefault("appointment.reason.required_actions",
+                "",
+                "STRING",
+                "Appointment actions that must submit an explicit reason code.");
+        seedDefault("appointment.reason.default_create",
+                "CUSTOMER_REQUEST",
+                "STRING",
+                "Default reason for first appointment scheduling.");
+        seedDefault("appointment.reason.default_change",
+                "RESCHEDULE",
+                "STRING",
+                "Default reason for rescheduling.");
+        seedDefault("appointment.reason.default_cancel",
+                "CUSTOMER_CANCEL",
+                "STRING",
+                "Default reason for appointment cancellation.");
         seedDefault("store.schedule.configs", """
                 [
                   {"id":1,"storeName":"静安门店","morningStart":"09:00","morningEnd":"12:00","afternoonStart":"13:30","afternoonEnd":"18:00","slotHours":1.5,"remark":"医美咨询与基础皮肤项目排档"},

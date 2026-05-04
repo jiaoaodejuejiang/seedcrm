@@ -599,6 +599,54 @@ class SystemConfigServiceImplTest {
                 .allSatisfy(event -> assertThat(event.getStatus()).isEqualTo("SUCCESS"));
     }
 
+    @Test
+    void shouldValidateAppointmentReasonConfigDraft() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("appointment.reason.required_actions");
+        request.setConfigValue("APPOINTMENT_CHANGE,APPOINTMENT_CANCEL");
+        request.setValueType("STRING");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        SystemConfigDtos.ValidationResponse validation = service.validateDraft(draft.getDraftNo());
+
+        assertThat(validation.getValid()).isTrue();
+        assertThat(validation.getItems().get(0).getValidatorCode()).isEqualTo("APPOINTMENT_REASON");
+    }
+
+    @Test
+    void shouldRejectInvalidAppointmentReasonActionConfigDraft() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("appointment.reason.required_actions");
+        request.setConfigValue("APPOINTMENT_CHANGE,HACK_STATUS");
+        request.setValueType("STRING");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        SystemConfigDtos.ValidationResponse validation = service.validateDraft(draft.getDraftNo());
+
+        assertThat(validation.getValid()).isFalse();
+        assertThat(validation.getItems().get(0).getStatus()).isEqualTo("BLOCK");
+        assertThat(validation.getItems().get(0).getMessage()).contains("APPOINTMENT_CREATE");
+    }
+
+    @Test
+    void shouldRejectAppointmentDefaultReasonOutsideWhitelist() {
+        jdbcTemplate.update("""
+                INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
+                VALUES ('appointment.reason.allowed_codes', 'CUSTOMER_REQUEST', 'STRING', 'GLOBAL', 'GLOBAL', 1, 'allowed reasons')
+                """);
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("appointment.reason.default_change");
+        request.setConfigValue("STORE_ADJUST");
+        request.setValueType("STRING");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        SystemConfigDtos.ValidationResponse validation = service.validateDraft(draft.getDraftNo());
+
+        assertThat(validation.getValid()).isFalse();
+        assertThat(validation.getItems().get(0).getStatus()).isEqualTo("BLOCK");
+        assertThat(validation.getItems().get(0).getMessage()).contains("白名单");
+    }
+
     private void createSchema() {
         jdbcTemplate.execute("""
                 CREATE TABLE system_config (
@@ -734,6 +782,7 @@ class SystemConfigServiceImplTest {
         seedCapability("SYSTEM_DOMAIN", "system.domain.%", "SYSTEM_SETTING", "URL", "HIGH", 0, "DOMAIN_URL", "MODULE_CALLBACK");
         seedCapability("WORKFLOW_SWITCH", "workflow.%", "SYSTEM_FLOW", "BOOLEAN", "HIGH", 0, "BOOLEAN", "MODULE_CALLBACK");
         seedCapability("CLUE_DEDUP", "clue.dedup.%", "CLUE", "STRING", "MEDIUM", 0, "CLUE_DEDUP", "CACHE_EVICT");
+        seedCapability("APPOINTMENT_REASON", "appointment.reason.%", "CLUE", "STRING", "MEDIUM", 0, "APPOINTMENT_REASON", "CACHE_EVICT");
         seedCapability("STORE_SCHEDULE", "store.schedule.%", "STORE_SERVICE", "JSON", "MEDIUM", 0, "STORE_SCHEDULE", "CACHE_EVICT");
         seedCapability("WECOM_INTEGRATION", "wecom.%", "WECOM", "STRING", "HIGH", 1, "STRING", "MODULE_CALLBACK");
         seedCapability("DOUYIN_INTEGRATION", "douyin.%", "SCHEDULER", "STRING", "HIGH", 1, "STRING", "MODULE_CALLBACK");

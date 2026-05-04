@@ -112,6 +112,18 @@ class OrderServiceImplTest {
         lenient().when(systemConfigService.getBoolean("deposit.direct.enabled", true)).thenReturn(true);
         lenient().when(systemConfigService.getString("amount.visibility.service_confirm_edit_roles", "ADMIN,FINANCE"))
                 .thenReturn("ADMIN,FINANCE");
+        lenient().when(systemConfigService.getString(
+                        "appointment.reason.allowed_codes",
+                        "CUSTOMER_REQUEST,RESCHEDULE,STORE_ADJUST,TRAFFIC_DELAY,CUSTOMER_CANCEL"))
+                .thenReturn("CUSTOMER_REQUEST,RESCHEDULE,STORE_ADJUST,TRAFFIC_DELAY,CUSTOMER_CANCEL");
+        lenient().when(systemConfigService.getString("appointment.reason.required_actions", ""))
+                .thenReturn("");
+        lenient().when(systemConfigService.getString("appointment.reason.default_create", "CUSTOMER_REQUEST"))
+                .thenReturn("CUSTOMER_REQUEST");
+        lenient().when(systemConfigService.getString("appointment.reason.default_change", "RESCHEDULE"))
+                .thenReturn("RESCHEDULE");
+        lenient().when(systemConfigService.getString("appointment.reason.default_cancel", "CUSTOMER_CANCEL"))
+                .thenReturn("CUSTOMER_CANCEL");
         lenient().when(voucherVerificationGateway.verify(any(Order.class), any(), any()))
                 .thenReturn(OrderVoucherVerificationResult.skipped());
     }
@@ -276,6 +288,85 @@ class OrderServiceImplTest {
         assertThat(extra.path("operatorRoleCode").asText()).isEqualTo("CLUE_MANAGER");
         assertThat(extra.path("sourceSurface").asText()).isEqualTo("CUSTOMER_SCHEDULE");
         assertThat(extra.path("reasonType").asText()).isEqualTo("CUSTOMER_REQUEST");
+    }
+
+    @Test
+    void appointmentShouldUseConfiguredDefaultReason() throws Exception {
+        when(systemConfigService.getString("appointment.reason.default_create", "CUSTOMER_REQUEST"))
+                .thenReturn("STORE_ADJUST");
+        Order order = new Order();
+        order.setId(56L);
+        order.setOrderNo("ORD202604211234567956");
+        order.setCustomerId(256L);
+        order.setStatus(OrderStatus.PAID_DEPOSIT.name());
+        when(dbLockService.lockOrder(56L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(256L)).thenReturn(new Customer());
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+
+        OrderAppointmentDTO dto = new OrderAppointmentDTO();
+        dto.setOrderId(56L);
+        dto.setAppointmentTime(LocalDateTime.of(2026, 4, 26, 10, 0));
+        dto.setStoreName("Store B");
+
+        orderService.appointment(dto, 9001L, "CLUE_MANAGER");
+
+        ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
+        verify(orderActionRecordMapper).insert(recordCaptor.capture());
+        JsonNode extra = new ObjectMapper().readTree(recordCaptor.getValue().getExtraJson());
+        assertThat(extra.path("reasonType").asText()).isEqualTo("STORE_ADJUST");
+    }
+
+    @Test
+    void appointmentShouldRejectReasonOutsideConfiguredCodesBeforeUpdatingOrder() {
+        when(systemConfigService.getString(
+                        "appointment.reason.allowed_codes",
+                        "CUSTOMER_REQUEST,RESCHEDULE,STORE_ADJUST,TRAFFIC_DELAY,CUSTOMER_CANCEL"))
+                .thenReturn("CUSTOMER_REQUEST");
+        Order order = new Order();
+        order.setId(57L);
+        order.setOrderNo("ORD202604211234567957");
+        order.setCustomerId(257L);
+        order.setStatus(OrderStatus.PAID_DEPOSIT.name());
+        when(dbLockService.lockOrder(57L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(257L)).thenReturn(new Customer());
+
+        OrderAppointmentDTO dto = new OrderAppointmentDTO();
+        dto.setOrderId(57L);
+        dto.setAppointmentTime(LocalDateTime.of(2026, 4, 26, 10, 0));
+        dto.setStoreName("Store B");
+        dto.setAppointmentReasonType("store_adjust");
+
+        assertThatThrownBy(() -> orderService.appointment(dto, 9001L, "CLUE_MANAGER"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("appointment reason is not allowed");
+        verify(orderMapper, never()).updateById(any(Order.class));
+        verify(orderActionRecordMapper, never()).insert(any(OrderActionRecord.class));
+    }
+
+    @Test
+    void appointmentShouldRequireExplicitReasonWhenConfigured() {
+        when(systemConfigService.getString("appointment.reason.required_actions", ""))
+                .thenReturn("APPOINTMENT_CHANGE");
+        Order order = new Order();
+        order.setId(58L);
+        order.setOrderNo("ORD202604211234567958");
+        order.setCustomerId(258L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setAppointmentTime(LocalDateTime.of(2026, 4, 25, 10, 0));
+        order.setAppointmentStoreName("Store A");
+        when(dbLockService.lockOrder(58L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(258L)).thenReturn(new Customer());
+
+        OrderAppointmentDTO dto = new OrderAppointmentDTO();
+        dto.setOrderId(58L);
+        dto.setAppointmentTime(LocalDateTime.of(2026, 4, 26, 10, 0));
+        dto.setStoreName("Store B");
+
+        assertThatThrownBy(() -> orderService.appointment(dto, 9001L, "CLUE_MANAGER"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("appointment reason is required");
+        verify(orderMapper, never()).updateById(any(Order.class));
+        verify(orderActionRecordMapper, never()).insert(any(OrderActionRecord.class));
     }
 
     @Test

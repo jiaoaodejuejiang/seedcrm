@@ -111,7 +111,7 @@
               <div v-if="latestAppointmentRecord(row)" class="schedule-record-preview">
                 <div class="schedule-record-preview__head">
                   <el-tag size="small" :type="recordTagType(latestAppointmentRecord(row)?.actionType)">
-                    {{ recordActionLabel(latestAppointmentRecord(row)?.actionType) }}
+                    {{ recordPreviewActionText(latestAppointmentRecord(row)) }}
                   </el-tag>
                   <span>{{ recentRecordText(row) }}</span>
                 </div>
@@ -338,7 +338,7 @@
             档。
           </div>
         </el-form-item>
-        <el-form-item label="原因类型">
+        <el-form-item :label="appointmentReasonFieldLabel">
           <el-select
             v-model="appointmentForm.reasonType"
             :disabled="!selectedOrderCanEditAppointment"
@@ -346,6 +346,7 @@
           >
             <el-option v-for="item in appointmentReasonOptions" :key="item.itemCode" :label="item.itemLabel" :value="item.itemCode" />
           </el-select>
+          <div v-if="appointmentReasonRequired" class="appointment-reason-tip">当前动作需要选择原因</div>
         </el-form-item>
         <el-form-item label="排档备注">
           <el-input
@@ -434,12 +435,12 @@
       <el-timeline v-if="selectedAppointmentRecords.length" class="schedule-record-timeline">
         <el-timeline-item
           v-for="(record, index) in selectedAppointmentRecords"
-          :key="`${record.actionType}-${record.createTime}-${index}`"
+          :key="appointmentRecordKey(record, index)"
           :timestamp="record.createTime || '--'"
           placement="top"
         >
           <div class="schedule-record-line">
-            <strong>{{ timelineActionLabel(record.actionType) }}</strong>
+            <strong>{{ recordTimelineTitle(record) }}</strong>
             <span v-if="recordActorText(record)">{{ recordActorText(record) }}</span>
             <span v-if="statusChangeText(record)">状态：{{ statusChangeText(record) }}</span>
             <span v-if="recordReasonLabel(record)">原因：{{ recordReasonLabel(record) }}</span>
@@ -465,7 +466,11 @@ import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { appointOrder, cancelOrderAppointment } from '../api/order'
-import { fetchStoreScheduleConfigs } from '../api/systemConfig'
+import {
+  DEFAULT_APPOINTMENT_REASON_CONFIG,
+  fetchAppointmentReasonConfig,
+  fetchStoreScheduleConfigs
+} from '../api/systemConfig'
 import { fetchAppointments, fetchOrders } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
 import { formatDateTime, normalize } from '../utils/format'
@@ -505,6 +510,13 @@ const appointmentRecordDialogVisible = ref(false)
 const selectedOrder = ref(null)
 const selectedRecordOrder = ref(null)
 const pendingRouteOrderId = ref(Number(route.query.orderId || 0))
+const appointmentReasonConfig = reactive({
+  allowedCodes: [...DEFAULT_APPOINTMENT_REASON_CONFIG.allowedCodes],
+  requiredActions: [...DEFAULT_APPOINTMENT_REASON_CONFIG.requiredActions],
+  defaultCreate: DEFAULT_APPOINTMENT_REASON_CONFIG.defaultCreate,
+  defaultChange: DEFAULT_APPOINTMENT_REASON_CONFIG.defaultChange,
+  defaultCancel: DEFAULT_APPOINTMENT_REASON_CONFIG.defaultCancel
+})
 
 const orderFilters = reactive({
   customerName: '',
@@ -620,18 +632,21 @@ const appointmentCount = computed(() => schedulingOrders.value.filter((item) => 
 const waitingCount = computed(() => schedulingOrders.value.filter((item) => isUnappointedOrder(item) && !isVerifiedOrder(item)).length)
 const appointmentReasonOptions = computed(() => {
   const configured = getDictionaryOptions(consoleState, 'appointment_reason_type')
-  if (configured.length) {
-    return configured
-  }
-  return [
+  const sourceOptions = configured.length ? configured : [
     { itemCode: 'CUSTOMER_REQUEST', itemLabel: '客户主动预约' },
     { itemCode: 'RESCHEDULE', itemLabel: '客户改约' },
     { itemCode: 'STORE_ADJUST', itemLabel: '门店调整' },
     { itemCode: 'TRAFFIC_DELAY', itemLabel: '到店延迟' },
     { itemCode: 'CUSTOMER_CANCEL', itemLabel: '客户取消' }
   ]
+  const allowedCodes = appointmentReasonAllowedCodes()
+  const filtered = sourceOptions.filter((item) => allowedCodes.includes(normalizeAppointmentReasonCode(item.itemCode)))
+  return filtered.length ? filtered : sourceOptions
 })
 const selectedOrderCanEditAppointment = computed(() => canEditAppointment(selectedOrder.value))
+const selectedAppointmentActionType = computed(() => appointmentActionTypeForOrder(selectedOrder.value))
+const appointmentReasonRequired = computed(() => isAppointmentReasonRequired(selectedAppointmentActionType.value))
+const appointmentReasonFieldLabel = computed(() => (appointmentReasonRequired.value ? '原因类型 *' : '原因类型'))
 const requiredAppointmentSlotCount = computed(() => normalizeHeadcount(appointmentForm.headcount))
 const selectedAppointmentSlotValues = computed(() => normalizeSlotValues(appointmentForm.appointmentSlots))
 const selectedAppointmentSlotCount = computed(() => selectedAppointmentSlotValues.value.length)
@@ -898,10 +913,51 @@ function appointmentRecordBadges(row) {
 }
 
 function defaultAppointmentReasonType(row) {
-  if (isAppointedOrder(row)) {
-    return 'RESCHEDULE'
+  return defaultAppointmentReasonForAction(appointmentActionTypeForOrder(row))
+}
+
+function appointmentActionTypeForOrder(row) {
+  return isAppointedOrder(row) ? 'APPOINTMENT_CHANGE' : 'APPOINTMENT_CREATE'
+}
+
+function defaultAppointmentReasonForAction(actionType) {
+  const normalizedAction = normalizeAppointmentReasonCode(actionType)
+  const configuredDefault = {
+    APPOINTMENT_CHANGE: appointmentReasonConfig.defaultChange,
+    APPOINTMENT_CANCEL: appointmentReasonConfig.defaultCancel,
+    APPOINTMENT_CREATE: appointmentReasonConfig.defaultCreate
+  }[normalizedAction] || appointmentReasonConfig.defaultCreate
+  return ensureAllowedAppointmentReason(configuredDefault)
+}
+
+function isAppointmentReasonRequired(actionType) {
+  const normalizedAction = normalizeAppointmentReasonCode(actionType)
+  return appointmentReasonConfig.requiredActions
+    .map((item) => normalizeAppointmentReasonCode(item))
+    .includes(normalizedAction)
+}
+
+function appointmentReasonAllowedCodes() {
+  const configured = appointmentReasonConfig.allowedCodes
+    .map((item) => normalizeAppointmentReasonCode(item))
+    .filter(Boolean)
+  return configured.length ? [...new Set(configured)] : [...DEFAULT_APPOINTMENT_REASON_CONFIG.allowedCodes]
+}
+
+function ensureAllowedAppointmentReason(value) {
+  const normalized = normalizeAppointmentReasonCode(value)
+  const allowedCodes = appointmentReasonAllowedCodes()
+  if (normalized && allowedCodes.includes(normalized)) {
+    return normalized
   }
-  return 'CUSTOMER_REQUEST'
+  return allowedCodes[0] || ''
+}
+
+function normalizeAppointmentReasonCode(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[-\s]+/g, '_')
 }
 
 function openAppointmentRecordDialog(row) {
@@ -919,6 +975,10 @@ function recordActionLabel(actionType) {
   return labels[normalized] || '记录'
 }
 
+function recordPreviewActionText(record) {
+  return record?.summary || recordActionLabel(record?.actionType)
+}
+
 function timelineActionLabel(actionType) {
   const normalized = normalize(actionType)
   const labels = {
@@ -927,6 +987,14 @@ function timelineActionLabel(actionType) {
     APPOINTMENT_CANCEL: '取消预约'
   }
   return labels[normalized] || '排档记录'
+}
+
+function recordTimelineTitle(record) {
+  return record?.summary || timelineActionLabel(record?.actionType)
+}
+
+function appointmentRecordKey(record, index) {
+  return record?.id || `${record?.actionType || 'record'}-${record?.createTime || index}`
 }
 
 function recordTagType(actionType) {
@@ -1005,6 +1073,10 @@ function recordSummary(record) {
 }
 
 function recordTimelineDetails(record) {
+  const structuredDetails = normalizeRecordDetailItems(record?.detailItems)
+  if (structuredDetails.length) {
+    return structuredDetails
+  }
   const extra = parseRecordExtra(record?.extraJson)
   const beforeSlots = normalizeSlotValues(extra.appointmentSlotsBefore)
   const afterSlots = normalizeSlotValues(extra.appointmentSlotsAfter)
@@ -1018,6 +1090,31 @@ function recordTimelineDetails(record) {
   addRecordDetail(details, '来源入口', sourceSurfaceLabel(extra.sourceSurface))
   addRecordDetail(details, '备注', extra.remark || record?.remark)
   return details
+}
+
+function normalizeRecordDetailItems(items) {
+  if (!Array.isArray(items)) {
+    return []
+  }
+  return items
+    .map((item) => {
+      if (!item) {
+        return null
+      }
+      if (typeof item === 'object') {
+        return item.label && item.value ? { label: item.label, value: item.value } : null
+      }
+      const text = String(item)
+      const separatorIndex = text.indexOf('：')
+      if (separatorIndex > 0) {
+        return {
+          label: text.slice(0, separatorIndex),
+          value: text.slice(separatorIndex + 1)
+        }
+      }
+      return { label: '记录', value: text }
+    })
+    .filter(Boolean)
 }
 
 function addRecordDetail(details, label, value) {
@@ -1071,7 +1168,7 @@ function formatOrderStatus(value) {
 
 function recordReasonLabel(record) {
   const extra = parseRecordExtra(record?.extraJson)
-  const reasonType = normalize(extra.reasonType)
+  const reasonType = normalize(record?.reasonType || extra.reasonType)
   if (!reasonType) {
     return ''
   }
@@ -1415,14 +1512,37 @@ async function loadStoreScheduleConfigs() {
   }
 }
 
+async function loadAppointmentReasonConfig() {
+  try {
+    const config = await fetchAppointmentReasonConfig()
+    appointmentReasonConfig.allowedCodes = Array.isArray(config.allowedCodes) && config.allowedCodes.length
+      ? config.allowedCodes
+      : [...DEFAULT_APPOINTMENT_REASON_CONFIG.allowedCodes]
+    appointmentReasonConfig.requiredActions = Array.isArray(config.requiredActions)
+      ? config.requiredActions
+      : [...DEFAULT_APPOINTMENT_REASON_CONFIG.requiredActions]
+    appointmentReasonConfig.defaultCreate = config.defaultCreate || DEFAULT_APPOINTMENT_REASON_CONFIG.defaultCreate
+    appointmentReasonConfig.defaultChange = config.defaultChange || DEFAULT_APPOINTMENT_REASON_CONFIG.defaultChange
+    appointmentReasonConfig.defaultCancel = config.defaultCancel || DEFAULT_APPOINTMENT_REASON_CONFIG.defaultCancel
+    appointmentForm.reasonType = ensureAllowedAppointmentReason(appointmentForm.reasonType)
+  } catch {
+  }
+}
+
 async function handleSaveAppointment() {
   if (!selectedOrderCanEditAppointment.value) {
     appointmentDialogVisible.value = false
     return
   }
   const selectedSlots = selectedAppointmentSlotValues.value
+  const actionType = appointmentActionTypeForOrder(selectedOrder.value)
+  const reasonType = ensureAllowedAppointmentReason(appointmentForm.reasonType || defaultAppointmentReasonForAction(actionType))
   if (!selectedOrder.value?.id || !appointmentForm.appointmentTime || !appointmentForm.storeName) {
     ElMessage.warning('请先选择预约门店和预约时间')
+    return
+  }
+  if (isAppointmentReasonRequired(actionType) && !reasonType) {
+    ElMessage.warning('请选择排档原因')
     return
   }
   if (selectedSlots.length < requiredAppointmentSlotCount.value) {
@@ -1448,7 +1568,7 @@ async function handleSaveAppointment() {
       previousStoreName: selectedOrder.value.storeName || undefined,
       storeName: appointmentForm.storeName,
       sourceSurface: 'CUSTOMER_SCHEDULE',
-      appointmentReasonType: appointmentForm.reasonType || defaultAppointmentReasonType(selectedOrder.value),
+      appointmentReasonType: reasonType,
       remark: appointmentForm.remark || undefined
     })
     persistPreferredStore(selectedOrder.value, appointmentForm.storeName)
@@ -1473,12 +1593,17 @@ async function handleSaveAppointment() {
 }
 
 async function handleCancelAppointment(row) {
+  const reasonType = defaultAppointmentReasonForAction('APPOINTMENT_CANCEL')
+  if (isAppointmentReasonRequired('APPOINTMENT_CANCEL') && !reasonType) {
+    ElMessage.warning('请选择取消预约原因')
+    return
+  }
   saving.value = true
   try {
     await cancelOrderAppointment({
       orderId: row.id,
       sourceSurface: 'CUSTOMER_SCHEDULE',
-      appointmentReasonType: 'CUSTOMER_CANCEL',
+      appointmentReasonType: reasonType || 'CUSTOMER_CANCEL',
       remark: '取消预约'
     })
     ElMessage.success('已取消预约，客户已回到未预约状态')
@@ -1524,7 +1649,7 @@ async function handleStoreBookingConfirm() {
       previousStoreName: order.storeName || undefined,
       storeName: activeStoreName.value,
       sourceSurface: 'CUSTOMER_SCHEDULE',
-      appointmentReasonType: 'CUSTOMER_REQUEST',
+      appointmentReasonType: defaultAppointmentReasonForAction('APPOINTMENT_CREATE') || 'CUSTOMER_REQUEST',
       remark: order.remark || undefined
     })
     persistPreferredStore(order, activeStoreName.value)
@@ -1544,6 +1669,7 @@ async function handleStoreBookingConfirm() {
   }
 }
 
+loadAppointmentReasonConfig()
 loadStoreScheduleConfigs()
 loadOrders()
 </script>
@@ -1551,6 +1677,14 @@ loadOrders()
 <style scoped>
 .appointment-status-tip {
   margin-bottom: 14px;
+}
+
+.appointment-reason-tip {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+  margin-top: 6px;
+  width: 100%;
 }
 
 .appointment-headcount-row {

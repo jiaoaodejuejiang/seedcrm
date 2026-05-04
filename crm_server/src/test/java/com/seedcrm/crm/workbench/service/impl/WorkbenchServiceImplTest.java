@@ -311,14 +311,14 @@ class WorkbenchServiceImplTest {
         appointment.setFromStatus("PAID_DEPOSIT");
         appointment.setToStatus("PAID_DEPOSIT");
         appointment.setOperatorUserId(9001L);
-        appointment.setRemark("customer private note");
+        appointment.setRemark("operator fallback note");
         appointment.setExtraJson("""
                 {"storeNameBefore":"A","storeNameAfter":"B",
                  "appointmentSlotsBefore":["2026-05-05 10:00"],
                  "appointmentSlotsAfter":["2026-05-06 11:00","2026-05-06 12:00"],
                  "headcountBefore":1,"headcountAfter":2,
                  "reasonType":"RESCHEDULE","sourceSurface":"CUSTOMER_SCHEDULE",
-                 "remark":"private extra","rawPayload":"secret"}
+                 "remark":"customer requested afternoon","rawPayload":"secret"}
                 """);
         appointment.setCreateTime(LocalDateTime.now());
 
@@ -333,7 +333,21 @@ class WorkbenchServiceImplTest {
 
         OrderItemResponse target = responses.get(0);
         assertThat(target.getAppointmentRecords()).hasSize(1);
-        assertThat(target.getAppointmentRecords().get(0).getRemark()).isNull();
+        assertThat(target.getAppointmentRecords().get(0).getId()).isEqualTo(201L);
+        assertThat(target.getAppointmentRecords().get(0).getSummary()).isEqualTo("改档");
+        assertThat(target.getAppointmentRecords().get(0).getReasonType()).isEqualTo("RESCHEDULE");
+        assertThat(target.getAppointmentRecords().get(0).getSourceSurface()).isEqualTo("CUSTOMER_SCHEDULE");
+        assertThat(target.getAppointmentRecords().get(0).getRemark()).isEqualTo("customer requested afternoon");
+        assertThat(target.getAppointmentRecords().get(0).getDetailItems())
+                .contains("原门店：A",
+                        "新门店：B",
+                        "原档期：2026-05-05 10:00",
+                        "新档期：2026-05-06 11:00、2026-05-06 12:00",
+                        "到店人数：1 -> 2",
+                        "来源入口：CUSTOMER_SCHEDULE",
+                        "备注：customer requested afternoon");
+        assertThat(target.getAppointmentRecords().get(0).getDetailItems())
+                .noneMatch(item -> item.contains("rawPayload") || item.contains("secret"));
         assertThat(target.getAppointmentRecords().get(0).getExtraJson())
                 .contains("\"storeNameBefore\":\"A\"",
                         "\"storeNameAfter\":\"B\"",
@@ -341,7 +355,7 @@ class WorkbenchServiceImplTest {
                         "\"headcountAfter\":2",
                         "\"reasonType\":\"RESCHEDULE\"",
                         "\"sourceSurface\":\"CUSTOMER_SCHEDULE\"")
-                .doesNotContain("private", "rawPayload", "secret");
+                .doesNotContain("rawPayload", "secret");
         assertThat(target.getFulfillmentRecords()).hasSize(1);
         assertThat(target.getFulfillmentRecords().get(0).getDetailItems()).contains("原档：A", "新档：B");
         assertThat(target.getFulfillmentRecords().get(0).getRemark()).isNull();
@@ -429,7 +443,11 @@ class WorkbenchServiceImplTest {
         assertThat(response.getStoreName()).isEqualTo("Store A");
         assertThat(response.getStatus()).isEqualTo("appointment");
         assertThat(response.getAppointmentRecords()).hasSize(1);
+        assertThat(response.getAppointmentRecords().get(0).getId()).isEqualTo(501L);
+        assertThat(response.getAppointmentRecords().get(0).getSummary()).isEqualTo("约档");
         assertThat(response.getAppointmentRecords().get(0).getOperatorUserName()).isEqualTo("Scheduler A");
+        assertThat(response.getAppointmentRecords().get(0).getDetailItems())
+                .contains("新门店：Store A", "新档期：2026-05-06 10:00:00", "到店人数：1");
         assertThat(response.getAppointmentRecords().get(0).getExtraJson())
                 .contains("\"appointmentSlotsAfter\":[\"2026-05-06 10:00:00\"]")
                 .doesNotContain("rawPayload", "secret");

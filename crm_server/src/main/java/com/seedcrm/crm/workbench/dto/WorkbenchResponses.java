@@ -164,11 +164,16 @@ public final class WorkbenchResponses {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class AppointmentRecordResponse {
+        private Long id;
         private String actionType;
         private String fromStatus;
         private String toStatus;
         private Long operatorUserId;
         private String operatorUserName;
+        private String summary;
+        private List<String> detailItems;
+        private String reasonType;
+        private String sourceSurface;
         private String remark;
         private String extraJson;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

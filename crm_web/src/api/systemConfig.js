@@ -1,6 +1,22 @@
 import http from './http'
 
 const STORE_SCHEDULE_CONFIG_KEY = 'store.schedule.configs'
+const APPOINTMENT_REASON_CONFIG_PREFIX = 'appointment.reason.'
+const APPOINTMENT_REASON_CONFIG_KEYS = {
+  allowedCodes: `${APPOINTMENT_REASON_CONFIG_PREFIX}allowed_codes`,
+  requiredActions: `${APPOINTMENT_REASON_CONFIG_PREFIX}required_actions`,
+  defaultCreate: `${APPOINTMENT_REASON_CONFIG_PREFIX}default_create`,
+  defaultChange: `${APPOINTMENT_REASON_CONFIG_PREFIX}default_change`,
+  defaultCancel: `${APPOINTMENT_REASON_CONFIG_PREFIX}default_cancel`
+}
+
+export const DEFAULT_APPOINTMENT_REASON_CONFIG = {
+  allowedCodes: ['CUSTOMER_REQUEST', 'RESCHEDULE', 'STORE_ADJUST', 'TRAFFIC_DELAY', 'CUSTOMER_CANCEL'],
+  requiredActions: [],
+  defaultCreate: 'CUSTOMER_REQUEST',
+  defaultChange: 'RESCHEDULE',
+  defaultCancel: 'CUSTOMER_CANCEL'
+}
 
 export function fetchSystemConfigs(prefix) {
   return http.get('/system-config/list', {
@@ -32,6 +48,54 @@ export function saveStoreScheduleConfigs(configs) {
     summary: '更新门店档期配置',
     description: '门店档期配置，用于顾客排档和门店日历'
   })
+}
+
+export async function fetchAppointmentReasonConfig() {
+  const rows = await fetchSystemConfigs(APPOINTMENT_REASON_CONFIG_PREFIX)
+  const byKey = Array.isArray(rows)
+    ? rows.reduce((next, item) => {
+        next[item.configKey] = item.configValue
+        return next
+      }, {})
+    : {}
+  return {
+    allowedCodes: parseConfigList(
+      byKey[APPOINTMENT_REASON_CONFIG_KEYS.allowedCodes],
+      DEFAULT_APPOINTMENT_REASON_CONFIG.allowedCodes
+    ),
+    requiredActions: parseConfigList(
+      byKey[APPOINTMENT_REASON_CONFIG_KEYS.requiredActions],
+      DEFAULT_APPOINTMENT_REASON_CONFIG.requiredActions
+    ),
+    defaultCreate: normalizeConfigCode(
+      byKey[APPOINTMENT_REASON_CONFIG_KEYS.defaultCreate],
+      DEFAULT_APPOINTMENT_REASON_CONFIG.defaultCreate
+    ),
+    defaultChange: normalizeConfigCode(
+      byKey[APPOINTMENT_REASON_CONFIG_KEYS.defaultChange],
+      DEFAULT_APPOINTMENT_REASON_CONFIG.defaultChange
+    ),
+    defaultCancel: normalizeConfigCode(
+      byKey[APPOINTMENT_REASON_CONFIG_KEYS.defaultCancel],
+      DEFAULT_APPOINTMENT_REASON_CONFIG.defaultCancel
+    )
+  }
+}
+
+function parseConfigList(value, fallback = []) {
+  const rawItems = String(value || '')
+    .split(/[,，\s]+/)
+    .map((item) => normalizeConfigCode(item, ''))
+    .filter(Boolean)
+  return rawItems.length ? [...new Set(rawItems)] : [...fallback]
+}
+
+function normalizeConfigCode(value, fallback = '') {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[-\s]+/g, '_')
+  return normalized || fallback
 }
 
 export function previewSystemConfig(payload) {

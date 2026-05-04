@@ -53,7 +53,7 @@ public final class AuthAccessCatalog {
             menu(34, "系统设置 / 基础配置", "字典管理", "/settings/dictionaries", "SETTING", "setting:dictionary:update", "ADMIN"),
             menu(35, "系统设置 / 基础配置", "参数管理", "/settings/parameters", "SETTING", "setting:parameter:update", "ADMIN"),
             menu(36, "系统设置 / 基础配置", "支付设置", "/settings/payment", "SETTING", "setting:payment:update", "ADMIN"),
-            menu(37, "财务管理 / 薪酬结算", "提现处理", "/finance/salary/withdrawals", "SALARY", "salary:update", "ADMIN", "FINANCE"),
+            menu(37, "财务管理 / 薪酬结算", "线下结清登记", "/finance/salary/withdrawals", "SALARY", "salary:update", "ADMIN", "FINANCE"),
             menu(38, "财务管理 / 薪酬结算", "退款冲正", "/finance/salary/refund-adjustments", "SALARY", "salary:update", "ADMIN", "FINANCE"),
             menu(39, "系统设置 / 流程配置", "系统流程", "/settings/system-flow", "SETTING", "setting:system-flow:view", "ADMIN"),
             menu(40, "系统设置 / 基础配置", "上线工具", "/settings/base/go-live", "SETTING", "setting:go-live:update", "ADMIN"),

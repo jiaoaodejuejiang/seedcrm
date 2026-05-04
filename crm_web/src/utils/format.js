@@ -40,7 +40,7 @@ const ORDER_STATUS_LABELS = {
   REJECTED: '已驳回',
   INIT: '待确认',
   CONFIRMED: '已确认',
-  PAID_OUT: '已打款',
+  PAID_OUT: '已线下结清',
   DRAFT: '草稿',
   ENABLED: '启用',
   DISABLED: '停用',
@@ -124,8 +124,8 @@ const VERIFICATION_STATUS_LABELS = {
 }
 
 const SETTLEMENT_MODE_LABELS = {
-  WITHDRAW_AUDIT: '提现审核',
-  WITHDRAW_DIRECT: '提现不审核',
+  WITHDRAW_AUDIT: '线下结清需审核',
+  WITHDRAW_DIRECT: '外部处理直接登记',
   LEDGER_ONLY: '只记账'
 }
 

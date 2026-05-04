@@ -18,7 +18,8 @@
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h3>结算与提现规则</h3>
+          <h3>结算与线下处理规则</h3>
+          <p>配置只决定系统台账、审核和线下处理登记方式，不发起真实资金划转。</p>
         </div>
         <div class="action-group">
           <el-button @click="loadPolicies">刷新</el-button>
@@ -28,7 +29,7 @@
 
       <el-tabs v-model="activeRuleTab" class="platform-tabs" @tab-change="pagination.reset">
         <el-tab-pane label="结算规则" name="settlement" />
-        <el-tab-pane label="提现规则" name="withdraw" />
+        <el-tab-pane label="线下结清规则" name="withdraw" />
       </el-tabs>
 
       <el-table v-loading="loading" :data="pagination.rows" stripe>
@@ -146,7 +147,7 @@
       <div class="form-grid">
         <label>
           <span>规则名称</span>
-          <el-input v-model="ruleForm.policyName" placeholder="例如：分销小额自动提现" />
+          <el-input v-model="ruleForm.policyName" placeholder="例如：分销小额线下结清登记" />
         </label>
         <label>
           <span>结算对象</span>
@@ -193,8 +194,8 @@
           <span>结算方式</span>
           <el-select v-model="ruleForm.settlementMode">
             <el-option label="只记账" value="LEDGER_ONLY" />
-            <el-option label="提现不审核" value="WITHDRAW_DIRECT" />
-            <el-option label="提现审核" value="WITHDRAW_AUDIT" />
+            <el-option label="外部处理直接登记" value="WITHDRAW_DIRECT" />
+            <el-option label="线下结清需审核" value="WITHDRAW_AUDIT" />
           </el-select>
         </label>
         <label>
@@ -208,7 +209,7 @@
       </div>
       <el-alert
         v-if="ruleForm.settlementMode === 'WITHDRAW_DIRECT'"
-        title="低于当前金额区间的提现会自动通过；发布前请确认金额上限。"
+        title="当前规则会直接登记为外部已处理；发布前请确认金额上限和适用对象。"
         type="warning"
         show-icon
         :closable="false"
@@ -364,7 +365,7 @@ async function saveDraft() {
     return
   }
   try {
-    await ElMessageBox.confirm('保存草稿不会立即生效；发布后才会影响后续新结算和新提现申请。确认保存吗？', '保存规则草稿', {
+    await ElMessageBox.confirm('保存草稿不会立即生效；发布后才会影响后续新结算和线下处理申请。确认保存吗？', '保存规则草稿', {
       type: 'warning',
       confirmButtonText: '确认保存',
       cancelButtonText: '取消'
@@ -388,7 +389,7 @@ async function saveDraft() {
 
 async function publishRule(row) {
   try {
-    await ElMessageBox.confirm('发布后会立即影响结算/提现规则匹配，确认发布吗？', '发布结算规则', {
+    await ElMessageBox.confirm('发布后会立即影响结算/线下处理规则匹配，确认发布吗？', '发布结算规则', {
       type: 'warning',
       confirmButtonText: '确认发布',
       cancelButtonText: '取消'
@@ -403,7 +404,7 @@ async function publishRule(row) {
 
 async function disableRule(row) {
   try {
-    await ElMessageBox.confirm('停用后该规则不再参与结算/提现匹配，确认停用吗？', '停用结算规则', {
+    await ElMessageBox.confirm('停用后该规则不再参与结算/线下处理匹配，确认停用吗？', '停用结算规则', {
       type: 'warning',
       confirmButtonText: '确认停用',
       cancelButtonText: '取消'

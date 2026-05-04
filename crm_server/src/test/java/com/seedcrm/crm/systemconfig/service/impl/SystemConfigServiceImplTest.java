@@ -647,6 +647,35 @@ class SystemConfigServiceImplTest {
         assertThat(validation.getItems().get(0).getMessage()).contains("白名单");
     }
 
+    @Test
+    void shouldValidateServiceFormStalePolicyConfigDraft() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("service_form.print.stale_policy");
+        request.setConfigValue("WARN_ONLY");
+        request.setValueType("STRING");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        SystemConfigDtos.ValidationResponse validation = service.validateDraft(draft.getDraftNo());
+
+        assertThat(validation.getValid()).isTrue();
+        assertThat(validation.getItems().get(0).getValidatorCode()).isEqualTo("SERVICE_FORM_STALE_POLICY");
+    }
+
+    @Test
+    void shouldRejectFormDesignerBlockedComponentsWithoutSignatureGuard() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("form_designer.blocked_components");
+        request.setConfigValue("html,iframe,script");
+        request.setValueType("STRING");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        SystemConfigDtos.ValidationResponse validation = service.validateDraft(draft.getDraftNo());
+
+        assertThat(validation.getValid()).isFalse();
+        assertThat(validation.getItems().get(0).getStatus()).isEqualTo("BLOCK");
+        assertThat(validation.getItems().get(0).getMessage()).contains("电子签名");
+    }
+
     private void createSchema() {
         jdbcTemplate.execute("""
                 CREATE TABLE system_config (
@@ -784,6 +813,12 @@ class SystemConfigServiceImplTest {
         seedCapability("CLUE_DEDUP", "clue.dedup.%", "CLUE", "STRING", "MEDIUM", 0, "CLUE_DEDUP", "CACHE_EVICT");
         seedCapability("APPOINTMENT_REASON", "appointment.reason.%", "CLUE", "STRING", "MEDIUM", 0, "APPOINTMENT_REASON", "CACHE_EVICT");
         seedCapability("STORE_SCHEDULE", "store.schedule.%", "STORE_SERVICE", "JSON", "MEDIUM", 0, "STORE_SCHEDULE", "CACHE_EVICT");
+        seedCapability("SERVICE_FORM_PRINT_REQUIRED", "service_form.print.required_before_confirm", "PLANORDER", "BOOLEAN", "MEDIUM", 0, "BOOLEAN", "CACHE_EVICT");
+        seedCapability("SERVICE_FORM_CONFIRM_REQUIRED", "service_form.confirm.required_before_start", "PLANORDER", "BOOLEAN", "MEDIUM", 0, "BOOLEAN", "CACHE_EVICT");
+        seedCapability("SERVICE_FORM_STALE_POLICY", "service_form.print.stale_policy", "PLANORDER", "STRING", "MEDIUM", 0, "SERVICE_FORM_STALE_POLICY", "CACHE_EVICT");
+        seedCapability("SERVICE_FORM_DESIGNER", "form_designer.%", "PLANORDER", "STRING", "MEDIUM", 0, "FORM_DESIGNER", "MODULE_CALLBACK");
+        seedCapability("SERVICE_FORM_DESIGNER_PAPER_SIGNATURE", "form_designer.paper_signature_required", "PLANORDER", "BOOLEAN", "MEDIUM", 0, "BOOLEAN", "MODULE_CALLBACK");
+        seedCapability("SERVICE_FORM_DESIGNER_SCHEMA_SIZE", "form_designer.max_schema_bytes", "PLANORDER", "NUMBER", "MEDIUM", 0, "FORM_DESIGNER_SCHEMA_SIZE", "MODULE_CALLBACK");
         seedCapability("WECOM_INTEGRATION", "wecom.%", "WECOM", "STRING", "HIGH", 1, "STRING", "MODULE_CALLBACK");
         seedCapability("DOUYIN_INTEGRATION", "douyin.%", "SCHEDULER", "STRING", "HIGH", 1, "STRING", "MODULE_CALLBACK");
         seedCapability("DISTRIBUTION_MAPPING", DistributionOrderTypeMappingResolver.CONFIG_KEY, "SCHEDULER", "JSON", "MEDIUM", 0, "DISTRIBUTION_MAPPING", "MODULE_CALLBACK");

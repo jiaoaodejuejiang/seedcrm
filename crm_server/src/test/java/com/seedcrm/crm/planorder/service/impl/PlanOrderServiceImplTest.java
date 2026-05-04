@@ -214,12 +214,14 @@ class PlanOrderServiceImplTest {
                 "\"printAudit\"",
                 "\"status\":\"PRINTED\"",
                 "\"serviceDetailHash\"",
+                "\"policySnapshot\"",
+                "\"service_form.print.required_before_confirm\":true",
                 "\"printCount\":1",
                 "\"printedByUserId\":9002");
         ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
         verify(orderActionRecordMapper).insert(recordCaptor.capture());
         assertThat(recordCaptor.getValue().getActionType()).isEqualTo("SERVICE_FORM_PRINT");
-        assertThat(recordCaptor.getValue().getExtraJson()).contains("serviceDetailHash");
+        assertThat(recordCaptor.getValue().getExtraJson()).contains("serviceDetailHash", "policySnapshot");
     }
 
     @Test

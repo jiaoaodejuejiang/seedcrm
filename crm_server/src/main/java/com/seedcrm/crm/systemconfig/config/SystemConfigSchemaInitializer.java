@@ -177,7 +177,12 @@ public class SystemConfigSchemaInitializer {
         seedCapability("CLUE_DEDUP", "clue.dedup.%", "CLUE", "STRING", "MEDIUM", false, "CLUE_DEDUP", "CACHE_EVICT");
         seedCapability("APPOINTMENT_REASON", "appointment.reason.%", "CLUE", "STRING", "MEDIUM", false, "APPOINTMENT_REASON", "CACHE_EVICT");
         seedCapability("STORE_SCHEDULE", "store.schedule.%", "STORE_SERVICE", "JSON", "MEDIUM", false, "STORE_SCHEDULE", "CACHE_EVICT");
+        seedCapability("SERVICE_FORM_PRINT_REQUIRED", "service_form.print.required_before_confirm", "PLANORDER", "BOOLEAN", "MEDIUM", false, "BOOLEAN", "CACHE_EVICT");
+        seedCapability("SERVICE_FORM_CONFIRM_REQUIRED", "service_form.confirm.required_before_start", "PLANORDER", "BOOLEAN", "MEDIUM", false, "BOOLEAN", "CACHE_EVICT");
+        seedCapability("SERVICE_FORM_STALE_POLICY", "service_form.print.stale_policy", "PLANORDER", "STRING", "MEDIUM", false, "SERVICE_FORM_STALE_POLICY", "CACHE_EVICT");
         seedCapability("SERVICE_FORM_DESIGNER", "form_designer.%", "PLANORDER", "STRING", "MEDIUM", false, "FORM_DESIGNER", "MODULE_CALLBACK");
+        seedCapability("SERVICE_FORM_DESIGNER_PAPER_SIGNATURE", "form_designer.paper_signature_required", "PLANORDER", "BOOLEAN", "MEDIUM", false, "BOOLEAN", "MODULE_CALLBACK");
+        seedCapability("SERVICE_FORM_DESIGNER_SCHEMA_SIZE", "form_designer.max_schema_bytes", "PLANORDER", "NUMBER", "MEDIUM", false, "FORM_DESIGNER_SCHEMA_SIZE", "MODULE_CALLBACK");
         seedCapability("DISTRIBUTION_MAPPING", DistributionOrderTypeMappingResolver.CONFIG_KEY, "SCHEDULER", "JSON", "MEDIUM", false, "DISTRIBUTION_MAPPING", "MODULE_CALLBACK");
         seedCapability("SCHEDULER_INTEGRATION", "scheduler.%", "SCHEDULER", "STRING", "MEDIUM", false, "STRING", "CACHE_EVICT");
         seedCapability("DOUYIN_INTEGRATION", "douyin.%", "SCHEDULER", "STRING", "HIGH", true, "STRING", "MODULE_CALLBACK");
@@ -229,8 +234,15 @@ public class SystemConfigSchemaInitializer {
                   {"id":3,"storeName":"徐汇门店","morningStart":"09:30","morningEnd":"12:30","afternoonStart":"13:30","afternoonEnd":"18:30","slotHours":1,"remark":"团购客资集中承接"}
                 ]
                 """, "JSON", "门店档期配置，用于顾客排档和门店日历；按系统配置统一生效");
+        seedDefault("service_form.print.required_before_confirm", "true", "BOOLEAN", "服务确认单必须打印当前版本后才能确认纸质单");
+        seedDefault("service_form.confirm.required_before_start", "true", "BOOLEAN", "服务开始前必须确认纸质服务确认单");
+        seedDefault("service_form.print.stale_policy", "BLOCK_CONFIRM", "STRING", "服务确认单内容变更后的处理策略：BLOCK_CONFIRM/WARN_ONLY");
         seedDefault("form_designer.adapter.enabled", "true", "BOOLEAN", "启用服务单设计器适配层");
         seedDefault("form_designer.provider", "INTERNAL_SCHEMA", "STRING", "默认服务单设计器适配器");
+        seedDefault("form_designer.allowed_engines", "INTERNAL_SCHEMA,FORMILY,VFORM3,LOWCODE_ENGINE,JSON_SCHEMA", "STRING", "允许接入的成熟服务单设计器引擎");
+        seedDefault("form_designer.blocked_components", "signature,esign,electronicSignature,canvasSignature,html,iframe,script,webview", "STRING", "服务单设计器导入时强制拦截的组件，电子签名和脚本类默认禁止");
+        seedDefault("form_designer.max_schema_bytes", "200000", "NUMBER", "服务单设计器 Schema 单模板最大长度");
+        seedDefault("form_designer.paper_signature_required", "true", "BOOLEAN", "打印版服务确认单强制保留纸质手写签名位置");
         seedDefault("system.environment.mode", "TEST", "STRING", "系统运行环境：LOCAL/DEV/TEST/STAGING/PROD；清理测试数据会阻断 PROD");
         seedDefault(DistributionOrderTypeMappingResolver.CONFIG_KEY,
                 DistributionOrderTypeMappingResolver.DEFAULT_MAPPING_JSON,

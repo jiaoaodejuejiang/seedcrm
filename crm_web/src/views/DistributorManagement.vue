@@ -41,7 +41,7 @@
             {{ formatMoney(row.unsettledIncome) }}
           </template>
         </el-table-column>
-        <el-table-column label="可提现" width="140">
+        <el-table-column label="可登记结清" width="140">
           <template #default="{ row }">
             {{ formatMoney(row.withdrawableAmount) }}
           </template>

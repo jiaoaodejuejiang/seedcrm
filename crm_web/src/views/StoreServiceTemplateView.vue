@@ -279,7 +279,7 @@
         <div class="template-form__wide designer-import-panel">
           <div>
             <strong>第三方设计器导入</strong>
-            <span>支持 VForm 3、Formily、LowCode Engine、JSON Schema；系统会做白名单校验并生成标准 Schema。</span>
+            <span>支持 VForm 3、Formily、LowCode Engine、JSON Schema；纸质签名留位会保留，电子签名组件会拦截。</span>
           </div>
           <div class="action-group">
             <el-button plain @click="triggerImportSchema">导入设计器 JSON</el-button>
@@ -299,6 +299,7 @@
             <span>字段数量：{{ schemaImportReport.fieldCount }}</span>
             <span>组件数量：{{ schemaImportReport.componentCount }}</span>
             <span>标准化版本：{{ schemaImportReport.version }}</span>
+            <span>纸质签名：{{ schemaImportReport.paperSignatureReady ? '已保留' : '保存时补齐' }}</span>
           </div>
           <p v-if="schemaImportReport.blocked.length">拦截内容：{{ schemaImportReport.blocked.join('、') }}</p>
           <p v-else>已生成标准 Schema 预览；保存时后端会再次执行安全校验，草稿发布前不会影响门店正在使用的模板。</p>
@@ -456,6 +457,8 @@ async function saveTemplateDraft() {
     ElMessage.warning('系统标准 Schema JSON 格式不正确')
     return
   }
+  templateForm.configJson = ensurePaperSignatureConfig(templateForm.configJson)
+  templateForm.normalizedSchemaJson = ensurePaperSignatureNormalizedSchema(templateForm.normalizedSchemaJson)
   const unsafe = findUnsafeSchemaText(templateForm.rawSchemaJson || templateForm.normalizedSchemaJson)
   if (unsafe) {
     ElMessage.warning(`Schema 包含不允许的内容：${unsafe}`)
@@ -511,6 +514,8 @@ function validateTemplateSchema() {
     ElMessage.warning('系统标准 Schema JSON 格式不正确')
     return false
   }
+  templateForm.configJson = ensurePaperSignatureConfig(templateForm.configJson)
+  templateForm.normalizedSchemaJson = ensurePaperSignatureNormalizedSchema(templateForm.normalizedSchemaJson)
   const unsafe = findUnsafeSchemaText(templateForm.rawSchemaJson || templateForm.normalizedSchemaJson)
   schemaImportReport.value = buildSchemaImportReport(templateForm.rawSchemaJson || templateForm.normalizedSchemaJson)
   if (unsafe) {
@@ -680,6 +685,37 @@ function isJsonLike(value) {
   }
 }
 
+function ensurePaperSignatureConfig(value) {
+  try {
+    const parsed = JSON.parse(value || '{}')
+    const sections = Array.isArray(parsed.sections) ? parsed.sections : []
+    if (!sections.includes('纸质签名留位')) {
+      parsed.sections = [...sections, '纸质签名留位']
+    }
+    parsed.paperSignatureRequired = true
+    parsed.signatureMode = 'PAPER'
+    return JSON.stringify(parsed, null, 2)
+  } catch {
+    return value
+  }
+}
+
+function ensurePaperSignatureNormalizedSchema(value) {
+  if (!value || !String(value).trim()) {
+    return value
+  }
+  try {
+    const parsed = JSON.parse(value)
+    parsed.paperSignatureRequired = true
+    if (!Array.isArray(parsed.printSignatureBlocks) || !parsed.printSignatureBlocks.length) {
+      parsed.printSignatureBlocks = ['customerHandwrittenSignature', 'storeOperator', 'signedDate']
+    }
+    return JSON.stringify(parsed, null, 2)
+  } catch {
+    return value
+  }
+}
+
 function buildSchemaImportReport(value) {
   if (!value || !String(value).trim()) {
     return null
@@ -703,8 +739,14 @@ function buildSchemaImportReport(value) {
     fieldCount: stats.fieldCount,
     componentCount: stats.components.size,
     version: resolveSchemaVersion(schema),
+    paperSignatureReady: hasPaperSignaturePlaceholder(schema),
     blocked: unsafe ? [unsafe] : []
   }
+}
+
+function hasPaperSignaturePlaceholder(schema) {
+  const text = JSON.stringify(schema || '').toLowerCase()
+  return text.includes('papersignatureplaceholder') || text.includes('纸质签名留位') || text.includes('客户手写签名')
 }
 
 function scanSchemaStats(node, key = '') {
@@ -788,6 +830,8 @@ function buildNormalizedSchemaPreview(schema) {
       'divider',
       'paperSignaturePlaceholder'
     ],
+    paperSignatureRequired: true,
+    printSignatureBlocks: ['customerHandwrittenSignature', 'storeOperator', 'signedDate'],
     schema
   }
 }

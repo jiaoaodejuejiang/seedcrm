@@ -2,7 +2,7 @@
   <div class="stack-page">
     <section class="summary-strip">
       <article class="summary-pill">
-        <span>今日收入</span>
+        <span>今日账面收入</span>
         <strong>{{ formatMoney(todayIncome) }}</strong>
       </article>
       <article class="summary-pill">
@@ -14,7 +14,7 @@
         <strong>{{ formatMoney(balance?.settledAmount) }}</strong>
       </article>
       <article class="summary-pill">
-        <span>可提现金额</span>
+        <span>可登记结清</span>
         <strong>{{ formatMoney(withdrawable) }}</strong>
       </article>
     </section>

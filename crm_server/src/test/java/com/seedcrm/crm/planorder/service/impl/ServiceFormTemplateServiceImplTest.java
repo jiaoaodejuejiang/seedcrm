@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.planorder.dto.ServiceFormTemplateDtos;
+import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,9 @@ class ServiceFormTemplateServiceImplTest {
 
     @Mock
     private JdbcTemplate jdbcTemplate;
+
+    @Mock
+    private SystemConfigService systemConfigService;
 
     private ServiceFormTemplateServiceImpl service;
 
@@ -137,6 +141,26 @@ class ServiceFormTemplateServiceImplTest {
         request.setRawSchemaJson("{\"components\":[{\"component\":\"signature\",\"label\":\"客户签名\"}]}");
 
         assertThatThrownBy(() -> service.saveTemplateDraft(request, context("ADMIN", "ALL", null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不允许");
+        verify(jdbcTemplate, never()).update(ArgumentMatchers.anyString(), ArgumentMatchers.<Object[]>any());
+    }
+
+    @Test
+    void saveDraftShouldRejectConfiguredBlockedComponent() {
+        ServiceFormTemplateServiceImpl configuredService = new ServiceFormTemplateServiceImpl(jdbcTemplate, systemConfigService);
+        when(systemConfigService.getString(ArgumentMatchers.anyString(), ArgumentMatchers.anyString()))
+                .thenAnswer(invocation -> "form_designer.blocked_components".equals(invocation.getArgument(0))
+                        ? "drawSignature"
+                        : invocation.getArgument(1));
+        ServiceFormTemplateDtos.SaveTemplateRequest request = new ServiceFormTemplateDtos.SaveTemplateRequest();
+        request.setTemplateCode("BAD_CONFIG_BLOCK");
+        request.setTemplateName("配置拦截模板");
+        request.setTitle("配置拦截模板");
+        request.setDesignerEngine("VFORM3");
+        request.setRawSchemaJson("{\"components\":[{\"component\":\"draw-signature\",\"label\":\"客户签名\"}]}");
+
+        assertThatThrownBy(() -> configuredService.saveTemplateDraft(request, context("ADMIN", "ALL", null)))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("不允许");
         verify(jdbcTemplate, never()).update(ArgumentMatchers.anyString(), ArgumentMatchers.<Object[]>any());

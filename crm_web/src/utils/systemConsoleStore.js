@@ -39,7 +39,7 @@ const DEFAULT_DICTIONARIES = [
   { id: 18, dictType: 'order_status', itemCode: 'PENDING', itemLabel: '待处理', sortOrder: 140, isEnabled: 1 },
   { id: 19, dictType: 'order_status', itemCode: 'INIT', itemLabel: '待确认', sortOrder: 150, isEnabled: 1 },
   { id: 20, dictType: 'order_status', itemCode: 'CONFIRMED', itemLabel: '已确认', sortOrder: 160, isEnabled: 1 },
-  { id: 21, dictType: 'order_status', itemCode: 'PAID_OUT', itemLabel: '已打款', sortOrder: 170, isEnabled: 1 },
+  { id: 21, dictType: 'order_status', itemCode: 'PAID_OUT', itemLabel: '已线下结清', sortOrder: 170, isEnabled: 1 },
   { id: 22, dictType: 'order_status', itemCode: 'DRAFT', itemLabel: '草稿', sortOrder: 180, isEnabled: 1 },
   { id: 23, dictType: 'order_status', itemCode: 'ENABLED', itemLabel: '启用', sortOrder: 190, isEnabled: 1 },
   { id: 24, dictType: 'order_status', itemCode: 'DISABLED', itemLabel: '停用', sortOrder: 200, isEnabled: 1 },
@@ -81,8 +81,8 @@ const DEFAULT_DICTIONARIES = [
   { id: 60, dictType: 'scheduler_status', itemCode: 'FAILED', itemLabel: '失败', sortOrder: 90, isEnabled: 1 },
   { id: 61, dictType: 'verification_status', itemCode: 'VERIFIED', itemLabel: '已核销', sortOrder: 10, isEnabled: 1 },
   { id: 62, dictType: 'verification_status', itemCode: 'UNVERIFIED', itemLabel: '待核销', sortOrder: 20, isEnabled: 1 },
-  { id: 63, dictType: 'settlement_mode', itemCode: 'WITHDRAW_AUDIT', itemLabel: '提现审核', sortOrder: 10, isEnabled: 1 },
-  { id: 64, dictType: 'settlement_mode', itemCode: 'WITHDRAW_DIRECT', itemLabel: '提现不审核', sortOrder: 20, isEnabled: 1 },
+  { id: 63, dictType: 'settlement_mode', itemCode: 'WITHDRAW_AUDIT', itemLabel: '线下结清需审核', sortOrder: 10, isEnabled: 1 },
+  { id: 64, dictType: 'settlement_mode', itemCode: 'WITHDRAW_DIRECT', itemLabel: '外部处理直接登记', sortOrder: 20, isEnabled: 1 },
   { id: 65, dictType: 'settlement_mode', itemCode: 'LEDGER_ONLY', itemLabel: '只记账', sortOrder: 30, isEnabled: 1 },
   { id: 66, dictType: 'role_code', itemCode: 'ADMIN', itemLabel: '管理员', sortOrder: 10, isEnabled: 1 },
   { id: 67, dictType: 'role_code', itemCode: 'ONLINE_CUSTOMER_SERVICE', itemLabel: '在线客服', sortOrder: 20, isEnabled: 1 },
@@ -111,7 +111,7 @@ const DEFAULT_STATE = {
     { id: 1, departmentCode: 'HQ', departmentName: '总部管理', parentCode: '', managerRoleCode: 'ADMIN', dataScopeRule: '可查看全部有效数据并进行系统配置', isEnabled: 1, remark: '系统管理员负责整体系统治理' },
     { id: 2, departmentCode: 'CLUE', departmentName: '客资中心', parentCode: 'HQ', managerRoleCode: 'CLUE_MANAGER', dataScopeRule: '仅查看并分配客资中心有效数据', isEnabled: 1, remark: '负责客资接入、分配、预约与转化' },
     { id: 3, departmentCode: 'STORE', departmentName: '门店服务', parentCode: 'HQ', managerRoleCode: 'STORE_MANAGER', dataScopeRule: '仅处理门店范围内订单与服务单', isEnabled: 1, remark: '负责客户到店确认和服务履约' },
-    { id: 4, departmentCode: 'FINANCE', departmentName: '财务中心', parentCode: 'HQ', managerRoleCode: 'FINANCE', dataScopeRule: '查看财务、薪酬和结算数据', isEnabled: 1, remark: '负责结算、提现与财务复核' },
+    { id: 4, departmentCode: 'FINANCE', departmentName: '财务中心', parentCode: 'HQ', managerRoleCode: 'FINANCE', dataScopeRule: '查看财务、薪酬和结算数据', isEnabled: 1, remark: '负责结算、线下结清登记与财务复核' },
     { id: 5, departmentCode: 'PRIVATE_DOMAIN', departmentName: '私域客服', parentCode: 'HQ', managerRoleCode: 'PRIVATE_DOMAIN_SERVICE', dataScopeRule: '查看绑定客户的企微与触达记录', isEnabled: 1, remark: '负责企业微信触达与私域维护' }
   ],
   positions: [
@@ -123,7 +123,7 @@ const DEFAULT_STATE = {
     { id: 6, positionCode: 'PHOTOGRAPHER', positionName: '摄影岗', departmentCode: 'STORE', isEnabled: 1, remark: '负责摄影服务' },
     { id: 7, positionCode: 'MAKEUP_ARTIST', positionName: '化妆师岗', departmentCode: 'STORE', isEnabled: 1, remark: '负责化妆与造型服务' },
     { id: 8, positionCode: 'PHOTO_SELECTOR', positionName: '选片负责人岗', departmentCode: 'STORE', isEnabled: 1, remark: '负责选片与确认服务' },
-    { id: 9, positionCode: 'FINANCE_SPECIALIST', positionName: '财务专员岗', departmentCode: 'FINANCE', isEnabled: 1, remark: '负责结算和打款' },
+    { id: 9, positionCode: 'FINANCE_SPECIALIST', positionName: '财务专员岗', departmentCode: 'FINANCE', isEnabled: 1, remark: '负责结算和线下处理登记' },
     { id: 10, positionCode: 'PRIVATE_DOMAIN_CS', positionName: '私域客服岗', departmentCode: 'PRIVATE_DOMAIN', isEnabled: 1, remark: '负责企微客户触达' }
   ],
   roles: [
@@ -196,7 +196,7 @@ const DEFAULT_STATE = {
     { id: 34, menuGroup: '系统设置 / 基础配置', menuName: '字典管理', routePath: '/settings/dictionaries', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 35, menuGroup: '系统设置 / 基础配置', menuName: '参数管理', routePath: '/settings/parameters', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 36, menuGroup: '系统设置 / 基础配置', menuName: '支付设置', routePath: '/settings/payment', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
-    { id: 37, menuGroup: '财务管理 / 薪酬结算', menuName: '提现处理', routePath: '/finance/salary/withdrawals', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
+    { id: 37, menuGroup: '财务管理 / 薪酬结算', menuName: '线下结清登记', routePath: '/finance/salary/withdrawals', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
     { id: 38, menuGroup: '财务管理 / 薪酬结算', menuName: '退款冲正', routePath: '/finance/salary/refund-adjustments', roleCodes: ['ADMIN', 'FINANCE'], moduleCode: 'SALARY', isEnabled: 1 },
     { id: 39, menuGroup: '系统设置 / 流程配置', menuName: '系统流程', routePath: '/settings/system-flow', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 },
     { id: 40, menuGroup: '系统设置 / 流程配置', menuName: '配置化平台', routePath: '/settings/lowcode', roleCodes: ['ADMIN'], moduleCode: 'SETTING', isEnabled: 1 }
@@ -215,9 +215,9 @@ const DEFAULT_STATE = {
     { id: 6, category: 'TEAM', gradeName: '团队优秀档', metricLabel: '有效到店率', startNode: '已付款', endNode: '已完成', targetRate: '78%', targetPeople: '160人', rewardAmount: '组长团队优秀奖 1200元', isEnabled: 1 }
   ],
   salarySettlementRules: [
-    { id: 1, ruleName: '分销大额提现', scopeType: 'AMOUNT', roleCodes: [], amountMin: 3000, amountMax: '', settlementMode: 'WITHDRAW_AUDIT', enabled: 1, remark: '大额分销提现需财务审核' },
-    { id: 2, ruleName: '分销小额提现', scopeType: 'AMOUNT', roleCodes: [], amountMin: 0, amountMax: 2999.99, settlementMode: 'WITHDRAW_DIRECT', enabled: 1, remark: '小额分销提现自动通过' },
-    { id: 3, ruleName: '内部员工记账', scopeType: 'ROLE', roleCodes: ['NORMAL_CS', 'SENIOR_CS', 'LEADER'], amountMin: '', amountMax: '', settlementMode: 'LEDGER_ONLY', enabled: 1, remark: '内部员工只记账，不走提现' }
+    { id: 1, ruleName: '分销大额线下结清', scopeType: 'AMOUNT', roleCodes: [], amountMin: 3000, amountMax: '', settlementMode: 'WITHDRAW_AUDIT', enabled: 1, remark: '大额分销结清需财务审核登记' },
+    { id: 2, ruleName: '分销小额外部处理', scopeType: 'AMOUNT', roleCodes: [], amountMin: 0, amountMax: 2999.99, settlementMode: 'WITHDRAW_DIRECT', enabled: 1, remark: '小额分销由外部平台处理后直接登记' },
+    { id: 3, ruleName: '内部员工记账', scopeType: 'ROLE', roleCodes: ['NORMAL_CS', 'SENIOR_CS', 'LEADER'], amountMin: '', amountMax: '', settlementMode: 'LEDGER_ONLY', enabled: 1, remark: '内部员工只记账，不走资金划拨' }
   ],
   distributorConfigs: [
     { id: 1, configName: '团购券分销提成', productType: 'coupon', orderStage: '到店核销', commissionRate: 0.12, settlementBase: 'completed_amount', enabled: 1, remark: '团购券完成核销后按订单金额结算' },
@@ -298,7 +298,14 @@ const DEFAULT_STATE = {
     { id: 8, paramKey: 'appointment.reason.required_actions', paramValue: '', category: '客资', remark: '需要强制选择原因的排档动作' },
     { id: 9, paramKey: 'appointment.reason.default_create', paramValue: 'CUSTOMER_REQUEST', category: '客资', remark: '首次约档默认原因' },
     { id: 10, paramKey: 'appointment.reason.default_change', paramValue: 'RESCHEDULE', category: '客资', remark: '改档默认原因' },
-    { id: 11, paramKey: 'appointment.reason.default_cancel', paramValue: 'CUSTOMER_CANCEL', category: '客资', remark: '取消预约默认原因' }
+    { id: 11, paramKey: 'appointment.reason.default_cancel', paramValue: 'CUSTOMER_CANCEL', category: '客资', remark: '取消预约默认原因' },
+    { id: 12, paramKey: 'service_form.print.required_before_confirm', paramValue: 'true', category: '门店服务', remark: '打印当前版本后才允许确认纸质服务单' },
+    { id: 13, paramKey: 'service_form.confirm.required_before_start', paramValue: 'true', category: '门店服务', remark: '开始服务前必须确认纸质服务单' },
+    { id: 14, paramKey: 'service_form.print.stale_policy', paramValue: 'BLOCK_CONFIRM', category: '门店服务', remark: '确认单内容变化后要求重新打印确认' },
+    { id: 15, paramKey: 'form_designer.allowed_engines', paramValue: 'INTERNAL_SCHEMA,FORMILY,VFORM3,LOWCODE_ENGINE,JSON_SCHEMA', category: '门店服务', remark: '允许接入的成熟服务单设计器' },
+    { id: 16, paramKey: 'form_designer.blocked_components', paramValue: 'signature,esign,electronicSignature,canvasSignature,html,iframe,script,webview', category: '门店服务', remark: '导入时拦截电子签名和脚本类组件' },
+    { id: 17, paramKey: 'form_designer.max_schema_bytes', paramValue: '200000', category: '门店服务', remark: '单个服务单设计器 Schema 最大长度' },
+    { id: 18, paramKey: 'form_designer.paper_signature_required', paramValue: 'true', category: '门店服务', remark: '打印版强制保留纸质手写签名位置' }
   ],
   wecomContacts: [
     { id: 1, contactName: '企微客服A', externalUserId: 'wx_external_a', scene: '术前咨询', isEnabled: 1 },
@@ -469,6 +476,15 @@ function migrateSystemConsoleState(state) {
         roleCodes: ['ADMIN', 'FINANCE']
       }
     }
+    if (item?.routePath === '/finance/salary/withdrawals') {
+      return {
+        ...item,
+        menuGroup: '财务管理 / 薪酬结算',
+        menuName: '线下结清登记',
+        roleCodes: ['ADMIN', 'FINANCE'],
+        moduleCode: 'SALARY'
+      }
+    }
     return item
   })
   const normalizedDictionaries = (state?.dictionaries || []).map((item) => {
@@ -476,6 +492,47 @@ function migrateSystemConsoleState(state) {
       return {
         ...item,
         itemLabel: '定金'
+      }
+    }
+    if (item?.dictType === 'order_status' && item?.itemCode === 'PAID_OUT') {
+      return {
+        ...item,
+        itemLabel: '已线下结清'
+      }
+    }
+    if (item?.dictType === 'settlement_mode' && item?.itemCode === 'WITHDRAW_AUDIT') {
+      return {
+        ...item,
+        itemLabel: '线下结清需审核'
+      }
+    }
+    if (item?.dictType === 'settlement_mode' && item?.itemCode === 'WITHDRAW_DIRECT') {
+      return {
+        ...item,
+        itemLabel: '外部处理直接登记'
+      }
+    }
+    return item
+  })
+  const normalizedSalarySettlementRules = (state?.salarySettlementRules || []).map((item) => {
+    if (item?.ruleName === '分销大额提现') {
+      return {
+        ...item,
+        ruleName: '分销大额线下结清',
+        remark: '大额分销结清需财务审核登记'
+      }
+    }
+    if (item?.ruleName === '分销小额提现') {
+      return {
+        ...item,
+        ruleName: '分销小额外部处理',
+        remark: '小额分销由外部平台处理后直接登记'
+      }
+    }
+    if (item?.ruleName === '内部员工记账' && String(item?.remark || '').includes('提现')) {
+      return {
+        ...item,
+        remark: '内部员工只记账，不走资金划拨'
       }
     }
     return item
@@ -532,7 +589,7 @@ function migrateSystemConsoleState(state) {
   nextState.clueConsoleProfiles = mergeCollectionByKey(state?.clueConsoleProfiles, defaults.clueConsoleProfiles, (item) => item?.clueId || item?.id)
   nextState.salaryRoles = mergeCollectionByKey(state?.salaryRoles, defaults.salaryRoles, (item) => item?.roleCode || item?.id)
   nextState.salaryGrades = mergeCollectionByKey(state?.salaryGrades, defaults.salaryGrades, (item) => item?.gradeName || item?.id)
-  nextState.salarySettlementRules = mergeCollectionByKey(state?.salarySettlementRules, defaults.salarySettlementRules, (item) => item?.ruleName || item?.id)
+  nextState.salarySettlementRules = mergeCollectionByKey(normalizedSalarySettlementRules, defaults.salarySettlementRules, (item) => item?.ruleName || item?.id)
   nextState.distributorConfigs = mergeCollectionByKey(state?.distributorConfigs, defaults.distributorConfigs, (item) => item?.configName || item?.id)
   nextState.serviceFormTemplates = mergeCollectionByKey(state?.serviceFormTemplates, defaults.serviceFormTemplates, (item) => item?.templateCode || item?.id)
   nextState.serviceFormBindings = mergeCollectionByKey(state?.serviceFormBindings, defaults.serviceFormBindings, (item) => item?.storeName || item?.id)

@@ -85,6 +85,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             "clue.",
             "appointment.",
             "store.",
+            "service_form.",
             "form_designer.",
             "distribution.",
             "scheduler.",
@@ -1213,6 +1214,9 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             case "CLUE_DEDUP" -> validateClueDedupItem(item, capability);
             case "APPOINTMENT_REASON" -> validateAppointmentReasonItem(item, capability);
             case "FINANCE_VISIBILITY" -> validateFinanceVisibilityItem(item, capability);
+            case "SERVICE_FORM_STALE_POLICY" -> validateServiceFormStalePolicyItem(item, capability);
+            case "FORM_DESIGNER" -> validateFormDesignerItem(item, capability);
+            case "FORM_DESIGNER_SCHEMA_SIZE" -> validateFormDesignerSchemaSizeItem(item, capability);
             case "BLOCKED" -> validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
                     validator, "该能力已被阻断", "请使用专用业务流程处理。");
             default -> validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
@@ -1228,6 +1232,69 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         }
         return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
                 capability.validatorCode(), "布尔配置校验通过", null);
+    }
+
+    private SystemConfigDtos.ValidationItemResponse validateServiceFormStalePolicyItem(RawDraftItem item,
+                                                                                       RawCapability capability) {
+        String value = normalizeOrDefault(item.afterValue(), "BLOCK_CONFIRM");
+        if (!List.of("BLOCK_CONFIRM", "WARN_ONLY").contains(value)) {
+            return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), "服务确认单过期策略只允许 BLOCK_CONFIRM 或 WARN_ONLY",
+                    "建议保持 BLOCK_CONFIRM，内容变更后要求重新打印并确认纸质单。");
+        }
+        return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                capability.validatorCode(), "服务确认单过期策略校验通过", null);
+    }
+
+    private SystemConfigDtos.ValidationItemResponse validateFormDesignerItem(RawDraftItem item,
+                                                                            RawCapability capability) {
+        String key = normalizeConfigKey(item.configKey());
+        if ("form_designer.adapter.enabled".equals(key)) {
+            return validateBooleanItem(item, capability);
+        }
+        if ("form_designer.allowed_engines".equals(key)) {
+            Set<String> engines = parseConfigCodes(item.afterValue());
+            if (engines.isEmpty()) {
+                return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                        capability.validatorCode(), "至少保留一个服务单设计器引擎",
+                        "可选：INTERNAL_SCHEMA、FORMILY、VFORM3、LOWCODE_ENGINE、JSON_SCHEMA。");
+            }
+            List<String> allowed = List.of("INTERNAL_SCHEMA", "FORMILY", "VFORM3", "LOWCODE_ENGINE", "JSON_SCHEMA");
+            for (String engine : engines) {
+                if (!allowed.contains(engine)) {
+                    return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                            capability.validatorCode(), "不支持的服务单设计器引擎：" + engine,
+                            "只允许接入已适配的成熟设计器，不开放自研重型编辑器。");
+                }
+            }
+        }
+        if ("form_designer.blocked_components".equals(key)) {
+            Set<String> components = parseConfigCodes(item.afterValue());
+            if (components.stream().noneMatch(code -> code.contains("SIGNATURE") || code.contains("ESIGN"))) {
+                return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                        capability.validatorCode(), "拦截组件必须包含电子签名类组件",
+                        "电子签名已取消，请保留 signature/eSign/electronicSignature 等拦截项。");
+            }
+        }
+        return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                capability.validatorCode(), "服务单设计器适配配置校验通过", null);
+    }
+
+    private SystemConfigDtos.ValidationItemResponse validateFormDesignerSchemaSizeItem(RawDraftItem item,
+                                                                                      RawCapability capability) {
+        int value;
+        try {
+            value = Integer.parseInt(firstNonBlank(item.afterValue(), "0").trim());
+        } catch (Exception exception) {
+            value = 0;
+        }
+        if (value < 10_000 || value > 1_000_000) {
+            return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), "服务单设计器 Schema 大小需在 10000 到 1000000 字节之间",
+                    "推荐默认 200000，避免导入内嵌资源过大的模板。");
+        }
+        return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                capability.validatorCode(), "服务单设计器 Schema 大小校验通过", null);
     }
 
     private SystemConfigDtos.ValidationItemResponse validateClueDedupItem(RawDraftItem item, RawCapability capability) {
@@ -1658,6 +1725,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 || normalized.startsWith("clue.")
                 || normalized.startsWith("appointment.")
                 || normalized.startsWith("store.")
+                || normalized.startsWith("service_form.")
                 || normalized.startsWith("distribution.")
                 || normalized.startsWith("form_designer.")
                 || normalized.startsWith("scheduler.")) {
@@ -1673,7 +1741,8 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             modules.add("客资中心");
         }
         if (normalized.startsWith("deposit.") || normalized.startsWith("workflow.")
-                || normalized.startsWith("form_designer.") || normalized.startsWith("store.")) {
+                || normalized.startsWith("form_designer.") || normalized.startsWith("service_form.")
+                || normalized.startsWith("store.")) {
             modules.add("门店服务");
         }
         if (normalized.startsWith("amount.") || normalized.startsWith("payment.")) {
@@ -1711,6 +1780,10 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             warnings.add("排档原因配置会影响顾客排档的原因选项、默认原因和必填校验，不改变订单状态流。");
         } else if (normalized.startsWith("deposit.direct.")) {
             warnings.add("定金免码配置会影响定金订单是否可直接进入后续服务流程。");
+        } else if (normalized.startsWith("service_form.")) {
+            warnings.add("服务确认单配置会影响打印、纸质确认和开始服务前置校验，建议保留默认强校验。");
+        } else if (normalized.startsWith("form_designer.")) {
+            warnings.add("服务单设计器配置会影响模板导入和字段校验；电子签名组件仍会被强制拦截。");
         } else if (normalized.startsWith("store.schedule.")) {
             warnings.add("门店档期配置会影响顾客排档和门店日历，请确认时段、每档时长和单日容量。");
         } else if (normalized.startsWith("system.domain.")) {

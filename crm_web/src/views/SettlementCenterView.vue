@@ -19,6 +19,16 @@
       </article>
     </section>
 
+    <section class="finance-ledger-notice">
+      <el-alert
+        :title="financeLedgerNotice.title"
+        :description="financeLedgerNotice.description"
+        type="info"
+        show-icon
+        :closable="false"
+      />
+    </section>
+
     <section class="panel compact-panel">
       <div class="toolbar toolbar--stack">
         <div class="toolbar__filters">
@@ -67,12 +77,12 @@
 
           <el-table :data="settlementPagination.rows" stripe>
             <el-table-column label="结算单号" width="120" prop="id" />
-            <el-table-column label="金额" min-width="140">
+            <el-table-column label="记账金额" min-width="140">
               <template #default="{ row }">
                 {{ formatMoney(row.totalAmount) }}
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="120">
+            <el-table-column label="处理状态" width="120">
               <template #default="{ row }">
                 <el-tag :type="statusTagType(row.status)">{{ formatOrderStatus(row.status) }}</el-tag>
               </template>
@@ -114,7 +124,7 @@
 
         <el-tab-pane v-if="pageMode === 'withdraw'" :label="withdrawTabLabel" name="withdraw">
           <template v-if="matchedMode === 'LEDGER_ONLY'">
-            <el-empty description="当前角色只记账，不走提现或资金划拨流程" />
+            <el-empty description="当前角色只记账，不走资金申请或划拨流程" />
           </template>
 
           <template v-else>
@@ -153,17 +163,17 @@
 
           <el-table :data="withdrawPagination.rows" stripe>
             <el-table-column label="单号" width="120" prop="id" />
-            <el-table-column label="金额" min-width="140">
+            <el-table-column label="记账金额" min-width="140">
               <template #default="{ row }">
                 {{ formatMoney(row.amount) }}
               </template>
             </el-table-column>
-            <el-table-column label="结算方式" min-width="140">
+            <el-table-column label="处理方式" min-width="140">
               <template #default="{ row }">
                 {{ formatSettlementMode(row.settlementMode || matchedMode) }}
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="120">
+            <el-table-column label="线下处理状态" width="130">
               <template #default="{ row }">
                 <el-tag :type="statusTagType(row.status)">{{ formatOrderStatus(row.status) }}</el-tag>
               </template>
@@ -173,7 +183,7 @@
                 {{ formatDateTime(row.createTime) }}
               </template>
             </el-table-column>
-            <el-table-column label="审核说明" min-width="180">
+            <el-table-column label="登记说明" min-width="180">
               <template #default="{ row }">
                 {{ row.auditRemark || '--' }}
               </template>
@@ -220,6 +230,14 @@
           </div>
 
           <el-table v-loading="refundOrdersLoading" :data="refundOrderPagination.rows" stripe>
+            <el-table-column label="源单" min-width="180">
+              <template #default="{ row }">
+                <div class="source-trace">
+                  <strong>{{ orderSourceTitle(row) }}</strong>
+                  <small v-for="item in orderSourceTraceItems(row)" :key="item">{{ item }}</small>
+                </div>
+              </template>
+            </el-table-column>
             <el-table-column label="手机号" min-width="140" prop="customerPhone" />
             <el-table-column label="姓名" min-width="120">
               <template #default="{ row }">
@@ -252,7 +270,7 @@
                 {{ formatDateTime(row.verificationTime) || '--' }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="160" fixed="right">
+            <el-table-column label="操作" width="220" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" type="danger" plain @click="openFinanceRefund(row)">登记团购/定金退款冲正</el-button>
               </template>
@@ -276,7 +294,7 @@
             <div class="section-heading">
               <div>
                 <h3>已登记冲正记录</h3>
-                <p>这里只展示系统记账冲正记录，不代表第三方平台已完成原路退款或打款。</p>
+                <p>这里只展示系统记账冲正记录，不代表第三方平台已完成退款或结清。</p>
               </div>
             </div>
 
@@ -286,9 +304,12 @@
                   {{ formatDateTime(row.createTime) }}
                 </template>
               </el-table-column>
-              <el-table-column label="订单号" min-width="170">
+              <el-table-column label="源单" min-width="220">
                 <template #default="{ row }">
-                  {{ row.orderNo || row.orderId || '--' }}
+                  <div class="source-trace">
+                    <strong>{{ refundSourceTitle(row) }}</strong>
+                    <small v-for="item in refundSourceTraceItems(row)" :key="item">{{ item }}</small>
+                  </div>
                   <small v-if="row.customerName || row.customerPhoneMasked" class="muted-cell">
                     {{ row.customerName || '--' }} / {{ row.customerPhoneMasked || '--' }}
                   </small>
@@ -320,9 +341,9 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="资金动作" min-width="140">
+              <el-table-column label="处理口径" min-width="170">
                 <template #default="{ row }">
-                  <el-tag size="small" type="info">{{ row.fundsTransferred ? '已登记资金动作' : '未发起资金退款' }}</el-tag>
+                  <el-tag size="small" :type="row.fundsTransferred ? 'warning' : 'info'">{{ refundLedgerScopeLabel(row) }}</el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="操作人" width="110">
@@ -518,6 +539,24 @@ const matchedMode = computed(() => matchedRule.value?.settlementMode || 'LEDGER_
 const currentModeLabel = computed(() => formatSettlementMode(matchedMode.value))
 const withdrawTabLabel = computed(() => (matchedMode.value === 'LEDGER_ONLY' ? '记账记录' : '线下处理登记'))
 const pageMode = computed(() => route.meta?.settlementCenterMode || 'settlement')
+const financeLedgerNotice = computed(() => {
+  if (pageMode.value === 'withdraw') {
+    return {
+      title: '线下结清登记只更新系统处理状态',
+      description: '本页记录员工或分销的线下结清申请、审核和凭证口径，不发起真实资金申请、转账或划拨。'
+    }
+  }
+  if (pageMode.value === 'refunds') {
+    return {
+      title: '退款冲正只登记台账并生成绩效冲正',
+      description: '真实抖音、分销或支付平台退款仍在外部完成；本系统用于追溯源单、冲正薪资/分销绩效和记录处理结果。'
+    }
+  }
+  return {
+    title: '结算中心只形成薪酬/分销台账',
+    description: '结算单用于确认账面金额和后续线下处理依据，不代表系统已经向员工、门店或分销方发起付款。'
+  }
+})
 
 function staffLabel(staff) {
   return `${staff.userName} / ${formatRoleCode(staff.roleCode)}`
@@ -890,6 +929,66 @@ function formatRefundReasonType(value) {
   return financeRefundReasonTypeLabel(value)
 }
 
+function orderSourceTitle(row) {
+  return row?.orderNo || (row?.id ? `订单 #${row.id}` : '--')
+}
+
+function orderSourceTraceItems(row) {
+  const items = []
+  if (row?.sourceChannel) {
+    items.push(`来源：${formatSourceChannel(row.sourceChannel)}`)
+  }
+  if (row?.verificationCode) {
+    items.push(`核销码：${row.verificationCode}`)
+  }
+  if (row?.id && row?.orderNo) {
+    items.push(`订单ID：${row.id}`)
+  }
+  return items.length ? items : ['源单：订单']
+}
+
+function refundSourceTitle(row) {
+  return row?.orderNo || (row?.orderId ? `订单 #${row.orderId}` : '--')
+}
+
+function refundSourceTraceItems(row) {
+  const items = []
+  if (row?.refundRecordId) {
+    items.push(`冲正单：#${row.refundRecordId}`)
+  }
+  if (row?.planOrderId) {
+    items.push(`服务单：#${row.planOrderId}`)
+  }
+  if (row?.platformChannel) {
+    items.push(`来源：${formatSourceChannel(row.platformChannel)}`)
+  }
+  if (row?.orderId && row?.orderNo) {
+    items.push(`订单ID：${row.orderId}`)
+  }
+  return items.length ? items : ['源单：退款冲正记录']
+}
+
+function refundLedgerScopeLabel(row) {
+  if (row?.fundsTransferred) {
+    return '已登记外部资金结果'
+  }
+  if (row?.ledgerOnly === false) {
+    return '按接口结果登记'
+  }
+  return '只记账，未发起退款'
+}
+
+function formatSourceChannel(value) {
+  const normalized = normalize(value)
+  return {
+    DOUYIN: '抖音',
+    OCEAN_ENGINE: '巨量',
+    DISTRIBUTOR: '分销',
+    DISTRIBUTION: '分销',
+    MANUAL: '手工录入'
+  }[normalized] || value || '--'
+}
+
 function refundEffectTags(row) {
   const tags = []
   if (row?.reverseCustomerService) {
@@ -1006,6 +1105,10 @@ watch(
   margin-bottom: 16px;
 }
 
+.finance-ledger-notice {
+  margin-bottom: 14px;
+}
+
 .refund-record-section {
   display: grid;
   gap: 14px;
@@ -1049,6 +1152,21 @@ watch(
   display: block;
   margin-top: 2px;
   color: #64748b;
+}
+
+.source-trace {
+  display: grid;
+  gap: 2px;
+}
+
+.source-trace strong {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.source-trace small {
+  color: #64748b;
+  line-height: 1.4;
 }
 
 .tag-line {

@@ -40,16 +40,22 @@ public class SalarySchemaInitializer {
         ensureDefaultRule("PHOTOGRAPHER", "PERCENT", "0.1200");
         ensureDefaultRule("MAKEUP_ARTIST", "PERCENT", "0.0600");
         ensureDefaultRule("PHOTO_SELECTOR", "PERCENT", "0.0700");
+        renameLegacySettlementPolicy("分销小额自动提现", "分销小额外部处理",
+                "小额分销由外部平台处理后直接登记");
+        renameLegacySettlementPolicy("分销大额提现审核", "分销大额线下结清",
+                "大额分销结清需财务审核登记");
+        updateDefaultSettlementPolicyRemark("内部员工按月记账",
+                "公司内部员工按月出结算单，只记账不走资金划拨");
         ensureDefaultSettlementPolicy("内部员工按月记账", "INTERNAL_STAFF", "ROLE",
                 "ONLINE_CUSTOMER_SERVICE,CLUE_MANAGER,STORE_SERVICE,STORE_MANAGER,PHOTOGRAPHER,MAKEUP_ARTIST,PHOTO_SELECTOR,PRIVATE_DOMAIN_SERVICE",
                 null, null, "MONTHLY", "LEDGER_ONLY", null, 10,
-                "公司内部员工按月出结算单，只记账不走提现");
-        ensureDefaultSettlementPolicy("分销小额自动提现", "DISTRIBUTOR", "AMOUNT",
+                "公司内部员工按月出结算单，只记账不走资金划拨");
+        ensureDefaultSettlementPolicy("分销小额外部处理", "DISTRIBUTOR", "AMOUNT",
                 "", "0.00", "2999.99", "INSTANT", "WITHDRAW_DIRECT", "3000.00", 20,
-                "外部分销小额佣金可随时提现并自动通过");
-        ensureDefaultSettlementPolicy("分销大额提现审核", "DISTRIBUTOR", "AMOUNT",
+                "小额分销由外部平台处理后直接登记");
+        ensureDefaultSettlementPolicy("分销大额线下结清", "DISTRIBUTOR", "AMOUNT",
                 "", "3000.00", null, "INSTANT", "WITHDRAW_AUDIT", "3000.00", 30,
-                "外部分销大额提现必须进入财务审核");
+                "大额分销结清需财务审核登记");
     }
 
     private void ensureTable(String tableName, String createSql, Map<String, String> expectedColumns) {
@@ -134,6 +140,37 @@ public class SalarySchemaInitializer {
                 VALUES (?, ?, ?, 1, NOW())
                 """, roleCode, ruleType, ruleValue);
         log.info("inserted default salary rule for role {}", roleCode);
+    }
+
+    private void renameLegacySettlementPolicy(String legacyName, String newName, String remark) {
+        Integer newNameCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM salary_settlement_policy
+                WHERE policy_name = ?
+                """, Integer.class, newName);
+        if (newNameCount != null && newNameCount > 0) {
+            return;
+        }
+        int updated = jdbcTemplate.update("""
+                UPDATE salary_settlement_policy
+                SET policy_name = ?, remark = ?, update_time = NOW()
+                WHERE policy_name = ?
+                """, newName, remark, legacyName);
+        if (updated > 0) {
+            log.info("renamed legacy salary settlement policy {} to {}", legacyName, newName);
+        }
+    }
+
+    private void updateDefaultSettlementPolicyRemark(String policyName, String remark) {
+        int updated = jdbcTemplate.update("""
+                UPDATE salary_settlement_policy
+                SET remark = ?, update_time = NOW()
+                WHERE policy_name = ?
+                  AND remark LIKE '%提现%'
+                """, remark, policyName);
+        if (updated > 0) {
+            log.info("updated salary settlement policy remark for {}", policyName);
+        }
     }
 
     private void ensureDefaultSettlementPolicy(String policyName,

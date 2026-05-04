@@ -28,6 +28,7 @@ import com.seedcrm.crm.planorder.service.PlanOrderService;
 import com.seedcrm.crm.risk.service.DbLockService;
 import com.seedcrm.crm.scheduler.entity.SchedulerOutboxEvent;
 import com.seedcrm.crm.scheduler.service.SchedulerOutboxService;
+import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import com.seedcrm.crm.systemflow.support.SystemFlowRuntimeBridge;
 import com.seedcrm.crm.wecom.entity.WecomTouchLog;
 import com.seedcrm.crm.wecom.service.WecomTouchService;
@@ -35,6 +36,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -49,6 +51,10 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
             "MAKEUP_ARTIST",
             "PHOTO_SELECTOR");
     private static final String SERVICE_FORM_CONFIRM_STATUS = ServiceFormVersionSupport.CONFIRM_STATUS;
+    private static final String CONFIG_PRINT_REQUIRED_BEFORE_CONFIRM = "service_form.print.required_before_confirm";
+    private static final String CONFIG_CONFIRM_REQUIRED_BEFORE_START = "service_form.confirm.required_before_start";
+    private static final String CONFIG_PRINT_STALE_POLICY = "service_form.print.stale_policy";
+    private static final String STALE_POLICY_WARN_ONLY = "WARN_ONLY";
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final PlanOrderMapper planOrderMapper;
@@ -61,6 +67,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
     private final SchedulerOutboxService schedulerOutboxService;
     private final SystemFlowRuntimeBridge systemFlowRuntimeBridge;
     private final ObjectMapper objectMapper;
+    private final SystemConfigService systemConfigService;
 
     public PlanOrderServiceImpl(PlanOrderMapper planOrderMapper,
                                 OrderMapper orderMapper,
@@ -72,6 +79,23 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
                                  SchedulerOutboxService schedulerOutboxService,
                                  SystemFlowRuntimeBridge systemFlowRuntimeBridge,
                                  ObjectMapper objectMapper) {
+        this(planOrderMapper, orderMapper, orderRoleRecordService, orderSettlementService, wecomTouchService,
+                orderActionRecordMapper, dbLockService, schedulerOutboxService, systemFlowRuntimeBridge,
+                objectMapper, null);
+    }
+
+    @Autowired
+    public PlanOrderServiceImpl(PlanOrderMapper planOrderMapper,
+                                OrderMapper orderMapper,
+                                OrderRoleRecordService orderRoleRecordService,
+                                OrderSettlementService orderSettlementService,
+                                WecomTouchService wecomTouchService,
+                                OrderActionRecordMapper orderActionRecordMapper,
+                                DbLockService dbLockService,
+                                SchedulerOutboxService schedulerOutboxService,
+                                SystemFlowRuntimeBridge systemFlowRuntimeBridge,
+                                ObjectMapper objectMapper,
+                                SystemConfigService systemConfigService) {
         this.planOrderMapper = planOrderMapper;
         this.orderMapper = orderMapper;
         this.orderRoleRecordService = orderRoleRecordService;
@@ -82,6 +106,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         this.schedulerOutboxService = schedulerOutboxService;
         this.systemFlowRuntimeBridge = systemFlowRuntimeBridge;
         this.objectMapper = objectMapper;
+        this.systemConfigService = systemConfigService;
     }
 
     @Override
@@ -181,7 +206,9 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         if (planOrder.getStartTime() != null) {
             throw new BusinessException("plan order already started");
         }
-        ensureServiceFormConfirmed(order, "start");
+        if (isServiceFormConfirmRequiredBeforeStart()) {
+            ensureServiceFormConfirmed(order, "start");
+        }
 
         planOrder.setStartTime(LocalDateTime.now());
         updatePlanOrder(planOrder, "failed to start plan order");
@@ -249,12 +276,13 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         ObjectNode root = ServiceFormVersionSupport.parseRoot(order.getServiceDetailJson(), objectMapper);
         String currentHash = ServiceFormVersionSupport.printableHash(root, objectMapper);
         if (isServiceFormConfirmed(root)) {
-            if (!ServiceFormVersionSupport.hasCurrentConfirmation(root, currentHash)) {
+            if (!ServiceFormVersionSupport.hasCurrentConfirmation(root, currentHash) && shouldBlockStaleServiceForm()) {
                 throw new BusinessException("service form content changed; print current version before confirming");
             }
             return planOrder;
         }
-        if (!ServiceFormVersionSupport.hasCurrentPrintAudit(root, currentHash)) {
+        if (isServiceFormPrintRequiredBeforeConfirm()
+                && !ServiceFormVersionSupport.hasCurrentPrintAudit(root, currentHash)) {
             throw new BusinessException("please print current service form version before confirming");
         }
         order.setServiceDetailJson(markServiceFormConfirmed(root, currentHash, operatorUserId, operatorRoleCode));
@@ -424,7 +452,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         if (!isServiceFormConfirmed(root)) {
             throw new BusinessException("service form must be printed and confirmed before " + action);
         }
-        if (!ServiceFormVersionSupport.hasCurrentConfirmation(root, currentHash)) {
+        if (!ServiceFormVersionSupport.hasCurrentConfirmation(root, currentHash) && shouldBlockStaleServiceForm()) {
             throw new BusinessException("service form content changed; print current version before " + action);
         }
     }
@@ -544,6 +572,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         printAudit.put("printedAt", DATE_TIME_FORMATTER.format(LocalDateTime.now()));
         printAudit.put("serviceDetailHash", serviceDetailHash);
         printAudit.put("projectionVersion", ServiceFormVersionSupport.PROJECTION_VERSION);
+        printAudit.set("policySnapshot", serviceFormPolicySnapshot());
         printAudit.put("printCount", printCount);
         if (planOrderId != null && planOrderId > 0) {
             printAudit.put("planOrderId", planOrderId);
@@ -569,6 +598,7 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
             extra.put("serviceDetailHash", serviceDetailHash);
         }
         extra.put("projectionVersion", ServiceFormVersionSupport.PROJECTION_VERSION);
+        extra.set("policySnapshot", serviceFormPolicySnapshot());
         if (StringUtils.hasText(operatorRoleCode)) {
             extra.put("operatorRoleCode", operatorRoleCode.trim());
         }
@@ -588,6 +618,38 @@ public class PlanOrderServiceImpl extends ServiceImpl<PlanOrderMapper, PlanOrder
         } catch (Exception exception) {
             throw new BusinessException("service form json is invalid");
         }
+    }
+
+    private ObjectNode serviceFormPolicySnapshot() {
+        ObjectNode snapshot = objectMapper.createObjectNode();
+        snapshot.put(CONFIG_PRINT_REQUIRED_BEFORE_CONFIRM, isServiceFormPrintRequiredBeforeConfirm());
+        snapshot.put(CONFIG_CONFIRM_REQUIRED_BEFORE_START, isServiceFormConfirmRequiredBeforeStart());
+        snapshot.put(CONFIG_PRINT_STALE_POLICY, serviceFormStalePolicy());
+        snapshot.put("signatureMode", "PAPER");
+        return snapshot;
+    }
+
+    private boolean isServiceFormPrintRequiredBeforeConfirm() {
+        return configBoolean(CONFIG_PRINT_REQUIRED_BEFORE_CONFIRM, true);
+    }
+
+    private boolean isServiceFormConfirmRequiredBeforeStart() {
+        return configBoolean(CONFIG_CONFIRM_REQUIRED_BEFORE_START, true);
+    }
+
+    private boolean shouldBlockStaleServiceForm() {
+        return !STALE_POLICY_WARN_ONLY.equalsIgnoreCase(serviceFormStalePolicy());
+    }
+
+    private String serviceFormStalePolicy() {
+        String configured = systemConfigService == null
+                ? null
+                : systemConfigService.getString(CONFIG_PRINT_STALE_POLICY, "BLOCK_CONFIRM");
+        return StringUtils.hasText(configured) ? configured.trim().toUpperCase(Locale.ROOT) : "BLOCK_CONFIRM";
+    }
+
+    private boolean configBoolean(String key, boolean defaultValue) {
+        return systemConfigService == null ? defaultValue : systemConfigService.getBoolean(key, defaultValue);
     }
 
     private String buildDefaultServiceFormMessage(Order order) {

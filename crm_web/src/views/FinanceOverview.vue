@@ -2,15 +2,15 @@
   <div class="stack-page">
     <section class="summary-strip summary-strip--compact">
       <article class="summary-pill">
-        <span>今日收入</span>
+        <span>今日记账金额</span>
         <strong>{{ formatMoney(overview?.todayIncome) }}</strong>
       </article>
       <article class="summary-pill">
-        <span>员工收入</span>
+        <span>员工账面收入</span>
         <strong>{{ formatMoney(overview?.employeeIncome) }}</strong>
       </article>
       <article class="summary-pill">
-        <span>分销收入</span>
+        <span>分销账面收入</span>
         <strong>{{ formatMoney(overview?.distributorIncome) }}</strong>
       </article>
     </section>
@@ -19,24 +19,18 @@
       <div class="panel-heading">
         <div>
           <h3>财务看板</h3>
-          <p>本系统仅记录账务数据，不执行收款或资金划拨。</p>
+          <p>本系统只记录业务账务和处理状态，真实收款、退款、结清由抖音、分销平台、支付平台或线下完成。</p>
         </div>
       </div>
 
-      <div class="finance-boundary">
-        <article>
-          <strong>只记账</strong>
-          <span>订单完成、薪酬、分销和退款只形成账务记录，真实资金处理在线下或三方平台完成。</span>
-        </article>
-        <article>
-          <strong>退款冲正</strong>
-          <span>退款不覆盖原账，后续应以冲正记录追溯调整。</span>
-        </article>
-        <article>
-          <strong>提现确认</strong>
-          <span>提现状态仅表示线下处理进度，不代表系统发起资金划拨。</span>
-        </article>
-      </div>
+      <el-alert
+        title="只记账、不走资金"
+        description="订单完成、薪酬、分销和退款冲正只形成系统台账；线下结清状态仅表示人工或第三方处理进度。"
+        type="info"
+        show-icon
+        :closable="false"
+        class="finance-boundary-alert"
+      />
 
       <el-tabs v-model="activeTab" class="platform-tabs finance-tabs">
         <el-tab-pane label="团队" name="team">
@@ -59,12 +53,12 @@
             </el-table-column>
             <el-table-column label="人数" width="100" prop="memberCount" />
             <el-table-column label="服务次数" width="120" prop="serviceCount" />
-            <el-table-column label="订单金额" min-width="140">
+            <el-table-column label="订单记账金额" min-width="140">
               <template #default="{ row }">
                 {{ formatMoney(row.orderIncome) }}
               </template>
             </el-table-column>
-            <el-table-column label="结算收入" min-width="140">
+            <el-table-column label="账面结算收入" min-width="140">
               <template #default="{ row }">
                 {{ formatMoney(row.incomeAmount) }}
               </template>
@@ -86,17 +80,17 @@
 
           <el-table v-loading="loading" :data="overview?.monthlyStats || []" stripe>
             <el-table-column label="月份" width="120" prop="monthLabel" />
-            <el-table-column label="订单收入" min-width="140">
+            <el-table-column label="订单记账收入" min-width="140">
               <template #default="{ row }">
                 {{ formatMoney(row.orderIncome) }}
               </template>
             </el-table-column>
-            <el-table-column label="员工收入" min-width="140">
+            <el-table-column label="员工账面收入" min-width="140">
               <template #default="{ row }">
                 {{ formatMoney(row.employeeIncome) }}
               </template>
             </el-table-column>
-            <el-table-column label="分销收入" min-width="140">
+            <el-table-column label="分销账面收入" min-width="140">
               <template #default="{ row }">
                 {{ formatMoney(row.distributorIncome) }}
               </template>
@@ -109,7 +103,7 @@
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane label="提现记录" name="withdraw">
+        <el-tab-pane label="线下结清记录" name="withdraw">
           <el-table v-loading="loading" :data="overview?.withdrawRecords || []" stripe>
             <el-table-column label="对象" min-width="180">
               <template #default="{ row }">
@@ -223,31 +217,8 @@ onMounted(loadOverview)
   margin-bottom: 18px;
 }
 
-.finance-boundary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+.finance-boundary-alert {
   margin-bottom: 18px;
-}
-
-.finance-boundary article {
-  display: grid;
-  gap: 6px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: #f8fbff;
-  border: 1px solid #e5edf4;
-}
-
-.finance-boundary strong {
-  color: #0f172a;
-  font-size: 14px;
-}
-
-.finance-boundary span {
-  color: #64748b;
-  font-size: 13px;
-  line-height: 1.6;
 }
 
 .tab-summary {

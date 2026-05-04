@@ -120,7 +120,7 @@ export const demoAccounts = [
     username: 'finance',
     password: '123456',
     title: '财务',
-    description: '查看财务与薪酬数据，处理结算与提现',
+    description: '查看财务与薪酬数据，登记结算与线下处理',
     loginMode: 'hq'
   },
   {

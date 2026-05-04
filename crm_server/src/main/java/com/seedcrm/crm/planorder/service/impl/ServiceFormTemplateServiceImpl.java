@@ -8,6 +8,7 @@ import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.planorder.dto.ServiceFormTemplateDtos;
 import com.seedcrm.crm.planorder.service.ServiceFormTemplateService;
+import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -17,6 +18,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,8 +33,12 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
     private static final String STATUS_DISABLED = "DISABLED";
     private static final String STATUS_ARCHIVED = "ARCHIVED";
     private static final String SCHEMA_VERSION = "service-form-template.v1";
-    private static final int MAX_SCHEMA_JSON_LENGTH = 200_000;
-    private static final Set<String> SUPPORTED_DESIGNER_ENGINES = Set.of(
+    private static final String CONFIG_ALLOWED_ENGINES = "form_designer.allowed_engines";
+    private static final String CONFIG_BLOCKED_COMPONENTS = "form_designer.blocked_components";
+    private static final String CONFIG_MAX_SCHEMA_BYTES = "form_designer.max_schema_bytes";
+    private static final String CONFIG_PAPER_SIGNATURE_REQUIRED = "form_designer.paper_signature_required";
+    private static final int DEFAULT_MAX_SCHEMA_JSON_LENGTH = 200_000;
+    private static final Set<String> DEFAULT_SUPPORTED_DESIGNER_ENGINES = Set.of(
             "INTERNAL_SCHEMA",
             "FORMILY",
             "VFORM3",
@@ -147,9 +154,17 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final JdbcTemplate jdbcTemplate;
+    private final SystemConfigService systemConfigService;
 
     public ServiceFormTemplateServiceImpl(JdbcTemplate jdbcTemplate) {
+        this(jdbcTemplate, null);
+    }
+
+    @Autowired
+    public ServiceFormTemplateServiceImpl(JdbcTemplate jdbcTemplate,
+                                          SystemConfigService systemConfigService) {
         this.jdbcTemplate = jdbcTemplate;
+        this.systemConfigService = systemConfigService;
     }
 
     @Override
@@ -435,7 +450,7 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
     }
 
     private JsonNode parseJson(String value, String message) {
-        if (value != null && value.length() > MAX_SCHEMA_JSON_LENGTH) {
+        if (value != null && value.length() > maxSchemaJsonLength()) {
             throw new BusinessException("服务单设计器 Schema 过大，请拆分模板或减少内嵌数据");
         }
         try {
@@ -642,7 +657,7 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
 
     private String normalizeDesignerEngine(String value) {
         String normalized = StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : "INTERNAL_SCHEMA";
-        if (!SUPPORTED_DESIGNER_ENGINES.contains(normalized)) {
+        if (!supportedDesignerEngines().contains(normalized)) {
             throw new BusinessException("不支持的服务单设计器引擎：" + normalized);
         }
         return normalized;
@@ -686,6 +701,7 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
         if (!normalized.has("componentWhitelist")) {
             normalized.set("componentWhitelist", componentWhitelistNode());
         }
+        ensurePaperSignaturePolicy(normalized);
         return normalized.toString();
     }
 
@@ -713,6 +729,20 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
                 .sorted()
                 .forEach(array::add);
         return array;
+    }
+
+    private void ensurePaperSignaturePolicy(ObjectNode normalized) {
+        if (!isPaperSignatureRequired()) {
+            return;
+        }
+        normalized.put("paperSignatureRequired", true);
+        if (!normalized.has("printSignatureBlocks")) {
+            ArrayNode blocks = OBJECT_MAPPER.createArrayNode();
+            blocks.add("customerHandwrittenSignature");
+            blocks.add("storeOperator");
+            blocks.add("signedDate");
+            normalized.set("printSignatureBlocks", blocks);
+        }
     }
 
     private String resolveDesignerEngineVersion(JsonNode schema) {
@@ -790,7 +820,7 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
             return;
         }
         String normalizedValue = normalizeIdentifier(value);
-        if (BLOCKED_COMPONENTS.contains(normalizedValue)) {
+        if (blockedComponents().contains(normalizedValue)) {
             throw new BusinessException("服务单设计器 Schema 含有不允许的组件：" + value);
         }
         String trimmed = value.trim();
@@ -821,6 +851,53 @@ public class ServiceFormTemplateServiceImpl implements ServiceFormTemplateServic
 
     private String normalizeIdentifier(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+    }
+
+    private Set<String> supportedDesignerEngines() {
+        Set<String> configured = configuredTokens(CONFIG_ALLOWED_ENGINES, true);
+        return configured.isEmpty() ? DEFAULT_SUPPORTED_DESIGNER_ENGINES : configured;
+    }
+
+    private Set<String> blockedComponents() {
+        Set<String> configured = configuredTokens(CONFIG_BLOCKED_COMPONENTS, false);
+        if (configured.isEmpty()) {
+            return BLOCKED_COMPONENTS;
+        }
+        return java.util.stream.Stream.concat(BLOCKED_COMPONENTS.stream(), configured.stream())
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private Set<String> configuredTokens(String key, boolean upperCase) {
+        if (systemConfigService == null) {
+            return Set.of();
+        }
+        String configured = systemConfigService.getString(key, "");
+        if (!StringUtils.hasText(configured)) {
+            return Set.of();
+        }
+        return java.util.Arrays.stream(configured.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .map(value -> upperCase ? value.toUpperCase(Locale.ROOT) : normalizeIdentifier(value))
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private int maxSchemaJsonLength() {
+        if (systemConfigService == null) {
+            return DEFAULT_MAX_SCHEMA_JSON_LENGTH;
+        }
+        String configured = systemConfigService.getString(CONFIG_MAX_SCHEMA_BYTES, String.valueOf(DEFAULT_MAX_SCHEMA_JSON_LENGTH));
+        try {
+            int parsed = Integer.parseInt(configured.trim());
+            return Math.max(10_000, Math.min(parsed, 1_000_000));
+        } catch (Exception ignored) {
+            return DEFAULT_MAX_SCHEMA_JSON_LENGTH;
+        }
+    }
+
+    private boolean isPaperSignatureRequired() {
+        return systemConfigService == null
+                || systemConfigService.getBoolean(CONFIG_PAPER_SIGNATURE_REQUIRED, true);
     }
 
     private String trimToNull(String value) {

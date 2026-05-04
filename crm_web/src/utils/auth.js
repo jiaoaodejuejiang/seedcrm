@@ -66,7 +66,7 @@ export const demoAccounts = [
     username: 'clue_manager',
     password: '123456',
     title: '客资主管',
-    description: '管理客资中心、顾客排档、门店档期与值班安排',
+    description: '管理客资中心、顾客排档与值班安排',
     loginMode: 'hq'
   },
   {
@@ -197,7 +197,10 @@ export function clearAuthSession() {
 }
 
 export function hasRole(roleCodes = []) {
-  if (!isCurrentRoleEnabled()) {
+  if (!authState.currentUser) {
+    return false
+  }
+  if (!hasBackendAccessPayload() && !isCurrentRoleEnabled()) {
     return false
   }
   if (!roleCodes?.length) {
@@ -211,15 +214,18 @@ export function hasModule(moduleCode) {
   if (!moduleCode) {
     return true
   }
+  if (!authState.currentUser) {
+    return false
+  }
+  const modules = authState.currentUser?.allowedModules
+  if (Array.isArray(modules)) {
+    return modules.includes(moduleCode)
+  }
   if (!isCurrentRoleEnabled()) {
     return false
   }
   const configuredRole = getConfiguredCurrentRole()
-  if (configuredRole?.moduleCodes?.length) {
-    return configuredRole.moduleCodes.includes(moduleCode)
-  }
-  const modules = authState.currentUser?.allowedModules || []
-  return modules.includes(moduleCode)
+  return configuredRole?.moduleCodes?.includes(moduleCode) || false
 }
 
 export function hasAccess(moduleCode, roleCodes = []) {
@@ -235,25 +241,27 @@ export function canViewServiceAmounts(roleCode = authState.currentUser?.roleCode
 }
 
 export function hasRouteAccess(path, moduleCode, roleCodes = []) {
-  if (!hasAccess(moduleCode, roleCodes)) {
-    return false
-  }
   const normalizedPath = normalizePath(path)
   const backendRoutes = getBackendMenuRoutes()
   const hasBackendRouteSource = backendRoutes.length > 0
+  const backendRouteMatched = backendRoutes.includes(normalizedPath)
   const configuredMenu = getConfiguredMenuConfigs().find((item) => normalizePath(item.routePath) === normalizedPath)
-  if (hasBackendRouteSource && !backendRoutes.includes(normalizedPath)) {
-    return !configuredMenu
+
+  if (backendRouteMatched) {
+    return true
+  }
+  if (configuredMenu?.isEnabled === 0) {
+    return false
   }
   if (configuredMenu) {
+    if (hasBackendRouteSource) {
+      return false
+    }
     return configuredMenu.isEnabled !== 0
       && hasModule(configuredMenu.moduleCode)
       && hasRole(configuredMenu.roleCodes || [])
   }
-  if (hasBackendRouteSource) {
-    return true
-  }
-  return true
+  return hasAccess(moduleCode, roleCodes)
 }
 
 export function getFirstAccessibleRoute() {
@@ -366,6 +374,12 @@ function getConfiguredMenuConfigs() {
 
 function getCurrentRoleCode() {
   return normalizeRoleCode(authState.currentUser?.roleCode)
+}
+
+function hasBackendAccessPayload() {
+  return Array.isArray(authState.currentUser?.allowedModules)
+    || Array.isArray(authState.currentUser?.menuRoutes)
+    || Array.isArray(authState.currentUser?.permissions)
 }
 
 function normalizeRoleCode(value) {

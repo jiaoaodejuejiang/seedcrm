@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'seedcrm.system-console'
-const SYSTEM_CONSOLE_SCHEMA_VERSION = 3
+const SYSTEM_CONSOLE_SCHEMA_VERSION = 4
 const SELF_SALARY_ROLE_CODES = [
   'ADMIN',
   'FINANCE',
@@ -159,8 +159,8 @@ const DEFAULT_STATE = {
   ],
   clueConsoleProfiles: [],
   menuConfigs: [
-    { id: 1, menuGroup: '客资中心', menuName: '客资列表', routePath: '/clues', roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE'], moduleCode: 'CLUE', isEnabled: 1 },
-    { id: 2, menuGroup: '门店服务', menuName: '顾客排档', routePath: '/clues/scheduling', roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE'], moduleCode: 'ORDER', isEnabled: 1 },
+    { id: 1, menuGroup: '客资中心 / 线上客服工作台', menuName: '客资列表', routePath: '/clues', roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE'], moduleCode: 'CLUE', isEnabled: 1 },
+    { id: 2, menuGroup: '客资中心 / 线上客服工作台', menuName: '顾客排档', routePath: '/clues/scheduling', roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE'], moduleCode: 'ORDER', isEnabled: 1 },
     { id: 3, menuGroup: '客资中心 / 客资管理', menuName: '客资配置', routePath: '/clue-management/auto-assign', roleCodes: ['ADMIN', 'CLUE_MANAGER'], moduleCode: 'CLUE', isEnabled: 1 },
     { id: 4, menuGroup: '客资中心 / 客资管理', menuName: '值班客服', routePath: '/clue-management/duty-cs', roleCodes: ['ADMIN', 'CLUE_MANAGER'], moduleCode: 'CLUE', isEnabled: 1 },
     { id: 5, menuGroup: '门店服务', menuName: '门店档期', routePath: '/store-service/schedules', roleCodes: ['ADMIN', 'STORE_MANAGER'], moduleCode: 'PLANORDER', isEnabled: 1 },
@@ -394,15 +394,23 @@ function migrateSystemConsoleState(state) {
     if (item?.routePath === '/clues/payments') {
       return {
         ...item,
-        menuGroup: '门店服务',
+        menuGroup: '客资中心 / 线上客服工作台',
         menuName: '顾客排档',
         routePath: '/clues/scheduling'
+      }
+    }
+    if (item?.routePath === '/clues') {
+      return {
+        ...item,
+        menuGroup: '客资中心 / 线上客服工作台',
+        menuName: '客资列表',
+        moduleCode: 'CLUE'
       }
     }
     if (item?.routePath === '/clues/scheduling') {
       return {
         ...item,
-        menuGroup: '门店服务',
+        menuGroup: '客资中心 / 线上客服工作台',
         menuName: '顾客排档',
         moduleCode: 'ORDER'
       }

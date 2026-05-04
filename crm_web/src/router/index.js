@@ -74,7 +74,7 @@ const routes = [
         component: ClueManagement,
         meta: {
           title: '客资列表',
-          sectionTitle: '客资中心',
+          sectionTitle: '客资中心 / 线上客服工作台',
           moduleCode: 'CLUE',
           navKey: 'clues'
         }
@@ -85,10 +85,10 @@ const routes = [
         component: PaidOrderManagement,
         meta: {
           title: '顾客排档',
-          sectionTitle: '门店服务',
+          sectionTitle: '客资中心 / 线上客服工作台',
           moduleCode: 'ORDER',
           roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE'],
-          navKey: 'paid-orders'
+          navKey: 'customer-scheduling'
         }
       },
       {

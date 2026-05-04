@@ -104,6 +104,7 @@ public class AuthAccessSchemaInitializer {
     private void seedDefaults() {
         AuthAccessCatalog.roleSeeds().forEach(this::seedRole);
         AuthAccessCatalog.menuSeeds().forEach(this::seedMenuAndGrants);
+        enforceCustomerSchedulingMenuBoundary();
         log.info("auth access system tables initialized with {} menu seeds", AuthAccessCatalog.menuSeeds().size());
     }
 
@@ -170,6 +171,16 @@ public class AuthAccessSchemaInitializer {
                     sort_order = VALUES(sort_order),
                     updated_at = VALUES(updated_at)
                 """, permissionCode, moduleCode, actionCode(permissionCode), permissionName, sortOrder, now, now);
+    }
+
+    private void enforceCustomerSchedulingMenuBoundary() {
+        jdbcTemplate.update("""
+                DELETE FROM sys_role_menu
+                WHERE role_code IN ('STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR')
+                  AND menu_id IN (
+                      SELECT id FROM sys_menu WHERE route_path = '/clues/scheduling'
+                  )
+                """);
     }
 
     private String actionCode(String permissionCode) {

@@ -181,10 +181,18 @@ const navGroups = [
     sections: [
       {
         key: 'clue-center-main',
-        label: '业务工作台',
+        label: '线上客服工作台',
         icon: icon(Operation),
         items: [
-          { key: 'clues', to: '/clues', label: '客资列表', icon: icon(Files), moduleCode: 'CLUE' }
+          { key: 'clues', to: '/clues', label: '客资列表', icon: icon(Files), moduleCode: 'CLUE' },
+          {
+            key: 'paid-orders',
+            to: '/clues/scheduling',
+            label: '顾客排档',
+            icon: icon(Calendar),
+            moduleCode: 'ORDER',
+            roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE']
+          }
         ]
       },
       {
@@ -217,14 +225,6 @@ const navGroups = [
     label: '门店服务',
     icon: icon(Shop),
     items: [
-      {
-        key: 'paid-orders',
-        to: '/clues/scheduling',
-        label: '顾客排档',
-        icon: icon(Calendar),
-        moduleCode: 'ORDER',
-        roleCodes: ['ADMIN', 'CLUE_MANAGER', 'ONLINE_CUSTOMER_SERVICE']
-      },
       {
         key: 'store-service-orders',
         to: '/store-service/orders',
@@ -586,8 +586,8 @@ const routeTitleMap = {
 }
 
 const routeSectionMap = {
-  clues: '客资中心',
-  'clues-scheduling': '门店服务',
+  clues: '客资中心 / 线上客服工作台',
+  'clues-scheduling': '客资中心 / 线上客服工作台',
   'clue-auto-assign': '客资中心 / 客资管理',
   'duty-customer-service': '客资中心 / 客资管理',
   'store-schedules': '门店服务',

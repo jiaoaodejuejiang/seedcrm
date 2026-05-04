@@ -16,8 +16,8 @@ import org.springframework.util.StringUtils;
 public final class AuthAccessCatalog {
 
     private static final List<MenuSeed> MENU_SEEDS = List.of(
-            menu(1, "客资中心", "客资列表", "/clues", "CLUE", "clue:view", "ADMIN", "CLUE_MANAGER", "ONLINE_CUSTOMER_SERVICE"),
-            menu(2, "门店服务", "顾客排档", "/clues/scheduling", "ORDER", "order:view", "ADMIN", "CLUE_MANAGER", "ONLINE_CUSTOMER_SERVICE"),
+            menu(1, "客资中心 / 线上客服工作台", "客资列表", "/clues", "CLUE", "clue:view", "ADMIN", "CLUE_MANAGER", "ONLINE_CUSTOMER_SERVICE"),
+            menu(2, "客资中心 / 线上客服工作台", "顾客排档", "/clues/scheduling", "ORDER", "order:view", "ADMIN", "CLUE_MANAGER", "ONLINE_CUSTOMER_SERVICE"),
             menu(3, "客资中心 / 客资管理", "客资配置", "/clue-management/auto-assign", "CLUE", "clue:assign", "ADMIN", "CLUE_MANAGER"),
             menu(4, "客资中心 / 客资管理", "值班客服", "/clue-management/duty-cs", "CLUE", "clue:update", "ADMIN", "CLUE_MANAGER"),
             menu(5, "门店服务", "门店档期", "/store-service/schedules", "PLANORDER", "planorder:update", "ADMIN", "STORE_MANAGER"),

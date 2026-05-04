@@ -2,19 +2,19 @@
   <div class="stack-page paid-order-page">
     <section class="metrics-row">
       <article class="metric-card">
-        <span>付款订单</span>
+        <span>可约档顾客</span>
         <strong>{{ schedulingOrders.length }}</strong>
-        <small>这里只展示已付款且仍需预约排档的订单。</small>
+        <small>展示已付款且仍需线上客服安排门店档期的顾客。</small>
       </article>
       <article class="metric-card">
-        <span>已预约</span>
+        <span>已约顾客</span>
         <strong>{{ appointmentCount }}</strong>
-        <small>已预约客户可以继续更改档期，也能在门店日历里查看。</small>
+        <small>已约顾客可继续改档，门店会在门店服务订单列表承接到店/履约。</small>
       </article>
       <article class="metric-card">
-        <span>未预约</span>
+        <span>待约顾客</span>
         <strong>{{ waitingCount }}</strong>
-        <small>默认优先展示未预约客户，方便客服尽快排入门店空档。</small>
+        <small>默认优先展示待约顾客，方便客服尽快排入门店空档。</small>
       </article>
     </section>
 
@@ -22,14 +22,14 @@
       <div class="toolbar">
         <div class="toolbar-tabs">
           <el-radio-group v-model="productSourceFilter">
-            <el-radio-button value="ALL">全部订单</el-radio-button>
+            <el-radio-button value="ALL">全部顾客</el-radio-button>
             <el-radio-button value="GROUP_BUY">团购</el-radio-button>
             <el-radio-button value="FORM">定金</el-radio-button>
           </el-radio-group>
 
           <el-radio-group v-model="viewMode">
-            <el-radio-button value="ORDER">订单列表</el-radio-button>
-            <el-radio-button value="STORE">门店列表</el-radio-button>
+            <el-radio-button value="ORDER">按顾客约档</el-radio-button>
+            <el-radio-button value="STORE">按门店看空档</el-radio-button>
           </el-radio-group>
         </div>
 
@@ -56,7 +56,7 @@
         </div>
 
         <el-table class="paid-order-table" v-loading="loading" :data="orderPagination.rows" row-key="id" stripe table-layout="fixed">
-          <el-table-column label="订单" width="170">
+          <el-table-column label="关联订单" width="170">
             <template #default="{ row }">
               <div class="table-primary">
                 <strong>{{ row.orderNo }}</strong>
@@ -65,7 +65,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="客户信息" width="180">
+          <el-table-column label="顾客信息" width="180">
             <template #default="{ row }">
               <div class="table-primary">
                 <strong>{{ row.customerName || '--' }}</strong>
@@ -86,7 +86,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="是否已预约" width="120">
+          <el-table-column label="约档状态" width="120">
             <template #default="{ row }">
               <el-tag :type="appointmentStateTagType(row)">
                 {{ appointmentStateLabel(row) }}
@@ -100,7 +100,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="预约档期" width="190" show-overflow-tooltip>
+          <el-table-column label="门店档期" width="190" show-overflow-tooltip>
             <template #default="{ row }">
               {{ appointmentDisplayText(row) }}
             </template>
@@ -165,7 +165,7 @@
           <aside class="store-browser__aside">
             <div class="panel-heading compact">
               <div>
-                <h3>门店列表</h3>
+                <h3>门店空档</h3>
               </div>
             </div>
 
@@ -228,7 +228,7 @@
                   :disabled="!activeStoreName || !availableStoreSlots.length"
                   @click="openStoreBookingDialog"
                 >
-                  添加
+                  为顾客约档
                 </el-button>
               </div>
 
@@ -273,7 +273,7 @@
         show-icon
       />
       <el-form :model="appointmentForm" label-width="92px">
-        <el-form-item label="订单">
+        <el-form-item label="关联订单">
           <el-input :model-value="selectedOrderLabel" disabled />
         </el-form-item>
         <el-form-item label="预约门店">
@@ -365,7 +365,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="storeBookingDialogVisible" title="添加客户到门店空档" width="760px">
+    <el-dialog v-model="storeBookingDialogVisible" title="为顾客选择门店档期" width="760px">
       <div class="stack-page">
         <div class="toolbar toolbar--compact">
           <div class="toolbar__filters">
@@ -377,7 +377,7 @@
           <section class="panel">
             <div class="panel-heading compact">
               <div>
-                <h3>选择客户订单</h3>
+                <h3>选择待约顾客</h3>
               </div>
             </div>
 
@@ -395,7 +395,7 @@
                 <small>付款时间：{{ formatDateTime(order.createTime) }}</small>
               </button>
             </div>
-            <p v-else class="text-secondary">没有可加入当前门店档期的未预约订单。</p>
+            <p v-else class="text-secondary">没有可加入当前门店档期的待约顾客。</p>
           </section>
 
           <section class="panel">
@@ -419,14 +419,14 @@
                 <span>第 {{ slot.index }} 档</span>
               </button>
             </div>
-            <p v-else class="text-secondary">当前日期已满，无法继续添加预约。</p>
+            <p v-else class="text-secondary">当前日期已满，无法继续约档。</p>
           </section>
         </div>
       </div>
 
       <template #footer>
         <el-button @click="storeBookingDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleStoreBookingConfirm">确定</el-button>
+        <el-button type="primary" :loading="saving" @click="handleStoreBookingConfirm">确认约档</el-button>
       </template>
     </el-dialog>
 
@@ -1035,7 +1035,8 @@ function recordActorText(record) {
 function sourceSurfaceLabel(value) {
   const labels = {
     CUSTOMER_SCHEDULE: '顾客排档',
-    STORE_CALENDAR: '门店日历',
+    STORE_CALENDAR: '顾客排档 / 按门店看空档',
+    STORE_SCHEDULE: '顾客排档 / 按门店看空档',
     STORE_SERVICE: '门店服务',
     CLUE_LIST: '客资列表',
     SYSTEM_SYNC: '系统同步'
@@ -1451,7 +1452,7 @@ async function handleSaveAppointment() {
       remark: appointmentForm.remark || undefined
     })
     persistPreferredStore(selectedOrder.value, appointmentForm.storeName)
-    ElMessage.success(isAppointedOrder(selectedOrder.value) ? '已改档，记录已保存' : '已约档，门店可在服务列表查看')
+    ElMessage.success(isAppointedOrder(selectedOrder.value) ? '已改档，记录已保存' : '已约档，门店将在门店服务订单列表查看到店/履约状态')
     appointmentDialogVisible.value = false
     pendingRouteOrderId.value = 0
     selectedOrder.value = null
@@ -1493,7 +1494,7 @@ function openStoreBookingDialog() {
     return
   }
   if (!availableStoreSlots.value.length) {
-    ElMessage.warning('当前日期已经约满，请更换日期后再添加')
+    ElMessage.warning('当前日期已经约满，请更换日期后再约档')
     return
   }
   storeBookingForm.keyword = ''
@@ -1505,7 +1506,7 @@ function openStoreBookingDialog() {
 async function handleStoreBookingConfirm() {
   const order = schedulingOrders.value.find((item) => item.id === storeBookingForm.orderId)
   if (!order) {
-    ElMessage.warning('请先选择客户订单')
+    ElMessage.warning('请先选择待约顾客')
     return
   }
   if (!storeBookingForm.slotValue) {
@@ -1522,12 +1523,12 @@ async function handleStoreBookingConfirm() {
       headcount: 1,
       previousStoreName: order.storeName || undefined,
       storeName: activeStoreName.value,
-      sourceSurface: 'STORE_SCHEDULE',
-      appointmentReasonType: 'STORE_ADJUST',
+      sourceSurface: 'CUSTOMER_SCHEDULE',
+      appointmentReasonType: 'CUSTOMER_REQUEST',
       remark: order.remark || undefined
     })
     persistPreferredStore(order, activeStoreName.value)
-    ElMessage.success('门店档期添加成功')
+    ElMessage.success('已为顾客完成约档')
     storeBookingDialogVisible.value = false
     await router.replace({
       path: '/clues/scheduling',

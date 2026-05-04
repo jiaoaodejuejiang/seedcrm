@@ -16,6 +16,10 @@ export function fetchOrders(params) {
   return http.get('/workbench/orders', { params })
 }
 
+export function fetchAppointments(params) {
+  return http.get('/workbench/appointments', { params })
+}
+
 export function fetchOrderWecomLiveCode(orderId) {
   return http.get(`/workbench/orders/${orderId}/wecom-live-code`)
 }

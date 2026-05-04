@@ -1,5 +1,7 @@
 import http from './http'
 
+const STORE_SCHEDULE_CONFIG_KEY = 'store.schedule.configs'
+
 export function fetchSystemConfigs(prefix) {
   return http.get('/system-config/list', {
     params: {
@@ -10,6 +12,26 @@ export function fetchSystemConfigs(prefix) {
 
 export function saveSystemConfig(payload) {
   return http.post('/system-config/save', payload)
+}
+
+export async function fetchStoreScheduleConfigs() {
+  const rows = await fetchSystemConfigs(STORE_SCHEDULE_CONFIG_KEY)
+  const config = Array.isArray(rows) ? rows.find((item) => item.configKey === STORE_SCHEDULE_CONFIG_KEY) : null
+  if (!config?.configValue) {
+    return []
+  }
+  const parsed = JSON.parse(config.configValue)
+  return Array.isArray(parsed) ? parsed : []
+}
+
+export function saveStoreScheduleConfigs(configs) {
+  return saveSystemConfig({
+    configKey: STORE_SCHEDULE_CONFIG_KEY,
+    configValue: JSON.stringify(Array.isArray(configs) ? configs : []),
+    valueType: 'JSON',
+    summary: '更新门店档期配置',
+    description: '门店档期配置，用于顾客排档和门店日历'
+  })
 }
 
 export function previewSystemConfig(payload) {

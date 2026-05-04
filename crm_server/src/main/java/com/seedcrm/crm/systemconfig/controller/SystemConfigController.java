@@ -51,6 +51,9 @@ public class SystemConfigController {
     private static final String DISTRIBUTION_ORDER_TYPE_PREFIX = "distribution.order.type.";
     private static final String DEPOSIT_DIRECT_PREFIX = "deposit.direct.";
     private static final String AMOUNT_VISIBILITY_PREFIX = "amount.visibility.";
+    private static final String STORE_SCHEDULE_PREFIX = "store.schedule.";
+    private static final Set<String> STORE_SCHEDULE_READ_ROLES = Set.of("CLUE_MANAGER", "ONLINE_CUSTOMER_SERVICE", "STORE_MANAGER");
+    private static final Set<String> STORE_SCHEDULE_WRITE_ROLES = Set.of("STORE_MANAGER");
 
     private final SystemConfigService systemConfigService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
@@ -84,6 +87,9 @@ public class SystemConfigController {
             return ApiResponse.success(systemConfigService.listConfigs(prefix));
         }
         if (isAmountVisibilityConfig(prefix) && isAmountVisibilityReader(context)) {
+            return ApiResponse.success(systemConfigService.listConfigs(prefix));
+        }
+        if (isStoreScheduleConfig(prefix) && isStoreScheduleReader(context)) {
             return ApiResponse.success(systemConfigService.listConfigs(prefix));
         }
         settingModuleGuard.checkView(context);
@@ -308,6 +314,11 @@ public class SystemConfigController {
             schedulerModuleGuard.checkUpdate(context);
             return ApiResponse.success(systemConfigService.previewConfig(requestBody));
         }
+        if (requestBody != null
+                && isStoreScheduleConfig(requestBody.getConfigKey())
+                && isStoreScheduleWriter(context)) {
+            return ApiResponse.success(systemConfigService.previewConfig(requestBody));
+        }
         settingModuleGuard.checkConfigDraft(context);
         return ApiResponse.success(systemConfigService.previewConfig(requestBody));
     }
@@ -347,6 +358,11 @@ public class SystemConfigController {
                 && isDistributionIntegrationConfig(requestBody.getConfigKey())
                 && isIntegrationWriter(context)) {
             schedulerModuleGuard.checkUpdate(context);
+            return ApiResponse.success(systemConfigService.saveLegacyConfig(requestBody, context));
+        }
+        if (requestBody != null
+                && isStoreScheduleConfig(requestBody.getConfigKey())
+                && isStoreScheduleWriter(context)) {
             return ApiResponse.success(systemConfigService.saveLegacyConfig(requestBody, context));
         }
         settingModuleGuard.checkUpdate(context);
@@ -397,6 +413,20 @@ public class SystemConfigController {
     private boolean isAmountVisibilityConfig(String keyOrPrefix) {
         String value = keyOrPrefix == null ? "" : keyOrPrefix.trim();
         return value.startsWith(AMOUNT_VISIBILITY_PREFIX) || value.equals("amount.visibility");
+    }
+
+    private boolean isStoreScheduleReader(PermissionRequestContext context) {
+        String roleCode = normalize(context == null ? null : context.getRoleCode());
+        return STORE_SCHEDULE_READ_ROLES.contains(roleCode) || "ADMIN".equals(roleCode);
+    }
+
+    private boolean isStoreScheduleWriter(PermissionRequestContext context) {
+        return STORE_SCHEDULE_WRITE_ROLES.contains(normalize(context == null ? null : context.getRoleCode()));
+    }
+
+    private boolean isStoreScheduleConfig(String keyOrPrefix) {
+        String value = keyOrPrefix == null ? "" : keyOrPrefix.trim();
+        return value.startsWith(STORE_SCHEDULE_PREFIX) || value.equals("store.schedule");
     }
 
     private boolean isDistributionIntegrationConfig(String keyOrPrefix) {

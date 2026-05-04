@@ -18,7 +18,7 @@
       </article>
     </section>
 
-    <section class="panel">
+    <section class="panel" v-loading="loading">
       <div class="panel-heading">
         <div>
           <h3>门店档期配置</h3>
@@ -106,7 +106,7 @@
           </div>
 
           <div class="action-group">
-            <el-button type="primary" @click="saveSchedule">保存档期</el-button>
+            <el-button type="primary" :loading="saving" @click="saveSchedule">保存档期</el-button>
             <el-button @click="resetScheduleForm">重置当前门店</el-button>
           </div>
 
@@ -168,7 +168,8 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { fetchOrders } from '../api/workbench'
+import { fetchStoreScheduleConfigs, saveStoreScheduleConfigs } from '../api/systemConfig'
+import { fetchAppointments } from '../api/workbench'
 import {
   calculateStoreCapacity,
   getStoreScheduleConfig,
@@ -178,6 +179,8 @@ import {
 import { formatDateTime } from '../utils/format'
 
 const state = reactive(loadSystemConsoleState())
+const loading = ref(false)
+const saving = ref(false)
 const orders = ref([])
 const selectedStoreName = ref(state.storeScheduleConfigs[0]?.storeName || '')
 const calendarDate = ref(new Date())
@@ -235,7 +238,7 @@ function resetScheduleForm() {
   Object.assign(scheduleForm, createScheduleForm(selectedConfig.value))
 }
 
-function saveSchedule() {
+async function saveSchedule() {
   if (!selectedStoreName.value) {
     ElMessage.warning('请先选择门店')
     return
@@ -257,11 +260,36 @@ function saveSchedule() {
     slotHours: Number(scheduleForm.slotHours || 1)
   }
 
-  replaceState({
-    ...state,
-    storeScheduleConfigs: nextConfigs
-  })
-  ElMessage.success('门店档期已保存')
+  saving.value = true
+  try {
+    await saveStoreScheduleConfigs(nextConfigs)
+    replaceState({
+      ...state,
+      storeScheduleConfigs: nextConfigs
+    })
+    ElMessage.success('门店档期已保存并同步到系统配置')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function loadStoreScheduleConfigs() {
+  loading.value = true
+  try {
+    const configs = await fetchStoreScheduleConfigs()
+    if (Array.isArray(configs) && configs.length) {
+      replaceState({
+        ...state,
+        storeScheduleConfigs: configs
+      })
+      if (!selectedStoreName.value || !configs.some((item) => item.storeName === selectedStoreName.value)) {
+        selectedStoreName.value = configs[0]?.storeName || ''
+      }
+    }
+  } catch {
+  } finally {
+    loading.value = false
+  }
 }
 
 function formatDate(value) {
@@ -300,11 +328,12 @@ function isDateFull(day) {
 
 async function loadOrders() {
   try {
-    orders.value = await fetchOrders({ status: 'paid' })
+    orders.value = await fetchAppointments()
   } catch {
     orders.value = []
   }
 }
 
+loadStoreScheduleConfigs()
 loadOrders()
 </script>

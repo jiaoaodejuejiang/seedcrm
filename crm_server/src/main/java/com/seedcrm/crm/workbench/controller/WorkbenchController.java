@@ -13,6 +13,7 @@ import com.seedcrm.crm.permission.support.SensitiveDataProjectionService;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CluePageResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueSyncStatusResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.AppointmentItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CustomerProfileResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.DistributorBoardItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.FinanceOverviewResponse;
@@ -177,6 +178,19 @@ public class WorkbenchController {
                 .peek(order -> sensitiveDataProjectionService.projectOrderItem(order, context))
                 .collect(Collectors.toList());
         return ApiResponse.success(orders);
+    }
+
+    @GetMapping("/appointments")
+    public ApiResponse<List<AppointmentItemResponse>> appointments(@RequestParam(required = false) String storeName,
+                                                                   @RequestParam(required = false) String day,
+                                                                   HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        LocalDate parsedDay = parseDate(day);
+        List<AppointmentItemResponse> appointments = workbenchService.listAppointments(storeName, parsedDay).stream()
+                .filter(appointment -> orderPermissionGuard.canView(context, appointment.getId()))
+                .filter(appointment -> matchesStoreScope(context, appointment.getStoreName()))
+                .collect(Collectors.toList());
+        return ApiResponse.success(appointments);
     }
 
     @GetMapping("/orders/{orderId}/wecom-live-code")

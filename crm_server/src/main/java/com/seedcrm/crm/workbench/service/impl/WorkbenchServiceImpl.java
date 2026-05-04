@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.seedcrm.crm.clue.entity.Clue;
 import com.seedcrm.crm.clue.entity.ClueRecord;
 import com.seedcrm.crm.clue.dto.ClueProfileDtos.ClueProfileResponse;
@@ -54,6 +56,7 @@ import com.seedcrm.crm.wecom.support.WecomBindingStateCodec;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CluePageResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueRecordItemResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.AppointmentItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.AppointmentRecordResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CurrentRoleResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CustomerProfileResponse;
@@ -112,7 +115,26 @@ public class WorkbenchServiceImpl implements WorkbenchService {
     private static final int CLUE_LIST_SCAN_LIMIT = 2000;
     private static final int CLUE_PAGE_MAX_PAGE_SIZE = 200;
     private static final int ORDER_LIST_DEFAULT_LIMIT = 1000;
+    private static final int APPOINTMENT_LIST_DEFAULT_LIMIT = 1000;
     private static final int ORDER_LIST_FULFILLMENT_RECORD_LIMIT = 3;
+    private static final Set<String> ACTIVE_APPOINTMENT_ORDER_STATUSES = Set.of(
+            OrderStatus.APPOINTMENT.name(),
+            OrderStatus.ARRIVED.name(),
+            OrderStatus.SERVING.name());
+    private static final Set<String> SAFE_APPOINTMENT_EXTRA_FIELDS = Set.of(
+            "appointmentTimeBefore",
+            "appointmentTimeAfter",
+            "appointmentSlotsBefore",
+            "appointmentSlotsAfter",
+            "headcountBefore",
+            "headcountAfter",
+            "slotCountBefore",
+            "slotCountAfter",
+            "storeNameBefore",
+            "storeNameAfter",
+            "storeName",
+            "reasonType",
+            "sourceSurface");
     private static final Set<String> FULFILLMENT_ACTION_TYPES = Set.of(
             "APPOINTMENT_CREATE",
             "APPOINTMENT_CHANGE",
@@ -545,6 +567,34 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 .limit(ORDER_LIST_DEFAULT_LIMIT)
                 .toList();
         return buildOrderResponses(filteredOrders);
+    }
+
+    @Override
+    public List<AppointmentItemResponse> listAppointments(String storeName, LocalDate day) {
+        String normalizedStoreName = StringUtils.hasText(storeName) ? storeName.trim() : null;
+        LocalDateTime dayStart = day == null ? null : day.atStartOfDay();
+        LocalDateTime dayEnd = day == null ? null : day.plusDays(1).atStartOfDay();
+        List<Order> orders = orderMapper.selectList(Wrappers.<Order>lambdaQuery()
+                .in(Order::getStatus, ACTIVE_APPOINTMENT_ORDER_STATUSES)
+                .isNotNull(Order::getAppointmentTime)
+                .eq(StringUtils.hasText(normalizedStoreName), Order::getAppointmentStoreName, normalizedStoreName)
+                .ge(dayStart != null, Order::getAppointmentTime, dayStart)
+                .lt(dayEnd != null, Order::getAppointmentTime, dayEnd)
+                .orderByAsc(Order::getAppointmentTime)
+                .orderByAsc(Order::getId)
+                .last("LIMIT " + APPOINTMENT_LIST_DEFAULT_LIMIT));
+        if (orders == null || orders.isEmpty()) {
+            return List.of();
+        }
+        List<Order> filteredOrders = orders.stream()
+                .filter(this::isActiveAppointmentOrder)
+                .filter(order -> order.getAppointmentTime() != null)
+                .filter(order -> !StringUtils.hasText(normalizedStoreName)
+                        || normalizedStoreName.equals(resolveOrderStoreName(order)))
+                .filter(order -> day == null || day.equals(order.getAppointmentTime().toLocalDate()))
+                .limit(APPOINTMENT_LIST_DEFAULT_LIMIT)
+                .toList();
+        return buildAppointmentResponses(filteredOrders);
     }
 
     @Override
@@ -1008,6 +1058,48 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 .toList();
     }
 
+    private List<AppointmentItemResponse> buildAppointmentResponses(List<Order> orders) {
+        if (orders == null || orders.isEmpty()) {
+            return List.of();
+        }
+        List<Long> orderIds = orders.stream().map(Order::getId).filter(Objects::nonNull).toList();
+        Map<Long, Customer> customerMap = loadCustomers(orders.stream()
+                .map(Order::getCustomerId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList());
+        Map<Long, ClueProfileResponse> profileByClueId = loadClueProfilesByClueId(
+                orders.stream().map(Order::getClueId).filter(Objects::nonNull).distinct().toList());
+        Map<Long, List<AppointmentRecordResponse>> appointmentRecordsByOrderId =
+                loadAppointmentRecordsByOrderId(orderIds);
+        return orders.stream()
+                .map(order -> {
+                    Customer customer = order.getCustomerId() == null ? null : customerMap.get(order.getCustomerId());
+                    ClueProfileResponse profile = profileByClueId.get(order.getClueId());
+                    return new AppointmentItemResponse(
+                            order.getId(),
+                            order.getOrderNo(),
+                            order.getCustomerId(),
+                            customer == null ? null : customer.getName(),
+                            customer == null ? null : customer.getPhone(),
+                            order.getSourceChannel(),
+                            resolveProductSourceType(order.getSourceChannel(), null, null, order.getSourceId(), order.getClueId()),
+                            resolveOrderStoreName(order, profile),
+                            OrderType.toApiValue(order.getType()),
+                            toWorkbenchOrderStatus(order.getStatus()),
+                            OrderStatus.toApiValue(order.getStatus()),
+                            StringUtils.hasText(order.getVerificationStatus()) ? order.getVerificationStatus() : "UNVERIFIED",
+                            order.getAppointmentTime(),
+                            appointmentRecordsByOrderId.getOrDefault(order.getId(), List.of()),
+                            order.getCreateTime());
+                })
+                .toList();
+    }
+
+    private boolean isActiveAppointmentOrder(Order order) {
+        return order != null && ACTIVE_APPOINTMENT_ORDER_STATUSES.contains(normalize(order.getStatus()));
+    }
+
     private Map<Long, List<AppointmentRecordResponse>> loadAppointmentRecordsByOrderId(List<Long> orderIds) {
         if (orderIds == null || orderIds.isEmpty()) {
             return Map.of();
@@ -1038,8 +1130,73 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 record.getOperatorUserId(),
                 staffDirectoryService.getUserName(record.getOperatorUserId()),
                 null,
-                null,
+                buildSafeAppointmentExtraJson(record),
                 record.getCreateTime());
+    }
+
+    private String buildSafeAppointmentExtraJson(OrderActionRecord record) {
+        JsonNode extra = parseActionExtra(record == null ? null : record.getExtraJson());
+        if (extra == null || extra.isMissingNode() || extra.isNull() || !extra.isObject()) {
+            return null;
+        }
+        ObjectNode safe = JSON_MAPPER.createObjectNode();
+        for (String fieldName : SAFE_APPOINTMENT_EXTRA_FIELDS) {
+            copySafeAppointmentExtraField(safe, extra, fieldName);
+        }
+        if (safe.size() == 0) {
+            return null;
+        }
+        try {
+            return JSON_MAPPER.writeValueAsString(safe);
+        } catch (Exception exception) {
+            return null;
+        }
+    }
+
+    private void copySafeAppointmentExtraField(ObjectNode target, JsonNode source, String fieldName) {
+        JsonNode value = source.path(fieldName);
+        if (value.isMissingNode() || value.isNull()) {
+            return;
+        }
+        if (value.isArray()) {
+            ArrayNode array = JSON_MAPPER.createArrayNode();
+            for (JsonNode item : value) {
+                if (array.size() >= 20) {
+                    break;
+                }
+                addSafeScalarValue(array, item);
+            }
+            if (array.size() > 0) {
+                target.set(fieldName, array);
+            }
+            return;
+        }
+        if (value.isTextual()) {
+            String text = value.asText();
+            if (StringUtils.hasText(text)) {
+                target.put(fieldName, text.trim());
+            }
+            return;
+        }
+        if (value.isNumber() || value.isBoolean()) {
+            target.set(fieldName, value.deepCopy());
+        }
+    }
+
+    private void addSafeScalarValue(ArrayNode array, JsonNode value) {
+        if (value == null || value.isMissingNode() || value.isNull()) {
+            return;
+        }
+        if (value.isTextual()) {
+            String text = value.asText();
+            if (StringUtils.hasText(text)) {
+                array.add(text.trim());
+            }
+            return;
+        }
+        if (value.isNumber() || value.isBoolean()) {
+            array.add(value.asText());
+        }
     }
 
     private Map<Long, List<FulfillmentRecordResponse>> loadFulfillmentRecordsByOrderId(List<Long> orderIds) {

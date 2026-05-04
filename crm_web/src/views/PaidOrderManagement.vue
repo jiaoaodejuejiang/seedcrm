@@ -465,7 +465,8 @@ import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { appointOrder, cancelOrderAppointment } from '../api/order'
-import { fetchOrders } from '../api/workbench'
+import { fetchStoreScheduleConfigs } from '../api/systemConfig'
+import { fetchAppointments, fetchOrders } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
 import { formatDateTime, normalize } from '../utils/format'
 import {
@@ -488,6 +489,8 @@ const consoleState = reactive(loadSystemConsoleState())
 const loading = ref(true)
 const saving = ref(false)
 const orders = ref([])
+const appointmentOrders = ref([])
+const appointmentSnapshotLoaded = ref(false)
 const productSourceFilter = ref('ALL')
 const viewMode = ref('ORDER')
 const orderStatusFilter = ref('UNAPPOINTED')
@@ -544,6 +547,9 @@ const productFilteredOrders = computed(() =>
 )
 
 const schedulingOrders = computed(() => productFilteredOrders.value.filter((item) => isSchedulingOrder(item)))
+const appointmentOccupancyRows = computed(() => (
+  appointmentSnapshotLoaded.value ? appointmentOrders.value : mergedOrders.value
+))
 
 const filteredOrderRows = computed(() =>
   schedulingOrders.value.filter((item) => {
@@ -752,7 +758,7 @@ function bookedCountByStoreAndDay(storeName, day, excludingOrderId = null) {
   if (!storeName || !day) {
     return 0
   }
-  return mergedOrders.value.reduce((total, item) => {
+  return appointmentOccupancyRows.value.reduce((total, item) => {
     if (item.storeName !== storeName || (excludingOrderId && item.id === excludingOrderId)) {
       return total
     }
@@ -1009,6 +1015,7 @@ function recordTimelineDetails(record) {
   addRecordDetail(details, '新档期', formatSlotList(afterSlots) || extra.appointmentTimeAfter)
   addRecordDetail(details, '原人数', Number(extra.headcountBefore) > 0 ? `${extra.headcountBefore} 人` : '')
   addRecordDetail(details, '新人数', Number(extra.headcountAfter) > 0 ? `${extra.headcountAfter} 人` : '')
+  addRecordDetail(details, '来源入口', sourceSurfaceLabel(extra.sourceSurface))
   addRecordDetail(details, '备注', extra.remark || record?.remark)
   return details
 }
@@ -1023,6 +1030,18 @@ function addRecordDetail(details, label, value) {
 function recordActorText(record) {
   const actor = record?.operatorUserName || (record?.operatorUserId ? `ID ${record.operatorUserId}` : '')
   return actor ? `操作人：${actor}` : ''
+}
+
+function sourceSurfaceLabel(value) {
+  const labels = {
+    CUSTOMER_SCHEDULE: '顾客排档',
+    STORE_CALENDAR: '门店日历',
+    STORE_SERVICE: '门店服务',
+    CLUE_LIST: '客资列表',
+    SYSTEM_SYNC: '系统同步'
+  }
+  const normalized = normalize(value)
+  return labels[normalized] || value || ''
 }
 
 function statusChangeText(record) {
@@ -1167,7 +1186,7 @@ function buildAppointmentSlots(storeName, day, excludingOrderId = null) {
       const slotStart = formatClock(current)
       const slotEnd = formatClock(current + slotMinutes)
       const slotValue = `${day} ${slotStart}:00`
-      const occupiedOrder = mergedOrders.value.find((item) => {
+      const occupiedOrder = appointmentOccupancyRows.value.find((item) => {
         if (item.id === excludingOrderId || item.storeName !== storeName) {
           return false
         }
@@ -1341,6 +1360,13 @@ async function loadOrders() {
     let nextOrders = await fetchOrders({
       status: 'paid'
     })
+    try {
+      appointmentOrders.value = await fetchAppointments()
+      appointmentSnapshotLoaded.value = true
+    } catch {
+      appointmentOrders.value = []
+      appointmentSnapshotLoaded.value = false
+    }
     if (pendingRouteOrderId.value && !nextOrders.some((item) => item.id === pendingRouteOrderId.value)) {
       const completedOrders = await fetchOrders({
         status: 'used'
@@ -1371,6 +1397,20 @@ async function loadOrders() {
     orders.value = []
   } finally {
     loading.value = false
+  }
+}
+
+async function loadStoreScheduleConfigs() {
+  try {
+    const configs = await fetchStoreScheduleConfigs()
+    if (Array.isArray(configs) && configs.length) {
+      consoleState.storeScheduleConfigs = configs
+      saveSystemConsoleState({
+        ...consoleState,
+        storeScheduleConfigs: configs
+      })
+    }
+  } catch {
   }
 }
 
@@ -1503,6 +1543,7 @@ async function handleStoreBookingConfirm() {
   }
 }
 
+loadStoreScheduleConfigs()
 loadOrders()
 </script>
 

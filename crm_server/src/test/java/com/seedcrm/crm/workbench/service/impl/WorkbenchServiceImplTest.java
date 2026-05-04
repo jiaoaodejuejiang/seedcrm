@@ -30,8 +30,10 @@ import com.seedcrm.crm.wecom.mapper.WecomTouchLogMapper;
 import com.seedcrm.crm.wecom.service.WecomConsoleService;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.ClueItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.CluePageResponse;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.AppointmentItemResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.OrderItemResponse;
 import com.seedcrm.crm.workbench.service.StaffDirectoryService;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -292,7 +294,7 @@ class WorkbenchServiceImplTest {
     }
 
     @Test
-    void listOrdersShouldNotExposeRawAppointmentRemarkOrExtraJson() {
+    void listOrdersShouldExposeSafeAppointmentDetailsWithoutRawPayload() {
         Order order = new Order();
         order.setId(3L);
         order.setClueId(3L);
@@ -310,7 +312,14 @@ class WorkbenchServiceImplTest {
         appointment.setToStatus("PAID_DEPOSIT");
         appointment.setOperatorUserId(9001L);
         appointment.setRemark("customer private note");
-        appointment.setExtraJson("{\"storeNameBefore\":\"A\",\"storeNameAfter\":\"B\",\"remark\":\"private extra\"}");
+        appointment.setExtraJson("""
+                {"storeNameBefore":"A","storeNameAfter":"B",
+                 "appointmentSlotsBefore":["2026-05-05 10:00"],
+                 "appointmentSlotsAfter":["2026-05-06 11:00","2026-05-06 12:00"],
+                 "headcountBefore":1,"headcountAfter":2,
+                 "reasonType":"RESCHEDULE","sourceSurface":"CUSTOMER_SCHEDULE",
+                 "remark":"private extra","rawPayload":"secret"}
+                """);
         appointment.setCreateTime(LocalDateTime.now());
 
         when(orderMapper.selectList(any())).thenReturn(List.of(order));
@@ -325,7 +334,14 @@ class WorkbenchServiceImplTest {
         OrderItemResponse target = responses.get(0);
         assertThat(target.getAppointmentRecords()).hasSize(1);
         assertThat(target.getAppointmentRecords().get(0).getRemark()).isNull();
-        assertThat(target.getAppointmentRecords().get(0).getExtraJson()).isNull();
+        assertThat(target.getAppointmentRecords().get(0).getExtraJson())
+                .contains("\"storeNameBefore\":\"A\"",
+                        "\"storeNameAfter\":\"B\"",
+                        "\"appointmentSlotsAfter\":[\"2026-05-06 11:00\",\"2026-05-06 12:00\"]",
+                        "\"headcountAfter\":2",
+                        "\"reasonType\":\"RESCHEDULE\"",
+                        "\"sourceSurface\":\"CUSTOMER_SCHEDULE\"")
+                .doesNotContain("private", "rawPayload", "secret");
         assertThat(target.getFulfillmentRecords()).hasSize(1);
         assertThat(target.getFulfillmentRecords().get(0).getDetailItems()).contains("原档：A", "新档：B");
         assertThat(target.getFulfillmentRecords().get(0).getRemark()).isNull();
@@ -375,6 +391,50 @@ class WorkbenchServiceImplTest {
         assertThat(target.getFulfillmentRecords().get(0).getExtraJson()).isNull();
     }
 
+    @Test
+    void listAppointmentsShouldReturnOnlyActiveScheduleRowsForStoreAndDay() {
+        LocalDate day = LocalDate.of(2026, 5, 6);
+        Order target = appointmentOrder(1L, "Store A", day.atTime(10, 0), "APPOINTMENT");
+        Order otherStore = appointmentOrder(2L, "Store B", day.atTime(10, 0), "APPOINTMENT");
+        Order otherDay = appointmentOrder(3L, "Store A", day.plusDays(1).atTime(10, 0), "APPOINTMENT");
+        Order completed = appointmentOrder(4L, "Store A", day.atTime(11, 0), "COMPLETED");
+        Order noAppointmentTime = appointmentOrder(5L, "Store A", null, "APPOINTMENT");
+
+        OrderActionRecord appointment = new OrderActionRecord();
+        appointment.setId(501L);
+        appointment.setOrderId(1L);
+        appointment.setActionType("APPOINTMENT_CREATE");
+        appointment.setFromStatus("PAID_DEPOSIT");
+        appointment.setToStatus("APPOINTMENT");
+        appointment.setOperatorUserId(9001L);
+        appointment.setExtraJson("""
+                {"storeNameAfter":"Store A",
+                 "appointmentSlotsAfter":["2026-05-06 10:00:00"],
+                 "headcountAfter":1,
+                 "rawPayload":"secret"}
+                """);
+        appointment.setCreateTime(day.atTime(9, 0));
+
+        when(orderMapper.selectList(any())).thenReturn(List.of(target, otherStore, otherDay, completed, noAppointmentTime));
+        when(customerMapper.selectList(any())).thenReturn(List.of());
+        when(clueProfileService.listByClueIds(any())).thenReturn(List.of());
+        when(orderActionRecordMapper.selectList(any())).thenReturn(List.of(appointment));
+        when(staffDirectoryService.getUserName(9001L)).thenReturn("Scheduler A");
+
+        List<AppointmentItemResponse> responses = workbenchService.listAppointments("Store A", day);
+
+        assertThat(responses).hasSize(1);
+        AppointmentItemResponse response = responses.get(0);
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getStoreName()).isEqualTo("Store A");
+        assertThat(response.getStatus()).isEqualTo("appointment");
+        assertThat(response.getAppointmentRecords()).hasSize(1);
+        assertThat(response.getAppointmentRecords().get(0).getOperatorUserName()).isEqualTo("Scheduler A");
+        assertThat(response.getAppointmentRecords().get(0).getExtraJson())
+                .contains("\"appointmentSlotsAfter\":[\"2026-05-06 10:00:00\"]")
+                .doesNotContain("rawPayload", "secret");
+    }
+
     private void mockCluePage(List<Clue> clues) {
         when(clueMapper.selectPage(any(), any())).thenAnswer(invocation -> {
             Page<Clue> page = invocation.getArgument(0);
@@ -394,5 +454,20 @@ class WorkbenchServiceImplTest {
         clue.setIsPublic(1);
         clue.setCreatedAt(LocalDateTime.now().minusMinutes(id));
         return clue;
+    }
+
+    private Order appointmentOrder(Long id, String storeName, LocalDateTime appointmentTime, String status) {
+        Order order = new Order();
+        order.setId(id);
+        order.setClueId(id);
+        order.setCustomerId(1000L + id);
+        order.setOrderNo("APT-" + id);
+        order.setType(1);
+        order.setStatus(status);
+        order.setAppointmentStoreName(storeName);
+        order.setAppointmentTime(appointmentTime);
+        order.setVerificationStatus("UNVERIFIED");
+        order.setCreateTime(LocalDateTime.of(2026, 5, 1, 9, 0).plusMinutes(id));
+        return order;
     }
 }

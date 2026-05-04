@@ -178,6 +178,29 @@ public final class WorkbenchResponses {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    public static class AppointmentItemResponse {
+        private Long id;
+        private String orderNo;
+        private Long customerId;
+        private String customerName;
+        private String customerPhone;
+        private String sourceChannel;
+        private String productSourceType;
+        private String storeName;
+        private String type;
+        private String status;
+        private String statusCategory;
+        private String verificationStatus;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime appointmentTime;
+        private List<AppointmentRecordResponse> appointmentRecords;
+        @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+        private LocalDateTime createTime;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class FulfillmentRecordResponse {
         private String actionType;
         private String stage;

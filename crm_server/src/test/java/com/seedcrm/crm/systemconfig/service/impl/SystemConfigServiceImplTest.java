@@ -222,6 +222,56 @@ class SystemConfigServiceImplTest {
     }
 
     @Test
+    void shouldAllowStoreScheduleConfigJson() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("store.schedule.configs");
+        request.setConfigValue("""
+                [
+                  {
+                    "id": 1,
+                    "storeName": "静安门店",
+                    "morningStart": "09:00",
+                    "morningEnd": "12:00",
+                    "afternoonStart": "13:30",
+                    "afternoonEnd": "18:00",
+                    "slotHours": 1.5,
+                    "remark": "常规排档"
+                  }
+                ]
+                """);
+        request.setValueType("JSON");
+
+        SystemConfigDtos.ConfigResponse response = service.saveLegacyConfig(request, adminContext());
+
+        assertThat(response.getConfigKey()).isEqualTo("store.schedule.configs");
+        assertThat(valueOf("store.schedule.configs")).contains("\"storeName\": \"静安门店\"");
+        assertThat(response.getValueType()).isEqualTo("JSON");
+    }
+
+    @Test
+    void shouldRejectInvalidStoreScheduleConfigJson() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("store.schedule.configs");
+        request.setConfigValue("""
+                [
+                  {
+                    "storeName": "静安门店",
+                    "morningStart": "12:00",
+                    "morningEnd": "09:00",
+                    "afternoonStart": "13:30",
+                    "afternoonEnd": "18:00",
+                    "slotHours": 1.5
+                  }
+                ]
+                """);
+        request.setValueType("JSON");
+
+        assertThatThrownBy(() -> service.saveLegacyConfig(request, adminContext()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("morningEnd");
+    }
+
+    @Test
     void shouldCreateDraftWithoutMutatingRuntimeConfigOrAuditLog() {
         jdbcTemplate.update("""
                 INSERT INTO system_config(config_key, config_value, value_type, scope_type, scope_id, enabled, description)
@@ -684,6 +734,7 @@ class SystemConfigServiceImplTest {
         seedCapability("SYSTEM_DOMAIN", "system.domain.%", "SYSTEM_SETTING", "URL", "HIGH", 0, "DOMAIN_URL", "MODULE_CALLBACK");
         seedCapability("WORKFLOW_SWITCH", "workflow.%", "SYSTEM_FLOW", "BOOLEAN", "HIGH", 0, "BOOLEAN", "MODULE_CALLBACK");
         seedCapability("CLUE_DEDUP", "clue.dedup.%", "CLUE", "STRING", "MEDIUM", 0, "CLUE_DEDUP", "CACHE_EVICT");
+        seedCapability("STORE_SCHEDULE", "store.schedule.%", "STORE_SERVICE", "JSON", "MEDIUM", 0, "STORE_SCHEDULE", "CACHE_EVICT");
         seedCapability("WECOM_INTEGRATION", "wecom.%", "WECOM", "STRING", "HIGH", 1, "STRING", "MODULE_CALLBACK");
         seedCapability("DOUYIN_INTEGRATION", "douyin.%", "SCHEDULER", "STRING", "HIGH", 1, "STRING", "MODULE_CALLBACK");
         seedCapability("DISTRIBUTION_MAPPING", DistributionOrderTypeMappingResolver.CONFIG_KEY, "SCHEDULER", "JSON", "MEDIUM", 0, "DISTRIBUTION_MAPPING", "MODULE_CALLBACK");

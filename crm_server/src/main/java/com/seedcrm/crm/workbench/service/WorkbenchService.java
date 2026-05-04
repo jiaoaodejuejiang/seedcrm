@@ -11,7 +11,9 @@ import com.seedcrm.crm.workbench.dto.WorkbenchResponses.PlanOrderWorkbenchRespon
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StaffRoleOptionResponse;
 import com.seedcrm.crm.workbench.dto.WorkbenchResponses.StoreLiveCodePreviewResponse;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
+import com.seedcrm.crm.workbench.dto.WorkbenchResponses.AppointmentItemResponse;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Predicate;
 
@@ -31,6 +33,8 @@ public interface WorkbenchService {
                                Predicate<Long> clueVisiblePredicate);
 
     List<OrderItemResponse> listOrders(String status, String customerName, String customerPhone);
+
+    List<AppointmentItemResponse> listAppointments(String storeName, LocalDate day);
 
     StoreLiveCodePreviewResponse getOrderLiveCodePreview(Long orderId, PermissionRequestContext context);
 

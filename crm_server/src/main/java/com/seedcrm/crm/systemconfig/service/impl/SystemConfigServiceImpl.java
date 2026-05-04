@@ -40,6 +40,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
     private static final String SYSTEM_BASE_URL_KEY = "system.domain.systemBaseUrl";
     private static final String API_BASE_URL_KEY = "system.domain.apiBaseUrl";
+    private static final String STORE_SCHEDULE_CONFIG_KEY = "store.schedule.configs";
     private static final String DEFAULT_SYSTEM_BASE_URL = "http://127.0.0.1:8003";
     private static final String DEFAULT_API_BASE_URL = "http://127.0.0.1:8004";
     private static final String MASKED_VALUE = "******";
@@ -80,6 +81,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             "deposit.",
             "amount.",
             "clue.",
+            "store.",
             "form_designer.",
             "distribution.",
             "scheduler.",
@@ -1199,6 +1201,12 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 yield validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
                         validator, "分销订单类型映射校验通过", null);
             }
+            case "STORE_SCHEDULE" -> {
+                JsonNode root = parseJson(item.configKey(), item.afterValue());
+                validateStoreScheduleConfigs(root);
+                yield validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                        validator, "门店档期配置校验通过", null);
+            }
             case "CLUE_DEDUP" -> validateClueDedupItem(item, capability);
             case "FINANCE_VISIBILITY" -> validateFinanceVisibilityItem(item, capability);
             case "BLOCKED" -> validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
@@ -1557,6 +1565,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         }
         if (normalized.startsWith("deposit.")
                 || normalized.startsWith("clue.")
+                || normalized.startsWith("store.")
                 || normalized.startsWith("distribution.")
                 || normalized.startsWith("form_designer.")
                 || normalized.startsWith("scheduler.")) {
@@ -1571,7 +1580,8 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         if (normalized.startsWith("clue.")) {
             modules.add("客资中心");
         }
-        if (normalized.startsWith("deposit.") || normalized.startsWith("workflow.") || normalized.startsWith("form_designer.")) {
+        if (normalized.startsWith("deposit.") || normalized.startsWith("workflow.")
+                || normalized.startsWith("form_designer.") || normalized.startsWith("store.")) {
             modules.add("门店服务");
         }
         if (normalized.startsWith("amount.") || normalized.startsWith("payment.")) {
@@ -1607,6 +1617,8 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             warnings.add("客资去重配置会影响后续接口拉取入库和客资记录合并方式。");
         } else if (normalized.startsWith("deposit.direct.")) {
             warnings.add("定金免码配置会影响定金订单是否可直接进入后续服务流程。");
+        } else if (normalized.startsWith("store.schedule.")) {
+            warnings.add("门店档期配置会影响顾客排档和门店日历，请确认时段、每档时长和单日容量。");
         } else if (normalized.startsWith("system.domain.")) {
             warnings.add("域名配置会影响回调地址、Swagger/OpenAPI 地址和第三方联调地址。");
         } else if (normalized.startsWith("distribution.") || normalized.startsWith("douyin.") || normalized.startsWith("wecom.")) {
@@ -1859,6 +1871,70 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         }
         if (DistributionOrderTypeMappingResolver.CONFIG_KEY.equals(key)) {
             validateDistributionOrderTypeMapping(root);
+        } else if (STORE_SCHEDULE_CONFIG_KEY.equals(key)) {
+            validateStoreScheduleConfigs(root);
+        }
+    }
+
+    private void validateStoreScheduleConfigs(JsonNode root) {
+        if (root == null || !root.isArray()) {
+            throw new BusinessException("门店档期配置必须是 JSON 数组");
+        }
+        if (root.size() > 100) {
+            throw new BusinessException("门店档期配置最多维护 100 个门店");
+        }
+        int index = 0;
+        for (JsonNode item : root) {
+            if (item == null || !item.isObject()) {
+                throw new BusinessException("门店档期配置[" + index + "] 必须是对象");
+            }
+            String prefix = "门店档期配置[" + index + "]";
+            String storeName = text(item, "storeName");
+            if (!StringUtils.hasText(storeName)) {
+                throw new BusinessException(prefix + ".storeName 不能为空");
+            }
+            double slotHours = numberValue(item.path("slotHours"), 0D);
+            if (slotHours < 0.5D || slotHours > 12D) {
+                throw new BusinessException(prefix + ".slotHours 必须在 0.5 到 12 小时之间");
+            }
+            validateTimeRange(prefix, item, "morningStart", "morningEnd");
+            validateTimeRange(prefix, item, "afternoonStart", "afternoonEnd");
+            index++;
+        }
+    }
+
+    private void validateTimeRange(String prefix, JsonNode item, String startField, String endField) {
+        int start = parseTimeMinutes(text(item, startField), prefix + "." + startField);
+        int end = parseTimeMinutes(text(item, endField), prefix + "." + endField);
+        if (end <= start) {
+            throw new BusinessException(prefix + "." + endField + " 必须晚于 " + startField);
+        }
+    }
+
+    private int parseTimeMinutes(String value, String fieldName) {
+        if (!StringUtils.hasText(value) || !value.matches("\\d{2}:\\d{2}")) {
+            throw new BusinessException(fieldName + " 必须是 HH:mm 格式");
+        }
+        String[] parts = value.split(":");
+        int hour = Integer.parseInt(parts[0]);
+        int minute = Integer.parseInt(parts[1]);
+        if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+            throw new BusinessException(fieldName + " 时间超出范围");
+        }
+        return hour * 60 + minute;
+    }
+
+    private double numberValue(JsonNode node, double defaultValue) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return defaultValue;
+        }
+        if (node.isNumber()) {
+            return node.asDouble();
+        }
+        try {
+            return Double.parseDouble(node.asText());
+        } catch (Exception exception) {
+            return defaultValue;
         }
     }
 

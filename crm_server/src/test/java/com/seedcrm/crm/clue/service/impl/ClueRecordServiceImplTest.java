@@ -79,4 +79,26 @@ class ClueRecordServiceImplTest {
         assertThat(record.getContent()).hasSizeLessThanOrEqualTo(500);
         verify(clueRecordMapper).insert(record);
     }
+
+    @Test
+    void findClueIdByExternalIdentityShouldPreferExternalRecordIdThenOrderId() {
+        ClueRecord matchedByRecord = new ClueRecord();
+        matchedByRecord.setClueId(21L);
+        when(clueRecordMapper.selectOne(any())).thenReturn(matchedByRecord);
+
+        Long clueId = clueRecordService.findClueIdByExternalIdentity("DOUYIN", "clue-1", "order-1");
+
+        assertThat(clueId).isEqualTo(21L);
+    }
+
+    @Test
+    void findClueIdByExternalIdentityShouldFallbackToOrderId() {
+        ClueRecord matchedByOrder = new ClueRecord();
+        matchedByOrder.setClueId(22L);
+        when(clueRecordMapper.selectOne(any())).thenReturn(null, matchedByOrder);
+
+        Long clueId = clueRecordService.findClueIdByExternalIdentity("DOUYIN", "missing-record", "order-2");
+
+        assertThat(clueId).isEqualTo(22L);
+    }
 }

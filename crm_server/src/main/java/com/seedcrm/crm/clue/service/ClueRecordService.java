@@ -8,5 +8,7 @@ public interface ClueRecordService {
 
     boolean addRecordIfAbsent(ClueRecord record);
 
+    Long findClueIdByExternalIdentity(String sourceChannel, String externalRecordId, String externalOrderId);
+
     List<ClueRecord> listByClueIds(Collection<Long> clueIds);
 }

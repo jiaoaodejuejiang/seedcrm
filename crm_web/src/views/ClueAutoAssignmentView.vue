@@ -110,30 +110,15 @@
     </template>
 
     <template v-else>
-      <section class="metrics-row">
-        <article class="metric-card">
-          <span>去重状态</span>
-          <strong>{{ dedupForm.enabled === 1 ? '已启用' : '已停用' }}</strong>
-          <small>默认开启，避免接口重叠拉取时生成重复客资记录。</small>
-        </article>
-        <article class="metric-card">
-          <span>去重窗口</span>
-          <strong>{{ dedupForm.windowDays }} 天</strong>
-          <small>窗口内相同来源、同手机号或微信号会合并到同一条客资。</small>
-        </article>
-        <article class="metric-card">
-          <span>记录策略</span>
-          <strong>合并记录</strong>
-          <small>客户基础信息保留一条，订单和动作写入客资详情。</small>
-        </article>
-      </section>
-
       <section class="panel">
         <div class="panel-heading">
           <div>
-            <h3>去重配置</h3>
-            <p>适用于巨量 OceanEngine 客资接口同步入库；关闭后不按时间窗主动合并，手机号/微信号唯一保护仍生效。</p>
+            <h3>客资去重</h3>
+            <p>适用于客资接口同步入库。开启后，同来源同手机号/微信号在窗口期内合并为一条基础客资；订单和动作继续进入客资记录。</p>
           </div>
+          <el-tag :type="dedupForm.enabled === 1 ? 'success' : 'info'" effect="light">
+            {{ dedupForm.enabled === 1 ? '已启用' : '已停用' }} · {{ dedupForm.windowDays }} 天
+          </el-tag>
         </div>
 
         <el-alert
@@ -142,7 +127,7 @@
           type="warning"
           show-icon
           :closable="false"
-          title="当前后端版本暂不支持保存去重配置，页面已按默认启用 90 天展示；升级后端后可保存。"
+          title="当前后端暂不支持保存，页面按默认启用 90 天展示。"
         />
         <el-alert
           v-else-if="dedupConfigLoadError"
@@ -163,10 +148,10 @@
               active-text="启用"
               inactive-text="停用"
             />
-            <p class="table-note">开启后，同来源同手机号/微信号在窗口期内优先合并到同一条基础客资。</p>
+            <p class="table-note">关闭后不按时间窗口主动合并；手机号/微信号唯一保护仍生效。</p>
           </article>
           <article class="detail-card">
-            <h3>窗口天数</h3>
+            <h3>去重窗口</h3>
             <el-input-number
               v-model="dedupForm.windowDays"
               :min="1"
@@ -175,7 +160,7 @@
               :disabled="!canSaveDedupConfig"
               controls-position="right"
             />
-            <p class="table-note">默认 90 天；超出窗口仍保留客户身份唯一，订单/动作继续进入客资记录。</p>
+            <p class="table-note">默认 90 天，支持 1-3650 天。</p>
           </article>
           <article class="detail-card">
             <h3>配置更新时间</h3>

@@ -2,9 +2,16 @@ package com.seedcrm.crm.clue.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.seedcrm.crm.clue.entity.Clue;
+import com.seedcrm.crm.clue.entity.ClueRecord;
 import com.seedcrm.crm.clue.service.ClueRecordService;
 import com.seedcrm.crm.clue.service.ClueService;
 import com.seedcrm.crm.scheduler.entity.IntegrationProviderConfig;
@@ -15,6 +22,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -143,6 +151,38 @@ class DouyinClueSyncServiceImplTest {
 
         assertThat(douyinClueSyncService.buildRecordKey(paidRecord, paidRecord.toString()))
                 .isNotEqualTo(douyinClueSyncService.buildRecordKey(refundedRecord, refundedRecord.toString()));
+    }
+
+    @Test
+    void importRecordShouldMergeOrderWithoutPhoneWhenExternalIdentityMatched() throws Exception {
+        JsonNode orderRecord = objectMapper.readTree("""
+                {"clue_id":"clue-1","order_id":"order-1","order_status":"PAID","update_time":"2026-04-27 10:00:00"}
+                """);
+        when(clueRecordService.findClueIdByExternalIdentity(eq("DOUYIN"), eq("clue-1"), eq("order-1")))
+                .thenReturn(88L);
+        when(clueRecordService.addRecordIfAbsent(any(ClueRecord.class))).thenReturn(true);
+
+        DouyinClueSyncServiceImpl.ImportResult result = douyinClueSyncService.importRecord(orderRecord);
+
+        assertThat(result).isEqualTo(DouyinClueSyncServiceImpl.ImportResult.IMPORTED);
+        verify(clueService, never()).addClue(any(Clue.class));
+        ArgumentCaptor<ClueRecord> recordCaptor = ArgumentCaptor.forClass(ClueRecord.class);
+        verify(clueRecordService).addRecordIfAbsent(recordCaptor.capture());
+        assertThat(recordCaptor.getValue().getClueId()).isEqualTo(88L);
+        assertThat(recordCaptor.getValue().getExternalOrderId()).isEqualTo("order-1");
+    }
+
+    @Test
+    void importRecordShouldDropOrderWithoutPhoneWhenExternalIdentityNotMatched() throws Exception {
+        JsonNode orderRecord = objectMapper.readTree("""
+                {"clue_id":"clue-2","order_id":"order-2","order_status":"PAID","update_time":"2026-04-27 10:00:00"}
+                """);
+
+        DouyinClueSyncServiceImpl.ImportResult result = douyinClueSyncService.importRecord(orderRecord);
+
+        assertThat(result).isEqualTo(DouyinClueSyncServiceImpl.ImportResult.SKIPPED_UNMATCHED_IDENTITY);
+        verify(clueService, never()).addClue(any(Clue.class));
+        verify(clueRecordService, never()).addRecordIfAbsent(any(ClueRecord.class));
     }
 
     @Test

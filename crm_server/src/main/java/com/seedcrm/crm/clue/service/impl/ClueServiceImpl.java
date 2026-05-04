@@ -15,6 +15,7 @@ import com.seedcrm.crm.distributor.service.DistributorService;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -64,7 +65,15 @@ public class ClueServiceImpl extends ServiceImpl<ClueMapper, Clue> implements Cl
         clue.setCurrentOwnerId(null);
         clue.setCreatedAt(now);
         clue.setUpdatedAt(now);
-        clueMapper.insert(clue);
+        try {
+            clueMapper.insert(clue);
+        } catch (DuplicateKeyException exception) {
+            Clue concurrentClue = findExistingClueByIdentity(clue.getPhone(), clue.getWechat(), null, null);
+            if (concurrentClue != null) {
+                return syncExistingClue(concurrentClue, clue);
+            }
+            throw exception;
+        }
         return autoAssignClue(clue);
     }
 

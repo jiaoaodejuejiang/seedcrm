@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 
 @ExtendWith(MockitoExtension.class)
 class ClueServiceImplTest {
@@ -183,6 +184,27 @@ class ClueServiceImplTest {
 
         assertThat(merged.getId()).isEqualTo(12L);
         verify(clueMapper, never()).insert(any(Clue.class));
+        verify(clueManagementService, never()).autoAssignIfEnabled(any(Clue.class));
+    }
+
+    @Test
+    void addClueShouldMergeAfterConcurrentDuplicateKey() {
+        when(clueManagementService.getDedupConfig()).thenReturn(new DedupConfigResponse(1, 90, null));
+        Clue existing = new Clue();
+        existing.setId(13L);
+        existing.setPhone("13800138102");
+        when(clueMapper.selectOne(any())).thenReturn(null, null, existing);
+        when(clueMapper.insert(any(Clue.class))).thenThrow(new DuplicateKeyException("duplicate phone"));
+
+        Clue request = new Clue();
+        request.setPhone("13800138102");
+        request.setName("Concurrent");
+        request.setSourceChannel("DOUYIN");
+
+        Clue merged = clueService.addClue(request);
+
+        assertThat(merged.getId()).isEqualTo(13L);
+        assertThat(merged.getName()).isEqualTo("Concurrent");
         verify(clueManagementService, never()).autoAssignIfEnabled(any(Clue.class));
     }
 }

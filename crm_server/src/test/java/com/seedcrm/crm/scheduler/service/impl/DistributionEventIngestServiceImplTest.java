@@ -9,6 +9,10 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.seedcrm.crm.clue.entity.Clue;
+import com.seedcrm.crm.clue.entity.ClueRecord;
+import com.seedcrm.crm.clue.mapper.ClueMapper;
+import com.seedcrm.crm.clue.service.ClueRecordService;
 import com.seedcrm.crm.customer.entity.Customer;
 import com.seedcrm.crm.customer.mapper.CustomerMapper;
 import com.seedcrm.crm.order.entity.Order;
@@ -58,6 +62,12 @@ class DistributionEventIngestServiceImplTest {
     @Mock
     private OrderMapper orderMapper;
 
+    @Mock
+    private ClueMapper clueMapper;
+
+    @Mock
+    private ClueRecordService clueRecordService;
+
     private ObjectMapper objectMapper;
     private DistributionEventIngestServiceImpl service;
 
@@ -71,6 +81,8 @@ class DistributionEventIngestServiceImplTest {
                 distributionExceptionService,
                 customerMapper,
                 orderMapper,
+                clueMapper,
+                clueRecordService,
                 objectMapper,
                 new DistributionOrderTypeMappingResolver(objectMapper, null));
     }
@@ -110,12 +122,55 @@ class DistributionEventIngestServiceImplTest {
         assertThat(orderCaptor.getValue().getCustomerId()).isEqualTo(101L);
         assertThat(orderCaptor.getValue().getStatus()).isEqualTo("PAID_DEPOSIT");
         assertThat(orderCaptor.getValue().getExternalOrderId()).isEqualTo("o_20001");
+        verify(clueRecordService, never()).addRecordIfAbsent(any(ClueRecord.class));
 
         ArgumentCaptor<IntegrationCallbackEventLog> logCaptor = ArgumentCaptor.forClass(IntegrationCallbackEventLog.class);
         verify(eventLogWriter).write(logCaptor.capture());
         assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("SUCCESS");
         assertThat(logCaptor.getValue().getIdempotencyStatus()).isEqualTo("CREATED");
         assertThat(logCaptor.getValue().getSignatureStatus()).isEqualTo("MOCK_SKIPPED");
+    }
+
+    @Test
+    void shouldWriteDistributionPaidOrderToClueRecordWhenPhoneMatchesExistingClue() throws Exception {
+        when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
+        when(eventLogMapper.selectOne(any())).thenReturn(null);
+        when(customerMapper.selectOne(any())).thenReturn(null);
+        when(customerMapper.insert(any(Customer.class))).thenAnswer(invocation -> {
+            Customer customer = invocation.getArgument(0);
+            customer.setId(101L);
+            return 1;
+        });
+        when(orderMapper.selectOne(any())).thenReturn(null);
+        when(orderMapper.insert(any(Order.class))).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            order.setId(202L);
+            return 1;
+        });
+        Clue matchedClue = new Clue();
+        matchedClue.setId(88L);
+        matchedClue.setPhone("13800000000");
+        when(clueMapper.selectOne(any())).thenReturn(matchedClue);
+        when(clueRecordService.addRecordIfAbsent(any(ClueRecord.class))).thenReturn(true);
+
+        DistributionEventResponse response = service.ingest(readPayload(), request("idem-clue-record-001"));
+
+        assertThat(response.getIdempotencyResult()).isEqualTo("CREATED");
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderMapper).insert(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getClueId()).isEqualTo(88L);
+
+        ArgumentCaptor<ClueRecord> recordCaptor = ArgumentCaptor.forClass(ClueRecord.class);
+        verify(clueRecordService).addRecordIfAbsent(recordCaptor.capture());
+        ClueRecord record = recordCaptor.getValue();
+        assertThat(record.getClueId()).isEqualTo(88L);
+        assertThat(record.getRecordType()).isEqualTo("ORDER");
+        assertThat(record.getSourceChannel()).isEqualTo("DISTRIBUTOR");
+        assertThat(record.getExternalRecordId()).isEqualTo("evt_001");
+        assertThat(record.getExternalOrderId()).isEqualTo("o_20001");
+        assertThat(record.getRecordKey()).isEqualTo("distribution:order:distribution:o_20001:paid");
+        assertThat(record.getTitle()).isEqualTo("分销订单同步：已付款");
+        assertThat(record.getContent()).contains("外部订单：o_20001", "支付金额：199.00");
     }
 
     @Test
@@ -279,6 +334,30 @@ class DistributionEventIngestServiceImplTest {
         verify(orderMapper).updateById(orderCaptor.capture());
         assertThat(orderCaptor.getValue().getExternalTradeNo()).isEqualTo("pay_30001");
         assertThat(orderCaptor.getValue().getRawData()).contains("\"externalOrderId\":\"o_20001\"");
+    }
+
+    @Test
+    void shouldAppendRecordForExistingDistributionOrderMatchedByExternalIdentity() throws Exception {
+        when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
+        when(eventLogMapper.selectOne(any())).thenReturn(null);
+        Order existingOrder = existingDistributionOrder();
+        existingOrder.setClueId(null);
+        when(orderMapper.selectOne(any())).thenReturn(existingOrder);
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+        when(clueRecordService.findClueIdByExternalIdentity(any(), any(), any())).thenReturn(88L);
+        when(clueRecordService.addRecordIfAbsent(any(ClueRecord.class))).thenReturn(true);
+
+        DistributionEventResponse response = service.ingest(readPayload(), request("idem-existing-record-001"));
+
+        assertThat(response.getIdempotencyResult()).isEqualTo("EXISTING");
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderMapper).updateById(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getClueId()).isEqualTo(88L);
+
+        ArgumentCaptor<ClueRecord> recordCaptor = ArgumentCaptor.forClass(ClueRecord.class);
+        verify(clueRecordService).addRecordIfAbsent(recordCaptor.capture());
+        assertThat(recordCaptor.getValue().getRecordKey()).isEqualTo("distribution:order:distribution:o_20001:paid");
+        assertThat(recordCaptor.getValue().getClueId()).isEqualTo(88L);
     }
 
     @Test
@@ -455,6 +534,33 @@ class DistributionEventIngestServiceImplTest {
         assertThat(logCaptor.getValue().getProcessStatus()).isEqualTo("SUCCESS");
         assertThat(logCaptor.getValue().getIdempotencyStatus()).isEqualTo("EXCEPTION_QUEUED");
         assertThat(logCaptor.getValue().getRelatedOrderId()).isEqualTo(202L);
+    }
+
+    @Test
+    void shouldWriteDistributionStatusEventToClueRecordWhenOrderHasClueId() throws Exception {
+        when(providerConfigMapper.selectOne(any())).thenReturn(distributionProvider());
+        when(eventLogMapper.selectOne(any())).thenReturn(null);
+        Order existingOrder = existingDistributionOrder();
+        existingOrder.setClueId(88L);
+        when(orderMapper.selectOne(any())).thenReturn(existingOrder);
+        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
+        when(clueRecordService.addRecordIfAbsent(any(ClueRecord.class))).thenReturn(true);
+
+        DistributionEventResponse response = service.ingest(readRefundedPayload(), request("idem-refunded-record-001"));
+
+        assertThat(response.getIdempotencyResult()).isEqualTo("UPDATED");
+        assertThat(existingOrder.getStatus()).isEqualTo("REFUNDED");
+
+        ArgumentCaptor<ClueRecord> recordCaptor = ArgumentCaptor.forClass(ClueRecord.class);
+        verify(clueRecordService).addRecordIfAbsent(recordCaptor.capture());
+        ClueRecord record = recordCaptor.getValue();
+        assertThat(record.getClueId()).isEqualTo(88L);
+        assertThat(record.getRecordType()).isEqualTo("ORDER");
+        assertThat(record.getSourceChannel()).isEqualTo("DISTRIBUTOR");
+        assertThat(record.getExternalRecordId()).isEqualTo("evt_refunded_001");
+        assertThat(record.getExternalOrderId()).isEqualTo("o_20001");
+        assertThat(record.getTitle()).isEqualTo("分销订单同步：已退款");
+        assertThat(record.getContent()).contains("退款金额：199.00", "状态：refunded");
     }
 
     @Test
@@ -726,6 +832,8 @@ class DistributionEventIngestServiceImplTest {
                 distributionExceptionService,
                 customerMapper,
                 orderMapper,
+                clueMapper,
+                clueRecordService,
                 objectMapper,
                 new DistributionOrderTypeMappingResolver(objectMapper, new StaticSystemConfigService(mappingJson)));
     }

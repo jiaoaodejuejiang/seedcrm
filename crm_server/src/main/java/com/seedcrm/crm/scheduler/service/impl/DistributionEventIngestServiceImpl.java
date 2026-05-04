@@ -3,6 +3,10 @@ package com.seedcrm.crm.scheduler.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.seedcrm.crm.clue.entity.Clue;
+import com.seedcrm.crm.clue.entity.ClueRecord;
+import com.seedcrm.crm.clue.mapper.ClueMapper;
+import com.seedcrm.crm.clue.service.ClueRecordService;
 import com.seedcrm.crm.common.exception.BusinessException;
 import com.seedcrm.crm.customer.entity.Customer;
 import com.seedcrm.crm.customer.enums.CustomerStatus;
@@ -67,6 +71,8 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
     private final DistributionExceptionService distributionExceptionService;
     private final CustomerMapper customerMapper;
     private final OrderMapper orderMapper;
+    private final ClueMapper clueMapper;
+    private final ClueRecordService clueRecordService;
     private final ObjectMapper objectMapper;
     private final DistributionOrderTypeMappingResolver orderTypeMappingResolver;
 
@@ -76,6 +82,8 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
                                               DistributionExceptionService distributionExceptionService,
                                               CustomerMapper customerMapper,
                                               OrderMapper orderMapper,
+                                              ClueMapper clueMapper,
+                                              ClueRecordService clueRecordService,
                                               ObjectMapper objectMapper,
                                               DistributionOrderTypeMappingResolver orderTypeMappingResolver) {
         this.providerConfigMapper = providerConfigMapper;
@@ -84,6 +92,8 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         this.distributionExceptionService = distributionExceptionService;
         this.customerMapper = customerMapper;
         this.orderMapper = orderMapper;
+        this.clueMapper = clueMapper;
+        this.clueRecordService = clueRecordService;
         this.objectMapper = objectMapper;
         this.orderTypeMappingResolver = orderTypeMappingResolver == null
                 ? new DistributionOrderTypeMappingResolver(objectMapper, null)
@@ -182,7 +192,7 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         DistributionMemberPayload member = requireMember(event);
         String externalOrderId = requireText(orderPayload.getExternalOrderId(), "externalOrderId is required");
         String externalMemberId = requireText(member.getExternalMemberId(), "externalMemberId is required");
-        String phone = requireText(member.getPhone(), "member.phone is required");
+        String phone = normalizePhone(requireText(member.getPhone(), "member.phone is required"));
         ResolvedOrderType mappedOrderType = resolveMappedOrderType(partnerCode, orderPayload);
 
         Order existingOrder = findOrder(partnerCode, externalOrderId);
@@ -198,7 +208,11 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
                         "SUCCESS", "duplicate external order conflict queued for manual handling");
             }
             refreshExternalOrderSnapshot(existingOrder, event, rawPayload);
+            Customer existingCustomer = resolveOrderCustomer(existingOrder);
+            applyMatchedClueId(existingOrder, existingCustomer, phone);
             orderMapper.updateById(existingOrder);
+            addDistributionClueRecordIfMatched(event, partnerCode, existingOrder, existingCustomer, rawPayload, traceId,
+                    idempotencyKey);
             return response(traceId, "EXISTING", existingOrder.getCustomerId(), existingOrder.getId(),
                     "SUCCESS", "external order already exists");
         }
@@ -284,9 +298,11 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         order.setRemark("External distribution paid order synced");
         order.setCreateTime(now);
         order.setUpdateTime(now);
+        applyMatchedClueId(order, customer, phone);
         if (orderMapper.insert(order) <= 0) {
             throw new BusinessException("failed to create distribution order");
         }
+        addDistributionClueRecordIfMatched(event, partnerCode, order, customer, rawPayload, traceId, idempotencyKey);
         return response(traceId, "CREATED", customer.getId(), order.getId(), "SUCCESS",
                 "distribution paid order created");
     }
@@ -393,11 +409,14 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         }
         String originalStatus = normalizeUpper(order.getStatus());
         refreshExternalOrderSnapshot(order, event, rawPayload);
+        Customer customer = resolveOrderCustomer(order);
+        applyMatchedClueId(order, customer, null);
         if (requiresManualExternalStatusHandling(originalStatus, eventType)) {
             order.setUpdateTime(LocalDateTime.now());
             if (orderMapper.updateById(order) <= 0) {
                 throw new BusinessException("failed to update distribution order status");
             }
+            addDistributionClueRecordIfMatched(event, partnerCode, order, customer, rawPayload, traceId, idempotencyKey);
             distributionExceptionService.recordFailure(partnerCode, event, rawPayload, traceId, idempotencyKey,
                     "EXTERNAL_STATUS_CONFLICT",
                     "external " + eventType + " received for local order status " + originalStatus
@@ -418,6 +437,7 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         if (orderMapper.updateById(order) <= 0) {
             throw new BusinessException("failed to update distribution order status");
         }
+        addDistributionClueRecordIfMatched(event, partnerCode, order, customer, rawPayload, traceId, idempotencyKey);
         return response(traceId, "UPDATED", order.getCustomerId(), order.getId(), "SUCCESS",
                 "external order status updated");
     }
@@ -435,6 +455,182 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         order.setRefundStatus(firstNonBlank(orderPayload.getRefundStatus(), resolveRefundStatus(event.getEventType()), order.getRefundStatus()));
         order.setRawData(rawPayload);
         order.setUpdateTime(LocalDateTime.now());
+    }
+
+    private void addDistributionClueRecordIfMatched(DistributionEventRequest event,
+                                                    String partnerCode,
+                                                    Order order,
+                                                    Customer customer,
+                                                    String rawPayload,
+                                                    String traceId,
+                                                    String idempotencyKey) {
+        if (order == null || clueRecordService == null) {
+            return;
+        }
+        Long clueId = applyMatchedClueId(order, customer, null);
+        if (clueId == null || clueId <= 0) {
+            return;
+        }
+
+        try {
+            clueRecordService.addRecordIfAbsent(buildDistributionClueRecord(event, order, clueId, rawPayload));
+        } catch (RuntimeException exception) {
+            try {
+                distributionExceptionService.recordFailure(partnerCode, event, rawPayload, traceId, idempotencyKey,
+                        "CLUE_RECORD_SYNC_FAILED",
+                        "distribution clue record sync failed: " + safeMessage(exception),
+                        order.getId(),
+                        order.getOrderNo());
+            } catch (RuntimeException ignored) {
+                // The order ingest flow should not fail only because the auxiliary clue timeline write failed.
+            }
+        }
+    }
+
+    private ClueRecord buildDistributionClueRecord(DistributionEventRequest event,
+                                                   Order order,
+                                                   Long clueId,
+                                                   String rawPayload) {
+        DistributionOrderPayload orderPayload = requireOrder(event);
+        ClueRecord record = new ClueRecord();
+        record.setClueId(clueId);
+        record.setRecordKey(buildDistributionRecordKey(event, order, rawPayload));
+        record.setRecordType("ORDER");
+        record.setSourceChannel(SOURCE_CHANNEL_DISTRIBUTOR);
+        record.setExternalRecordId(trimToNull(event == null ? null : event.getEventId()));
+        record.setExternalOrderId(trimToNull(order == null ? null : order.getExternalOrderId()));
+        record.setTitle(buildDistributionRecordTitle(event, order));
+        record.setContent(buildDistributionRecordContent(event, order));
+        record.setOccurredAt(parseDateTime(firstNonBlank(
+                event == null ? null : event.getOccurredAt(),
+                orderPayload.getRefundAt(),
+                orderPayload.getPaidAt()), LocalDateTime.now()));
+        record.setRawData(rawPayload);
+        return record;
+    }
+
+    private String buildDistributionRecordKey(DistributionEventRequest event, Order order, String rawPayload) {
+        String partnerCode = firstNonBlank(
+                order == null ? null : order.getExternalPartnerCode(),
+                event == null ? null : event.getPartnerCode(),
+                PROVIDER_DISTRIBUTION);
+        String externalOrderId = firstNonBlank(
+                order == null ? null : order.getExternalOrderId(),
+                event == null || event.getOrder() == null ? null : event.getOrder().getExternalOrderId(),
+                "unknown-order");
+        return "distribution:order:"
+                + normalizeRecordKeyPart(partnerCode)
+                + ":"
+                + normalizeRecordKeyPart(externalOrderId)
+                + ":"
+                + normalizeRecordKeyPart(resolveDistributionRecordStage(event, order, rawPayload));
+    }
+
+    private String buildDistributionRecordTitle(DistributionEventRequest event, Order order) {
+        String eventType = normalizeLower(event == null ? null : event.getEventType());
+        if (eventType.endsWith("paid")) {
+            return "分销订单同步：已付款";
+        }
+        if (eventType.endsWith("refund_pending")) {
+            return "分销订单同步：退款中";
+        }
+        if (eventType.endsWith("refunded")) {
+            return "分销订单同步：已退款";
+        }
+        if (eventType.endsWith("cancelled")) {
+            return "分销订单同步：已取消";
+        }
+        String status = firstNonBlank(order == null ? null : order.getRefundStatus(), order == null ? null : order.getExternalStatus());
+        return StringUtils.hasText(status) ? "分销订单同步：" + status.trim() : "分销订单同步";
+    }
+
+    private String resolveDistributionRecordStage(DistributionEventRequest event, Order order, String rawPayload) {
+        String eventType = normalizeLower(event == null ? null : event.getEventType());
+        if (eventType.endsWith("refund_pending")) {
+            return "refund_pending";
+        }
+        if (eventType.endsWith("refunded")) {
+            return "refunded";
+        }
+        if (eventType.endsWith("cancelled")) {
+            return "cancelled";
+        }
+        if (eventType.endsWith("paid")) {
+            return "paid";
+        }
+        return firstNonBlank(
+                order == null ? null : order.getRefundStatus(),
+                order == null ? null : order.getExternalStatus(),
+                eventType,
+                "updated:" + sha256Hex(firstNonBlank(rawPayload, "distribution")).substring(0, 16));
+    }
+
+    private String buildDistributionRecordContent(DistributionEventRequest event, Order order) {
+        DistributionOrderPayload orderPayload = event == null ? null : event.getOrder();
+        List<String> parts = new ArrayList<>();
+        appendPart(parts, "订单号", order == null ? null : order.getOrderNo());
+        appendPart(parts, "外部订单", order == null ? null : order.getExternalOrderId());
+        appendPart(parts, "商品", orderPayload == null ? null : orderPayload.getProductName());
+        appendPart(parts, "订单类型", order == null ? null : OrderType.toApiValue(order.getType()));
+        appendPart(parts, "状态", firstNonBlank(order == null ? null : order.getRefundStatus(), order == null ? null : order.getExternalStatus()));
+        appendPart(parts, "支付金额", moneyText(order == null ? null : order.getAmount()));
+        appendPart(parts, "退款金额", moneyText(orderPayload == null ? null : scaleNullableMoneyFromCent(orderPayload.getRefundAmount())));
+        appendPart(parts, "支付流水", order == null ? null : order.getExternalTradeNo());
+        appendPart(parts, "分销会员", order == null ? null : order.getExternalMemberId());
+        appendPart(parts, "推广员", order == null ? null : order.getExternalPromoterId());
+        return parts.isEmpty() ? "分销订单接口同步" : String.join(" / ", parts);
+    }
+
+    private Long applyMatchedClueId(Order order, Customer customer, String fallbackPhone) {
+        Long clueId = resolveMatchedClueId(order, customer, fallbackPhone);
+        if (clueId != null && clueId > 0 && order != null && (order.getClueId() == null || order.getClueId() <= 0)) {
+            order.setClueId(clueId);
+        }
+        return clueId;
+    }
+
+    private Long resolveMatchedClueId(Order order, Customer customer, String fallbackPhone) {
+        if (order != null && order.getClueId() != null && order.getClueId() > 0) {
+            return order.getClueId();
+        }
+        if (customer != null && customer.getSourceClueId() != null && customer.getSourceClueId() > 0) {
+            return customer.getSourceClueId();
+        }
+        Long externalMatchedClueId = findClueIdByExternalOrder(order);
+        if (externalMatchedClueId != null && externalMatchedClueId > 0) {
+            return externalMatchedClueId;
+        }
+        String phone = firstNonBlank(
+                fallbackPhone,
+                customer == null ? null : customer.getPhone());
+        return findClueIdByPhone(phone);
+    }
+
+    private Customer resolveOrderCustomer(Order order) {
+        if (order == null || order.getCustomerId() == null || customerMapper == null) {
+            return null;
+        }
+        return customerMapper.selectById(order.getCustomerId());
+    }
+
+    private Long findClueIdByPhone(String phone) {
+        String normalizedPhone = normalizePhone(phone);
+        if (!StringUtils.hasText(normalizedPhone) || clueMapper == null) {
+            return null;
+        }
+        Clue clue = clueMapper.selectOne(Wrappers.<Clue>lambdaQuery()
+                .eq(Clue::getPhone, normalizedPhone)
+                .orderByDesc(Clue::getCreatedAt)
+                .orderByDesc(Clue::getId)
+                .last("LIMIT 1"));
+        return clue == null ? null : clue.getId();
+    }
+
+    private Long findClueIdByExternalOrder(Order order) {
+        if (order == null || clueRecordService == null || !StringUtils.hasText(order.getExternalOrderId())) {
+            return null;
+        }
+        return clueRecordService.findClueIdByExternalIdentity(SOURCE_CHANNEL_DISTRIBUTOR, null, order.getExternalOrderId());
     }
 
     private Customer resolveCustomer(String partnerCode, String externalMemberId, String phone) {
@@ -727,6 +923,14 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
         return amount.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal scaleNullableMoneyFromCent(BigDecimal amount) {
+        return amount == null ? null : amount.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+    }
+
+    private String moneyText(BigDecimal amount) {
+        return amount == null ? null : amount.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    }
+
     private boolean canApplyExternalTerminalStatus(Order order) {
         String status = normalizeUpper(order == null ? null : order.getStatus());
         return "CREATED".equals(status) || "PAID_DEPOSIT".equals(status);
@@ -887,6 +1091,35 @@ public class DistributionEventIngestServiceImpl implements DistributionEventInge
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private void appendPart(List<String> parts, String label, String value) {
+        if (StringUtils.hasText(value)) {
+            parts.add(label + "：" + value.trim());
+        }
+    }
+
+    private String normalizePhone(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim()
+                .replaceAll("[\\s\\-()（）]", "")
+                .replaceAll("^\\+86", "")
+                .replaceAll("^0086", "");
+        String digits = normalized.replaceAll("\\D", "");
+        if (digits.length() >= 7) {
+            return digits;
+        }
+        return StringUtils.hasText(normalized) ? normalized : null;
+    }
+
+    private String normalizeRecordKeyPart(String value) {
+        String normalized = normalizeLower(value);
+        if (!StringUtils.hasText(normalized)) {
+            return "unknown";
+        }
+        return normalized.replaceAll("[^a-z0-9._-]+", "_");
     }
 
     private String normalizeLower(String value) {

@@ -71,6 +71,20 @@ public class ClueRecordServiceImpl implements ClueRecordService {
     }
 
     @Override
+    public Long findClueIdByExternalIdentity(String sourceChannel, String externalRecordId, String externalOrderId) {
+        String normalizedSourceChannel = truncate(sourceChannel, SOURCE_CHANNEL_MAX_LENGTH);
+        if (!StringUtils.hasText(normalizedSourceChannel)) {
+            return null;
+        }
+
+        Long matchedByRecordId = findClueId(normalizedSourceChannel, "external_record_id", externalRecordId);
+        if (matchedByRecordId != null) {
+            return matchedByRecordId;
+        }
+        return findClueId(normalizedSourceChannel, "external_order_id", externalOrderId);
+    }
+
+    @Override
     public List<ClueRecord> listByClueIds(Collection<Long> clueIds) {
         List<Long> ids = clueIds == null
                 ? List.of()
@@ -82,6 +96,21 @@ public class ClueRecordServiceImpl implements ClueRecordService {
                 .in(ClueRecord::getClueId, ids)
                 .orderByDesc(ClueRecord::getOccurredAt)
                 .orderByDesc(ClueRecord::getId));
+    }
+
+    private Long findClueId(String sourceChannel, String column, String value) {
+        String normalizedValue = truncate(value, EXTERNAL_ID_MAX_LENGTH);
+        if (!StringUtils.hasText(normalizedValue)) {
+            return null;
+        }
+        ClueRecord record = clueRecordMapper.selectOne(Wrappers.<ClueRecord>lambdaQuery()
+                .eq(ClueRecord::getSourceChannel, sourceChannel)
+                .eq("external_record_id".equals(column), ClueRecord::getExternalRecordId, normalizedValue)
+                .eq("external_order_id".equals(column), ClueRecord::getExternalOrderId, normalizedValue)
+                .orderByDesc(ClueRecord::getOccurredAt)
+                .orderByDesc(ClueRecord::getId)
+                .last("LIMIT 1"));
+        return record == null ? null : record.getClueId();
     }
 
     private String defaultText(String value, String defaultValue) {

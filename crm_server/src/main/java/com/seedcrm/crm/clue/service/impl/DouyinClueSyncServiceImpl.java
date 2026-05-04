@@ -139,8 +139,8 @@ public class DouyinClueSyncServiceImpl implements DouyinClueSyncService {
                         stats.recordsImported++;
                     } else if (result == ImportResult.DUPLICATED) {
                         stats.recordsDuplicated++;
-                    } else if (result == ImportResult.SKIPPED_NO_PHONE) {
-                        stats.recordsSkippedNoPhone++;
+                    } else if (result == ImportResult.SKIPPED_UNMATCHED_IDENTITY) {
+                        stats.recordsSkippedUnmatchedIdentity++;
                     }
                 }
                 if (!shouldFetchNextPage(response, records, page, pageSize)) {
@@ -190,32 +190,53 @@ public class DouyinClueSyncServiceImpl implements DouyinClueSyncService {
         return result;
     }
 
-    private ImportResult importRecord(JsonNode record) {
+    ImportResult importRecord(JsonNode record) {
         String phone = extractText(record,
                 "telephone", "phone", "mobile", "customer_phone", "user_phone", "phone_info.phone");
-        if (!StringUtils.hasText(phone)) {
-            return ImportResult.SKIPPED_NO_PHONE;
-        }
         String externalId = extractText(record, "clue_id", "clueId", "lead_id", "id");
         String name = extractText(record, "name", "customer_name", "user_name", "nickname");
         String wechat = extractText(record, "weixin", "wechat", "wx");
-        Clue clue = new Clue();
-        clue.setName(StringUtils.hasText(name) ? name : "抖音客资-" + (StringUtils.hasText(externalId)
-                ? externalId
-                : TIME_FORMATTER.format(LocalDateTime.now())));
-        clue.setPhone(phone.trim());
-        clue.setWechat(StringUtils.hasText(wechat) ? wechat.trim() : null);
-        clue.setSourceChannel("DOUYIN");
-        clue.setSource("douyin");
         String rawData;
         try {
             rawData = objectMapper.writeValueAsString(record);
         } catch (Exception exception) {
             rawData = record.toString();
         }
-        clue.setRawData(rawData);
-        Clue savedClue = clueService.addClue(clue);
+
+        Clue savedClue;
+        if (StringUtils.hasText(phone) || StringUtils.hasText(wechat)) {
+            Clue clue = new Clue();
+            clue.setName(StringUtils.hasText(name) ? name : "抖音客资-" + (StringUtils.hasText(externalId)
+                    ? externalId
+                    : TIME_FORMATTER.format(LocalDateTime.now())));
+            clue.setPhone(StringUtils.hasText(phone) ? phone.trim() : null);
+            clue.setWechat(StringUtils.hasText(wechat) ? wechat.trim() : null);
+            clue.setSourceChannel("DOUYIN");
+            clue.setSource("douyin");
+            clue.setRawData(rawData);
+            savedClue = clueService.addClue(clue);
+        } else {
+            Long matchedClueId = resolveExistingClueIdByExternalIdentity(record);
+            if (matchedClueId == null || matchedClueId <= 0) {
+                return ImportResult.SKIPPED_UNMATCHED_IDENTITY;
+            }
+            savedClue = new Clue();
+            savedClue.setId(matchedClueId);
+        }
         return recordDouyinRecord(savedClue, record, rawData, null) ? ImportResult.IMPORTED : ImportResult.DUPLICATED;
+    }
+
+    private Long resolveExistingClueIdByExternalIdentity(JsonNode record) {
+        if (clueRecordService == null) {
+            return null;
+        }
+        return clueRecordService.findClueIdByExternalIdentity(
+                "DOUYIN",
+                firstNonBlank(
+                        extractText(record, "clue_id", "clueId", "lead_id", "id"),
+                        extractText(record, "event_id", "eventId", "action_id", "actionId", "record_id", "recordId", "log_id", "logId")),
+                extractText(record,
+                        "order_id", "orderId", "item_order_id", "itemOrderId", "order_info.order_id", "order.trade_order_id"));
     }
 
     private boolean recordDouyinRecord(Clue clue, JsonNode record, String rawData, LocalDateTime fallbackOccurredAt) {
@@ -499,10 +520,10 @@ public class DouyinClueSyncServiceImpl implements DouyinClueSyncService {
         return null;
     }
 
-    private enum ImportResult {
+    enum ImportResult {
         IMPORTED,
         DUPLICATED,
-        SKIPPED_NO_PHONE
+        SKIPPED_UNMATCHED_IDENTITY
     }
 
     private static class SyncStats {
@@ -513,7 +534,7 @@ public class DouyinClueSyncServiceImpl implements DouyinClueSyncService {
         private int recordsFetched;
         private int recordsImported;
         private int recordsDuplicated;
-        private int recordsSkippedNoPhone;
+        private int recordsSkippedUnmatchedIdentity;
         private Integer failedPage;
         private String stopReason = "RUNNING";
 
@@ -528,7 +549,7 @@ public class DouyinClueSyncServiceImpl implements DouyinClueSyncService {
                     + ", recordsFetched=" + recordsFetched
                     + ", recordsImported=" + recordsImported
                     + ", recordsDuplicated=" + recordsDuplicated
-                    + ", recordsSkippedNoPhone=" + recordsSkippedNoPhone
+                    + ", recordsSkippedUnmatchedIdentity=" + recordsSkippedUnmatchedIdentity
                     + ", stopReason=" + stopReason;
         }
 

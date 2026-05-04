@@ -213,7 +213,10 @@
               show-icon
               :closable="false"
             />
-            <el-button :loading="refundOrdersLoading" @click="loadRefundableOrders">刷新订单</el-button>
+            <div class="action-group">
+              <el-button :loading="refundOrdersLoading" @click="loadRefundableOrders">刷新订单</el-button>
+              <el-button :loading="refundRecordsLoading" @click="loadRefundRecords">刷新记录</el-button>
+            </div>
           </div>
 
           <el-table v-loading="refundOrdersLoading" :data="refundOrderPagination.rows" stripe>
@@ -267,6 +270,95 @@
               @size-change="refundOrderPagination.handleSizeChange"
               @current-change="refundOrderPagination.handleCurrentChange"
             />
+          </div>
+
+          <div class="refund-record-section">
+            <div class="section-heading">
+              <div>
+                <h3>已登记冲正记录</h3>
+                <p>这里只展示系统记账冲正记录，不代表第三方平台已完成原路退款或打款。</p>
+              </div>
+            </div>
+
+            <el-table v-loading="refundRecordsLoading" :data="refundRecords" stripe>
+              <el-table-column label="登记时间" min-width="170">
+                <template #default="{ row }">
+                  {{ formatDateTime(row.createTime) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="订单号" min-width="170">
+                <template #default="{ row }">
+                  {{ row.orderNo || row.orderId || '--' }}
+                  <small v-if="row.customerName || row.customerPhoneMasked" class="muted-cell">
+                    {{ row.customerName || '--' }} / {{ row.customerPhoneMasked || '--' }}
+                  </small>
+                </template>
+              </el-table-column>
+              <el-table-column label="冲正类型" min-width="150">
+                <template #default="{ row }">
+                  <div class="record-main">
+                    <strong>{{ formatRefundScene(row.refundScene) }}</strong>
+                    <small>{{ formatRefundObject(row.refundObject) }}</small>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="冲正金额" width="130">
+                <template #default="{ row }">
+                  {{ formatMoney(row.refundAmount) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="门店" min-width="120">
+                <template #default="{ row }">
+                  {{ row.storeName || '--' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="影响范围" min-width="190">
+                <template #default="{ row }">
+                  <div class="tag-line">
+                    <el-tag v-for="tag in refundEffectTags(row)" :key="tag" size="small" type="warning">{{ tag }}</el-tag>
+                    <span v-if="!refundEffectTags(row).length">--</span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="资金动作" min-width="140">
+                <template #default="{ row }">
+                  <el-tag size="small" type="info">{{ row.fundsTransferred ? '已登记资金动作' : '未发起资金退款' }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作人" width="110">
+                <template #default="{ row }">
+                  {{ row.operatorName || row.operatorUserId || '--' }}
+                </template>
+              </el-table-column>
+              <el-table-column label="薪酬冲正" min-width="140">
+                <template #default="{ row }">
+                  {{ row.salaryReversalCount || 0 }} 笔 / {{ formatMoney(row.salaryReversalAmount) }}
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="110">
+                <template #default="{ row }">
+                  <el-tag :type="statusTagType(row.status)">{{ formatOrderStatus(row.status) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="原因" min-width="240">
+                <template #default="{ row }">
+                  {{ formatRefundReasonType(row.refundReasonType) }} / {{ row.refundReasonMasked || '--' }}
+                </template>
+              </el-table-column>
+            </el-table>
+
+            <div class="table-pagination">
+              <el-pagination
+                background
+                layout="total, sizes, prev, pager, next"
+                :total="refundRecordTotal"
+                :current-page="refundRecordPage"
+                :page-size="refundRecordPageSize"
+                :page-sizes="refundRecordPageSizes"
+                @size-change="handleRefundRecordSizeChange"
+                @current-change="handleRefundRecordCurrentChange"
+              />
+            </div>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -343,6 +435,7 @@ import {
   paySalarySettlement
 } from '../api/salary'
 import { refundOrder } from '../api/order'
+import { fetchFinanceRefundRecords } from '../api/finance'
 import { fetchOrders, fetchStaffOptions } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
 import { currentUser } from '../utils/auth'
@@ -370,8 +463,14 @@ const settlements = ref([])
 const withdraws = ref([])
 const policyRows = ref([])
 const refundableOrders = ref([])
+const refundRecords = ref([])
+const refundRecordTotal = ref(0)
+const refundRecordPage = ref(1)
+const refundRecordPageSize = ref(30)
+const refundRecordPageSizes = [30, 50, 100]
 const activeTab = ref('settlement')
 const refundOrdersLoading = ref(false)
+const refundRecordsLoading = ref(false)
 const financeRefundDialogVisible = ref(false)
 const financeRefundSubmitting = ref(false)
 
@@ -551,6 +650,37 @@ async function loadRefundableOrders() {
   }
 }
 
+async function loadRefundRecords(page = refundRecordPage.value, pageSize = refundRecordPageSize.value) {
+  refundRecordsLoading.value = true
+  try {
+    const response = await fetchFinanceRefundRecords({
+      refundScene: 'FINANCE_VERIFIED_PAYMENT',
+      page,
+      pageSize
+    })
+    refundRecords.value = response?.records || []
+    refundRecordTotal.value = response?.total || 0
+    refundRecordPage.value = response?.page || page
+    refundRecordPageSize.value = response?.pageSize || pageSize
+  } catch {
+    refundRecords.value = []
+    refundRecordTotal.value = 0
+  } finally {
+    refundRecordsLoading.value = false
+  }
+}
+
+async function handleRefundRecordSizeChange(size) {
+  refundRecordPageSize.value = size
+  refundRecordPage.value = 1
+  await loadRefundRecords(1, size)
+}
+
+async function handleRefundRecordCurrentChange(page) {
+  refundRecordPage.value = page
+  await loadRefundRecords(page, refundRecordPageSize.value)
+}
+
 async function handleCreateSettlement() {
   await createSalarySettlement({
     userId: selectedUserId.value,
@@ -699,7 +829,7 @@ async function submitFinanceRefund() {
     })
     financeRefundDialogVisible.value = false
     ElMessage.success('已登记团购/定金记账冲正')
-    await Promise.all([loadSalaryData(), loadRefundableOrders()])
+    await Promise.all([loadSalaryData(), loadRefundableOrders(), loadRefundRecords()])
   } finally {
     financeRefundSubmitting.value = false
   }
@@ -733,6 +863,45 @@ function financeRefundReasonTypeLabel(value) {
       OTHER: '其他'
     }[value] || '未选择'
   )
+}
+
+function formatRefundScene(value) {
+  return (
+    {
+      FINANCE_VERIFIED_PAYMENT: '财务已核销退款',
+      STORE_SERVICE_REFUND: '门店服务退款'
+    }[normalize(value)] || value || '--'
+  )
+}
+
+function formatRefundObject(value) {
+  return (
+    {
+      ORDER: '订单',
+      PLAN_ORDER: '服务单',
+      CUSTOMER_SERVICE: '客服绩效',
+      DISTRIBUTOR: '分销绩效',
+      STORE_PERFORMANCE: '门店绩效'
+    }[normalize(value)] || value || '记账冲正'
+  )
+}
+
+function formatRefundReasonType(value) {
+  return financeRefundReasonTypeLabel(value)
+}
+
+function refundEffectTags(row) {
+  const tags = []
+  if (row?.reverseCustomerService) {
+    tags.push('客服绩效')
+  }
+  if (row?.reverseDistributor) {
+    tags.push('分销绩效')
+  }
+  if (row?.reverseStorePerformance) {
+    tags.push('门店绩效')
+  }
+  return tags
 }
 
 function parseServiceDetail(row) {
@@ -779,7 +948,7 @@ onMounted(async () => {
   await initSelection()
   await loadSalaryData()
   if (pageMode.value === 'refunds') {
-    await loadRefundableOrders()
+    await Promise.all([loadRefundableOrders(), loadRefundRecords()])
   }
 })
 
@@ -788,7 +957,7 @@ watch(
   async (mode) => {
     activeTab.value = mode
     if (mode === 'refunds') {
-      await loadRefundableOrders()
+      await Promise.all([loadRefundableOrders(), loadRefundRecords()])
     }
   }
 )
@@ -835,6 +1004,57 @@ watch(
   display: grid;
   gap: 14px;
   margin-bottom: 16px;
+}
+
+.refund-record-section {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-heading h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.section-heading p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.record-main {
+  display: grid;
+  gap: 2px;
+}
+
+.record-main strong {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.record-main small {
+  color: #64748b;
+}
+
+.muted-cell {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+}
+
+.tag-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .refund-dialog {

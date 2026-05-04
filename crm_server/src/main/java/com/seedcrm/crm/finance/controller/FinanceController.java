@@ -3,6 +3,7 @@ package com.seedcrm.crm.finance.controller;
 import com.seedcrm.crm.common.api.ApiResponse;
 import com.seedcrm.crm.finance.dto.FinanceBalanceResponse;
 import com.seedcrm.crm.finance.dto.FinanceCheckResponse;
+import com.seedcrm.crm.finance.dto.FinanceRefundRecordListResponse;
 import com.seedcrm.crm.finance.enums.AccountOwnerType;
 import com.seedcrm.crm.finance.service.FinanceService;
 import com.seedcrm.crm.permission.support.FinancePermissionGuard;
@@ -45,5 +46,18 @@ public class FinanceController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         financePermissionGuard.checkUpdate(context);
         return ApiResponse.success(financeService.check());
+    }
+
+    @GetMapping("/refund-records")
+    public ApiResponse<FinanceRefundRecordListResponse> refundRecords(@RequestParam(required = false) String refundScene,
+                                                                      @RequestParam(required = false) Long orderId,
+                                                                      @RequestParam(required = false) String status,
+                                                                      @RequestParam(required = false) String orderNo,
+                                                                      @RequestParam(required = false) Integer page,
+                                                                      @RequestParam(required = false) Integer pageSize,
+                                                                      HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        financePermissionGuard.checkView(context);
+        return ApiResponse.success(financeService.listRefundRecords(refundScene, orderId, status, orderNo, page, pageSize));
     }
 }

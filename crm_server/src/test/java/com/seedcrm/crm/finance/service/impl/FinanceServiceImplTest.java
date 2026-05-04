@@ -8,11 +8,16 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.seedcrm.crm.customer.entity.Customer;
+import com.seedcrm.crm.customer.mapper.CustomerMapper;
 import com.seedcrm.crm.distributor.entity.DistributorIncomeDetail;
 import com.seedcrm.crm.distributor.mapper.DistributorWithdrawMapper;
 import com.seedcrm.crm.distributor.mapper.DistributorIncomeDetailMapper;
 import com.seedcrm.crm.finance.dto.FinanceBalanceResponse;
 import com.seedcrm.crm.finance.dto.FinanceCheckResponse;
+import com.seedcrm.crm.finance.dto.FinanceRefundRecordListResponse;
+import com.seedcrm.crm.finance.dto.FinanceRefundRecordResponse;
 import com.seedcrm.crm.finance.entity.Account;
 import com.seedcrm.crm.finance.entity.FinanceCheckRecord;
 import com.seedcrm.crm.finance.enums.AccountOwnerType;
@@ -21,10 +26,13 @@ import com.seedcrm.crm.finance.enums.LedgerDirection;
 import com.seedcrm.crm.finance.service.AccountService;
 import com.seedcrm.crm.finance.service.LedgerService;
 import com.seedcrm.crm.order.entity.Order;
+import com.seedcrm.crm.order.entity.OrderRefundRecord;
 import com.seedcrm.crm.order.mapper.OrderMapper;
+import com.seedcrm.crm.order.mapper.OrderRefundRecordMapper;
 import com.seedcrm.crm.salary.entity.SalaryDetail;
 import com.seedcrm.crm.salary.mapper.WithdrawRecordMapper;
 import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
+import com.seedcrm.crm.workbench.service.StaffDirectoryService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -51,6 +59,12 @@ class FinanceServiceImplTest {
     private OrderMapper orderMapper;
 
     @Mock
+    private OrderRefundRecordMapper orderRefundRecordMapper;
+
+    @Mock
+    private CustomerMapper customerMapper;
+
+    @Mock
     private SalaryDetailMapper salaryDetailMapper;
 
     @Mock
@@ -62,13 +76,16 @@ class FinanceServiceImplTest {
     @Mock
     private DistributorWithdrawMapper distributorWithdrawMapper;
 
+    @Mock
+    private StaffDirectoryService staffDirectoryService;
+
     private FinanceServiceImpl financeService;
 
     @BeforeEach
     void setUp() {
         financeService = new FinanceServiceImpl(accountService, ledgerService, financeCheckRecordMapper,
-                orderMapper, salaryDetailMapper, distributorIncomeDetailMapper,
-                withdrawRecordMapper, distributorWithdrawMapper);
+                orderMapper, orderRefundRecordMapper, customerMapper, salaryDetailMapper, distributorIncomeDetailMapper,
+                withdrawRecordMapper, distributorWithdrawMapper, staffDirectoryService);
     }
 
     @Test
@@ -196,5 +213,85 @@ class FinanceServiceImplTest {
                 eq(LedgerBizType.SALARY),
                 eq(44L),
                 eq(LedgerDirection.OUT));
+    }
+
+    @Test
+    void listRefundRecordsShouldExposeMaskedLedgerSummaryWithoutRawPayload() {
+        OrderRefundRecord record = new OrderRefundRecord();
+        record.setId(77L);
+        record.setOrderId(12L);
+        record.setPlanOrderId(33L);
+        record.setRefundScene("FINANCE_VERIFIED_PAYMENT");
+        record.setRefundObject("ORDER");
+        record.setRefundAmount(new BigDecimal("88.50"));
+        record.setRefundReasonType("DEPOSIT_REFUND");
+        record.setRefundReason("客户 13912345678 退款，线下平台已处理");
+        record.setStatus("SUCCESS");
+        record.setIdempotencyKey("raw-key");
+        record.setOutOrderNo("OUT-1");
+        record.setOutRefundNo("REF-1");
+        record.setExternalRefundId("EXT-1");
+        record.setItemOrderId("ITEM-1");
+        record.setNotifyUrl("https://example.test/notify");
+        record.setPlatformChannel("DOUYIN");
+        record.setOperatorUserId(9L);
+        record.setReverseStorePerformance(0);
+        record.setReverseCustomerService(1);
+        record.setReverseDistributor(1);
+        record.setRawRequest("{secret-request}");
+        record.setRawResponse("{secret-response}");
+        record.setRawNotify("{secret-notify}");
+        record.setCreateTime(LocalDateTime.now());
+
+        Order order = new Order();
+        order.setId(12L);
+        order.setOrderNo("SO-12");
+        order.setCustomerId(5L);
+        order.setAppointmentStoreName("静安店");
+        Customer customer = new Customer();
+        customer.setId(5L);
+        customer.setName("李女士");
+        customer.setPhone("13812345678");
+        SalaryDetail salaryDetail = new SalaryDetail();
+        salaryDetail.setRefundRecordId(77L);
+        salaryDetail.setAdjustmentType("REFUND_REVERSAL");
+        salaryDetail.setAmount(new BigDecimal("-20.00"));
+        Page<OrderRefundRecord> refundPage = new Page<>(1, 30);
+        refundPage.setRecords(List.of(record));
+        refundPage.setTotal(1);
+        when(orderRefundRecordMapper.selectPage(any(), any())).thenReturn(refundPage);
+        when(orderMapper.selectBatchIds(any())).thenReturn(List.of(order));
+        when(customerMapper.selectBatchIds(any())).thenReturn(List.of(customer));
+        when(salaryDetailMapper.selectList(any())).thenReturn(List.of(salaryDetail));
+        when(staffDirectoryService.getUserName(9L)).thenReturn("财务专员");
+
+        FinanceRefundRecordListResponse pageResponse =
+                financeService.listRefundRecords("FINANCE_VERIFIED_PAYMENT", 12L, null, null, 1, 500);
+
+        assertThat(pageResponse.getTotal()).isEqualTo(1);
+        assertThat(pageResponse.getPageSize()).isEqualTo(200);
+        List<FinanceRefundRecordResponse> responses = pageResponse.getRecords();
+        assertThat(responses).hasSize(1);
+        FinanceRefundRecordResponse response = responses.get(0);
+        assertThat(response.getRefundRecordId()).isEqualTo(77L);
+        assertThat(response.getOrderNo()).isEqualTo("SO-12");
+        assertThat(response.getCustomerId()).isEqualTo(5L);
+        assertThat(response.getCustomerName()).isEqualTo("李女士");
+        assertThat(response.getCustomerPhoneMasked()).isEqualTo("138****5678");
+        assertThat(response.getStoreName()).isEqualTo("静安店");
+        assertThat(response.getRefundAmount()).isEqualByComparingTo("88.50");
+        assertThat(response.getRefundReasonMasked()).contains("139****5678");
+        assertThat(response.getOperatorName()).isEqualTo("财务专员");
+        assertThat(response.getReverseCustomerService()).isTrue();
+        assertThat(response.getReverseDistributor()).isTrue();
+        assertThat(response.getReverseStorePerformance()).isFalse();
+        assertThat(response.getSalaryReversalCount()).isEqualTo(1);
+        assertThat(response.getSalaryReversalAmount()).isEqualByComparingTo("20.00");
+        assertThat(response.getFundsTransferred()).isFalse();
+        assertThat(response.getLedgerOnly()).isTrue();
+        assertThat(FinanceRefundRecordResponse.class.getDeclaredFields())
+                .extracting("name")
+                .doesNotContain("rawRequest", "rawResponse", "rawNotify", "notifyUrl", "idempotencyKey",
+                        "refundReason", "outRefundNo", "externalRefundId", "itemOrderId");
     }
 }

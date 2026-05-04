@@ -6,12 +6,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.seedcrm.crm.common.exception.BusinessException;
+import com.seedcrm.crm.finance.dto.FinanceRefundRecordListResponse;
 import com.seedcrm.crm.finance.enums.AccountOwnerType;
 import com.seedcrm.crm.finance.service.FinanceService;
 import com.seedcrm.crm.permission.support.FinancePermissionGuard;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -73,6 +75,31 @@ class FinanceControllerTest {
         assertThatThrownBy(() -> controller.check(request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("finance update denied");
+    }
+
+    @Test
+    void financeRoleShouldPassRefundRecordGuard() {
+        PermissionRequestContext context = context("FINANCE");
+        when(permissionRequestContextResolver.resolve(request)).thenReturn(context);
+        when(financeService.listRefundRecords("FINANCE_VERIFIED_PAYMENT", 12L, "SUCCESS", "SO", 1, 30))
+                .thenReturn(new FinanceRefundRecordListResponse(List.of(), 0L, 1, 30));
+
+        controller.refundRecords("FINANCE_VERIFIED_PAYMENT", 12L, "SUCCESS", "SO", 1, 30, request);
+
+        verify(financePermissionGuard).checkView(context);
+        verify(financeService).listRefundRecords("FINANCE_VERIFIED_PAYMENT", 12L, "SUCCESS", "SO", 1, 30);
+    }
+
+    @Test
+    void storeRoleShouldBeRejectedFromRefundRecords() {
+        PermissionRequestContext context = context("STORE_SERVICE");
+        when(permissionRequestContextResolver.resolve(request)).thenReturn(context);
+        doThrow(new BusinessException("finance view denied"))
+                .when(financePermissionGuard).checkView(context);
+
+        assertThatThrownBy(() -> controller.refundRecords("FINANCE_VERIFIED_PAYMENT", null, null, null, null, null, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("finance view denied");
     }
 
     private PermissionRequestContext context(String roleCode) {

@@ -4,6 +4,7 @@ import com.seedcrm.crm.distributor.entity.DistributorIncomeDetail;
 import com.seedcrm.crm.distributor.entity.DistributorWithdraw;
 import com.seedcrm.crm.finance.dto.FinanceBalanceResponse;
 import com.seedcrm.crm.finance.dto.FinanceCheckResponse;
+import com.seedcrm.crm.finance.dto.FinanceRefundRecordListResponse;
 import com.seedcrm.crm.finance.entity.Ledger;
 import com.seedcrm.crm.finance.enums.AccountOwnerType;
 import com.seedcrm.crm.finance.enums.LedgerBizType;
@@ -26,6 +27,13 @@ public interface FinanceService {
     FinanceBalanceResponse getBalance(AccountOwnerType ownerType, Long ownerId);
 
     FinanceCheckResponse check();
+
+    FinanceRefundRecordListResponse listRefundRecords(String refundScene,
+                                                      Long orderId,
+                                                      String status,
+                                                      String orderNo,
+                                                      Integer page,
+                                                      Integer pageSize);
 
     boolean hasLedgerRecord(LedgerBizType bizType, Long bizId);
 }

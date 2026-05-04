@@ -101,7 +101,7 @@
               <el-button type="primary" size="small" :disabled="!canOpenServiceForm(row)" @click="openServiceForm(row)">
                 {{ serviceButtonLabel(row) }}
               </el-button>
-              <el-button v-if="canManageRefunds && canRefundOrder(row)" type="danger" size="small" plain @click="handleRefund(row)">退款</el-button>
+              <el-button v-if="canManageRefunds && canRefundOrder(row)" type="danger" size="small" plain @click="handleRefund(row)">登记退款</el-button>
               <el-button size="small" plain @click="openWecomDialog(row)">企微活码</el-button>
               <el-button v-if="row.customerId" link @click="router.push(`/customers/${row.customerId}`)">客户详情</el-button>
             </div>
@@ -155,7 +155,7 @@
       </div>
     </el-dialog>
 
-    <el-dialog v-model="refundDialogVisible" title="门店服务退款" width="600px">
+    <el-dialog v-model="refundDialogVisible" title="门店服务退款登记" width="600px">
       <div class="refund-dialog">
         <el-alert
           title="本次仅登记门店服务内容退款，不会发起微信、银行或原路资金退款。"
@@ -170,7 +170,7 @@
           <span>影响范围：门店人员整体绩效</span>
         </div>
         <el-form label-width="110px">
-          <el-form-item label="退款金额">
+          <el-form-item label="冲正金额">
             <el-input-number
               v-model="refundForm.serviceRefundAmount"
               :min="0"
@@ -205,7 +205,7 @@
       </div>
       <template #footer>
         <el-button @click="refundDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="refundSubmitting" @click="submitRefund">确认登记退款</el-button>
+        <el-button type="danger" :loading="refundSubmitting" @click="submitRefund">确认登记记账冲正</el-button>
       </template>
     </el-dialog>
   </div>
@@ -595,7 +595,7 @@ async function submitRefund() {
       remark: buildRefundRemark()
     })
     refundDialogVisible.value = false
-    ElMessage.success('退款记录已登记')
+    ElMessage.success('门店服务退款冲正已登记')
     await loadOrders()
   } finally {
     refundSubmitting.value = false

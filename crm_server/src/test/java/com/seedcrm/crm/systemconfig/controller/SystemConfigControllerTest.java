@@ -62,6 +62,29 @@ class SystemConfigControllerTest {
     }
 
     @Test
+    void shouldAllowAuthenticatedStoreRoleToReadDomainSettingsWithoutSettingPermission() {
+        PermissionRequestContext context = context("STORE_SERVICE");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        ApiResponse<SystemConfigDtos.DomainSettingsResponse> response = controller.getDomainSettings(request);
+
+        assertThat(response.getCode()).isZero();
+        verify(settingModuleGuard, never()).checkView(context);
+        verify(schedulerModuleGuard, never()).checkView(context);
+    }
+
+    @Test
+    void shouldAllowStoreManagerToReadAmountVisibilityConfigsOnly() {
+        PermissionRequestContext context = context("STORE_MANAGER");
+        when(resolver.resolve(request)).thenReturn(context);
+
+        controller.list("amount.visibility.", request);
+
+        verify(systemConfigService).listConfigs("amount.visibility.");
+        verify(settingModuleGuard, never()).checkView(context);
+    }
+
+    @Test
     void shouldKeepDomainSettingsWriteRestrictedToSettingUpdatePermission() {
         PermissionRequestContext context = context("INTEGRATION_OPERATOR");
         SystemConfigDtos.SaveDomainSettingsRequest body = new SystemConfigDtos.SaveDomainSettingsRequest();

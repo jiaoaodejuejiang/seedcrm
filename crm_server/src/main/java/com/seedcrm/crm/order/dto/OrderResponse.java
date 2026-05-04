@@ -42,6 +42,9 @@ public class OrderResponse {
     private LocalDateTime createTime;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime updateTime;
+    private Long refundRecordId;
+    private String refundIdempotencyKey;
+    private Boolean refundDuplicate;
 
     public static OrderResponse from(Order order) {
         if (order == null) {
@@ -71,12 +74,16 @@ public class OrderResponse {
         response.setVerificationOperatorId(order.getVerificationOperatorId());
         response.setCreateTime(order.getCreateTime());
         response.setUpdateTime(order.getUpdateTime());
+        response.setRefundRecordId(order.getRefundRecordId());
+        response.setRefundIdempotencyKey(order.getRefundIdempotencyKey());
+        response.setRefundDuplicate(order.getRefundDuplicate());
         return response;
     }
 
     public OrderResponse maskBusinessAmounts() {
         this.amount = null;
         this.deposit = null;
+        this.verificationCode = null;
         return this;
     }
 

@@ -345,7 +345,7 @@ const navGroups = [
           {
             key: 'salary-withdrawals',
             to: '/finance/salary/withdrawals',
-            label: '提现处理',
+            label: '线下结清登记',
             icon: icon(Money),
             moduleCode: 'SALARY',
             roleCodes: ['ADMIN', 'FINANCE']
@@ -557,7 +557,7 @@ const routeTitleMap = {
   finance: '财务看板',
   'salary-my': '我的薪酬',
   'salary-settlements': '结算单管理',
-  'salary-withdrawals': '提现处理',
+  'salary-withdrawals': '线下结清登记',
   'salary-refund-adjustments': '退款冲正',
   'salary-settlement-config': '结算配置',
   'salary-config-roles': '薪酬角色',

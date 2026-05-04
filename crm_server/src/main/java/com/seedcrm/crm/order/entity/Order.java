@@ -114,4 +114,13 @@ public class Order {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("update_time")
     private LocalDateTime updateTime;
+
+    @TableField(exist = false)
+    private Long refundRecordId;
+
+    @TableField(exist = false)
+    private String refundIdempotencyKey;
+
+    @TableField(exist = false)
+    private Boolean refundDuplicate;
 }

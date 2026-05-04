@@ -5,14 +5,43 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.util.StringUtils;
 
 public final class OrderAmountMaskingSupport {
 
     public static final String MASK_MARKER = "_amountsMasked";
+    private static final Set<String> AMOUNT_TOKENS = Set.of(
+            "amount",
+            "money",
+            "price",
+            "deposit",
+            "refund",
+            "fee",
+            "charge",
+            "cost",
+            "commission",
+            "income",
+            "settlement");
+    private static final Set<String> COMBINED_AMOUNT_KEYS = Set.of(
+            "unitprice",
+            "totalprice",
+            "totalamount",
+            "totalmoney",
+            "totalfee",
+            "totalcost",
+            "grandtotal",
+            "subtotal",
+            "actualpayamount",
+            "paidamount",
+            "paymentamount",
+            "verificationamount",
+            "serviceconfirmamount");
 
     private OrderAmountMaskingSupport() {
     }
@@ -109,21 +138,36 @@ public final class OrderAmountMaskingSupport {
             return false;
         }
         String rawKey = key.trim();
-        String normalized = key.replaceAll("[^A-Za-z0-9]", "").toLowerCase(Locale.ROOT);
-        return normalized.contains("amount")
-                || normalized.contains("money")
-                || normalized.contains("price")
-                || normalized.contains("deposit")
-                || normalized.contains("refund")
-                || normalized.contains("fee")
-                || rawKey.contains("金额")
-                || rawKey.contains("价格")
-                || rawKey.contains("定金")
-                || rawKey.contains("退款")
-                || rawKey.contains("费用")
-                || rawKey.contains("收费")
-                || rawKey.contains("价款")
-                || rawKey.contains("总价")
-                || rawKey.contains("单价");
+        String normalized = rawKey.replaceAll("[^A-Za-z0-9]", "").toLowerCase(Locale.ROOT);
+        return splitAsciiTokens(rawKey).stream().anyMatch(AMOUNT_TOKENS::contains)
+                || COMBINED_AMOUNT_KEYS.stream().anyMatch(normalized::contains)
+                || rawKey.contains("\u91d1\u989d")
+                || rawKey.contains("\u4ef7\u683c")
+                || rawKey.contains("\u5b9a\u91d1")
+                || rawKey.contains("\u9000\u6b3e")
+                || rawKey.contains("\u8d39\u7528")
+                || rawKey.contains("\u6536\u8d39")
+                || rawKey.contains("\u4ef7\u6b3e")
+                || rawKey.contains("\u603b\u4ef7")
+                || rawKey.contains("\u5355\u4ef7")
+                || rawKey.contains("\u6838\u9500\u91d1\u989d")
+                || rawKey.contains("\u652f\u4ed8\u91d1\u989d")
+                || rawKey.contains("\u5b9e\u4ed8")
+                || rawKey.contains("\u5e94\u4ed8")
+                || rawKey.contains("\u4ed8\u6b3e\u91d1\u989d")
+                || rawKey.contains("\u5206\u4f63")
+                || rawKey.contains("\u4f63\u91d1")
+                || rawKey.contains("\u7ed3\u7b97\u91d1\u989d");
+    }
+
+    private static Set<String> splitAsciiTokens(String rawKey) {
+        String spaced = rawKey
+                .replaceAll("([a-z0-9])([A-Z])", "$1 $2")
+                .replaceAll("([A-Z]+)([A-Z][a-z])", "$1 $2")
+                .replaceAll("[^A-Za-z0-9]+", " ");
+        return Arrays.stream(spaced.split("\\s+"))
+                .map(token -> token.trim().toLowerCase(Locale.ROOT))
+                .filter(token -> !token.isBlank())
+                .collect(Collectors.toSet());
     }
 }

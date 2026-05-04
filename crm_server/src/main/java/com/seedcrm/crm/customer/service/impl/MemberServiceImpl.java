@@ -11,6 +11,7 @@ import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.enums.OrderStatus;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
+import com.seedcrm.crm.permission.support.SensitiveDataProjectionService;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
 import com.seedcrm.crm.wecom.entity.CustomerWecomRelation;
@@ -39,17 +40,20 @@ public class MemberServiceImpl implements MemberService {
     private final PlanOrderMapper planOrderMapper;
     private final CustomerWecomRelationMapper customerWecomRelationMapper;
     private final StaffDirectoryService staffDirectoryService;
+    private final SensitiveDataProjectionService sensitiveDataProjectionService;
 
     public MemberServiceImpl(CustomerMapper customerMapper,
                              OrderMapper orderMapper,
                              PlanOrderMapper planOrderMapper,
                              CustomerWecomRelationMapper customerWecomRelationMapper,
-                             StaffDirectoryService staffDirectoryService) {
+                             StaffDirectoryService staffDirectoryService,
+                             SensitiveDataProjectionService sensitiveDataProjectionService) {
         this.customerMapper = customerMapper;
         this.orderMapper = orderMapper;
         this.planOrderMapper = planOrderMapper;
         this.customerWecomRelationMapper = customerWecomRelationMapper;
         this.staffDirectoryService = staffDirectoryService;
+        this.sensitiveDataProjectionService = sensitiveDataProjectionService;
     }
 
     @Override
@@ -99,7 +103,8 @@ public class MemberServiceImpl implements MemberService {
                 .map(customer -> buildItem(customer,
                         ordersByCustomerId.getOrDefault(customer.getId(), List.of()),
                         allWecomMap.get(customer.getId()),
-                        planOrdersByOrderId))
+                        planOrdersByOrderId,
+                        context))
                 .toList();
         return new MemberListResponse(records, total, currentPage, currentPageSize);
     }
@@ -191,14 +196,15 @@ public class MemberServiceImpl implements MemberService {
     private MemberListItemResponse buildItem(Customer customer,
                                              List<Order> orders,
                                              CustomerWecomRelation wecomRelation,
-                                             Map<Long, PlanOrder> planOrdersByOrderId) {
+                                             Map<Long, PlanOrder> planOrdersByOrderId,
+                                             PermissionRequestContext context) {
         Order latestOrder = latestOrder(orders);
         PlanOrder latestPlanOrder = latestOrder == null ? null : planOrdersByOrderId.get(latestOrder.getId());
         BigDecimal totalAmount = orders.stream()
                 .map(Order::getAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return new MemberListItemResponse(
+        MemberListItemResponse response = new MemberListItemResponse(
                 customer.getId(),
                 customer.getName(),
                 customer.getPhone(),
@@ -223,6 +229,7 @@ public class MemberServiceImpl implements MemberService {
                 totalAmount,
                 customer.getUpdateTime(),
                 customer.getCreateTime());
+        return sensitiveDataProjectionService.projectMemberListItem(response, context);
     }
 
     private Order latestOrder(List<Order> orders) {

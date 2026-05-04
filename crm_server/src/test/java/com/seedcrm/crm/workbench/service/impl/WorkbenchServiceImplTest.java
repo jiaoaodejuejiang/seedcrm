@@ -291,6 +291,90 @@ class WorkbenchServiceImplTest {
         assertThat(target.getFulfillmentRecords().get(0).getExtraJson()).isNull();
     }
 
+    @Test
+    void listOrdersShouldNotExposeRawAppointmentRemarkOrExtraJson() {
+        Order order = new Order();
+        order.setId(3L);
+        order.setClueId(3L);
+        order.setCustomerId(1003L);
+        order.setOrderNo("SO3");
+        order.setType(1);
+        order.setStatus("PAID_DEPOSIT");
+        order.setCreateTime(LocalDateTime.now());
+
+        OrderActionRecord appointment = new OrderActionRecord();
+        appointment.setId(201L);
+        appointment.setOrderId(3L);
+        appointment.setActionType("APPOINTMENT_CHANGE");
+        appointment.setFromStatus("PAID_DEPOSIT");
+        appointment.setToStatus("PAID_DEPOSIT");
+        appointment.setOperatorUserId(9001L);
+        appointment.setRemark("customer private note");
+        appointment.setExtraJson("{\"storeNameBefore\":\"A\",\"storeNameAfter\":\"B\",\"remark\":\"private extra\"}");
+        appointment.setCreateTime(LocalDateTime.now());
+
+        when(orderMapper.selectList(any())).thenReturn(List.of(order));
+        when(customerMapper.selectList(any())).thenReturn(List.of());
+        when(clueProfileService.listByClueIds(any())).thenReturn(List.of());
+        when(planOrderMapper.selectList(any())).thenReturn(List.of());
+        when(orderActionRecordMapper.selectList(any())).thenReturn(List.of(appointment), List.of(appointment));
+        when(staffDirectoryService.getUserName(9001L)).thenReturn("Store Service A");
+
+        List<OrderItemResponse> responses = workbenchService.listOrders(null, null, null);
+
+        OrderItemResponse target = responses.get(0);
+        assertThat(target.getAppointmentRecords()).hasSize(1);
+        assertThat(target.getAppointmentRecords().get(0).getRemark()).isNull();
+        assertThat(target.getAppointmentRecords().get(0).getExtraJson()).isNull();
+        assertThat(target.getFulfillmentRecords()).hasSize(1);
+        assertThat(target.getFulfillmentRecords().get(0).getDetailItems()).contains("原档：A", "新档：B");
+        assertThat(target.getFulfillmentRecords().get(0).getRemark()).isNull();
+        assertThat(target.getFulfillmentRecords().get(0).getExtraJson()).isNull();
+    }
+
+    @Test
+    void listOrdersShouldExposeSafeRefundLedgerReferenceWithoutRawPayload() {
+        Order order = new Order();
+        order.setId(4L);
+        order.setClueId(4L);
+        order.setCustomerId(1004L);
+        order.setOrderNo("SO4");
+        order.setType(1);
+        order.setStatus("COMPLETED");
+        order.setCreateTime(LocalDateTime.now());
+
+        OrderActionRecord refund = new OrderActionRecord();
+        refund.setId(301L);
+        refund.setOrderId(4L);
+        refund.setActionType("REFUND_REGISTER");
+        refund.setFromStatus("COMPLETED");
+        refund.setToStatus("COMPLETED");
+        refund.setOperatorUserId(9002L);
+        refund.setRemark("raw refund remark should not leak");
+        refund.setExtraJson("""
+                {"refundRecordId":601,"refundAmount":88.00,"scope":"VERIFIED_PAYMENT","rawPayload":"secret"}
+                """);
+        refund.setCreateTime(LocalDateTime.now());
+
+        when(orderMapper.selectList(any())).thenReturn(List.of(order));
+        when(customerMapper.selectList(any())).thenReturn(List.of());
+        when(clueProfileService.listByClueIds(any())).thenReturn(List.of());
+        when(planOrderMapper.selectList(any())).thenReturn(List.of());
+        when(orderActionRecordMapper.selectList(any())).thenReturn(List.of(), List.of(refund));
+        when(staffDirectoryService.getUserName(9002L)).thenReturn("Finance A");
+
+        List<OrderItemResponse> responses = workbenchService.listOrders(null, null, null);
+
+        OrderItemResponse target = responses.get(0);
+        assertThat(target.getFulfillmentRecords()).hasSize(1);
+        assertThat(target.getFulfillmentRecords().get(0).getDetailItems())
+                .contains("资金处理：仅记账，不动资金", "冲正流水：601", "冲正范围：VERIFIED_PAYMENT");
+        assertThat(target.getFulfillmentRecords().get(0).getDetailItems())
+                .noneMatch(item -> item.contains("88") || item.contains("secret"));
+        assertThat(target.getFulfillmentRecords().get(0).getRemark()).isNull();
+        assertThat(target.getFulfillmentRecords().get(0).getExtraJson()).isNull();
+    }
+
     private void mockCluePage(List<Clue> clues) {
         when(clueMapper.selectPage(any(), any())).thenAnswer(invocation -> {
             Page<Clue> page = invocation.getArgument(0);

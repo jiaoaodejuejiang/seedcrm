@@ -4,13 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seedcrm.crm.customer.entity.Customer;
 import com.seedcrm.crm.customer.mapper.CustomerMapper;
 import com.seedcrm.crm.order.entity.Order;
 import com.seedcrm.crm.order.mapper.OrderMapper;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
+import com.seedcrm.crm.permission.support.SensitiveDataProjectionService;
 import com.seedcrm.crm.planorder.entity.PlanOrder;
 import com.seedcrm.crm.planorder.mapper.PlanOrderMapper;
+import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import com.seedcrm.crm.wecom.entity.CustomerWecomRelation;
 import com.seedcrm.crm.wecom.mapper.CustomerWecomRelationMapper;
 import com.seedcrm.crm.workbench.service.StaffDirectoryService;
@@ -41,11 +44,20 @@ class MemberServiceImplTest {
     @Mock
     private StaffDirectoryService staffDirectoryService;
 
+    @Mock
+    private SystemConfigService systemConfigService;
+
     private MemberServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new MemberServiceImpl(customerMapper, orderMapper, planOrderMapper, customerWecomRelationMapper, staffDirectoryService);
+        service = new MemberServiceImpl(
+                customerMapper,
+                orderMapper,
+                planOrderMapper,
+                customerWecomRelationMapper,
+                staffDirectoryService,
+                new SensitiveDataProjectionService(new ObjectMapper(), systemConfigService));
     }
 
     @Test
@@ -62,6 +74,8 @@ class MemberServiceImplTest {
 
         assertThat(response.getTotal()).isEqualTo(1L);
         assertThat(response.getRecords()).extracting("customerId").containsExactly(1L);
+        assertThat(response.getRecords().get(0).getLatestOrderAmount()).isNull();
+        assertThat(response.getRecords().get(0).getTotalOrderAmount()).isNull();
     }
 
     @Test
@@ -80,6 +94,8 @@ class MemberServiceImplTest {
         assertThat(response.getRecords().get(0).getPrivateDomainOwner()).isEqualTo("private_domain");
         assertThat(response.getRecords().get(0).getLatestPlanOrderId()).isEqualTo(100L);
         assertThat(response.getRecords().get(0).getLatestPlanOrderStatus()).isEqualTo("FINISHED");
+        assertThat(response.getRecords().get(0).getLatestOrderAmount()).isEqualByComparingTo("199");
+        assertThat(response.getRecords().get(0).getTotalOrderAmount()).isEqualByComparingTo("199");
     }
 
     private Customer customer(Long id) {

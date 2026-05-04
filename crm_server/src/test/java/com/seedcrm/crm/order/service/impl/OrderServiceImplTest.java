@@ -53,6 +53,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceImplTest {
@@ -508,7 +509,7 @@ class OrderServiceImplTest {
     }
 
     @Test
-    void refundShouldOnlyRegisterActionRecordForCompletedOrder() {
+    void refundShouldOnlyRegisterActionRecordForCompletedOrder() throws Exception {
         Order order = new Order();
         order.setId(12L);
         order.setOrderNo("ORD202604211234567912");
@@ -524,18 +525,41 @@ class OrderServiceImplTest {
         planOrder.setStatus(PlanOrderStatus.FINISHED.name());
         when(planOrderMapper.selectOne(any())).thenReturn(planOrder);
         when(orderRefundRecordMapper.selectList(any())).thenReturn(List.of());
-        when(orderRefundRecordMapper.insert(any(OrderRefundRecord.class))).thenReturn(1);
+        when(orderRefundRecordMapper.insert(any(OrderRefundRecord.class))).thenAnswer(invocation -> {
+            OrderRefundRecord record = invocation.getArgument(0);
+            record.setId(501L);
+            return 1;
+        });
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
 
         OrderActionDTO dto = new OrderActionDTO();
         dto.setOrderId(12L);
         dto.setServiceRefundAmount(new BigDecimal("100.00"));
+        dto.setIdempotencyKey("STORE-REFUND-12-100");
         dto.setRemark("store refund register");
 
         Order refunded = orderService.refund(dto, 9002L);
 
         assertThat(refunded.getStatus()).isEqualTo(OrderStatus.COMPLETED.name());
-        verify(orderActionRecordMapper).insert(any(OrderActionRecord.class));
+        assertThat(refunded.getRefundRecordId()).isEqualTo(501L);
+        assertThat(refunded.getRefundDuplicate()).isFalse();
+        ArgumentCaptor<OrderActionRecord> recordCaptor = ArgumentCaptor.forClass(OrderActionRecord.class);
+        verify(orderActionRecordMapper).insert(recordCaptor.capture());
+        JsonNode extra = new ObjectMapper().readTree(recordCaptor.getValue().getExtraJson());
+        assertThat(extra.path("refundRecordId").asLong()).isEqualTo(501L);
+        assertThat(extra.path("refundIdempotencyKey").asText()).startsWith("ORDER_REFUND:");
+        assertThat(extra.has("refundAmount")).isFalse();
+        assertThat(extra.has("serviceRefundAmount")).isFalse();
+        assertThat(extra.has("refundReason")).isFalse();
+        assertThat(extra.has("outRefundNo")).isFalse();
+        assertThat(extra.has("externalRefundId")).isFalse();
+        assertThat(extra.has("itemOrderId")).isFalse();
+        assertThat(extra.has("notifyUrl")).isFalse();
+        ArgumentCaptor<OrderRefundRecord> refundCaptor = ArgumentCaptor.forClass(OrderRefundRecord.class);
+        verify(orderRefundRecordMapper).insert(refundCaptor.capture());
+        assertThat(refundCaptor.getValue().getRawRequest())
+                .doesNotContain("refundAmount", "serviceRefundAmount", "refundReason", "outRefundNo",
+                        "externalRefundId", "itemOrderId", "notifyUrl");
         verify(orderSettlementService, never()).settleCompletedOrder(12L);
     }
 
@@ -565,6 +589,121 @@ class OrderServiceImplTest {
         assertThat(refunded.getStatus()).isEqualTo(OrderStatus.REFUNDED.name());
         verify(orderActionRecordMapper).insert(any(OrderActionRecord.class));
         verify(orderSettlementService, never()).settleCompletedOrder(13L);
+    }
+
+    @Test
+    void refundShouldReturnExistingRecordForDuplicateIdempotencyEvenAfterRefundedStatus() {
+        Order order = new Order();
+        order.setId(14L);
+        order.setOrderNo("ORD202604211234567914");
+        order.setCustomerId(214L);
+        order.setStatus(OrderStatus.REFUNDED.name());
+        when(dbLockService.lockOrder(14L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(214L)).thenReturn(new Customer());
+
+        OrderRefundRecord existing = new OrderRefundRecord();
+        existing.setId(601L);
+        existing.setOrderId(14L);
+        existing.setRefundScene("FINANCE_VERIFIED_PAYMENT");
+        existing.setRefundAmount(new BigDecimal("88.00"));
+        existing.setRefundReason("duplicate submit");
+        existing.setStatus("REGISTERED");
+        existing.setIdempotencyKey("ORDER_REFUND:existing");
+        when(orderRefundRecordMapper.selectOne(any())).thenReturn(existing);
+
+        OrderActionDTO dto = new OrderActionDTO();
+        dto.setOrderId(14L);
+        dto.setRefundScene("FINANCE_VERIFIED_PAYMENT");
+        dto.setRefundAmount(new BigDecimal("88.00"));
+        dto.setIdempotencyKey("FINANCE-REFUND-14-88");
+        dto.setRemark("duplicate submit");
+
+        Order result = orderService.refund(dto, 9002L);
+
+        assertThat(result).isSameAs(order);
+        assertThat(result.getRefundRecordId()).isEqualTo(601L);
+        assertThat(result.getRefundDuplicate()).isTrue();
+        verify(orderRefundRecordMapper, never()).selectList(any());
+        verify(orderRefundRecordMapper, never()).insert(any(OrderRefundRecord.class));
+        verify(orderActionRecordMapper, never()).insert(any(OrderActionRecord.class));
+        verify(orderMapper, never()).updateById(any(Order.class));
+    }
+
+    @Test
+    void refundShouldRejectSameIdempotencyKeyWithDifferentAmount() {
+        Order order = new Order();
+        order.setId(15L);
+        order.setOrderNo("ORD202604211234567915");
+        order.setCustomerId(215L);
+        order.setStatus(OrderStatus.REFUNDED.name());
+        when(dbLockService.lockOrder(15L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(215L)).thenReturn(new Customer());
+
+        OrderRefundRecord existing = new OrderRefundRecord();
+        existing.setId(602L);
+        existing.setOrderId(15L);
+        existing.setRefundScene("FINANCE_VERIFIED_PAYMENT");
+        existing.setRefundAmount(new BigDecimal("99.00"));
+        existing.setRefundReason("same key");
+        existing.setStatus("REGISTERED");
+        existing.setIdempotencyKey("ORDER_REFUND:existing");
+        when(orderRefundRecordMapper.selectOne(any())).thenReturn(existing);
+
+        OrderActionDTO dto = new OrderActionDTO();
+        dto.setOrderId(15L);
+        dto.setRefundScene("FINANCE_VERIFIED_PAYMENT");
+        dto.setRefundAmount(new BigDecimal("88.00"));
+        dto.setIdempotencyKey("FINANCE-REFUND-CONFLICT");
+        dto.setRemark("same key");
+
+        assertThatThrownBy(() -> orderService.refund(dto, 9002L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("idempotency key conflicts");
+        verify(orderRefundRecordMapper, never()).selectList(any());
+        verify(orderRefundRecordMapper, never()).insert(any(OrderRefundRecord.class));
+        verify(orderActionRecordMapper, never()).insert(any(OrderActionRecord.class));
+        verify(orderMapper, never()).updateById(any(Order.class));
+    }
+
+    @Test
+    void refundShouldTreatDuplicateKeyRaceAsDuplicateWhenRequestMatches() {
+        Order order = new Order();
+        order.setId(16L);
+        order.setOrderNo("ORD202604211234567916");
+        order.setCustomerId(216L);
+        order.setStatus(OrderStatus.APPOINTMENT.name());
+        order.setVerificationStatus("VERIFIED");
+        order.setDeposit(new BigDecimal("200.00"));
+        when(dbLockService.lockOrder(16L)).thenReturn(order);
+        when(customerService.getByIdOrThrow(216L)).thenReturn(new Customer());
+        when(orderRefundRecordMapper.selectList(any())).thenReturn(List.of());
+
+        OrderRefundRecord existing = new OrderRefundRecord();
+        existing.setId(603L);
+        existing.setOrderId(16L);
+        existing.setRefundScene("FINANCE_VERIFIED_PAYMENT");
+        existing.setRefundAmount(new BigDecimal("88.00"));
+        existing.setRefundReason("race retry");
+        existing.setStatus("REGISTERED");
+        existing.setIdempotencyKey("ORDER_REFUND:race");
+        when(orderRefundRecordMapper.selectOne(any())).thenReturn(null, existing);
+        when(orderRefundRecordMapper.insert(any(OrderRefundRecord.class)))
+                .thenThrow(new DuplicateKeyException("duplicate"));
+
+        OrderActionDTO dto = new OrderActionDTO();
+        dto.setOrderId(16L);
+        dto.setRefundScene("FINANCE_VERIFIED_PAYMENT");
+        dto.setRefundAmount(new BigDecimal("88.00"));
+        dto.setIdempotencyKey("FINANCE-REFUND-RACE");
+        dto.setRemark("race retry");
+
+        Order result = orderService.refund(dto, 9002L);
+
+        assertThat(result).isSameAs(order);
+        assertThat(result.getRefundRecordId()).isEqualTo(603L);
+        assertThat(result.getRefundDuplicate()).isTrue();
+        verify(orderActionRecordMapper, never()).insert(any(OrderActionRecord.class));
+        verify(orderMapper, never()).updateById(any(Order.class));
     }
 
     @Test

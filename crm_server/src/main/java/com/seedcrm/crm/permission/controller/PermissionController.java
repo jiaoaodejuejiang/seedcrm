@@ -10,6 +10,8 @@ import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
 import com.seedcrm.crm.permission.service.PermissionService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,6 +21,21 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/permission")
 public class PermissionController {
+
+    private static final Set<String> STORE_ROLE_MATRIX_READER_ROLES = Set.of("STORE_MANAGER");
+    private static final Set<String> STORE_ROLE_MATRIX_ROLE_CODES = Set.of(
+            "STORE_SERVICE",
+            "STORE_MANAGER",
+            "PHOTOGRAPHER",
+            "MAKEUP_ARTIST",
+            "PHOTO_SELECTOR");
+    private static final Set<String> STORE_ROLE_MATRIX_MODULE_CODES = Set.of("ORDER", "PLANORDER");
+    private static final Set<String> STORE_ROLE_MATRIX_ACTION_CODES = Set.of(
+            "VIEW",
+            "UPDATE",
+            "FINISH",
+            "REFUND_STORE",
+            "ASSIGN_ROLE");
 
     private final PermissionService permissionService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
@@ -35,6 +52,11 @@ public class PermissionController {
     @GetMapping("/policies")
     public ApiResponse<List<PermissionPolicy>> listPolicies(HttpServletRequest request) {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        if (isStoreRoleMatrixReader(context)) {
+            return ApiResponse.success(permissionService.listPolicies().stream()
+                    .filter(this::isStoreRoleMatrixPolicy)
+                    .toList());
+        }
         permissionModuleGuard.checkView(context);
         return ApiResponse.success(permissionService.listPolicies());
     }
@@ -52,5 +74,20 @@ public class PermissionController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         permissionModuleGuard.checkCheck(context);
         return ApiResponse.success(permissionService.check(requestBody));
+    }
+
+    private boolean isStoreRoleMatrixReader(PermissionRequestContext context) {
+        return STORE_ROLE_MATRIX_READER_ROLES.contains(normalize(context == null ? null : context.getRoleCode()));
+    }
+
+    private boolean isStoreRoleMatrixPolicy(PermissionPolicy policy) {
+        return policy != null
+                && STORE_ROLE_MATRIX_ROLE_CODES.contains(normalize(policy.getRoleCode()))
+                && STORE_ROLE_MATRIX_MODULE_CODES.contains(normalize(policy.getModuleCode()))
+                && STORE_ROLE_MATRIX_ACTION_CODES.contains(normalize(policy.getActionCode()));
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
     }
 }

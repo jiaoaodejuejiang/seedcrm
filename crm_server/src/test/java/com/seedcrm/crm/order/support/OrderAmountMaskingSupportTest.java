@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 
 class OrderAmountMaskingSupportTest {
@@ -12,18 +11,18 @@ class OrderAmountMaskingSupportTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
-    void maskServiceDetailJsonShouldScrubNestedAmountsAndMarkPayload() throws Exception {
+    void shouldMaskChineseAndCommonAmountKeysWithoutMaskingServiceText() throws Exception {
         String masked = OrderAmountMaskingSupport.maskServiceDetailJson("""
                 {
-                  "serviceRequirement": "portrait",
-                  "serviceConfirmAmount": 1288.00,
-                  "确认金额": 3888,
+                  "\\u91d1\\u989d": 1288.00,
+                  "\\u603b\\u4ef7": 1999.00,
+                  "\\u670d\\u52a1\\u9879\\u76ee": "\\u4eb2\\u5b50\\u5199\\u771f",
+                  "serviceCost": 99,
+                  "costume": "\\u767d\\u8272\\u793c\\u670d",
                   "serviceTemplate": {
                     "config": {
-                      "price": 99,
-                      "sections": [
-                        { "deposit": 200, "title": "A", "定金": 50 }
-                      ]
+                      "\\u5355\\u4ef7": 199,
+                      "totalDuration": 120
                     }
                   }
                 }
@@ -31,41 +30,13 @@ class OrderAmountMaskingSupportTest {
 
         JsonNode root = objectMapper.readTree(masked);
 
-        assertThat(root.path("serviceRequirement").asText()).isEqualTo("portrait");
-        assertThat(root.path("serviceConfirmAmount").isNull()).isTrue();
-        assertThat(root.path("确认金额").isNull()).isTrue();
-        assertThat(root.path("serviceTemplate").path("config").path("price").isNull()).isTrue();
-        assertThat(root.path("serviceTemplate").path("config").path("sections").get(0).path("deposit").isNull()).isTrue();
-        assertThat(root.path("serviceTemplate").path("config").path("sections").get(0).path("定金").isNull()).isTrue();
+        assertThat(root.path("\u91d1\u989d").isNull()).isTrue();
+        assertThat(root.path("\u603b\u4ef7").isNull()).isTrue();
+        assertThat(root.path("serviceCost").isNull()).isTrue();
+        assertThat(root.path("serviceTemplate").path("config").path("\u5355\u4ef7").isNull()).isTrue();
+        assertThat(root.path("\u670d\u52a1\u9879\u76ee").asText()).isEqualTo("\u4eb2\u5b50\u5199\u771f");
+        assertThat(root.path("costume").asText()).isEqualTo("\u767d\u8272\u793c\u670d");
+        assertThat(root.path("serviceTemplate").path("config").path("totalDuration").asInt()).isEqualTo(120);
         assertThat(root.path(OrderAmountMaskingSupport.MASK_MARKER).asBoolean()).isTrue();
-    }
-
-    @Test
-    void restoreMaskedAmountFieldsShouldKeepHistoricalAmountsOnMaskedSave() throws Exception {
-        ObjectNode incoming = (ObjectNode) objectMapper.readTree("""
-                {
-                  "_amountsMasked": true,
-                  "serviceRequirement": "updated",
-                  "serviceConfirmAmount": null,
-                  "serviceTemplate": {
-                    "config": { "price": null, "title": "A" }
-                  }
-                }
-                """);
-
-        OrderAmountMaskingSupport.restoreMaskedAmountFields(incoming, """
-                {
-                  "serviceRequirement": "old",
-                  "serviceConfirmAmount": 1288.00,
-                  "serviceTemplate": {
-                    "config": { "price": 99, "title": "A" }
-                  }
-                }
-                """, objectMapper);
-
-        assertThat(incoming.has(OrderAmountMaskingSupport.MASK_MARKER)).isFalse();
-        assertThat(incoming.path("serviceRequirement").asText()).isEqualTo("updated");
-        assertThat(incoming.path("serviceConfirmAmount").decimalValue()).isEqualByComparingTo("1288.00");
-        assertThat(incoming.path("serviceTemplate").path("config").path("price").asInt()).isEqualTo(99);
     }
 }

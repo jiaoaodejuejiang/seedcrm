@@ -36,8 +36,21 @@ public class SystemConfigController {
             "PHOTOGRAPHER",
             "MAKEUP_ARTIST",
             "PHOTO_SELECTOR");
+    private static final Set<String> DOMAIN_AUTHENTICATED_READ_ROLES = Set.of(
+            "CLUE_MANAGER",
+            "ONLINE_CUSTOMER_SERVICE",
+            "STORE_SERVICE",
+            "STORE_MANAGER",
+            "PHOTOGRAPHER",
+            "MAKEUP_ARTIST",
+            "PHOTO_SELECTOR",
+            "FINANCE",
+            "PRIVATE_DOMAIN_SERVICE",
+            "PARTNER_APP");
+    private static final Set<String> AMOUNT_VISIBILITY_READ_ROLES = Set.of("STORE_MANAGER");
     private static final String DISTRIBUTION_ORDER_TYPE_PREFIX = "distribution.order.type.";
     private static final String DEPOSIT_DIRECT_PREFIX = "deposit.direct.";
+    private static final String AMOUNT_VISIBILITY_PREFIX = "amount.visibility.";
 
     private final SystemConfigService systemConfigService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
@@ -68,6 +81,9 @@ public class SystemConfigController {
             return ApiResponse.success(systemConfigService.listConfigs(prefix));
         }
         if (isRuntimeCapabilityConfig(prefix) && isRuntimeCapabilityReader(context)) {
+            return ApiResponse.success(systemConfigService.listConfigs(prefix));
+        }
+        if (isAmountVisibilityConfig(prefix) && isAmountVisibilityReader(context)) {
             return ApiResponse.success(systemConfigService.listConfigs(prefix));
         }
         settingModuleGuard.checkView(context);
@@ -339,6 +355,9 @@ public class SystemConfigController {
 
     private void checkDomainSettingsView(PermissionRequestContext context) {
         String roleCode = normalize(context == null ? null : context.getRoleCode());
+        if (DOMAIN_AUTHENTICATED_READ_ROLES.contains(roleCode)) {
+            return;
+        }
         if (DOMAIN_READ_ROLES.contains(roleCode)) {
             schedulerModuleGuard.checkView(context);
             return;
@@ -369,6 +388,15 @@ public class SystemConfigController {
     private boolean isRuntimeCapabilityConfig(String keyOrPrefix) {
         String value = keyOrPrefix == null ? "" : keyOrPrefix.trim();
         return value.startsWith(DEPOSIT_DIRECT_PREFIX) || value.equals("deposit.direct");
+    }
+
+    private boolean isAmountVisibilityReader(PermissionRequestContext context) {
+        return AMOUNT_VISIBILITY_READ_ROLES.contains(normalize(context == null ? null : context.getRoleCode()));
+    }
+
+    private boolean isAmountVisibilityConfig(String keyOrPrefix) {
+        String value = keyOrPrefix == null ? "" : keyOrPrefix.trim();
+        return value.startsWith(AMOUNT_VISIBILITY_PREFIX) || value.equals("amount.visibility");
     }
 
     private boolean isDistributionIntegrationConfig(String keyOrPrefix) {

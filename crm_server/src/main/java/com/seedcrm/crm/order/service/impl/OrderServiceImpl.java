@@ -59,6 +59,7 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -415,17 +416,23 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         validateOrderId(orderActionDTO == null ? null : orderActionDTO.getOrderId());
         Order order = dbLockService.lockOrder(orderActionDTO.getOrderId());
         ensureOrderCustomerBound(order);
+        OrderRefundRecord existingRefund = findSameRefund(order, orderActionDTO);
+        if (existingRefund != null) {
+            attachRefundResult(order, existingRefund, true);
+            return order;
+        }
         OrderStatus currentStatus = getCurrentStatus(order);
         if (!currentStatus.canRefund()) {
             throw new BusinessException("order cannot be refunded from status " + currentStatus.name());
         }
         validateRefundRequest(order, orderActionDTO);
-        OrderRefundRecord existingRefund = findSameRefund(order, orderActionDTO);
-        if (existingRefund != null) {
+        String refundRemark = buildRefundRemark(orderActionDTO);
+        RefundRegistration registration = createRefundRecord(order, orderActionDTO, operatorUserId);
+        if (registration.duplicate()) {
+            attachRefundResult(order, registration.record(), true);
             return order;
         }
-        String refundRemark = buildRefundRemark(orderActionDTO);
-        OrderRefundRecord refundRecord = createRefundRecord(order, orderActionDTO, operatorUserId);
+        OrderRefundRecord refundRecord = registration.record();
         createSalaryReversalDetails(order, orderActionDTO, refundRecord);
         updateRemark(order, refundRemark);
         if (currentStatus == OrderStatus.COMPLETED) {
@@ -434,12 +441,14 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 throw new BusinessException("failed to register order refund");
             }
             recordOrderAction(order.getId(), "REFUND_REGISTER", currentStatus.name(), currentStatus.name(),
-                    operatorUserId, refundRemark, buildRefundActionExtra(orderActionDTO));
+                    operatorUserId, refundRemark, buildRefundActionExtra(orderActionDTO, refundRecord));
+            attachRefundResult(order, refundRecord, false);
             return order;
         }
         Order updated = updateOrderStatus(order, OrderStatus.REFUNDED);
         recordOrderAction(order.getId(), "REFUND_REGISTER", currentStatus.name(), OrderStatus.REFUNDED.name(),
-                operatorUserId, refundRemark, buildRefundActionExtra(orderActionDTO));
+                operatorUserId, refundRemark, buildRefundActionExtra(orderActionDTO, refundRecord));
+        attachRefundResult(updated, refundRecord, false);
         return updated;
     }
 
@@ -1243,6 +1252,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     private String buildRefundActionExtra(OrderActionDTO orderActionDTO) {
+        return buildRefundActionExtra(orderActionDTO, null);
+    }
+
+    private String buildRefundActionExtra(OrderActionDTO orderActionDTO, OrderRefundRecord refundRecord) {
         if (orderActionDTO == null) {
             return null;
         }
@@ -1257,15 +1270,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 && Boolean.TRUE.equals(orderActionDTO.getReverseDistributor());
         return "{"
                 + "\"refundScene\":" + jsonString(scene)
-                + ",\"refundAmount\":" + jsonNumber(resolveRefundAmount(orderActionDTO))
-                + ",\"serviceRefundAmount\":" + jsonNumber(orderActionDTO.getServiceRefundAmount())
-                + ",\"refundReasonType\":" + jsonString(orderActionDTO.getRefundReasonType())
-                + ",\"refundReason\":" + jsonString(orderActionDTO.getRefundReason())
-                + ",\"outOrderNo\":" + jsonString(orderActionDTO.getOutOrderNo())
-                + ",\"outRefundNo\":" + jsonString(orderActionDTO.getOutRefundNo())
-                + ",\"externalRefundId\":" + jsonString(orderActionDTO.getExternalRefundId())
-                + ",\"itemOrderId\":" + jsonString(orderActionDTO.getItemOrderId())
-                + ",\"notifyUrl\":" + jsonString(orderActionDTO.getNotifyUrl())
+                + ",\"refundRecordId\":" + (refundRecord == null || refundRecord.getId() == null ? "null" : refundRecord.getId())
+                + ",\"refundIdempotencyKey\":" + jsonString(refundRecord == null ? null : refundRecord.getIdempotencyKey())
                 + ",\"platformChannel\":" + jsonString(orderActionDTO.getPlatformChannel())
                 + ",\"reverseStorePerformance\":" + reverseStorePerformance
                 + ",\"reverseSalary\":" + reverseStorePerformance
@@ -1384,12 +1390,16 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     private OrderRefundRecord findSameRefund(Order order, OrderActionDTO orderActionDTO) {
         String idempotencyKey = buildRefundIdempotencyKey(order, orderActionDTO);
-        return orderRefundRecordMapper.selectOne(new LambdaQueryWrapper<OrderRefundRecord>()
+        OrderRefundRecord existing = orderRefundRecordMapper.selectOne(new LambdaQueryWrapper<OrderRefundRecord>()
                 .eq(OrderRefundRecord::getIdempotencyKey, idempotencyKey)
                 .last("LIMIT 1"));
+        if (existing != null) {
+            assertSameRefundRequest(existing, order, orderActionDTO);
+        }
+        return existing;
     }
 
-    private OrderRefundRecord createRefundRecord(Order order, OrderActionDTO orderActionDTO, Long operatorUserId) {
+    private RefundRegistration createRefundRecord(Order order, OrderActionDTO orderActionDTO, Long operatorUserId) {
         String scene = resolveRefundScene(orderActionDTO);
         LocalDateTime now = LocalDateTime.now();
         PlanOrder planOrder = findPlanOrder(order.getId());
@@ -1420,10 +1430,85 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         record.setRawRequest(buildRefundActionExtra(orderActionDTO));
         record.setCreateTime(now);
         record.setUpdateTime(now);
-        if (orderRefundRecordMapper.insert(record) <= 0) {
-            throw new BusinessException("退款流水登记失败");
+        try {
+            if (orderRefundRecordMapper.insert(record) <= 0) {
+                throw new BusinessException("refund ledger registration failed");
+            }
+        } catch (DuplicateKeyException exception) {
+            OrderRefundRecord existing = findSameRefund(order, orderActionDTO);
+            if (existing == null) {
+                throw new BusinessException("refund request already registered, please retry query");
+            }
+            return new RefundRegistration(existing, true);
         }
-        return record;
+        return new RefundRegistration(record, false);
+    }
+
+    private void assertSameRefundRequest(OrderRefundRecord existing, Order order, OrderActionDTO orderActionDTO) {
+        if (existing == null) {
+            return;
+        }
+        if (order == null || !existing.getOrderId().equals(order.getId())) {
+            throw new BusinessException("refund idempotency key has already been used by another order");
+        }
+        String expectedScene = resolveRefundScene(orderActionDTO);
+        if (!normalize(existing.getRefundScene()).equals(expectedScene)) {
+            throw new BusinessException("refund idempotency key conflicts with another refund scene");
+        }
+        BigDecimal existingAmount = scaleMoney(existing.getRefundAmount());
+        BigDecimal expectedAmount = scaleMoney(resolveRefundAmount(orderActionDTO));
+        if (existingAmount.compareTo(expectedAmount) != 0) {
+            throw new BusinessException("refund idempotency key conflicts with another refund amount");
+        }
+        assertSameRefundText(existing.getRefundReasonType(), orderActionDTO.getRefundReasonType(), "reason type");
+        assertSameRefundText(existing.getRefundReason(),
+                firstText(orderActionDTO.getRefundReason(), orderActionDTO.getRemark()), "reason");
+        assertSameRefundFlag(existing.getReverseStorePerformance(), expectedReverseStorePerformance(expectedScene),
+                "store performance reversal");
+        assertSameRefundFlag(existing.getReverseCustomerService(), expectedReverseCustomerService(expectedScene, orderActionDTO),
+                "customer service reversal");
+        assertSameRefundFlag(existing.getReverseDistributor(), expectedReverseDistributor(expectedScene, orderActionDTO),
+                "distributor reversal");
+    }
+
+    private void assertSameRefundText(String existing, String expected, String label) {
+        if (!normalize(existing).equals(normalize(expected))) {
+            throw new BusinessException("refund idempotency key conflicts with another refund " + label);
+        }
+    }
+
+    private void assertSameRefundFlag(Integer existing, int expected, String label) {
+        if ((existing == null ? 0 : existing) != expected) {
+            throw new BusinessException("refund idempotency key conflicts with another " + label);
+        }
+    }
+
+    private int expectedReverseStorePerformance(String scene) {
+        return REFUND_SCENE_STORE_SERVICE.equals(scene) ? 1 : 0;
+    }
+
+    private int expectedReverseCustomerService(String scene, OrderActionDTO orderActionDTO) {
+        return REFUND_SCENE_FINANCE_PAYMENT.equals(scene)
+                && orderActionDTO != null
+                && Boolean.TRUE.equals(orderActionDTO.getReverseCustomerService()) ? 1 : 0;
+    }
+
+    private int expectedReverseDistributor(String scene, OrderActionDTO orderActionDTO) {
+        return REFUND_SCENE_FINANCE_PAYMENT.equals(scene)
+                && orderActionDTO != null
+                && Boolean.TRUE.equals(orderActionDTO.getReverseDistributor()) ? 1 : 0;
+    }
+
+    private void attachRefundResult(Order order, OrderRefundRecord refundRecord, boolean duplicate) {
+        if (order == null || refundRecord == null) {
+            return;
+        }
+        order.setRefundRecordId(refundRecord.getId());
+        order.setRefundIdempotencyKey(refundRecord.getIdempotencyKey());
+        order.setRefundDuplicate(duplicate);
+    }
+
+    private record RefundRegistration(OrderRefundRecord record, boolean duplicate) {
     }
 
     private void createSalaryReversalDetails(Order order, OrderActionDTO orderActionDTO, OrderRefundRecord refundRecord) {

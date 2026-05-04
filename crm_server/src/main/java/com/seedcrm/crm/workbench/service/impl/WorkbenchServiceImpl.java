@@ -1037,8 +1037,8 @@ public class WorkbenchServiceImpl implements WorkbenchService {
                 record.getToStatus(),
                 record.getOperatorUserId(),
                 staffDirectoryService.getUserName(record.getOperatorUserId()),
-                record.getRemark(),
-                record.getExtraJson(),
+                null,
+                null,
                 record.getCreateTime());
     }
 
@@ -1181,6 +1181,10 @@ public class WorkbenchServiceImpl implements WorkbenchService {
             return;
         }
         items.add("资金处理：仅记账，不动资金");
+        String refundRecordId = textValue(extra, "refundRecordId");
+        if (StringUtils.hasText(refundRecordId)) {
+            items.add("冲正流水：" + refundRecordId);
+        }
         String scope = textValue(extra, "scope");
         if (StringUtils.hasText(scope)) {
             items.add("冲正范围：" + scope);

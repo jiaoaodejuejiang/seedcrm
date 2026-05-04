@@ -6,11 +6,11 @@
         <strong>{{ currentModeLabel }}</strong>
       </article>
       <article class="summary-pill">
-        <span>待结金额</span>
+        <span>账面待处理</span>
         <strong>{{ formatMoney(balance?.unsettledAmount) }}</strong>
       </article>
       <article class="summary-pill">
-        <span>可提现金额</span>
+        <span>账面可登记</span>
         <strong>{{ formatMoney(withdrawable) }}</strong>
       </article>
       <article class="summary-pill">
@@ -103,7 +103,7 @@
                     type="primary"
                     @click="handlePaySettlement(row)"
                   >
-                    {{ matchedMode === 'LEDGER_ONLY' ? '标记已结' : '确认打款' }}
+                    {{ matchedMode === 'LEDGER_ONLY' ? '标记已结' : '登记线下结清' }}
                   </el-button>
                   <el-button v-if="normalize(row.status) !== 'CONFIRMED'" size="small" plain @click="fillSettlementRange(row)">带入周期</el-button>
                 </div>
@@ -114,13 +114,13 @@
 
         <el-tab-pane v-if="pageMode === 'withdraw'" :label="withdrawTabLabel" name="withdraw">
           <template v-if="matchedMode === 'LEDGER_ONLY'">
-            <el-empty description="当前角色只记账，不走提现流程" />
+            <el-empty description="当前角色只记账，不走提现或资金划拨流程" />
           </template>
 
           <template v-else>
             <div class="form-grid">
               <label>
-                <span>{{ matchedMode === 'WITHDRAW_AUDIT' ? '发起提现金额' : '自动提现金额' }}</span>
+                <span>{{ matchedMode === 'WITHDRAW_AUDIT' ? '线下处理申请金额' : '外部处理登记金额' }}</span>
                 <el-input-number
                   v-model="withdrawForm.amount"
                   :min="0"
@@ -138,7 +138,7 @@
                 :disabled="!hasSelectedUser || Number(withdrawForm.amount || 0) <= 0"
                 @click="handleCreateWithdraw"
               >
-                发起提现
+                登记线下结清
               </el-button>
               <el-button
                 v-if="matchedMode === 'WITHDRAW_DIRECT'"
@@ -146,7 +146,7 @@
                 :disabled="!hasSelectedUser || Number(withdrawForm.amount || 0) <= 0"
                 @click="handleAutoWithdraw"
               >
-                自动提现
+                登记外部处理
               </el-button>
             </div>
           </template>
@@ -187,7 +187,7 @@
                     type="primary"
                     @click="handleApproveWithdraw(row)"
                   >
-                    审核打款
+                    登记已处理
                   </el-button>
                   <el-button
                     v-if="matchedMode === 'WITHDRAW_AUDIT' && normalize(row.status) === 'PENDING'"
@@ -208,7 +208,7 @@
         <el-tab-pane v-if="pageMode === 'refunds'" label="已核销退款冲正" name="refunds">
           <div class="settlement-refund-head">
             <el-alert
-              title="这里处理已核销团购券/定金退款对薪酬的冲正；门店线下确认单金额退款仍在门店订单列表登记。"
+              title="这里登记已核销团购券/定金退款的薪酬冲正；系统不发起原路退款，门店线下确认单金额退款仍在门店订单列表登记。"
               type="warning"
               show-icon
               :closable="false"
@@ -275,7 +275,7 @@
     <el-dialog v-model="financeRefundDialogVisible" title="团购/定金退款冲正" width="620px">
       <div class="refund-dialog">
         <el-alert
-          title="本入口登记已核销金额退款，并同步冲正客服与分销绩效；真实抖音/支付退款由三方接口配置后对接。"
+          title="本入口只登记已核销金额退款冲正，并同步冲正客服与分销绩效；真实抖音/支付退款在第三方平台或接口中完成。"
           type="warning"
           show-icon
           :closable="false"
@@ -283,7 +283,7 @@
         <div class="refund-summary">
           <span>客户：{{ financeRefundForm.order?.customerName || financeRefundForm.order?.customerPhone || '--' }}</span>
           <span>门店：{{ financeRefundForm.order?.storeName || '--' }}</span>
-          <span>可退核销金额：{{ formatMoney(resolveVerificationAmount(financeRefundForm.order)) }}</span>
+          <span>可冲正核销金额：{{ formatMoney(resolveVerificationAmount(financeRefundForm.order)) }}</span>
           <span>影响范围：客服绩效、分销绩效</span>
         </div>
         <el-form label-width="120px">
@@ -293,7 +293,7 @@
               / {{ financeRefundForm.order?.storeName || '--' }}
             </span>
           </el-form-item>
-          <el-form-item label="退款金额">
+          <el-form-item label="冲正金额">
             <el-input-number v-model="financeRefundForm.refundAmount" :min="0" :precision="2" controls-position="right" />
           </el-form-item>
           <el-form-item label="原因类型">
@@ -319,7 +319,7 @@
       </div>
       <template #footer>
         <el-button @click="financeRefundDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="financeRefundSubmitting" @click="submitFinanceRefund">确认登记冲正</el-button>
+        <el-button type="danger" :loading="financeRefundSubmitting" @click="submitFinanceRefund">确认登记记账冲正</el-button>
       </template>
     </el-dialog>
   </div>
@@ -417,7 +417,7 @@ const matchedRule = computed(() => {
 })
 const matchedMode = computed(() => matchedRule.value?.settlementMode || 'LEDGER_ONLY')
 const currentModeLabel = computed(() => formatSettlementMode(matchedMode.value))
-const withdrawTabLabel = computed(() => (matchedMode.value === 'LEDGER_ONLY' ? '记账记录' : '提现处理'))
+const withdrawTabLabel = computed(() => (matchedMode.value === 'LEDGER_ONLY' ? '记账记录' : '线下处理登记'))
 const pageMode = computed(() => route.meta?.settlementCenterMode || 'settlement')
 
 function staffLabel(staff) {
@@ -458,7 +458,7 @@ function fillSettlementRange(row) {
 
 function fillWithdrawAmount(row) {
   withdrawForm.amount = Number(row?.amount || 0)
-  ElMessage.success('已带入提现金额')
+  ElMessage.success('已带入登记金额')
 }
 
 function parsePickerDate(value) {
@@ -573,7 +573,7 @@ async function handlePaySettlement(row) {
   await paySalarySettlement({
     settlementId: row.id
   })
-  ElMessage.success(matchedMode.value === 'LEDGER_ONLY' ? '已标记记账完成' : '结算已打款')
+  ElMessage.success(matchedMode.value === 'LEDGER_ONLY' ? '已标记记账完成' : '已登记线下结清')
   await loadSalaryData()
 }
 
@@ -584,15 +584,15 @@ async function handleCreateWithdraw() {
     roleCode: selectedRoleCode.value,
     amount: withdrawForm.amount
   })
-  ElMessage.success('提现申请已创建')
+  ElMessage.success('线下结清登记已创建')
   await loadSalaryData()
 }
 
 async function handleApproveWithdraw(row) {
   try {
-    await ElMessageBox.confirm('确认通过该提现并登记为已打款吗？', '审核打款', {
+    await ElMessageBox.confirm('确认已在线下完成处理，并在系统登记为已处理吗？', '登记线下处理', {
       type: 'warning',
-      confirmButtonText: '确认打款',
+      confirmButtonText: '确认登记',
       cancelButtonText: '取消'
     })
   } catch {
@@ -603,14 +603,14 @@ async function handleApproveWithdraw(row) {
     status: 'PAID',
     auditRemark: '财务审核通过'
   })
-  ElMessage.success('提现状态已更新')
+  ElMessage.success('线下处理状态已更新')
   await loadSalaryData()
 }
 
 async function handleRejectWithdraw(row) {
   let auditRemark = ''
   try {
-    const result = await ElMessageBox.prompt('请填写驳回原因，驳回后该金额会释放为可提现余额。', '驳回提现', {
+    const result = await ElMessageBox.prompt('请填写驳回原因，驳回后该金额会释放为可登记余额。', '驳回线下处理', {
       inputType: 'textarea',
       inputPlaceholder: '例如：收款信息不完整，请补充后重新发起。',
       inputPattern: /\S+/,
@@ -628,7 +628,7 @@ async function handleRejectWithdraw(row) {
     status: 'REJECTED',
     auditRemark
   })
-  ElMessage.success('提现已驳回')
+  ElMessage.success('处理申请已驳回')
   await loadSalaryData()
 }
 
@@ -639,7 +639,7 @@ async function handleAutoWithdraw() {
     roleCode: selectedRoleCode.value,
     amount: withdrawForm.amount
   })
-  ElMessage.success('自动提现已完成')
+  ElMessage.success('外部处理已登记')
   await loadSalaryData()
 }
 
@@ -669,7 +669,7 @@ async function submitFinanceRefund() {
     return
   }
   if (Number(financeRefundForm.refundAmount || 0) <= 0) {
-    ElMessage.warning('请填写团购券/定金退款金额')
+    ElMessage.warning('请填写团购券/定金冲正金额')
     return
   }
   if (!financeRefundForm.reasonType) {
@@ -698,7 +698,7 @@ async function submitFinanceRefund() {
       remark: buildFinanceRefundRemark()
     })
     financeRefundDialogVisible.value = false
-    ElMessage.success('已登记团购/定金退款冲正')
+    ElMessage.success('已登记团购/定金记账冲正')
     await Promise.all([loadSalaryData(), loadRefundableOrders()])
   } finally {
     financeRefundSubmitting.value = false

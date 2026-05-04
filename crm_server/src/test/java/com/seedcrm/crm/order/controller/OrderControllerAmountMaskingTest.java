@@ -19,6 +19,7 @@ import com.seedcrm.crm.order.service.OrderService;
 import com.seedcrm.crm.permission.support.OrderPermissionGuard;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
+import com.seedcrm.crm.permission.support.SensitiveDataProjectionService;
 import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
@@ -57,7 +58,7 @@ class OrderControllerAmountMaskingTest {
                 permissionRequestContextResolver,
                 orderPermissionGuard,
                 objectMapper,
-                systemConfigService);
+                new SensitiveDataProjectionService(objectMapper, systemConfigService));
         when(systemConfigService.getBoolean("amount.visibility.store_staff_hidden", true)).thenReturn(true);
         when(systemConfigService.getString(anyString(), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
         when(orderService.updateServiceDetail(nullable(OrderServiceDetailDTO.class), nullable(String.class)))
@@ -73,6 +74,7 @@ class OrderControllerAmountMaskingTest {
         OrderResponse data = response.getData();
         assertThat(data.getAmount()).isNull();
         assertThat(data.getDeposit()).isNull();
+        assertThat(data.getVerificationCode()).isNull();
         JsonNode serviceDetail = objectMapper.readTree(data.getServiceDetailJson());
         assertThat(serviceDetail.path("serviceConfirmAmount").decimalValue()).isEqualByComparingTo("1288.00");
         assertThat(serviceDetail.path("serviceTemplate").path("config").path("price").asInt()).isEqualTo(99);
@@ -87,6 +89,7 @@ class OrderControllerAmountMaskingTest {
         OrderResponse data = response.getData();
         assertThat(data.getAmount()).isNull();
         assertThat(data.getDeposit()).isNull();
+        assertThat(data.getVerificationCode()).isNull();
         JsonNode serviceDetail = objectMapper.readTree(data.getServiceDetailJson());
         assertThat(serviceDetail.path("serviceConfirmAmount").isNull()).isTrue();
         assertThat(serviceDetail.path("serviceTemplate").path("config").path("price").isNull()).isTrue();
@@ -101,6 +104,7 @@ class OrderControllerAmountMaskingTest {
         OrderResponse data = response.getData();
         assertThat(data.getAmount()).isEqualByComparingTo("1999.00");
         assertThat(data.getDeposit()).isEqualByComparingTo("299.00");
+        assertThat(data.getVerificationCode()).isEqualTo("VC-8888");
         JsonNode serviceDetail = objectMapper.readTree(data.getServiceDetailJson());
         assertThat(serviceDetail.path("serviceConfirmAmount").decimalValue()).isEqualByComparingTo("1288.00");
         assertThat(serviceDetail.path("serviceTemplate").path("config").path("price").asInt()).isEqualTo(99);
@@ -133,6 +137,7 @@ class OrderControllerAmountMaskingTest {
         assertThat(submitted.has("_amountsMasked")).isFalse();
         assertThat(response.getData().getAmount()).isNull();
         assertThat(response.getData().getDeposit()).isNull();
+        assertThat(response.getData().getVerificationCode()).isNull();
         JsonNode returned = objectMapper.readTree(response.getData().getServiceDetailJson());
         assertThat(returned.path("serviceConfirmAmount").decimalValue()).isEqualByComparingTo("1288.00");
     }
@@ -170,6 +175,7 @@ class OrderControllerAmountMaskingTest {
         order.setStatus(OrderStatus.ARRIVED.name());
         order.setAmount(new BigDecimal("1999.00"));
         order.setDeposit(new BigDecimal("299.00"));
+        order.setVerificationCode("VC-8888");
         order.setServiceDetailJson("""
                 {
                   "serviceRequirement": "portrait",

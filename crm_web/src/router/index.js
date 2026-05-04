@@ -315,7 +315,7 @@ const routes = [
         name: 'salary-withdrawals',
         component: SettlementCenterView,
         meta: {
-          title: '提现处理',
+          title: '线下结清登记',
           sectionTitle: '财务管理 / 薪酬结算',
           moduleCode: 'SALARY',
           roleCodes: ['ADMIN', 'FINANCE'],

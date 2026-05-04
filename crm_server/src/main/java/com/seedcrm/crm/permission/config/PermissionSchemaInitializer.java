@@ -179,6 +179,8 @@ public class PermissionSchemaInitializer {
         seedPolicy("ORDER", "REFUND_PAYMENT", "FINANCE", "ALL", "verified payment refund registration");
         disablePolicy("ORDER", "UPDATE", "FINANCE", "ALL");
         disablePolicy("ORDER", "FINISH", "FINANCE", "ALL");
+        seedPolicy("FINANCE", "VIEW", "FINANCE", "ALL", "finance ledger and accounting view");
+        seedPolicy("FINANCE", "UPDATE", "FINANCE", "ALL", "finance ledger-only accounting operation");
 
         seedPolicy("SCHEDULER", "VIEW", "CLUE_MANAGER", "ALL", "scheduler monitor");
         seedPolicy("SCHEDULER", "UPDATE", "CLUE_MANAGER", "ALL", "scheduler config");

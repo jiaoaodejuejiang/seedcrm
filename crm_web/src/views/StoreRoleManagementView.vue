@@ -18,6 +18,49 @@
     <section class="panel">
       <div class="panel-heading">
         <div>
+          <h3>门店权限矩阵</h3>
+        </div>
+        <div class="action-group">
+          <el-button :loading="policyLoading" plain @click="loadRuntimePolicies">刷新权限</el-button>
+        </div>
+      </div>
+
+      <el-table v-loading="policyLoading" :data="storeCapabilityRows" stripe>
+        <el-table-column label="角色" min-width="160">
+          <template #default="{ row }">
+            <div class="table-primary">
+              <strong>{{ row.roleName }}</strong>
+              <span>{{ row.roleCode }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="定金/团购金额" width="140">
+          <template #default="{ row }">
+            <el-tag :type="row.businessAmountHidden ? 'info' : 'warning'" effect="light">
+              {{ row.businessAmountHidden ? '隐藏' : '可见' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="确认单金额" width="140">
+          <template #default="{ row }">
+            <el-tag :type="row.serviceAmountHidden ? 'info' : 'warning'" effect="light">
+              {{ row.serviceAmountHidden ? '隐藏' : '可见' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column v-for="capability in capabilityDefinitions" :key="capability.key" :label="capability.label" min-width="140">
+          <template #default="{ row }">
+            <el-tag :type="row.capabilities[capability.key] ? 'success' : 'info'" effect="light">
+              {{ row.capabilities[capability.key] ? '允许' : '未授权' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
           <h3>门店角色管理</h3>
         </div>
         <div class="action-group">
@@ -122,12 +165,16 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { fetchPermissionPolicies } from '../api/permission'
+import { fetchSystemConfigs } from '../api/systemConfig'
 import { useTablePagination } from '../composables/useTablePagination'
 import { loadSystemConsoleState, nextSystemId, saveSystemConsoleState } from '../utils/systemConsoleStore'
 
 const state = reactive(loadSystemConsoleState())
+const DEFAULT_BUSINESS_AMOUNT_HIDDEN_ROLES = ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR']
+const DEFAULT_SERVICE_AMOUNT_HIDDEN_ROLES = ['STORE_SERVICE', 'PHOTOGRAPHER', 'MAKEUP_ARTIST']
 const entryOptions = [
   { label: '订单列表', value: '/store-service/orders' },
   { label: '服务单设计', value: '/store-service/service-design' },
@@ -138,12 +185,43 @@ const moduleOptions = [
   { label: '服务单', value: 'PLANORDER' },
   { label: '门店管理', value: 'SYSTEM' }
 ]
+const capabilityDefinitions = [
+  { key: 'orderView', label: '订单查看', moduleCode: 'ORDER', actionCode: 'VIEW' },
+  { key: 'orderUpdate', label: '核销/确认', moduleCode: 'ORDER', actionCode: 'UPDATE' },
+  { key: 'orderFinish', label: '结束订单', moduleCode: 'ORDER', actionCode: 'FINISH' },
+  { key: 'storeRefund', label: '门店冲正', moduleCode: 'ORDER', actionCode: 'REFUND_STORE' },
+  { key: 'planOrderView', label: '服务单查看', moduleCode: 'PLANORDER', actionCode: 'VIEW' },
+  { key: 'planOrderUpdate', label: '服务单操作', moduleCode: 'PLANORDER', actionCode: 'UPDATE' }
+]
 const storeRoles = computed(() =>
   state.roles.filter((item) => item.roleCode === 'STORE_SERVICE' || item.dataScope === 'STORE')
 )
 const pagination = useTablePagination(storeRoles)
 const coveredEmployeeCount = computed(() =>
   state.employees.filter((item) => storeRoles.value.some((role) => role.roleCode === item.roleCode)).length
+)
+const policyLoading = ref(false)
+const permissionPolicies = ref([])
+const amountVisibilityConfigs = ref([])
+const storeCapabilityRows = computed(() =>
+  storeRoles.value.map((role) => {
+    const roleCode = normalizeCode(role.roleCode)
+    return {
+      ...role,
+      roleCode,
+      businessAmountHidden: businessAmountHiddenRoles.value.includes(roleCode),
+      serviceAmountHidden: serviceAmountHiddenRoles.value.includes(roleCode),
+      capabilities: Object.fromEntries(
+        capabilityDefinitions.map((capability) => [capability.key, hasEnabledPolicy(roleCode, capability.moduleCode, capability.actionCode)])
+      )
+    }
+  })
+)
+const businessAmountHiddenRoles = computed(() =>
+  parseConfigRoles('amount.visibility.store_staff_hidden_roles', DEFAULT_BUSINESS_AMOUNT_HIDDEN_ROLES)
+)
+const serviceAmountHiddenRoles = computed(() =>
+  parseConfigRoles('amount.visibility.service_confirm_hidden_roles', DEFAULT_SERVICE_AMOUNT_HIDDEN_ROLES)
 )
 
 const form = reactive(createForm())
@@ -237,4 +315,52 @@ function formatModuleNames(moduleCodes = []) {
     .map((code) => moduleOptions.find((item) => item.value === code)?.label || code)
     .join(' / ')
 }
+
+function hasEnabledPolicy(roleCode, moduleCode, actionCode) {
+  return permissionPolicies.value.some((policy) =>
+    normalizeCode(policy.roleCode) === roleCode
+      && normalizeCode(policy.moduleCode) === normalizeCode(moduleCode)
+      && normalizeCode(policy.actionCode) === normalizeCode(actionCode)
+      && Number(policy.isEnabled ?? 1) === 1
+  )
+}
+
+function parseConfigRoles(key, fallback) {
+  const row = amountVisibilityConfigs.value.find((item) => item.configKey === key)
+  const raw = row && row.enabled !== 0 ? row.configValue : ''
+  const roles = String(raw || '')
+    .split(/[,，\s]+/)
+    .map(normalizeCode)
+    .filter(Boolean)
+  return roles.length ? roles : fallback
+}
+
+function normalizeCode(value) {
+  return String(value || '').trim().toUpperCase()
+}
+
+async function loadRuntimePolicies() {
+  policyLoading.value = true
+  try {
+    const [policies, amountConfigs] = await Promise.all([
+      fetchPermissionPolicies(),
+      fetchSystemConfigs('amount.visibility.')
+    ])
+    permissionPolicies.value = policies || []
+    amountVisibilityConfigs.value = amountConfigs || []
+  } catch {
+    permissionPolicies.value = []
+    amountVisibilityConfigs.value = []
+  } finally {
+    policyLoading.value = false
+  }
+}
+
+onMounted(loadRuntimePolicies)
 </script>
+
+<style scoped>
+.panel-heading {
+  align-items: center;
+}
+</style>

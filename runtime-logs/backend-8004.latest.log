@@ -1,30 +1,3 @@
-[INFO] Scanning for projects...
-[INFO] 
-[INFO] -----------------------< com.seedcrm:crm_server >-----------------------
-[INFO] Building crm_server 0.0.1-SNAPSHOT
-[INFO]   from pom.xml
-[INFO] --------------------------------[ jar ]---------------------------------
-[INFO] 
-[INFO] >>> spring-boot:3.5.9:run (default-cli) > test-compile @ crm_server >>>
-[INFO] 
-[INFO] --- resources:3.3.1:resources (default-resources) @ crm_server ---
-[INFO] Copying 2 resources from src\main\resources to target\classes
-[INFO] Copying 0 resource from src\main\resources to target\classes
-[INFO] 
-[INFO] --- compiler:3.14.1:compile (default-compile) @ crm_server ---
-[INFO] Nothing to compile - all classes are up to date.
-[INFO] 
-[INFO] --- resources:3.3.1:testResources (default-testResources) @ crm_server ---
-[INFO] Copying 1 resource from src\test\resources to target\test-classes
-[INFO] 
-[INFO] --- compiler:3.14.1:testCompile (default-testCompile) @ crm_server ---
-[INFO] Nothing to compile - all classes are up to date.
-[INFO] 
-[INFO] <<< spring-boot:3.5.9:run (default-cli) < test-compile @ crm_server <<<
-[INFO] 
-[INFO] 
-[INFO] --- spring-boot:3.5.9:run (default-cli) @ crm_server ---
-[INFO] Attaching agents: []
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -35,27 +8,27 @@
 
  :: Spring Boot ::                (v3.5.9)
 
-2026-05-03T23:50:20.459+08:00  INFO 19028 --- [           main] com.seedcrm.crm.CrmApplication           : Starting CrmApplication using Java 17.0.18 with PID 19028 (E:\studio\test\seedcrm\crm_server\target\classes started by Administrator in E:\studio\test\seedcrm\crm_server)
-2026-05-03T23:50:20.464+08:00  INFO 19028 --- [           main] com.seedcrm.crm.CrmApplication           : No active profile set, falling back to 1 default profile: "default"
-2026-05-03T23:50:24.530+08:00  INFO 19028 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8004 (http)
-2026-05-03T23:50:24.581+08:00  INFO 19028 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-2026-05-03T23:50:24.583+08:00  INFO 19028 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.50]
-2026-05-03T23:50:24.806+08:00  INFO 19028 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2026-05-03T23:50:24.810+08:00  INFO 19028 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 4250 ms
+2026-05-04T09:06:20.088+08:00  INFO 3296 --- [           main] com.seedcrm.crm.CrmApplication           : Starting CrmApplication v0.0.1-SNAPSHOT using Java 17.0.18 with PID 3296 (E:\studio\test\seedcrm\crm_server\target\crm_server-0.0.1-SNAPSHOT.jar started by Administrator in E:\studio\test\seedcrm\crm_server)
+2026-05-04T09:06:20.101+08:00  INFO 3296 --- [           main] com.seedcrm.crm.CrmApplication           : No active profile set, falling back to 1 default profile: "default"
+2026-05-04T09:06:26.323+08:00  INFO 3296 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8004 (http)
+2026-05-04T09:06:26.353+08:00  INFO 3296 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-05-04T09:06:26.353+08:00  INFO 3296 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.50]
+2026-05-04T09:06:26.480+08:00  INFO 3296 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-05-04T09:06:26.485+08:00  INFO 3296 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 6290 ms
  _ _   |_  _ _|_. ___ _ |    _ 
 | | |\/|_)(_| | |_\  |_)||_|_\ 
      /               |         
                         3.5.15 
-2026-05-03T23:50:26.120+08:00  INFO 19028 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
-2026-05-03T23:50:26.779+08:00  INFO 19028 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@6d815fb7
-2026-05-03T23:50:26.783+08:00  INFO 19028 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
-2026-05-03T23:50:27.463+08:00  INFO 19028 --- [           main] c.s.c.a.s.AuthAccessSchemaInitializer    : auth access system tables initialized with 43 menu seeds
-2026-05-03T23:50:29.452+08:00  INFO 19028 --- [           main] letedOrderServiceFormBackfillInitializer : completed order service form backfill skipped, set seedcrm.backfill.completed-service-form.enabled=true to run it
-2026-05-03T23:50:29.958+08:00  WARN 19028 --- [           main] .c.SchedulerIntegrationSchemaInitializer : skip creating unique index integration_callback_event_log.uk_callback_provider_idempotency because duplicate callback logs already exist
-2026-05-03T23:50:29.968+08:00  WARN 19028 --- [           main] .c.SchedulerIntegrationSchemaInitializer : skip creating unique index integration_callback_event_log.uk_callback_provider_event because duplicate callback logs already exist
-2026-05-03T23:50:31.126+08:00  INFO 19028 --- [           main] m.e.s.MybatisPlusApplicationContextAware : Register ApplicationContext instances org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext@146dfe6
-2026-05-03T23:50:31.324+08:00  INFO 19028 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8004 (http) with context path '/'
-2026-05-03T23:50:31.340+08:00  INFO 19028 --- [           main] com.seedcrm.crm.CrmApplication           : Started CrmApplication in 11.705 seconds (process running for 12.419)
-2026-05-03T23:51:01.511+08:00  INFO 19028 --- [nio-8004-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-05-03T23:51:01.512+08:00  INFO 19028 --- [nio-8004-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-2026-05-03T23:51:01.514+08:00  INFO 19028 --- [nio-8004-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-05-04T09:06:28.290+08:00  INFO 3296 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-05-04T09:06:29.437+08:00  INFO 3296 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@5feb82b3
+2026-05-04T09:06:29.446+08:00  INFO 3296 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-05-04T09:06:30.521+08:00  INFO 3296 --- [           main] c.s.c.a.s.AuthAccessSchemaInitializer    : auth access system tables initialized with 43 menu seeds
+2026-05-04T09:06:34.002+08:00  INFO 3296 --- [           main] letedOrderServiceFormBackfillInitializer : completed order service form backfill skipped, set seedcrm.backfill.completed-service-form.enabled=true to run it
+2026-05-04T09:06:35.291+08:00  WARN 3296 --- [           main] .c.SchedulerIntegrationSchemaInitializer : skip creating unique index integration_callback_event_log.uk_callback_provider_idempotency because duplicate callback logs already exist
+2026-05-04T09:06:35.306+08:00  WARN 3296 --- [           main] .c.SchedulerIntegrationSchemaInitializer : skip creating unique index integration_callback_event_log.uk_callback_provider_event because duplicate callback logs already exist
+2026-05-04T09:06:37.858+08:00  INFO 3296 --- [           main] m.e.s.MybatisPlusApplicationContextAware : Register ApplicationContext instances org.springframework.boot.web.servlet.context.AnnotationConfigServletWebServerApplicationContext@4fad9bb2
+2026-05-04T09:06:38.423+08:00  INFO 3296 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8004 (http) with context path '/'
+2026-05-04T09:06:38.476+08:00  INFO 3296 --- [           main] com.seedcrm.crm.CrmApplication           : Started CrmApplication in 19.86 seconds (process running for 20.86)
+2026-05-04T09:06:39.080+08:00  INFO 3296 --- [nio-8004-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-05-04T09:06:39.091+08:00  INFO 3296 --- [nio-8004-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-05-04T09:06:39.096+08:00  INFO 3296 --- [nio-8004-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 5 ms

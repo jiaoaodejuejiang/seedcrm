@@ -15,12 +15,8 @@ import com.seedcrm.crm.order.support.OrderAmountMaskingSupport;
 import com.seedcrm.crm.permission.support.OrderPermissionGuard;
 import com.seedcrm.crm.permission.support.PermissionRequestContext;
 import com.seedcrm.crm.permission.support.PermissionRequestContextResolver;
-import com.seedcrm.crm.systemconfig.service.SystemConfigService;
+import com.seedcrm.crm.permission.support.SensitiveDataProjectionService;
 import jakarta.servlet.http.HttpServletRequest;
-import java.util.Arrays;
-import java.util.Locale;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,39 +27,22 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/order")
 public class OrderController {
 
-    private static final String CONFIG_STORE_AMOUNT_HIDDEN = "amount.visibility.store_staff_hidden";
-    private static final String CONFIG_STORE_AMOUNT_HIDDEN_ROLES = "amount.visibility.store_staff_hidden_roles";
-    private static final String CONFIG_SERVICE_AMOUNT_HIDDEN_ROLES = "amount.visibility.service_confirm_hidden_roles";
-    private static final String CONFIG_SERVICE_AMOUNT_EDIT_ROLES = "amount.visibility.service_confirm_edit_roles";
-    private static final String DEFAULT_STORE_AMOUNT_HIDDEN_ROLES =
-            "STORE_SERVICE,STORE_MANAGER,PHOTOGRAPHER,MAKEUP_ARTIST,PHOTO_SELECTOR";
-    private static final String DEFAULT_SERVICE_AMOUNT_HIDDEN_ROLES =
-            "STORE_SERVICE,PHOTOGRAPHER,MAKEUP_ARTIST";
-    private static final String DEFAULT_SERVICE_AMOUNT_EDIT_ROLES =
-            "ADMIN,FINANCE,PHOTO_SELECTOR";
-    private static final Set<String> STORE_AMOUNT_RESTRICTED_ROLES = Set.of(
-            "STORE_SERVICE",
-            "STORE_MANAGER",
-            "PHOTOGRAPHER",
-            "MAKEUP_ARTIST",
-            "PHOTO_SELECTOR");
-
     private final OrderService orderService;
     private final PermissionRequestContextResolver permissionRequestContextResolver;
     private final OrderPermissionGuard orderPermissionGuard;
     private final ObjectMapper objectMapper;
-    private final SystemConfigService systemConfigService;
+    private final SensitiveDataProjectionService sensitiveDataProjectionService;
 
     public OrderController(OrderService orderService,
                            PermissionRequestContextResolver permissionRequestContextResolver,
                            OrderPermissionGuard orderPermissionGuard,
                            ObjectMapper objectMapper,
-                           SystemConfigService systemConfigService) {
+                           SensitiveDataProjectionService sensitiveDataProjectionService) {
         this.orderService = orderService;
         this.permissionRequestContextResolver = permissionRequestContextResolver;
         this.orderPermissionGuard = orderPermissionGuard;
         this.objectMapper = objectMapper;
-        this.systemConfigService = systemConfigService;
+        this.sensitiveDataProjectionService = sensitiveDataProjectionService;
     }
 
     @PostMapping("/create")
@@ -161,26 +140,12 @@ public class OrderController {
     }
 
     private OrderResponse maskAmountsIfNeeded(OrderResponse response, PermissionRequestContext context) {
-        if (response == null || context == null || context.getRoleCode() == null) {
-            return response;
-        }
-        if (!systemConfigService.getBoolean(CONFIG_STORE_AMOUNT_HIDDEN, true)) {
-            return response;
-        }
-        String roleCode = context.getRoleCode().trim().toUpperCase(Locale.ROOT);
-        if (configuredRoles(CONFIG_STORE_AMOUNT_HIDDEN_ROLES, DEFAULT_STORE_AMOUNT_HIDDEN_ROLES, STORE_AMOUNT_RESTRICTED_ROLES)
-                .contains(roleCode)) {
-            response.maskBusinessAmounts();
-        }
-        if (configuredRoles(CONFIG_SERVICE_AMOUNT_HIDDEN_ROLES, DEFAULT_SERVICE_AMOUNT_HIDDEN_ROLES, Set.of("STORE_SERVICE", "PHOTOGRAPHER", "MAKEUP_ARTIST"))
-                .contains(roleCode)) {
-            response.maskServiceAmounts(objectMapper);
-        }
-        return response;
+        return sensitiveDataProjectionService.projectOrderResponse(response, context);
     }
 
     private void preserveServiceAmountsIfNotEditable(OrderServiceDetailDTO dto, PermissionRequestContext context) {
-        if (dto == null || !StringUtils.hasText(dto.getServiceDetailJson()) || canEditServiceAmounts(context)) {
+        if (dto == null || !StringUtils.hasText(dto.getServiceDetailJson())
+                || sensitiveDataProjectionService.canEditServiceAmounts(context)) {
             return;
         }
         try {
@@ -194,23 +159,5 @@ public class OrderController {
         } catch (Exception ignored) {
             // The service layer will return the existing validation error for invalid JSON.
         }
-    }
-
-    private boolean canEditServiceAmounts(PermissionRequestContext context) {
-        if (context == null || context.getRoleCode() == null) {
-            return false;
-        }
-        String roleCode = context.getRoleCode().trim().toUpperCase(Locale.ROOT);
-        return configuredRoles(CONFIG_SERVICE_AMOUNT_EDIT_ROLES, DEFAULT_SERVICE_AMOUNT_EDIT_ROLES,
-                Set.of("ADMIN", "FINANCE", "PHOTO_SELECTOR")).contains(roleCode);
-    }
-
-    private Set<String> configuredRoles(String key, String defaultRoles, Set<String> fallbackRoles) {
-        String configuredRoles = systemConfigService.getString(key, defaultRoles);
-        Set<String> roles = Arrays.stream(configuredRoles.split("[,，\\s]+"))
-                .map(role -> role.trim().toUpperCase(Locale.ROOT))
-                .filter(role -> !role.isBlank())
-                .collect(Collectors.toSet());
-        return roles.isEmpty() ? fallbackRoles : roles;
     }
 }

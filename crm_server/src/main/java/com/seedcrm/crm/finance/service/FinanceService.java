@@ -4,6 +4,7 @@ import com.seedcrm.crm.distributor.entity.DistributorIncomeDetail;
 import com.seedcrm.crm.distributor.entity.DistributorWithdraw;
 import com.seedcrm.crm.finance.dto.FinanceBalanceResponse;
 import com.seedcrm.crm.finance.dto.FinanceCheckResponse;
+import com.seedcrm.crm.finance.dto.FinanceLedgerBoundaryResponse;
 import com.seedcrm.crm.finance.dto.FinanceRefundRecordListResponse;
 import com.seedcrm.crm.finance.entity.Ledger;
 import com.seedcrm.crm.finance.enums.AccountOwnerType;
@@ -27,6 +28,8 @@ public interface FinanceService {
     FinanceBalanceResponse getBalance(AccountOwnerType ownerType, Long ownerId);
 
     FinanceCheckResponse check();
+
+    FinanceLedgerBoundaryResponse getLedgerBoundary();
 
     FinanceRefundRecordListResponse listRefundRecords(String refundScene,
                                                       Long orderId,

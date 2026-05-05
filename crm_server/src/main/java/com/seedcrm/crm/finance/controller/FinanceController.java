@@ -3,6 +3,7 @@ package com.seedcrm.crm.finance.controller;
 import com.seedcrm.crm.common.api.ApiResponse;
 import com.seedcrm.crm.finance.dto.FinanceBalanceResponse;
 import com.seedcrm.crm.finance.dto.FinanceCheckResponse;
+import com.seedcrm.crm.finance.dto.FinanceLedgerBoundaryResponse;
 import com.seedcrm.crm.finance.dto.FinanceRefundRecordListResponse;
 import com.seedcrm.crm.finance.enums.AccountOwnerType;
 import com.seedcrm.crm.finance.service.FinanceService;
@@ -46,6 +47,13 @@ public class FinanceController {
         PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
         financePermissionGuard.checkUpdate(context);
         return ApiResponse.success(financeService.check());
+    }
+
+    @GetMapping("/ledger-boundary")
+    public ApiResponse<FinanceLedgerBoundaryResponse> ledgerBoundary(HttpServletRequest request) {
+        PermissionRequestContext context = permissionRequestContextResolver.resolve(request);
+        financePermissionGuard.checkView(context);
+        return ApiResponse.success(financeService.getLedgerBoundary());
     }
 
     @GetMapping("/refund-records")

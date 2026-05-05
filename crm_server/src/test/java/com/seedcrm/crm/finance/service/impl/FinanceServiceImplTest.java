@@ -32,6 +32,7 @@ import com.seedcrm.crm.order.mapper.OrderRefundRecordMapper;
 import com.seedcrm.crm.salary.entity.SalaryDetail;
 import com.seedcrm.crm.salary.mapper.WithdrawRecordMapper;
 import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
+import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import com.seedcrm.crm.workbench.service.StaffDirectoryService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -79,13 +80,16 @@ class FinanceServiceImplTest {
     @Mock
     private StaffDirectoryService staffDirectoryService;
 
+    @Mock
+    private SystemConfigService systemConfigService;
+
     private FinanceServiceImpl financeService;
 
     @BeforeEach
     void setUp() {
         financeService = new FinanceServiceImpl(accountService, ledgerService, financeCheckRecordMapper,
                 orderMapper, orderRefundRecordMapper, customerMapper, salaryDetailMapper, distributorIncomeDetailMapper,
-                withdrawRecordMapper, distributorWithdrawMapper, staffDirectoryService);
+                withdrawRecordMapper, distributorWithdrawMapper, staffDirectoryService, systemConfigService);
     }
 
     @Test
@@ -101,6 +105,22 @@ class FinanceServiceImplTest {
 
         assertThat(response.getAccountId()).isEqualTo(3L);
         assertThat(response.getBalance()).isEqualByComparingTo("188.00");
+    }
+
+    @Test
+    void getLedgerBoundaryShouldExposeRuntimeFinanceSafeguards() {
+        when(systemConfigService.getBoolean("finance.ledger.only_mode", true)).thenReturn(true);
+        when(systemConfigService.getBoolean("finance.ledger.refund_salary_reversal_required", true)).thenReturn(true);
+        when(systemConfigService.getBoolean("finance.ledger.distributor_withdraw_register_only", true)).thenReturn(true);
+
+        var response = financeService.getLedgerBoundary();
+
+        assertThat(response.getOnlyModeEnabled()).isTrue();
+        assertThat(response.getRefundSalaryReversalRequired()).isTrue();
+        assertThat(response.getDistributorWithdrawRegisterOnly()).isTrue();
+        assertThat(response.getRuntimeConsumed()).isEqualTo(1);
+        assertThat(response.getBlockedFundActions()).contains("原路退款", "自动提现", "线上打款");
+        assertThat(response.getEffectiveScope()).contains("不重算历史台账");
     }
 
     @Test

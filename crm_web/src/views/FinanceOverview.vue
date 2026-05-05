@@ -24,13 +24,28 @@
       </div>
 
       <el-alert
-        title="只记账、不走资金"
-        description="订单完成、薪酬、分销和退款冲正只形成系统台账；线下结清状态仅表示人工或第三方处理进度。"
+        :title="ledgerBoundary.title"
+        :description="ledgerBoundary.overviewDescription"
         type="info"
         show-icon
         :closable="false"
         class="finance-boundary-alert"
       />
+
+      <div class="finance-boundary-grid">
+        <article>
+          <span>财务模式</span>
+          <strong>{{ ledgerBoundary.onlyModeEnabled ? '只记账' : '按配置' }}</strong>
+        </article>
+        <article>
+          <span>退款冲正</span>
+          <strong>{{ ledgerBoundary.refundSalaryReversalRequired ? '必须冲正' : '按配置' }}</strong>
+        </article>
+        <article>
+          <span>分销提现</span>
+          <strong>{{ ledgerBoundary.distributorWithdrawRegisterOnly ? '仅登记' : '按配置' }}</strong>
+        </article>
+      </div>
 
       <el-tabs v-model="activeTab" class="platform-tabs finance-tabs">
         <el-tab-pane label="团队" name="team">
@@ -137,12 +152,14 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
+import { fetchFinanceLedgerBoundary } from '../api/finance'
 import { fetchFinanceOverview } from '../api/workbench'
 import { formatMoney, formatRoleCode } from '../utils/format'
 
 const activeTab = ref('team')
 const loading = ref(true)
 const overview = ref(null)
+const ledgerBoundary = ref(defaultFinanceLedgerBoundary())
 
 async function loadOverview() {
   loading.value = true
@@ -152,6 +169,27 @@ async function loadOverview() {
     overview.value = null
   } finally {
     loading.value = false
+  }
+}
+
+async function loadLedgerBoundary() {
+  try {
+    ledgerBoundary.value = {
+      ...defaultFinanceLedgerBoundary(),
+      ...(await fetchFinanceLedgerBoundary({ silentError: true }))
+    }
+  } catch {
+    ledgerBoundary.value = defaultFinanceLedgerBoundary()
+  }
+}
+
+function defaultFinanceLedgerBoundary() {
+  return {
+    onlyModeEnabled: true,
+    refundSalaryReversalRequired: true,
+    distributorWithdrawRegisterOnly: true,
+    title: '只记账、不走资金',
+    overviewDescription: '订单完成、薪酬、分销和退款冲正只形成系统台账；线下结清状态仅表示人工或第三方处理进度。'
   }
 }
 
@@ -209,7 +247,9 @@ function withdrawStatusTag(value) {
   return 'warning'
 }
 
-onMounted(loadOverview)
+onMounted(async () => {
+  await Promise.all([loadLedgerBoundary(), loadOverview()])
+})
 </script>
 
 <style scoped>
@@ -219,6 +259,32 @@ onMounted(loadOverview)
 
 .finance-boundary-alert {
   margin-bottom: 18px;
+}
+
+.finance-boundary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.finance-boundary-grid article {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #e5edf4;
+  background: #f8fbff;
+  border-radius: 8px;
+}
+
+.finance-boundary-grid span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.finance-boundary-grid strong {
+  color: #0f172a;
+  font-size: 15px;
 }
 
 .tab-summary {
@@ -249,7 +315,7 @@ onMounted(loadOverview)
 
 @media (max-width: 900px) {
   .tab-summary,
-  .finance-boundary {
+  .finance-boundary-grid {
     grid-template-columns: 1fr;
   }
 }

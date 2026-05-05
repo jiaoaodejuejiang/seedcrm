@@ -14,6 +14,7 @@ import com.seedcrm.crm.distributor.enums.DistributorWithdrawStatus;
 import com.seedcrm.crm.finance.dto.FinanceBalanceResponse;
 import com.seedcrm.crm.finance.dto.FinanceCheckItemResponse;
 import com.seedcrm.crm.finance.dto.FinanceCheckResponse;
+import com.seedcrm.crm.finance.dto.FinanceLedgerBoundaryResponse;
 import com.seedcrm.crm.finance.dto.FinanceRefundRecordListResponse;
 import com.seedcrm.crm.finance.dto.FinanceRefundRecordResponse;
 import com.seedcrm.crm.finance.entity.Account;
@@ -36,6 +37,7 @@ import com.seedcrm.crm.salary.entity.WithdrawRecord;
 import com.seedcrm.crm.salary.mapper.SalaryDetailMapper;
 import com.seedcrm.crm.salary.mapper.WithdrawRecordMapper;
 import com.seedcrm.crm.salary.enums.WithdrawStatus;
+import com.seedcrm.crm.systemconfig.service.SystemConfigService;
 import com.seedcrm.crm.workbench.service.StaffDirectoryService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -57,6 +59,11 @@ public class FinanceServiceImpl implements FinanceService {
     private static final int DEFAULT_REFUND_RECORD_PAGE_SIZE = 30;
     private static final int MAX_REFUND_RECORD_PAGE_SIZE = 200;
     private static final int MAX_REFUND_REASON_LENGTH = 48;
+    private static final String CONFIG_FINANCE_LEDGER_ONLY_MODE = "finance.ledger.only_mode";
+    private static final String CONFIG_FINANCE_REFUND_SALARY_REVERSAL_REQUIRED =
+            "finance.ledger.refund_salary_reversal_required";
+    private static final String CONFIG_FINANCE_DISTRIBUTOR_WITHDRAW_REGISTER_ONLY =
+            "finance.ledger.distributor_withdraw_register_only";
 
     private final AccountService accountService;
     private final LedgerService ledgerService;
@@ -69,6 +76,7 @@ public class FinanceServiceImpl implements FinanceService {
     private final WithdrawRecordMapper withdrawRecordMapper;
     private final DistributorWithdrawMapper distributorWithdrawMapper;
     private final StaffDirectoryService staffDirectoryService;
+    private final SystemConfigService systemConfigService;
 
     public FinanceServiceImpl(AccountService accountService,
                               LedgerService ledgerService,
@@ -77,10 +85,11 @@ public class FinanceServiceImpl implements FinanceService {
                               OrderRefundRecordMapper orderRefundRecordMapper,
                               CustomerMapper customerMapper,
                               SalaryDetailMapper salaryDetailMapper,
-                              DistributorIncomeDetailMapper distributorIncomeDetailMapper,
-                              WithdrawRecordMapper withdrawRecordMapper,
-                              DistributorWithdrawMapper distributorWithdrawMapper,
-                              StaffDirectoryService staffDirectoryService) {
+                               DistributorIncomeDetailMapper distributorIncomeDetailMapper,
+                               WithdrawRecordMapper withdrawRecordMapper,
+                               DistributorWithdrawMapper distributorWithdrawMapper,
+                               StaffDirectoryService staffDirectoryService,
+                               SystemConfigService systemConfigService) {
         this.accountService = accountService;
         this.ledgerService = ledgerService;
         this.financeCheckRecordMapper = financeCheckRecordMapper;
@@ -92,6 +101,7 @@ public class FinanceServiceImpl implements FinanceService {
         this.withdrawRecordMapper = withdrawRecordMapper;
         this.distributorWithdrawMapper = distributorWithdrawMapper;
         this.staffDirectoryService = staffDirectoryService;
+        this.systemConfigService = systemConfigService;
     }
 
     @Override
@@ -210,6 +220,25 @@ public class FinanceServiceImpl implements FinanceService {
     }
 
     @Override
+    public FinanceLedgerBoundaryResponse getLedgerBoundary() {
+        boolean onlyMode = getFinanceBoundaryFlag(CONFIG_FINANCE_LEDGER_ONLY_MODE);
+        boolean refundSalaryReversalRequired = getFinanceBoundaryFlag(CONFIG_FINANCE_REFUND_SALARY_REVERSAL_REQUIRED);
+        boolean distributorWithdrawRegisterOnly = getFinanceBoundaryFlag(CONFIG_FINANCE_DISTRIBUTOR_WITHDRAW_REGISTER_ONLY);
+        return new FinanceLedgerBoundaryResponse(
+                onlyMode,
+                refundSalaryReversalRequired,
+                distributorWithdrawRegisterOnly,
+                1,
+                "只记账、不走资金",
+                "订单完成、薪酬、分销和退款冲正只形成系统台账；线下结清状态仅表示人工或第三方处理进度。",
+                "结算单用于确认账面金额和后续线下处理依据，不代表系统已经向员工、门店或分销方发起付款。",
+                "本页记录员工或分销的线下结清申请、审核和凭证口径，不发起真实资金申请、转账或划拨。",
+                "真实抖音、分销或支付平台退款仍在外部完成；本系统用于追溯源单、冲正薪资/分销绩效和记录处理结果。",
+                "配置发布后影响财务页面提示、后端校验和记账口径；不重算历史台账，不改变第三方资金状态。",
+                List.of("系统收款", "原路退款", "自动提现", "线上打款", "资金划拨"));
+    }
+
+    @Override
     public FinanceRefundRecordListResponse listRefundRecords(String refundScene,
                                                             Long orderId,
                                                             String status,
@@ -265,6 +294,14 @@ public class FinanceServiceImpl implements FinanceService {
     @Override
     public boolean hasLedgerRecord(LedgerBizType bizType, Long bizId) {
         return ledgerService.hasRecord(bizType, bizId);
+    }
+
+    private boolean getFinanceBoundaryFlag(String key) {
+        try {
+            return systemConfigService == null || systemConfigService.getBoolean(key, true);
+        } catch (RuntimeException ignored) {
+            return true;
+        }
     }
 
     private void synchronizeLedger() {

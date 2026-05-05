@@ -456,7 +456,7 @@ import {
   paySalarySettlement
 } from '../api/salary'
 import { refundOrder } from '../api/order'
-import { fetchFinanceRefundRecords } from '../api/finance'
+import { fetchFinanceLedgerBoundary, fetchFinanceRefundRecords } from '../api/finance'
 import { fetchOrders, fetchStaffOptions } from '../api/workbench'
 import { useTablePagination } from '../composables/useTablePagination'
 import { currentUser } from '../utils/auth'
@@ -494,6 +494,7 @@ const refundOrdersLoading = ref(false)
 const refundRecordsLoading = ref(false)
 const financeRefundDialogVisible = ref(false)
 const financeRefundSubmitting = ref(false)
+const ledgerBoundary = ref(defaultFinanceLedgerBoundary())
 
 const settlementPagination = useTablePagination(settlements)
 const withdrawPagination = useTablePagination(withdraws)
@@ -543,20 +544,42 @@ const financeLedgerNotice = computed(() => {
   if (pageMode.value === 'withdraw') {
     return {
       title: '线下结清登记只更新系统处理状态',
-      description: '本页记录员工或分销的线下结清申请、审核和凭证口径，不发起真实资金申请、转账或划拨。'
+      description: ledgerBoundary.value.withdrawNotice
     }
   }
   if (pageMode.value === 'refunds') {
     return {
       title: '退款冲正只登记台账并生成绩效冲正',
-      description: '真实抖音、分销或支付平台退款仍在外部完成；本系统用于追溯源单、冲正薪资/分销绩效和记录处理结果。'
+      description: ledgerBoundary.value.refundNotice
     }
   }
   return {
     title: '结算中心只形成薪酬/分销台账',
-    description: '结算单用于确认账面金额和后续线下处理依据，不代表系统已经向员工、门店或分销方发起付款。'
+    description: ledgerBoundary.value.settlementNotice
   }
 })
+
+function defaultFinanceLedgerBoundary() {
+  return {
+    onlyModeEnabled: true,
+    refundSalaryReversalRequired: true,
+    distributorWithdrawRegisterOnly: true,
+    settlementNotice: '结算单用于确认账面金额和后续线下处理依据，不代表系统已经向员工、门店或分销方发起付款。',
+    withdrawNotice: '本页记录员工或分销的线下结清申请、审核和凭证口径，不发起真实资金申请、转账或划拨。',
+    refundNotice: '真实抖音、分销或支付平台退款仍在外部完成；本系统用于追溯源单、冲正薪资/分销绩效和记录处理结果。'
+  }
+}
+
+async function loadLedgerBoundary() {
+  try {
+    ledgerBoundary.value = {
+      ...defaultFinanceLedgerBoundary(),
+      ...(await fetchFinanceLedgerBoundary({ silentError: true }))
+    }
+  } catch {
+    ledgerBoundary.value = defaultFinanceLedgerBoundary()
+  }
+}
 
 function staffLabel(staff) {
   return `${staff.userName} / ${formatRoleCode(staff.roleCode)}`
@@ -1100,7 +1123,7 @@ function formatServiceConfirmAmount(row) {
 
 onMounted(async () => {
   activeTab.value = pageMode.value
-  await loadPolicyRows()
+  await Promise.all([loadLedgerBoundary(), loadPolicyRows()])
   await initSelection()
   await loadSalaryData()
   if (pageMode.value === 'refunds') {

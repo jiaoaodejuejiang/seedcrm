@@ -302,10 +302,12 @@ const DEFAULT_STATE = {
     { id: 12, paramKey: 'service_form.print.required_before_confirm', paramValue: 'true', category: '门店服务', remark: '打印当前版本后才允许确认纸质服务单' },
     { id: 13, paramKey: 'service_form.confirm.required_before_start', paramValue: 'true', category: '门店服务', remark: '开始服务前必须确认纸质服务单' },
     { id: 14, paramKey: 'service_form.print.stale_policy', paramValue: 'BLOCK_CONFIRM', category: '门店服务', remark: '确认单内容变化后要求重新打印确认' },
-    { id: 15, paramKey: 'form_designer.allowed_engines', paramValue: 'INTERNAL_SCHEMA,FORMILY,VFORM3,LOWCODE_ENGINE,JSON_SCHEMA', category: '门店服务', remark: '允许接入的成熟服务单设计器' },
-    { id: 16, paramKey: 'form_designer.blocked_components', paramValue: 'signature,esign,electronicSignature,canvasSignature,html,iframe,script,webview', category: '门店服务', remark: '导入时拦截电子签名和脚本类组件' },
-    { id: 17, paramKey: 'form_designer.max_schema_bytes', paramValue: '200000', category: '门店服务', remark: '单个服务单设计器 Schema 最大长度' },
-    { id: 18, paramKey: 'form_designer.paper_signature_required', paramValue: 'true', category: '门店服务', remark: '打印版强制保留纸质手写签名位置' }
+    { id: 15, paramKey: 'form_designer.adapter.enabled', paramValue: 'true', category: '门店服务', remark: '服务单设计器适配层预留治理项，当前保持启用默认值' },
+    { id: 16, paramKey: 'form_designer.provider', paramValue: 'INTERNAL_SCHEMA', category: '门店服务', remark: '默认服务单设计器适配器预留治理项，当前保持内置 Schema' },
+    { id: 17, paramKey: 'form_designer.allowed_engines', paramValue: 'INTERNAL_SCHEMA,FORMILY,VFORM3,LOWCODE_ENGINE,JSON_SCHEMA', category: '门店服务', remark: '允许接入的成熟服务单设计器' },
+    { id: 18, paramKey: 'form_designer.blocked_components', paramValue: 'signature,esign,electronicSignature,canvasSignature,html,iframe,script,webview', category: '门店服务', remark: '导入时拦截电子签名和脚本类组件' },
+    { id: 19, paramKey: 'form_designer.max_schema_bytes', paramValue: '200000', category: '门店服务', remark: '单个服务单设计器 Schema 最大长度' },
+    { id: 20, paramKey: 'form_designer.paper_signature_required', paramValue: 'true', category: '门店服务', remark: '打印版强制保留纸质手写签名位置' }
   ],
   wecomContacts: [
     { id: 1, contactName: '企微客服A', externalUserId: 'wx_external_a', scene: '术前咨询', isEnabled: 1 },

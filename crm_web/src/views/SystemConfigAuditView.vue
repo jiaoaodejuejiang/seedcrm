@@ -112,6 +112,27 @@
             </button>
           </div>
 
+          <div class="service-form-presets">
+            <div class="service-form-presets__head">
+              <strong>服务确认单治理</strong>
+              <span>打印确认、纸质签名、设计器适配走配置草稿发布，不直接改订单或服务单状态。</span>
+            </div>
+            <div class="service-form-preset-grid">
+              <button
+                v-for="item in serviceFormPresets"
+                :key="item.configKey"
+                type="button"
+                class="service-form-preset"
+                :class="{ 'is-active': previewForm.configKey === item.configKey }"
+                @click="applyServiceFormPreset(item)"
+              >
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.description }}</span>
+                <small>{{ item.configKey }}</small>
+              </button>
+            </div>
+          </div>
+
           <div class="preview-layout">
             <div class="config-form">
               <label>
@@ -684,11 +705,41 @@ const capabilityMeta = {
     exampleKey: 'clue.dedup.window_days',
     exampleValue: '90'
   },
+  SERVICE_FORM_PRINT_REQUIRED: {
+    label: '确认前打印',
+    description: '控制纸质单确认前是否必须打印当前服务确认单版本',
+    exampleKey: 'service_form.print.required_before_confirm',
+    exampleValue: 'true'
+  },
+  SERVICE_FORM_CONFIRM_REQUIRED: {
+    label: '服务前确认',
+    description: '控制开始服务前是否必须确认纸质服务确认单',
+    exampleKey: 'service_form.confirm.required_before_start',
+    exampleValue: 'true'
+  },
+  SERVICE_FORM_STALE_POLICY: {
+    label: '重打策略',
+    description: '控制确认单内容变更后是否阻断确认和开始服务',
+    exampleKey: 'service_form.print.stale_policy',
+    exampleValue: 'BLOCK_CONFIRM'
+  },
   SERVICE_FORM_DESIGNER: {
     label: '服务单设计器',
-    description: '控制服务确认单模板适配和发布方式',
-    exampleKey: 'form_designer.adapter.enabled',
+    description: '控制成熟设计器适配、白名单和导入拦截规则',
+    exampleKey: 'form_designer.allowed_engines',
+    exampleValue: 'INTERNAL_SCHEMA,FORMILY,VFORM3,LOWCODE_ENGINE,JSON_SCHEMA'
+  },
+  SERVICE_FORM_DESIGNER_PAPER_SIGNATURE: {
+    label: '纸质签名留位',
+    description: '控制打印版服务确认单是否强制保留手写签名位置',
+    exampleKey: 'form_designer.paper_signature_required',
     exampleValue: 'true'
+  },
+  SERVICE_FORM_DESIGNER_SCHEMA_SIZE: {
+    label: 'Schema 大小',
+    description: '控制单个服务单设计器 Schema 的最大导入长度',
+    exampleKey: 'form_designer.max_schema_bytes',
+    exampleValue: '200000'
   },
   DISTRIBUTION_MAPPING: {
     label: '分销订单映射',
@@ -734,6 +785,67 @@ const moduleNameMap = {
   SYSTEM_CONFIG: '系统配置'
 }
 
+const pinnedCapabilityCodes = [
+  'SERVICE_FORM_PRINT_REQUIRED',
+  'SERVICE_FORM_CONFIRM_REQUIRED',
+  'SERVICE_FORM_STALE_POLICY',
+  'SERVICE_FORM_DESIGNER',
+  'SERVICE_FORM_DESIGNER_PAPER_SIGNATURE',
+  'SERVICE_FORM_DESIGNER_SCHEMA_SIZE'
+]
+
+const serviceFormPresets = [
+  {
+    label: '确认前必须打印',
+    description: '纸质单确认前要求当前版本已打印',
+    configKey: 'service_form.print.required_before_confirm',
+    configValue: 'true',
+    valueType: 'BOOLEAN'
+  },
+  {
+    label: '开始服务前确认',
+    description: '开始服务前要求纸质单已确认',
+    configKey: 'service_form.confirm.required_before_start',
+    configValue: 'true',
+    valueType: 'BOOLEAN'
+  },
+  {
+    label: '内容变更阻断',
+    description: '确认单内容变化后要求重新打印',
+    configKey: 'service_form.print.stale_policy',
+    configValue: 'BLOCK_CONFIRM',
+    valueType: 'STRING'
+  },
+  {
+    label: '成熟设计器白名单',
+    description: '只允许已适配设计器引擎导入',
+    configKey: 'form_designer.allowed_engines',
+    configValue: 'INTERNAL_SCHEMA,FORMILY,VFORM3,LOWCODE_ENGINE,JSON_SCHEMA',
+    valueType: 'STRING'
+  },
+  {
+    label: '电子签名拦截',
+    description: '导入时拦截电子签名和脚本组件',
+    configKey: 'form_designer.blocked_components',
+    configValue: 'signature,esign,electronicSignature,canvasSignature,html,iframe,script,webview',
+    valueType: 'STRING'
+  },
+  {
+    label: 'Schema 大小上限',
+    description: '限制单模板导入体积，避免内嵌资源过大',
+    configKey: 'form_designer.max_schema_bytes',
+    configValue: '200000',
+    valueType: 'NUMBER'
+  },
+  {
+    label: '纸质签名留位',
+    description: '打印版强制保留手写签名位置',
+    configKey: 'form_designer.paper_signature_required',
+    configValue: 'true',
+    valueType: 'BOOLEAN'
+  }
+]
+
 const filters = reactive({
   prefix: '',
   configKey: '',
@@ -765,8 +877,9 @@ const runtimePendingCount = computed(() => runtimeOverview.value.runtimeEventPen
 const runtimeFailedCount = computed(() =>
   (runtimeOverview.value.runtimeEventFailedCount ?? 0) + (runtimeOverview.value.runtimeEventTerminatedCount ?? 0)
 )
-const visibleCapabilities = computed(() => capabilities.value.slice(0, 7))
-const capabilityCards = computed(() => capabilities.value.slice(0, 10))
+const sortedCapabilities = computed(() => [...capabilities.value].sort(compareCapability))
+const visibleCapabilities = computed(() => sortedCapabilities.value.slice(0, 9))
+const capabilityCards = computed(() => sortedCapabilities.value.slice(0, 12))
 const currentStepIndex = computed(() => {
   const map = {
     preview: previewResult.value ? 1 : 0,
@@ -1128,6 +1241,40 @@ function applyCapability(item) {
   previewResult.value = null
 }
 
+function applyServiceFormPreset(item) {
+  activeCapabilityCode.value = relatedServiceFormCapability(item.configKey)
+  previewForm.configKey = item.configKey
+  previewForm.valueType = item.valueType
+  previewForm.scopeType = 'GLOBAL'
+  previewForm.scopeId = 'GLOBAL'
+  previewForm.configValue = item.configValue
+  previewForm.enabled = 1
+  previewForm.summary = `调整${item.label}`
+  previewResult.value = null
+}
+
+function relatedServiceFormCapability(configKey) {
+  const key = String(configKey || '')
+  if (key === 'service_form.print.required_before_confirm') return 'SERVICE_FORM_PRINT_REQUIRED'
+  if (key === 'service_form.confirm.required_before_start') return 'SERVICE_FORM_CONFIRM_REQUIRED'
+  if (key === 'service_form.print.stale_policy') return 'SERVICE_FORM_STALE_POLICY'
+  if (key === 'form_designer.paper_signature_required') return 'SERVICE_FORM_DESIGNER_PAPER_SIGNATURE'
+  if (key === 'form_designer.max_schema_bytes') return 'SERVICE_FORM_DESIGNER_SCHEMA_SIZE'
+  return 'SERVICE_FORM_DESIGNER'
+}
+
+function compareCapability(a, b) {
+  const left = pinnedCapabilityIndex(a?.capabilityCode)
+  const right = pinnedCapabilityIndex(b?.capabilityCode)
+  if (left !== right) return left - right
+  return String(a?.capabilityCode || '').localeCompare(String(b?.capabilityCode || ''))
+}
+
+function pinnedCapabilityIndex(code) {
+  const index = pinnedCapabilityCodes.indexOf(code)
+  return index === -1 ? 1000 : index
+}
+
 function defaultConfigKey(item) {
   const pattern = String(item?.configKeyPattern || '').trim()
   if (!pattern) return ''
@@ -1432,6 +1579,77 @@ function formatDate(value) {
   color: #64748b;
 }
 
+.service-form-presets {
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.service-form-presets__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.service-form-presets__head strong {
+  color: #0f172a;
+}
+
+.service-form-presets__head span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.service-form-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.service-form-preset {
+  min-height: 104px;
+  padding: 12px;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.service-form-preset:hover,
+.service-form-preset.is-active {
+  border-color: #0ea5e9;
+  box-shadow: 0 10px 24px rgba(14, 165, 233, 0.12);
+}
+
+.service-form-preset strong,
+.service-form-preset span,
+.service-form-preset small {
+  display: block;
+}
+
+.service-form-preset strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.service-form-preset span {
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.service-form-preset small {
+  margin-top: 8px;
+  color: #64748b;
+  overflow-wrap: anywhere;
+}
+
 .preview-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
@@ -1617,7 +1835,8 @@ function formatDate(value) {
 }
 
 @media (max-width: 1280px) {
-  .capability-catalog {
+  .capability-catalog,
+  .service-form-preset-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
@@ -1629,7 +1848,8 @@ function formatDate(value) {
     grid-template-columns: 1fr;
   }
 
-  .capability-catalog {
+  .capability-catalog,
+  .service-form-preset-grid {
     grid-template-columns: 1fr;
   }
 

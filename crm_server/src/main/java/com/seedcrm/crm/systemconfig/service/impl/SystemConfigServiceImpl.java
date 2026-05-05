@@ -1250,7 +1250,21 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                                                                             RawCapability capability) {
         String key = normalizeConfigKey(item.configKey());
         if ("form_designer.adapter.enabled".equals(key)) {
+            String value = normalizeOrDefault(item.afterValue(), "true");
+            if (!"TRUE".equals(value)) {
+                return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                        capability.validatorCode(), "服务单设计器适配层开关暂为预留治理项",
+                        "当前版本请保持 true，避免形成关闭后业务仍可导入的假控制。");
+            }
             return validateBooleanItem(item, capability);
+        }
+        if ("form_designer.provider".equals(key)) {
+            String provider = normalizeOrDefault(item.afterValue(), "INTERNAL_SCHEMA");
+            if (!"INTERNAL_SCHEMA".equals(provider)) {
+                return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                        capability.validatorCode(), "默认服务单设计器适配器暂为预留治理项",
+                        "当前版本请保持 INTERNAL_SCHEMA；成熟设计器接入通过 allowed_engines 白名单控制。");
+            }
         }
         if ("form_designer.allowed_engines".equals(key)) {
             Set<String> engines = parseConfigCodes(item.afterValue());

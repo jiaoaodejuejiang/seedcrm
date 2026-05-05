@@ -676,6 +676,36 @@ class SystemConfigServiceImplTest {
         assertThat(validation.getItems().get(0).getMessage()).contains("电子签名");
     }
 
+    @Test
+    void shouldRejectUnsupportedFormDesignerProvider() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("form_designer.provider");
+        request.setConfigValue("FORMILY");
+        request.setValueType("STRING");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        SystemConfigDtos.ValidationResponse validation = service.validateDraft(draft.getDraftNo());
+
+        assertThat(validation.getValid()).isFalse();
+        assertThat(validation.getItems().get(0).getStatus()).isEqualTo("BLOCK");
+        assertThat(validation.getItems().get(0).getMessage()).contains("默认服务单设计器适配器");
+    }
+
+    @Test
+    void shouldRejectDisabledFormDesignerAdapterUntilRuntimeIsWired() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("form_designer.adapter.enabled");
+        request.setConfigValue("false");
+        request.setValueType("BOOLEAN");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        SystemConfigDtos.ValidationResponse validation = service.validateDraft(draft.getDraftNo());
+
+        assertThat(validation.getValid()).isFalse();
+        assertThat(validation.getItems().get(0).getStatus()).isEqualTo("BLOCK");
+        assertThat(validation.getItems().get(0).getMessage()).contains("预留治理项");
+    }
+
     private void createSchema() {
         jdbcTemplate.execute("""
                 CREATE TABLE system_config (

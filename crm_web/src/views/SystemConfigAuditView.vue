@@ -108,8 +108,47 @@
                 </el-tag>
               </span>
               <span>{{ capabilityDescription(item) }}</span>
+              <span class="capability-card__tags">
+                <em v-for="tag in capabilityTags(item).slice(0, 3)" :key="tag">{{ tag }}</em>
+              </span>
               <small>{{ moduleLabel(item.ownerModule) }} · {{ valueTypeLabel(item.valueType) }}</small>
             </button>
+          </div>
+
+          <div v-if="selectedCapability" class="governance-impact-panel">
+            <div class="governance-impact-panel__head">
+              <div>
+                <strong>{{ capabilityLabel(selectedCapability) }}</strong>
+                <span>{{ capabilityDescription(selectedCapability) }}</span>
+              </div>
+              <el-tag :type="capabilityRuntimeTagType(selectedCapability)" effect="light">
+                {{ capabilityRuntimeStatus(selectedCapability) }}
+              </el-tag>
+            </div>
+            <div class="governance-impact-panel__tags">
+              <el-tag
+                v-for="tag in capabilityTags(selectedCapability)"
+                :key="tag"
+                size="small"
+                effect="plain"
+              >
+                {{ tag }}
+              </el-tag>
+            </div>
+            <div class="governance-impact-grid">
+              <article>
+                <h4>影响范围</h4>
+                <ul>
+                  <li v-for="item in capabilityImpactScope(selectedCapability)" :key="item">{{ item }}</li>
+                </ul>
+              </article>
+              <article>
+                <h4>不影响范围</h4>
+                <ul>
+                  <li v-for="item in capabilityNonImpactScope(selectedCapability)" :key="item">{{ item }}</li>
+                </ul>
+              </article>
+            </div>
           </div>
 
           <div class="governance-presets clue-dedup-presets">
@@ -911,6 +950,143 @@ const capabilityMeta = {
   }
 }
 
+const defaultGovernanceMeta = {
+  runtimeStatus: '配置治理',
+  runtimeTagType: 'info',
+  tags: ['仅配置', '发布后生效', '不改变历史数据'],
+  impactScope: ['后续运行态配置读取', '页面展示、校验或默认值口径'],
+  nonImpactScope: ['不直接修改客户、订单、排档或账务数据', '不触发第三方接口调用']
+}
+
+const capabilityGovernanceMeta = {
+  SYSTEM_DOMAIN: {
+    runtimeStatus: '运行时消费',
+    runtimeTagType: 'success',
+    tags: ['运行时消费', '仅影响新链接', '不改业务数据'],
+    impactScope: ['后台访问地址、API 基础地址、回调地址生成', '三方平台联调时展示的系统域名'],
+    nonImpactScope: ['不迁移历史回调记录', '不自动提交抖音、企微或分销平台配置']
+  },
+  WORKFLOW_SWITCH: {
+    runtimeStatus: '旁路/预留',
+    runtimeTagType: 'warning',
+    tags: ['预留未接管', '旁路记录', '不推进状态'],
+    impactScope: ['流程实例、任务和事件的旁路观察记录', '灰度排查时的运行态日志'],
+    nonImpactScope: ['不接管订单、服务单或排档状态机', '不自动改档、核销、退款或触发三方接口']
+  },
+  DEPOSIT_DIRECT: {
+    runtimeStatus: '运行时消费',
+    runtimeTagType: 'success',
+    tags: ['运行时消费', '定金免码', '不做真实核销'],
+    impactScope: ['定金订单到店确认按钮和后续服务确认单流程', '到店确认记录口径'],
+    nonImpactScope: ['不扫码、不输码、不调用团购券核销接口', '不处理收款、退款或资金结算']
+  },
+  AMOUNT_VISIBILITY: {
+    runtimeStatus: '运行时消费',
+    runtimeTagType: 'success',
+    tags: ['运行时消费', '展示控制', '不处理资金'],
+    impactScope: ['门店、财务和服务角色可见的金额字段', '服务确认单打印和企微通知中的金额展示'],
+    nonImpactScope: ['不修改订单金额、核销金额或服务确认单金额', '不改变付款、退款、薪资或分销结算结果']
+  },
+  FINANCE_LEDGER_BOUNDARY: {
+    runtimeStatus: '后端强制',
+    runtimeTagType: 'danger',
+    tags: ['后端强制', '只记账', '不可关闭红线'],
+    impactScope: ['财务页面提示、退款冲正校验和线下处理登记口径', '退款后的薪资/分销绩效冲正要求'],
+    nonImpactScope: ['不发起真实收款、原路退款、提现、打款或资金划拨', '不允许通过配置关闭财务只记账红线']
+  },
+  CLUE_DEDUP: {
+    runtimeStatus: '运行时消费',
+    runtimeTagType: 'success',
+    tags: ['运行时消费', '仅影响后续', '不重算历史'],
+    impactScope: ['接口同步和手工新增客资入库去重', '同一客户的订单、动作追加到客资记录'],
+    nonImpactScope: ['不重算历史客资和历史客资记录', '不自动创建无法匹配手机号/微信号的订单记录']
+  },
+  APPOINTMENT_REASON: {
+    runtimeStatus: '运行时消费',
+    runtimeTagType: 'success',
+    tags: ['运行时消费', '记录口径', '不自动改档'],
+    impactScope: ['约档、改档、取消预约原因白名单和默认值', '顾客排档历史记录的原因字段校验'],
+    nonImpactScope: ['不移动顾客排档菜单位置', '不自动创建、改动或取消预约']
+  },
+  SERVICE_FORM_PRINT_REQUIRED: {
+    runtimeStatus: '运行时消费',
+    runtimeTagType: 'success',
+    tags: ['运行时消费', '打印校验', '纸质签名'],
+    impactScope: ['服务确认单确认前是否必须打印当前版本', '纸质单确认前的阻断或提示'],
+    nonImpactScope: ['不启用电子签名', '不直接修改订单或服务单状态']
+  },
+  SERVICE_FORM_CONFIRM_REQUIRED: {
+    runtimeStatus: '运行时消费',
+    runtimeTagType: 'success',
+    tags: ['运行时消费', '服务前确认', '纸质流程'],
+    impactScope: ['服务开始前纸质服务确认单确认校验', '服务确认单打印后手写签名的流程提示'],
+    nonImpactScope: ['不启用电子签名', '不替代线下打印和手写签名']
+  },
+  SERVICE_FORM_STALE_POLICY: {
+    runtimeStatus: '运行时消费',
+    runtimeTagType: 'success',
+    tags: ['运行时消费', '重打策略', '不改历史'],
+    impactScope: ['服务确认单内容变更后的重打提醒或阻断策略', '后续服务确认动作的校验口径'],
+    nonImpactScope: ['不重写历史打印记录', '不自动确认纸质服务单']
+  },
+  SERVICE_FORM_DESIGNER: {
+    runtimeStatus: '适配层治理',
+    runtimeTagType: 'warning',
+    tags: ['适配层治理', '成熟引擎', '禁止电子签名'],
+    impactScope: ['服务单设计器引擎白名单、导入拦截和组件安全治理', '后续模板导入和在线编辑的适配策略'],
+    nonImpactScope: ['不自研重型编辑器', '不允许脚本、iframe、webview 或电子签名组件绕过拦截']
+  },
+  SERVICE_FORM_DESIGNER_PAPER_SIGNATURE: {
+    runtimeStatus: '运行时消费',
+    runtimeTagType: 'success',
+    tags: ['运行时消费', '纸质签名', '无电子签名'],
+    impactScope: ['打印版服务确认单手写签名位置', '模板导入时纸质签名占位要求'],
+    nonImpactScope: ['不采集电子签名', '不改变线下签字留存责任']
+  },
+  SERVICE_FORM_DESIGNER_SCHEMA_SIZE: {
+    runtimeStatus: '导入校验',
+    runtimeTagType: 'warning',
+    tags: ['导入校验', '大小限制', '安全边界'],
+    impactScope: ['单个服务单设计器 Schema 导入大小', '模板导入时的性能和安全校验'],
+    nonImpactScope: ['不压缩或改写历史模板', '不允许超限模板绕过导入校验']
+  },
+  DISTRIBUTION_MAPPING: {
+    runtimeStatus: '运行时消费',
+    runtimeTagType: 'success',
+    tags: ['运行时消费', '订单映射', '不动资金'],
+    impactScope: ['分销外部订单类型、商品和 SKU 到内部团购/定金映射', '后续分销同步入站事件解析'],
+    nonImpactScope: ['不修改历史订单类型', '不发起分销提现、打款或退款资金动作']
+  },
+  SCHEDULER_INTEGRATION: {
+    runtimeStatus: '运行时消费',
+    runtimeTagType: 'success',
+    tags: ['运行时消费', '调度参数', '幂等重试'],
+    impactScope: ['调度任务时间窗口、重试和队列配置', '后续同步任务的 dry-run、重试和监控口径'],
+    nonImpactScope: ['不绕过幂等和审计', '不直接改客户、订单、排档或账务主表']
+  },
+  DOUYIN_INTEGRATION: {
+    runtimeStatus: '运行时消费',
+    runtimeTagType: 'success',
+    tags: ['运行时消费', '敏感配置', 'OceanEngine'],
+    impactScope: ['抖音客资同步授权、回调和接口联调参数', '后续客资同步的访问凭证读取'],
+    nonImpactScope: ['不改写历史客资记录', '不切换到非 OceanEngine 客资接口']
+  },
+  WECOM_INTEGRATION: {
+    runtimeStatus: '运行时消费',
+    runtimeTagType: 'success',
+    tags: ['运行时消费', '敏感配置', '私域通知'],
+    impactScope: ['企业微信活码、客户关系回调和服务内容通知参数', '后续企微触达与回调校验'],
+    nonImpactScope: ['不自动添加客户微信', '不重发历史通知']
+  },
+  PAYMENT_BLOCKED: {
+    runtimeStatus: '已阻断',
+    runtimeTagType: 'danger',
+    tags: ['已阻断', '资金配置', '禁止直写'],
+    impactScope: ['发布预检查中阻断支付、转账、退款、提现类配置直写', '资金边界审计记录'],
+    nonImpactScope: ['不开放支付网关配置', '不允许配置发布中心发起真实资金动作']
+  }
+}
+
 const moduleNameMap = {
   SYSTEM_SETTING: '系统设置',
   SYSTEM_FLOW: '系统流程',
@@ -1211,6 +1387,9 @@ const runtimeFailedCount = computed(() =>
 const sortedCapabilities = computed(() => [...capabilities.value].sort(compareCapability))
 const visibleCapabilities = computed(() => sortedCapabilities.value.slice(0, 9))
 const capabilityCards = computed(() => sortedCapabilities.value.slice(0, 12))
+const selectedCapability = computed(() =>
+  capabilityCards.value.find((item) => item.capabilityCode === activeCapabilityCode.value) || capabilityCards.value[0] || null
+)
 const currentStepIndex = computed(() => {
   const map = {
     preview: previewResult.value ? 1 : 0,
@@ -1660,6 +1839,33 @@ function capabilityDescription(item) {
   return capabilityMeta[item?.capabilityCode]?.description || '受控配置能力，发布前必须完成校验和发布预检查'
 }
 
+function capabilityGovernance(item) {
+  return {
+    ...defaultGovernanceMeta,
+    ...(capabilityGovernanceMeta[item?.capabilityCode] || {})
+  }
+}
+
+function capabilityTags(item) {
+  return capabilityGovernance(item).tags || defaultGovernanceMeta.tags
+}
+
+function capabilityImpactScope(item) {
+  return capabilityGovernance(item).impactScope || defaultGovernanceMeta.impactScope
+}
+
+function capabilityNonImpactScope(item) {
+  return capabilityGovernance(item).nonImpactScope || defaultGovernanceMeta.nonImpactScope
+}
+
+function capabilityRuntimeStatus(item) {
+  return capabilityGovernance(item).runtimeStatus || defaultGovernanceMeta.runtimeStatus
+}
+
+function capabilityRuntimeTagType(item) {
+  return capabilityGovernance(item).runtimeTagType || defaultGovernanceMeta.runtimeTagType
+}
+
 function valueTypeLabel(value) {
   const map = {
     STRING: '文本',
@@ -1908,6 +2114,91 @@ function formatDate(value) {
 .capability-card small {
   margin-top: 8px;
   color: #64748b;
+}
+
+.capability-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.capability-card__tags em {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #2563eb;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.45;
+}
+
+.governance-impact-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.governance-impact-panel__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.governance-impact-panel__head div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.governance-impact-panel__head strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.governance-impact-panel__head span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.governance-impact-panel__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.governance-impact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.governance-impact-grid article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e5edf4;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.governance-impact-grid h4 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.governance-impact-grid ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: #475569;
+  font-size: 13px;
 }
 
 .governance-presets,
@@ -2219,9 +2510,15 @@ function formatDate(value) {
 
 @media (max-width: 980px) {
   .preview-layout,
+  .governance-impact-grid,
   .log-toolbar,
   .validation-row {
     grid-template-columns: 1fr;
+  }
+
+  .governance-impact-panel__head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .capability-catalog,

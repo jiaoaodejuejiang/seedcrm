@@ -62,6 +62,10 @@ class ClueManagementServiceImplTest {
 
         assertThat(response.getEnabled()).isEqualTo(1);
         assertThat(response.getWindowDays()).isEqualTo(90);
+        assertThat(response.getRuntimeConsumed()).isEqualTo(1);
+        assertThat(response.getRuntimeScope()).contains("客资入库");
+        assertThat(response.getRecordMergeRule()).contains("客资记录");
+        assertThat(response.getEffectiveScope()).contains("后续");
     }
 
     @Test
@@ -95,5 +99,6 @@ class ClueManagementServiceImplTest {
                 .containsExactly("false", "120");
         assertThat(response.getEnabled()).isEqualTo(0);
         assertThat(response.getWindowDays()).isEqualTo(120);
+        assertThat(response.getRuntimeConsumed()).isEqualTo(1);
     }
 }

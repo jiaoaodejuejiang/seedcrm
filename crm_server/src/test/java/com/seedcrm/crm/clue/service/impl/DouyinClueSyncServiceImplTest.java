@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -183,6 +184,34 @@ class DouyinClueSyncServiceImplTest {
         assertThat(result).isEqualTo(DouyinClueSyncServiceImpl.ImportResult.SKIPPED_UNMATCHED_IDENTITY);
         verify(clueService, never()).addClue(any(Clue.class));
         verify(clueRecordService, never()).addRecordIfAbsent(any(ClueRecord.class));
+    }
+
+    @Test
+    void importRecordShouldAppendMultipleRecordsToSameClueWhenCustomerIdentityDeduped() throws Exception {
+        JsonNode clueRecord = objectMapper.readTree("""
+                {"clue_id":"clue-3","telephone":"13800138003","name":"张三","clue_time":"2026-04-27 10:00:00"}
+                """);
+        JsonNode paidOrderRecord = objectMapper.readTree("""
+                {"clue_id":"clue-3","telephone":"13800138003","order_id":"order-3","order_status":"PAID","pay_time":"2026-04-27 10:05:00"}
+                """);
+        Clue savedClue = new Clue();
+        savedClue.setId(66L);
+        when(clueService.addClue(any(Clue.class))).thenReturn(savedClue);
+        when(clueRecordService.addRecordIfAbsent(any(ClueRecord.class))).thenReturn(true);
+
+        DouyinClueSyncServiceImpl.ImportResult clueResult = douyinClueSyncService.importRecord(clueRecord);
+        DouyinClueSyncServiceImpl.ImportResult orderResult = douyinClueSyncService.importRecord(paidOrderRecord);
+
+        assertThat(clueResult).isEqualTo(DouyinClueSyncServiceImpl.ImportResult.IMPORTED);
+        assertThat(orderResult).isEqualTo(DouyinClueSyncServiceImpl.ImportResult.IMPORTED);
+        verify(clueService, times(2)).addClue(any(Clue.class));
+        ArgumentCaptor<ClueRecord> recordCaptor = ArgumentCaptor.forClass(ClueRecord.class);
+        verify(clueRecordService, times(2)).addRecordIfAbsent(recordCaptor.capture());
+        List<ClueRecord> records = recordCaptor.getAllValues();
+        assertThat(records).extracting(ClueRecord::getClueId).containsOnly(66L);
+        assertThat(records).extracting(ClueRecord::getRecordType).containsExactly("CLUE", "ORDER");
+        assertThat(records).extracting(ClueRecord::getRecordKey).doesNotHaveDuplicates();
+        assertThat(records.get(1).getExternalOrderId()).isEqualTo("order-3");
     }
 
     @Test

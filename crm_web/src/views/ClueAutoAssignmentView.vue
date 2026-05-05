@@ -167,6 +167,26 @@
             <p>{{ formatDateTime(dedupForm.updatedAt) || '--' }}</p>
             <p>客资记录会在详情抽屉中按时间展示。</p>
           </article>
+          <article class="detail-card">
+            <h3>运行时生效</h3>
+            <p>
+              <el-tag size="small" :type="dedupForm.runtimeConsumed === 1 ? 'success' : 'info'" effect="light">
+                {{ dedupForm.runtimeConsumed === 1 ? '已接入' : '未接入' }}
+              </el-tag>
+              {{ dedupForm.runtimeScope }}
+            </p>
+            <p class="table-note">{{ dedupForm.effectiveScope }}</p>
+          </article>
+          <article class="detail-card">
+            <h3>合并规则</h3>
+            <p>{{ dedupForm.mergeIdentityRule }}</p>
+            <p class="table-note">{{ dedupForm.recordMergeRule }}</p>
+          </article>
+          <article class="detail-card">
+            <h3>无法匹配记录</h3>
+            <p>{{ dedupForm.unmatchedRecordPolicy }}</p>
+            <p class="table-note">基础客户信息保留一条，订单与动作保留多条。</p>
+          </article>
         </div>
 
         <div class="action-group">
@@ -202,7 +222,13 @@ const strategy = ref({
 const dedupForm = reactive({
   enabled: 1,
   windowDays: 90,
-  updatedAt: null
+  updatedAt: null,
+  runtimeConsumed: 1,
+  runtimeScope: '客资入库（接口同步与手工新增）',
+  mergeIdentityRule: '同来源内优先按手机号匹配，手机号为空时按微信号匹配；窗口内复用同一客户基础客资',
+  recordMergeRule: '留资、订单和动作不覆盖基础客资，按时间追加到客资记录',
+  unmatchedRecordPolicy: '没有手机号/微信号的订单或动作，只在命中既有外部身份时合并；否则跳过',
+  effectiveScope: '保存后只影响后续入库/同步，不重算历史客资'
 })
 const dutyStaff = ref([])
 const pagination = useTablePagination(dutyStaff)
@@ -238,13 +264,25 @@ async function loadData() {
     Object.assign(dedupForm, {
       enabled: 1,
       windowDays: 90,
-      updatedAt: null
+      updatedAt: null,
+      runtimeConsumed: 1,
+      runtimeScope: '客资入库（接口同步与手工新增）',
+      mergeIdentityRule: '同来源内优先按手机号匹配，手机号为空时按微信号匹配；窗口内复用同一客户基础客资',
+      recordMergeRule: '留资、订单和动作不覆盖基础客资，按时间追加到客资记录',
+      unmatchedRecordPolicy: '没有手机号/微信号的订单或动作，只在命中既有外部身份时合并；否则跳过',
+      effectiveScope: '保存后只影响后续入库/同步，不重算历史客资'
     })
   } else {
     Object.assign(dedupForm, {
       enabled: dedupResponse?.enabled ?? 1,
       windowDays: dedupResponse?.windowDays ?? 90,
-      updatedAt: dedupResponse?.updatedAt || null
+      updatedAt: dedupResponse?.updatedAt || null,
+      runtimeConsumed: dedupResponse?.runtimeConsumed ?? 1,
+      runtimeScope: dedupResponse?.runtimeScope || dedupForm.runtimeScope,
+      mergeIdentityRule: dedupResponse?.mergeIdentityRule || dedupForm.mergeIdentityRule,
+      recordMergeRule: dedupResponse?.recordMergeRule || dedupForm.recordMergeRule,
+      unmatchedRecordPolicy: dedupResponse?.unmatchedRecordPolicy || dedupForm.unmatchedRecordPolicy,
+      effectiveScope: dedupResponse?.effectiveScope || dedupForm.effectiveScope
     })
   }
   pagination.reset()
@@ -274,7 +312,13 @@ function applyDedupResponse(response) {
   Object.assign(dedupForm, {
     enabled: response?.enabled ?? dedupForm.enabled,
     windowDays: response?.windowDays ?? dedupForm.windowDays,
-    updatedAt: response?.updatedAt || dedupForm.updatedAt
+    updatedAt: response?.updatedAt || dedupForm.updatedAt,
+    runtimeConsumed: response?.runtimeConsumed ?? dedupForm.runtimeConsumed,
+    runtimeScope: response?.runtimeScope || dedupForm.runtimeScope,
+    mergeIdentityRule: response?.mergeIdentityRule || dedupForm.mergeIdentityRule,
+    recordMergeRule: response?.recordMergeRule || dedupForm.recordMergeRule,
+    unmatchedRecordPolicy: response?.unmatchedRecordPolicy || dedupForm.unmatchedRecordPolicy,
+    effectiveScope: response?.effectiveScope || dedupForm.effectiveScope
   })
 }
 

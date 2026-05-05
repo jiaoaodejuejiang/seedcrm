@@ -52,6 +52,18 @@ public final class ClueManagementDtos {
         private Integer windowDays;
         @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
         private LocalDateTime updatedAt;
+        private Integer runtimeConsumed;
+        private String runtimeScope;
+        private String mergeIdentityRule;
+        private String recordMergeRule;
+        private String unmatchedRecordPolicy;
+        private String effectiveScope;
+
+        public DedupConfigResponse(Integer enabled, Integer windowDays, LocalDateTime updatedAt) {
+            this.enabled = enabled;
+            this.windowDays = windowDays;
+            this.updatedAt = updatedAt;
+        }
     }
 
     @Data

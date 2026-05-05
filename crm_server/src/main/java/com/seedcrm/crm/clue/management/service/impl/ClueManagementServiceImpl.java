@@ -40,6 +40,11 @@ public class ClueManagementServiceImpl implements ClueManagementService {
     public static final String CLUE_DEDUP_ENABLED_KEY = "clue.dedup.enabled";
     public static final String CLUE_DEDUP_WINDOW_DAYS_KEY = "clue.dedup.window_days";
     public static final int DEFAULT_DEDUP_WINDOW_DAYS = 90;
+    private static final String DEDUP_RUNTIME_SCOPE = "客资入库（接口同步与手工新增）";
+    private static final String DEDUP_MERGE_IDENTITY_RULE = "同来源内优先按手机号匹配，手机号为空时按微信号匹配；窗口内复用同一客户基础客资";
+    private static final String DEDUP_RECORD_MERGE_RULE = "留资、订单和动作不覆盖基础客资，按时间追加到客资记录";
+    private static final String DEDUP_UNMATCHED_RECORD_POLICY = "没有手机号/微信号的订单或动作，只在命中既有外部身份时合并；否则跳过";
+    private static final String DEDUP_EFFECTIVE_SCOPE = "保存后只影响后续入库/同步，不重算历史客资";
 
     private final ClueAssignmentStrategyMapper clueAssignmentStrategyMapper;
     private final DutyCustomerServiceMapper dutyCustomerServiceMapper;
@@ -99,7 +104,7 @@ public class ClueManagementServiceImpl implements ClueManagementService {
                 .filter(Objects::nonNull)
                 .max(LocalDateTime::compareTo)
                 .orElse(null);
-        return new DedupConfigResponse(enabled, windowDays, updatedAt);
+        return buildDedupConfigResponse(enabled, windowDays, updatedAt);
     }
 
     @Override
@@ -277,6 +282,19 @@ public class ClueManagementServiceImpl implements ClueManagementService {
                 strategy.getLastAssignedUserId(),
                 strategy.getUpdatedBy(),
                 strategy.getUpdatedAt());
+    }
+
+    private DedupConfigResponse buildDedupConfigResponse(int enabled, int windowDays, LocalDateTime updatedAt) {
+        return new DedupConfigResponse(
+                enabled,
+                windowDays,
+                updatedAt,
+                1,
+                DEDUP_RUNTIME_SCOPE,
+                DEDUP_MERGE_IDENTITY_RULE,
+                DEDUP_RECORD_MERGE_RULE,
+                DEDUP_UNMATCHED_RECORD_POLICY,
+                DEDUP_EFFECTIVE_SCOPE);
     }
 
     private DutyCustomerServiceResponse toDutyCustomerServiceResponse(DutyCustomerService entity) {

@@ -112,6 +112,132 @@
             </button>
           </div>
 
+          <div class="governance-presets clue-dedup-presets">
+            <div class="governance-presets__head">
+              <strong>客资去重治理</strong>
+              <span>仅影响后续接口入库；基础客资合并，订单和动作继续进入客资记录，不重算历史数据。</span>
+            </div>
+            <div class="governance-preset-grid">
+              <button
+                v-for="item in clueDedupPresets"
+                :key="item.configKey"
+                type="button"
+                class="governance-preset"
+                :class="{ 'is-active': previewForm.configKey === item.configKey }"
+                @click="applyGovernancePreset(item)"
+              >
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.description }}</span>
+                <small>{{ item.configKey }}</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="governance-presets amount-visibility-presets">
+            <div class="governance-presets__head">
+              <strong>金额可见治理</strong>
+              <span>仅控制页面、打印和通知中的金额可见性；不改订单金额、付款、退款、结算或薪资结果。</span>
+            </div>
+            <div class="governance-preset-grid">
+              <button
+                v-for="item in amountVisibilityPresets"
+                :key="item.configKey"
+                type="button"
+                class="governance-preset"
+                :class="{ 'is-active': previewForm.configKey === item.configKey }"
+                @click="applyGovernancePreset(item)"
+              >
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.description }}</span>
+                <small>{{ item.configKey }}</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="governance-presets finance-ledger-presets">
+            <div class="governance-presets__head">
+              <strong>财务台账治理</strong>
+              <span>统一“只记账、不动资金”的边界；退款必须冲正薪资，分销提现只登记外部或线下处理结果。</span>
+            </div>
+            <div class="governance-preset-grid">
+              <button
+                v-for="item in financeLedgerPresets"
+                :key="item.configKey"
+                type="button"
+                class="governance-preset"
+                :class="{ 'is-active': previewForm.configKey === item.configKey }"
+                @click="applyGovernancePreset(item)"
+              >
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.description }}</span>
+                <small>{{ item.configKey }}</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="governance-presets deposit-direct-presets">
+            <div class="governance-presets__head">
+              <strong>定金免码确认治理</strong>
+              <span>定金订单不用扫码或输码；只记录到店确认并进入服务确认单流程，不发起真实券码核销或资金处理。</span>
+            </div>
+            <div class="governance-preset-grid">
+              <button
+                v-for="item in depositDirectPresets"
+                :key="item.configKey"
+                type="button"
+                class="governance-preset"
+                :class="{ 'is-active': previewForm.configKey === item.configKey }"
+                @click="applyGovernancePreset(item)"
+              >
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.description }}</span>
+                <small>{{ item.configKey }}</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="governance-presets workflow-switch-presets">
+            <div class="governance-presets__head">
+              <strong>流程旁路记录治理</strong>
+              <span>用于记录流程实例、任务和事件，便于沙盒观察与排查；默认不会推进订单、排档、财务或三方接口状态。</span>
+            </div>
+            <div class="governance-preset-grid">
+              <button
+                v-for="item in workflowSwitchPresets"
+                :key="item.configKey"
+                type="button"
+                class="governance-preset"
+                :class="{ 'is-active': previewForm.configKey === item.configKey }"
+                @click="applyGovernancePreset(item)"
+              >
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.description }}</span>
+                <small>{{ item.configKey }}</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="governance-presets appointment-reason-presets">
+            <div class="governance-presets__head">
+              <strong>排档记录治理</strong>
+              <span>统一约档、改档、取消预约的原因口径；只影响记录字段校验和默认值，不自动改档或改变顾客排档位置。</span>
+            </div>
+            <div class="governance-preset-grid">
+              <button
+                v-for="item in appointmentReasonPresets"
+                :key="item.configKey"
+                type="button"
+                class="governance-preset"
+                :class="{ 'is-active': previewForm.configKey === item.configKey }"
+                @click="applyGovernancePreset(item)"
+              >
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.description }}</span>
+                <small>{{ item.configKey }}</small>
+              </button>
+            </div>
+          </div>
+
           <div class="service-form-presets">
             <div class="service-form-presets__head">
               <strong>服务确认单治理</strong>
@@ -124,7 +250,7 @@
                 type="button"
                 class="service-form-preset"
                 :class="{ 'is-active': previewForm.configKey === item.configKey }"
-                @click="applyServiceFormPreset(item)"
+                @click="applyGovernancePreset(item)"
               >
                 <strong>{{ item.label }}</strong>
                 <span>{{ item.description }}</span>
@@ -683,13 +809,13 @@ const capabilityMeta = {
   },
   WORKFLOW_SWITCH: {
     label: '流程开关',
-    description: '控制订单、排档、服务单等流程能力灰度启用',
+    description: '登记订单、排档、服务单等旁路观察能力的灰度开关',
     exampleKey: 'workflow.service_order.enabled',
     exampleValue: 'false'
   },
   DEPOSIT_DIRECT: {
-    label: '定金免码核销',
-    description: '控制定金订单是否允许免扫码进入服务流程',
+    label: '定金免码确认',
+    description: '控制定金订单是否允许免扫码、免输码记录到店确认',
     exampleKey: 'deposit.direct.enabled',
     exampleValue: 'true'
   },
@@ -699,11 +825,23 @@ const capabilityMeta = {
     exampleKey: 'amount.visibility.store_staff_hidden',
     exampleValue: 'true'
   },
+  FINANCE_LEDGER_BOUNDARY: {
+    label: '财务台账边界',
+    description: '控制财务模块只做台账、退款冲正和外部处理登记',
+    exampleKey: 'finance.ledger.only_mode',
+    exampleValue: 'true'
+  },
   CLUE_DEDUP: {
     label: '客资去重规则',
     description: '控制客资入站去重窗口和合并策略',
     exampleKey: 'clue.dedup.window_days',
     exampleValue: '90'
+  },
+  APPOINTMENT_REASON: {
+    label: '排档原因规则',
+    description: '控制约档、改档、取消预约记录的原因白名单、强制项和默认值',
+    exampleKey: 'appointment.reason.default_change',
+    exampleValue: 'RESCHEDULE'
   },
   SERVICE_FORM_PRINT_REQUIRED: {
     label: '确认前打印',
@@ -786,6 +924,12 @@ const moduleNameMap = {
 }
 
 const pinnedCapabilityCodes = [
+  'AMOUNT_VISIBILITY',
+  'FINANCE_LEDGER_BOUNDARY',
+  'DEPOSIT_DIRECT',
+  'WORKFLOW_SWITCH',
+  'CLUE_DEDUP',
+  'APPOINTMENT_REASON',
   'SERVICE_FORM_PRINT_REQUIRED',
   'SERVICE_FORM_CONFIRM_REQUIRED',
   'SERVICE_FORM_STALE_POLICY',
@@ -794,55 +938,242 @@ const pinnedCapabilityCodes = [
   'SERVICE_FORM_DESIGNER_SCHEMA_SIZE'
 ]
 
+const clueDedupPresets = [
+  {
+    label: '启用 90 天游标去重',
+    description: '同来源同手机号或微信在窗口内主动合并，身份唯一保护仍保留',
+    configKey: 'clue.dedup.enabled',
+    configValue: 'true',
+    valueType: 'BOOLEAN',
+    capabilityCode: 'CLUE_DEDUP',
+    summary: '默认启用客资去重，仅影响后续接口入库，不重算历史客资'
+  },
+  {
+    label: '去重窗口 90 天',
+    description: '订单和动作继续追加到客资记录，不覆盖历史记录',
+    configKey: 'clue.dedup.window_days',
+    configValue: '90',
+    valueType: 'NUMBER',
+    capabilityCode: 'CLUE_DEDUP',
+    summary: '设置客资去重窗口为 90 天，订单和动作继续进入客资记录'
+  }
+]
+
+const depositDirectPresets = [
+  {
+    label: '启用定金免码确认',
+    description: '定金订单不用扫码或输码，只记录到店确认并进入确认单流程',
+    configKey: 'deposit.direct.enabled',
+    configValue: 'true',
+    valueType: 'BOOLEAN',
+    capabilityCode: 'DEPOSIT_DIRECT',
+    summary: '启用定金免码确认，仅跳过券码核销动作，不处理收款、退款或资金结算'
+  }
+]
+
+const workflowSwitchPresets = [
+  {
+    label: '旁路记录默认关闭',
+    description: '关闭真实订单动作的旁路观察记录，旧业务仍按原链路运行',
+    configKey: 'workflow.system_flow_runtime.enabled',
+    configValue: 'false',
+    valueType: 'BOOLEAN',
+    capabilityCode: 'WORKFLOW_SWITCH',
+    summary: '保持流程旁路记录关闭，不改变订单、排档、财务或三方接口状态'
+  },
+  {
+    label: '服务单观察开关预留',
+    description: '服务确认单仍按现有业务逻辑执行，本项仅作为未来旁路观察配置预留',
+    configKey: 'workflow.service_order.enabled',
+    configValue: 'false',
+    valueType: 'BOOLEAN',
+    capabilityCode: 'WORKFLOW_SWITCH',
+    summary: '保持服务单观察预留项关闭，不改变服务单状态'
+  },
+  {
+    label: '排档观察开关预留',
+    description: '顾客排档仍在客资中心按现有预约逻辑执行，本项仅作为未来旁路观察配置预留',
+    configKey: 'workflow.scheduling.enabled',
+    configValue: 'false',
+    valueType: 'BOOLEAN',
+    capabilityCode: 'WORKFLOW_SWITCH',
+    summary: '保持排档观察预留项关闭，不移动顾客排档，不改变预约状态'
+  }
+]
+
+const appointmentReasonPresets = [
+  {
+    label: '排档原因白名单',
+    description: '允许客服在约档、改档、取消预约时选择的原因编码',
+    configKey: 'appointment.reason.allowed_codes',
+    configValue: 'CUSTOMER_REQUEST,RESCHEDULE,STORE_ADJUST,TRAFFIC_DELAY,CUSTOMER_CANCEL',
+    valueType: 'STRING',
+    capabilityCode: 'APPOINTMENT_REASON',
+    summary: '更新排档原因白名单，仅影响约档、改档和取消预约的记录口径'
+  },
+  {
+    label: '改档必须选原因',
+    description: '只要求改档时明确原因，首次约档和取消预约仍使用默认原因',
+    configKey: 'appointment.reason.required_actions',
+    configValue: 'APPOINTMENT_CHANGE',
+    valueType: 'STRING',
+    capabilityCode: 'APPOINTMENT_REASON',
+    summary: '要求改档必须提交原因，方便留存改档记录，不自动改变预约状态'
+  },
+  {
+    label: '默认首次约档原因',
+    description: '客服首次约档未手选原因时使用客户主动预约',
+    configKey: 'appointment.reason.default_create',
+    configValue: 'CUSTOMER_REQUEST',
+    valueType: 'STRING',
+    capabilityCode: 'APPOINTMENT_REASON',
+    summary: '设置首次约档默认原因，不影响已保存排档记录'
+  },
+  {
+    label: '默认改档原因',
+    description: '客服改档未手选原因时使用客户改约',
+    configKey: 'appointment.reason.default_change',
+    configValue: 'RESCHEDULE',
+    valueType: 'STRING',
+    capabilityCode: 'APPOINTMENT_REASON',
+    summary: '设置改档默认原因，不自动触发改档'
+  },
+  {
+    label: '默认取消原因',
+    description: '取消预约未手选原因时使用客户取消',
+    configKey: 'appointment.reason.default_cancel',
+    configValue: 'CUSTOMER_CANCEL',
+    valueType: 'STRING',
+    capabilityCode: 'APPOINTMENT_REASON',
+    summary: '设置取消预约默认原因，不改变订单状态流转规则'
+  }
+]
+
+const amountVisibilityPresets = [
+  {
+    label: '隐藏门店前置金额',
+    description: '门店执行角色隐藏定金、团购、核销金额',
+    configKey: 'amount.visibility.store_staff_hidden',
+    configValue: 'true',
+    valueType: 'BOOLEAN',
+    capabilityCode: 'AMOUNT_VISIBILITY',
+    summary: '门店角色隐藏定金、团购和核销金额，仅控制展示不处理资金'
+  },
+  {
+    label: '前置金额隐藏角色',
+    description: '配置哪些门店角色看不到定金、团购和核销金额',
+    configKey: 'amount.visibility.store_staff_hidden_roles',
+    configValue: 'STORE_SERVICE,STORE_MANAGER,PHOTOGRAPHER,MAKEUP_ARTIST,PHOTO_SELECTOR',
+    valueType: 'STRING',
+    capabilityCode: 'AMOUNT_VISIBILITY',
+    summary: '更新门店前置金额隐藏角色，不改变订单金额和结算结果'
+  },
+  {
+    label: '确认单金额隐藏角色',
+    description: '服务确认单、打印、企微发送按角色隐藏确认单金额',
+    configKey: 'amount.visibility.service_confirm_hidden_roles',
+    configValue: 'STORE_SERVICE,STORE_MANAGER,PHOTOGRAPHER,MAKEUP_ARTIST,PHOTO_SELECTOR',
+    valueType: 'STRING',
+    capabilityCode: 'AMOUNT_VISIBILITY',
+    summary: '更新服务确认单金额隐藏角色，仅影响页面、打印和通知展示'
+  },
+  {
+    label: '确认单金额编辑角色',
+    description: '默认仅管理员和财务可修改服务确认单金额',
+    configKey: 'amount.visibility.service_confirm_edit_roles',
+    configValue: 'ADMIN,FINANCE',
+    valueType: 'STRING',
+    capabilityCode: 'AMOUNT_VISIBILITY',
+    summary: '更新服务确认单金额编辑角色，不影响历史确认单金额'
+  }
+]
+
+const financeLedgerPresets = [
+  {
+    label: '只做台账',
+    description: '财务管理不发起真实收款、退款、提现或转账',
+    configKey: 'finance.ledger.only_mode',
+    configValue: 'true',
+    valueType: 'BOOLEAN',
+    capabilityCode: 'FINANCE_LEDGER_BOUNDARY',
+    summary: '确认财务模块只做台账和登记，不处理真实资金'
+  },
+  {
+    label: '退款必须冲正',
+    description: '退款流程必须同步生成或登记薪资、分销绩效冲正',
+    configKey: 'finance.ledger.refund_salary_reversal_required',
+    configValue: 'true',
+    valueType: 'BOOLEAN',
+    capabilityCode: 'FINANCE_LEDGER_BOUNDARY',
+    summary: '确认退款必须走薪资和分销绩效冲正'
+  },
+  {
+    label: '分销外部处理登记',
+    description: '分销提现只同步外部结果或登记线下处理，不在系统内打款',
+    configKey: 'finance.ledger.distributor_withdraw_register_only',
+    configValue: 'true',
+    valueType: 'BOOLEAN',
+    capabilityCode: 'FINANCE_LEDGER_BOUNDARY',
+    summary: '确认分销提现只做外部处理登记'
+  }
+]
+
 const serviceFormPresets = [
   {
     label: '确认前必须打印',
     description: '纸质单确认前要求当前版本已打印',
     configKey: 'service_form.print.required_before_confirm',
     configValue: 'true',
-    valueType: 'BOOLEAN'
+    valueType: 'BOOLEAN',
+    capabilityCode: 'SERVICE_FORM_PRINT_REQUIRED'
   },
   {
     label: '开始服务前确认',
     description: '开始服务前要求纸质单已确认',
     configKey: 'service_form.confirm.required_before_start',
     configValue: 'true',
-    valueType: 'BOOLEAN'
+    valueType: 'BOOLEAN',
+    capabilityCode: 'SERVICE_FORM_CONFIRM_REQUIRED'
   },
   {
     label: '内容变更阻断',
     description: '确认单内容变化后要求重新打印',
     configKey: 'service_form.print.stale_policy',
     configValue: 'BLOCK_CONFIRM',
-    valueType: 'STRING'
+    valueType: 'STRING',
+    capabilityCode: 'SERVICE_FORM_STALE_POLICY'
   },
   {
     label: '成熟设计器白名单',
     description: '只允许已适配设计器引擎导入',
     configKey: 'form_designer.allowed_engines',
     configValue: 'INTERNAL_SCHEMA,FORMILY,VFORM3,LOWCODE_ENGINE,JSON_SCHEMA',
-    valueType: 'STRING'
+    valueType: 'STRING',
+    capabilityCode: 'SERVICE_FORM_DESIGNER'
   },
   {
     label: '电子签名拦截',
     description: '导入时拦截电子签名和脚本组件',
     configKey: 'form_designer.blocked_components',
     configValue: 'signature,esign,electronicSignature,canvasSignature,html,iframe,script,webview',
-    valueType: 'STRING'
+    valueType: 'STRING',
+    capabilityCode: 'SERVICE_FORM_DESIGNER'
   },
   {
     label: 'Schema 大小上限',
     description: '限制单模板导入体积，避免内嵌资源过大',
     configKey: 'form_designer.max_schema_bytes',
     configValue: '200000',
-    valueType: 'NUMBER'
+    valueType: 'NUMBER',
+    capabilityCode: 'SERVICE_FORM_DESIGNER_SCHEMA_SIZE'
   },
   {
     label: '纸质签名留位',
     description: '打印版强制保留手写签名位置',
     configKey: 'form_designer.paper_signature_required',
     configValue: 'true',
-    valueType: 'BOOLEAN'
+    valueType: 'BOOLEAN',
+    capabilityCode: 'SERVICE_FORM_DESIGNER_PAPER_SIGNATURE'
   }
 ]
 
@@ -1241,15 +1572,15 @@ function applyCapability(item) {
   previewResult.value = null
 }
 
-function applyServiceFormPreset(item) {
-  activeCapabilityCode.value = relatedServiceFormCapability(item.configKey)
+function applyGovernancePreset(item) {
+  activeCapabilityCode.value = item.capabilityCode || relatedServiceFormCapability(item.configKey)
   previewForm.configKey = item.configKey
   previewForm.valueType = item.valueType
   previewForm.scopeType = 'GLOBAL'
   previewForm.scopeId = 'GLOBAL'
   previewForm.configValue = item.configValue
   previewForm.enabled = 1
-  previewForm.summary = `调整${item.label}`
+  previewForm.summary = item.summary || `调整${item.label}`
   previewResult.value = null
 }
 
@@ -1579,6 +1910,7 @@ function formatDate(value) {
   color: #64748b;
 }
 
+.governance-presets,
 .service-form-presets {
   margin-bottom: 18px;
   padding: 14px;
@@ -1587,6 +1919,37 @@ function formatDate(value) {
   background: #f8fbff;
 }
 
+.clue-dedup-presets {
+  border-color: #bbf7d0;
+  background: #f7fef9;
+}
+
+.amount-visibility-presets {
+  border-color: #fde68a;
+  background: #fffdf5;
+}
+
+.finance-ledger-presets {
+  border-color: #fecaca;
+  background: #fff8f8;
+}
+
+.deposit-direct-presets {
+  border-color: #bfdbfe;
+  background: #f7fbff;
+}
+
+.workflow-switch-presets {
+  border-color: #ddd6fe;
+  background: #fbfaff;
+}
+
+.appointment-reason-presets {
+  border-color: #bae6fd;
+  background: #f7fdff;
+}
+
+.governance-presets__head,
 .service-form-presets__head {
   display: flex;
   flex-wrap: wrap;
@@ -1595,21 +1958,25 @@ function formatDate(value) {
   margin-bottom: 12px;
 }
 
+.governance-presets__head strong,
 .service-form-presets__head strong {
   color: #0f172a;
 }
 
+.governance-presets__head span,
 .service-form-presets__head span {
   color: #64748b;
   font-size: 13px;
 }
 
+.governance-preset-grid,
 .service-form-preset-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
+.governance-preset,
 .service-form-preset {
   min-height: 104px;
   padding: 12px;
@@ -1622,28 +1989,36 @@ function formatDate(value) {
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
+.governance-preset:hover,
+.governance-preset.is-active,
 .service-form-preset:hover,
 .service-form-preset.is-active {
   border-color: #0ea5e9;
   box-shadow: 0 10px 24px rgba(14, 165, 233, 0.12);
 }
 
+.governance-preset strong,
+.governance-preset span,
+.governance-preset small,
 .service-form-preset strong,
 .service-form-preset span,
 .service-form-preset small {
   display: block;
 }
 
+.governance-preset strong,
 .service-form-preset strong {
   color: #0f172a;
   font-size: 14px;
 }
 
+.governance-preset span,
 .service-form-preset span {
   margin-top: 6px;
   font-size: 13px;
 }
 
+.governance-preset small,
 .service-form-preset small {
   margin-top: 8px;
   color: #64748b;
@@ -1836,6 +2211,7 @@ function formatDate(value) {
 
 @media (max-width: 1280px) {
   .capability-catalog,
+  .governance-preset-grid,
   .service-form-preset-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1849,6 +2225,7 @@ function formatDate(value) {
   }
 
   .capability-catalog,
+  .governance-preset-grid,
   .service-form-preset-grid {
     grid-template-columns: 1fr;
   }

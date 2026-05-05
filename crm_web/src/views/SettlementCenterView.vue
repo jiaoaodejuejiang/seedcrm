@@ -721,6 +721,14 @@ async function handleRefundRecordCurrentChange(page) {
 }
 
 async function handleCreateSettlement() {
+  try {
+    await confirmFinanceLedgerAction(
+      '本操作只创建薪酬/分销台账依据，不会发起付款、打款或资金划拨。确认继续吗？',
+      '创建台账记录'
+    )
+  } catch {
+    return
+  }
   await createSalarySettlement({
     userId: selectedUserId.value,
     startTime: toDateTimeString(settlementForm.range?.[0]),
@@ -731,6 +739,14 @@ async function handleCreateSettlement() {
 }
 
 async function handleConfirmSettlement(row) {
+  try {
+    await confirmFinanceLedgerAction(
+      '本操作只确认系统账面金额和结算口径，不代表真实资金已经支付。确认继续吗？',
+      '确认台账'
+    )
+  } catch {
+    return
+  }
   await confirmSalarySettlement({
     settlementId: row.id
   })
@@ -739,6 +755,16 @@ async function handleConfirmSettlement(row) {
 }
 
 async function handlePaySettlement(row) {
+  try {
+    await confirmFinanceLedgerAction(
+      matchedMode.value === 'LEDGER_ONLY'
+        ? '本操作只把记账单标记为账面完成，不会发起真实转账。确认继续吗？'
+        : '请确认线下或外部渠道已完成处理；本系统只登记处理结果，不发起真实转账。确认继续吗？',
+      matchedMode.value === 'LEDGER_ONLY' ? '标记记账完成' : '登记线下结清'
+    )
+  } catch {
+    return
+  }
   await paySalarySettlement({
     settlementId: row.id
   })
@@ -747,6 +773,14 @@ async function handlePaySettlement(row) {
 }
 
 async function handleCreateWithdraw() {
+  try {
+    await confirmFinanceLedgerAction(
+      '本操作只登记线下结清申请和审核记录，不会发起提现、打款或资金划拨。确认继续吗？',
+      '登记线下结清'
+    )
+  } catch {
+    return
+  }
   await createSalaryWithdraw({
     userId: selectedUserId.value,
     subjectType: resolveWithdrawSubjectType(),
@@ -759,11 +793,10 @@ async function handleCreateWithdraw() {
 
 async function handleApproveWithdraw(row) {
   try {
-    await ElMessageBox.confirm('确认已在线下完成处理，并在系统登记为已处理吗？', '登记线下处理', {
-      type: 'warning',
-      confirmButtonText: '确认登记',
-      cancelButtonText: '取消'
-    })
+    await confirmFinanceLedgerAction(
+      '请确认已在线下或外部渠道完成处理；本操作只更新系统登记状态，不发起真实资金划拨。',
+      '登记线下处理'
+    )
   } catch {
     return
   }
@@ -802,6 +835,14 @@ async function handleRejectWithdraw(row) {
 }
 
 async function handleAutoWithdraw() {
+  try {
+    await confirmFinanceLedgerAction(
+      '本操作只把外部处理结果登记到系统台账，不会在本系统内自动提现或打款。确认继续吗？',
+      '登记外部处理'
+    )
+  } catch {
+    return
+  }
   await createSalaryWithdraw({
     userId: selectedUserId.value,
     subjectType: resolveWithdrawSubjectType(),
@@ -849,6 +890,14 @@ async function submitFinanceRefund() {
     ElMessage.warning('请填写退款原因')
     return
   }
+  try {
+    await confirmFinanceLedgerAction(
+      '真实退款仍需在抖音、分销或线下渠道完成；本操作只登记退款台账冲正，并同步冲正客服与分销绩效。确认继续吗？',
+      '登记退款冲正'
+    )
+  } catch {
+    return
+  }
   financeRefundSubmitting.value = true
   try {
     await refundOrder({
@@ -872,6 +921,14 @@ async function submitFinanceRefund() {
   } finally {
     financeRefundSubmitting.value = false
   }
+}
+
+function confirmFinanceLedgerAction(message, title = '财务台账登记') {
+  return ElMessageBox.confirm(message, title, {
+    type: 'warning',
+    confirmButtonText: '确认登记',
+    cancelButtonText: '取消'
+  })
 }
 
 function buildFinanceRefundRemark() {

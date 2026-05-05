@@ -478,6 +478,51 @@ class SystemConfigServiceImplTest {
     }
 
     @Test
+    void shouldValidateFinanceLedgerBoundaryConfigDraft() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("finance.ledger.refund_salary_reversal_required");
+        request.setConfigValue("true");
+        request.setValueType("BOOLEAN");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        SystemConfigDtos.ValidationResponse validation = service.validateDraft(draft.getDraftNo());
+
+        assertThat(validation.getValid()).isTrue();
+        assertThat(validation.getItems().get(0).getValidatorCode()).isEqualTo("FINANCE_LEDGER_BOUNDARY");
+        assertThat(validation.getItems().get(0).getMessage()).contains("财务台账边界");
+    }
+
+    @Test
+    void shouldRejectDisablingFinanceLedgerBoundary() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("finance.ledger.only_mode");
+        request.setConfigValue("false");
+        request.setValueType("BOOLEAN");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        SystemConfigDtos.ValidationResponse validation = service.validateDraft(draft.getDraftNo());
+
+        assertThat(validation.getValid()).isFalse();
+        assertThat(validation.getItems().get(0).getStatus()).isEqualTo("BLOCK");
+        assertThat(validation.getItems().get(0).getMessage()).contains("不能关闭");
+    }
+
+    @Test
+    void shouldRejectFinanceLedgerRealFundKeys() {
+        SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
+        request.setConfigKey("finance.ledger.transfer.enabled");
+        request.setConfigValue("true");
+        request.setValueType("BOOLEAN");
+        SystemConfigDtos.DraftResponse draft = service.createDraft(request, adminContext());
+
+        SystemConfigDtos.ValidationResponse validation = service.validateDraft(draft.getDraftNo());
+
+        assertThat(validation.getValid()).isFalse();
+        assertThat(validation.getItems().get(0).getStatus()).isEqualTo("BLOCK");
+        assertThat(validation.getItems().get(0).getMessage()).contains("真实资金");
+    }
+
+    @Test
     void shouldMaskSensitiveValuesInPublishRecordSnapshots() {
         SystemConfigDtos.SaveConfigRequest request = new SystemConfigDtos.SaveConfigRequest();
         request.setConfigKey("wecom.clientSecret");
@@ -842,6 +887,7 @@ class SystemConfigServiceImplTest {
         seedCapability("WORKFLOW_SWITCH", "workflow.%", "SYSTEM_FLOW", "BOOLEAN", "HIGH", 0, "BOOLEAN", "MODULE_CALLBACK");
         seedCapability("CLUE_DEDUP", "clue.dedup.%", "CLUE", "STRING", "MEDIUM", 0, "CLUE_DEDUP", "CACHE_EVICT");
         seedCapability("APPOINTMENT_REASON", "appointment.reason.%", "CLUE", "STRING", "MEDIUM", 0, "APPOINTMENT_REASON", "CACHE_EVICT");
+        seedCapability("FINANCE_LEDGER_BOUNDARY", "finance.ledger.%", "FINANCE", "STRING", "HIGH", 0, "FINANCE_LEDGER_BOUNDARY", "CACHE_EVICT");
         seedCapability("STORE_SCHEDULE", "store.schedule.%", "STORE_SERVICE", "JSON", "MEDIUM", 0, "STORE_SCHEDULE", "CACHE_EVICT");
         seedCapability("SERVICE_FORM_PRINT_REQUIRED", "service_form.print.required_before_confirm", "PLANORDER", "BOOLEAN", "MEDIUM", 0, "BOOLEAN", "CACHE_EVICT");
         seedCapability("SERVICE_FORM_CONFIRM_REQUIRED", "service_form.confirm.required_before_start", "PLANORDER", "BOOLEAN", "MEDIUM", 0, "BOOLEAN", "CACHE_EVICT");

@@ -1,8 +1,10 @@
 import { computed, reactive } from 'vue'
 import { fetchCurrentUser, login as loginRequest, logout as logoutRequest } from '../api/auth'
-import { loadSystemConsoleState } from './systemConsoleStore'
+import { getSystemParameterValue, loadSystemConsoleState } from './systemConsoleStore'
 
 const STORAGE_KEY = 'seedcrm.auth-token'
+const AMOUNT_ALWAYS_VISIBLE_ROLES = ['ADMIN', 'FINANCE']
+const DEFAULT_AMOUNT_HIDDEN_ROLES = ['STORE_SERVICE', 'STORE_MANAGER', 'PHOTOGRAPHER', 'MAKEUP_ARTIST', 'PHOTO_SELECTOR']
 
 const accessibleRoutes = [
   { path: '/clues', moduleCode: 'CLUE' },
@@ -233,11 +235,30 @@ export function hasAccess(moduleCode, roleCodes = []) {
 }
 
 export function canViewBusinessAmounts(roleCode = authState.currentUser?.roleCode) {
-  return ['ADMIN', 'FINANCE'].includes(normalizeRoleCode(roleCode))
+  const normalizedRole = normalizeRoleCode(roleCode)
+  if (!normalizedRole) {
+    return false
+  }
+  if (AMOUNT_ALWAYS_VISIBLE_ROLES.includes(normalizedRole)) {
+    return true
+  }
+  if (!isAmountVisibilityEnabled('amount.visibility.store_staff_hidden', true)) {
+    return DEFAULT_AMOUNT_HIDDEN_ROLES.includes(normalizedRole)
+  }
+  return DEFAULT_AMOUNT_HIDDEN_ROLES.includes(normalizedRole)
+    && !getAmountHiddenRoles('amount.visibility.store_staff_hidden_roles').includes(normalizedRole)
 }
 
 export function canViewServiceAmounts(roleCode = authState.currentUser?.roleCode) {
-  return ['ADMIN', 'FINANCE'].includes(normalizeRoleCode(roleCode))
+  const normalizedRole = normalizeRoleCode(roleCode)
+  if (!normalizedRole) {
+    return false
+  }
+  if (AMOUNT_ALWAYS_VISIBLE_ROLES.includes(normalizedRole)) {
+    return true
+  }
+  return DEFAULT_AMOUNT_HIDDEN_ROLES.includes(normalizedRole)
+    && !getAmountHiddenRoles('amount.visibility.service_confirm_hidden_roles').includes(normalizedRole)
 }
 
 export function hasRouteAccess(path, moduleCode, roleCodes = []) {
@@ -370,6 +391,37 @@ function getConfiguredMenuConfigs() {
   } catch {
     return []
   }
+}
+
+function getAmountHiddenRoles(paramKey) {
+  return parseRoleCodes(getSystemParameter(paramKey, DEFAULT_AMOUNT_HIDDEN_ROLES.join(',')), DEFAULT_AMOUNT_HIDDEN_ROLES)
+}
+
+function getSystemParameter(paramKey, fallback = '') {
+  try {
+    return getSystemParameterValue(loadSystemConsoleState(), paramKey, fallback)
+  } catch {
+    return fallback
+  }
+}
+
+function isAmountVisibilityEnabled(paramKey, fallback = true) {
+  const value = String(getSystemParameter(paramKey, fallback ? 'true' : 'false') || '').trim().toLowerCase()
+  if (['false', '0', 'no', 'off'].includes(value)) {
+    return false
+  }
+  if (['true', '1', 'yes', 'on'].includes(value)) {
+    return true
+  }
+  return fallback
+}
+
+function parseRoleCodes(value, fallback = []) {
+  const roles = String(value || '')
+    .split(/[,\uFF0C\s]+/)
+    .map(normalizeRoleCode)
+    .filter(Boolean)
+  return roles.length ? roles : [...fallback]
 }
 
 function getCurrentRoleCode() {

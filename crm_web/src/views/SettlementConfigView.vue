@@ -19,12 +19,19 @@
       <div class="panel-heading">
         <div>
           <h3>结算与线下处理规则</h3>
-          <p>配置只决定系统台账、审核和线下处理登记方式，不发起真实资金划转。</p>
+          <p>配置只决定系统台账、审核和线下处理登记方式，不发起真实收款、退款、提现或转账。</p>
         </div>
         <div class="action-group">
           <el-button @click="loadPolicies">刷新</el-button>
           <el-button type="primary" @click="openCreateDialog">新增规则</el-button>
         </div>
+      </div>
+
+      <div class="finance-boundary-grid">
+        <article v-for="item in financeBoundaryCards" :key="item.title" class="finance-boundary-card">
+          <strong>{{ item.title }}</strong>
+          <span>{{ item.description }}</span>
+        </article>
       </div>
 
       <el-tabs v-model="activeRuleTab" class="platform-tabs" @tab-change="pagination.reset">
@@ -209,7 +216,7 @@
       </div>
       <el-alert
         v-if="ruleForm.settlementMode === 'WITHDRAW_DIRECT'"
-        title="当前规则会直接登记为外部已处理；发布前请确认金额上限和适用对象。"
+        title="当前规则只会直接登记为外部已处理；系统不会发起打款、提现或资金划拨。发布前请确认金额上限和适用对象。"
         type="warning"
         show-icon
         :closable="false"
@@ -279,6 +286,20 @@ const roleOptions = computed(() => {
 const publishedCount = computed(() => policies.value.filter((item) => item.status === 'PUBLISHED').length)
 const draftCount = computed(() => policies.value.filter((item) => item.status === 'DRAFT').length)
 const disabledCount = computed(() => policies.value.filter((item) => ['DISABLED', 'ARCHIVED'].includes(item.status)).length)
+const financeBoundaryCards = [
+  {
+    title: '台账边界',
+    description: '本系统只生成薪酬、分销和线下处理台账，不接管第三方资金。'
+  },
+  {
+    title: '退款口径',
+    description: '真实退款在抖音、分销或线下渠道完成，本系统登记退款冲正和薪资冲正。'
+  },
+  {
+    title: '分销结清',
+    description: '分销提现按规则进入外部处理登记或财务审核登记，不在系统内打款。'
+  }
+]
 
 function createRuleForm() {
   return {
@@ -365,7 +386,7 @@ async function saveDraft() {
     return
   }
   try {
-    await ElMessageBox.confirm('保存草稿不会立即生效；发布后才会影响后续新结算和线下处理申请。确认保存吗？', '保存规则草稿', {
+    await ElMessageBox.confirm('保存草稿不会立即生效；发布后才会影响后续新结算和线下处理登记，不发起真实资金动作。确认保存吗？', '保存规则草稿', {
       type: 'warning',
       confirmButtonText: '确认保存',
       cancelButtonText: '取消'
@@ -389,7 +410,7 @@ async function saveDraft() {
 
 async function publishRule(row) {
   try {
-    await ElMessageBox.confirm('发布后会立即影响结算/线下处理规则匹配，确认发布吗？', '发布结算规则', {
+    await ElMessageBox.confirm('发布只影响后续规则匹配，不发起资金划转，不重算历史结算/线下结清/冲正记录。确认发布吗？', '发布结算规则', {
       type: 'warning',
       confirmButtonText: '确认发布',
       cancelButtonText: '取消'
@@ -484,6 +505,32 @@ onMounted(loadPolicies)
   align-items: center;
 }
 
+.finance-boundary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.finance-boundary-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.finance-boundary-card strong {
+  color: #0f172a;
+}
+
+.finance-boundary-card span {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .decision-card {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -524,6 +571,10 @@ onMounted(loadPolicies)
 @media (max-width: 1100px) {
   .simulate-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .finance-boundary-grid {
+    grid-template-columns: 1fr;
   }
 
   .decision-card {

@@ -174,6 +174,7 @@ public class SystemConfigSchemaInitializer {
         seedCapability("WORKFLOW_SWITCH", "workflow.%", "SYSTEM_FLOW", "BOOLEAN", "HIGH", false, "BOOLEAN", "MODULE_CALLBACK");
         seedCapability("DEPOSIT_DIRECT", "deposit.direct.%", "STORE_SERVICE", "BOOLEAN", "MEDIUM", false, "BOOLEAN", "CACHE_EVICT");
         seedCapability("AMOUNT_VISIBILITY", "amount.visibility.%", "FINANCE", "STRING", "HIGH", false, "FINANCE_VISIBILITY", "CACHE_EVICT");
+        seedCapability("FINANCE_LEDGER_BOUNDARY", "finance.ledger.%", "FINANCE", "STRING", "HIGH", false, "FINANCE_LEDGER_BOUNDARY", "CACHE_EVICT");
         seedCapability("CLUE_DEDUP", "clue.dedup.%", "CLUE", "STRING", "MEDIUM", false, "CLUE_DEDUP", "CACHE_EVICT");
         seedCapability("APPOINTMENT_REASON", "appointment.reason.%", "CLUE", "STRING", "MEDIUM", false, "APPOINTMENT_REASON", "CACHE_EVICT");
         seedCapability("STORE_SCHEDULE", "store.schedule.%", "STORE_SERVICE", "JSON", "MEDIUM", false, "STORE_SCHEDULE", "CACHE_EVICT");
@@ -205,6 +206,9 @@ public class SystemConfigSchemaInitializer {
                 "ADMIN,FINANCE",
                 "STRING",
                 "允许填写或修改服务确认单金额的角色编码，英文逗号分隔；默认仅总部与财务可编辑");
+        seedDefault("finance.ledger.only_mode", "true", "BOOLEAN", "财务管理只做台账、对账、线下处理登记，不发起真实收款、退款、提现或转账");
+        seedDefault("finance.ledger.refund_salary_reversal_required", "true", "BOOLEAN", "退款流程必须同步生成或登记薪资/分销绩效冲正");
+        seedDefault("finance.ledger.distributor_withdraw_register_only", "true", "BOOLEAN", "分销提现只同步外部结果或登记线下处理，不在本系统发起打款");
         seedDefault("clue.dedup.enabled", "true", "BOOLEAN", "客资入库启用按客户身份去重，默认开启");
         seedDefault("clue.dedup.window_days", "90", "NUMBER", "客资去重窗口天数；窗口内同客户保留一条基础客资，多条订单/动作写入客资记录");
         seedDefault("appointment.reason.allowed_codes",

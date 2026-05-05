@@ -110,6 +110,8 @@ class OrderServiceImplTest {
                 voucherVerificationGateway, orderActionRecordMapper, orderRefundRecordMapper, salaryDetailMapper,
                 new ObjectMapper(), systemConfigService, systemFlowRuntimeBridge);
         lenient().when(systemConfigService.getBoolean("deposit.direct.enabled", true)).thenReturn(true);
+        lenient().when(systemConfigService.getBoolean("finance.ledger.refund_salary_reversal_required", true))
+                .thenReturn(true);
         lenient().when(systemConfigService.getString("amount.visibility.service_confirm_edit_roles", "ADMIN,FINANCE"))
                 .thenReturn("ADMIN,FINANCE");
         lenient().when(systemConfigService.getString(
@@ -684,33 +686,28 @@ class OrderServiceImplTest {
     }
 
     @Test
-    void financeRefundShouldNotCreateSalaryReversalWhenFlagsAreFalse() {
+    void financeRefundShouldRejectDisabledSalaryReversalWhenRequired() {
         Order order = financeRefundOrder(17L);
         when(dbLockService.lockOrder(17L)).thenReturn(order);
         when(customerService.getByIdOrThrow(217L)).thenReturn(new Customer());
-        when(planOrderMapper.selectOne(any())).thenReturn(planOrder(170L, 17L));
-        when(orderRefundRecordMapper.selectList(any())).thenReturn(List.of());
-        when(orderRefundRecordMapper.insert(any(OrderRefundRecord.class))).thenAnswer(invocation -> {
-            OrderRefundRecord record = invocation.getArgument(0);
-            record.setId(701L);
-            return 1;
-        });
-        when(salaryDetailMapper.selectList(any())).thenReturn(List.of(
-                salaryDetail(1L, "ONLINE_CUSTOMER_SERVICE"),
-                salaryDetail(2L, "DISTRIBUTOR")));
-        when(orderMapper.updateById(any(Order.class))).thenReturn(1);
 
         OrderActionDTO dto = financeRefundDto(17L);
         dto.setReverseCustomerService(false);
         dto.setReverseDistributor(false);
 
-        orderService.refund(dto, 9002L);
+        assertThatThrownBy(() -> orderService.refund(dto, 9002L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("冲正");
 
+        verify(orderRefundRecordMapper, never()).selectOne(any());
+        verify(orderRefundRecordMapper, never()).insert(any(OrderRefundRecord.class));
         verify(salaryDetailMapper, never()).insert(any(SalaryDetail.class));
+        verify(orderActionRecordMapper, never()).insert(any(OrderActionRecord.class));
+        verify(orderMapper, never()).updateById(any(Order.class));
     }
 
     @Test
-    void financeRefundShouldReverseOnlyEnabledSalaryScopes() {
+    void financeRefundShouldDefaultRequiredSalaryReversalScopes() {
         Order order = financeRefundOrder(18L);
         when(dbLockService.lockOrder(18L)).thenReturn(order);
         when(customerService.getByIdOrThrow(218L)).thenReturn(new Customer());
@@ -727,17 +724,24 @@ class OrderServiceImplTest {
         when(orderMapper.updateById(any(Order.class))).thenReturn(1);
 
         OrderActionDTO dto = financeRefundDto(18L);
-        dto.setReverseCustomerService(true);
-        dto.setReverseDistributor(false);
 
         orderService.refund(dto, 9002L);
 
         ArgumentCaptor<SalaryDetail> salaryCaptor = ArgumentCaptor.forClass(SalaryDetail.class);
-        verify(salaryDetailMapper).insert(salaryCaptor.capture());
-        assertThat(salaryCaptor.getValue().getRoleCode()).isEqualTo("ONLINE_CUSTOMER_SERVICE");
-        assertThat(salaryCaptor.getValue().getAdjustmentType()).isEqualTo("REFUND_REVERSAL");
-        assertThat(salaryCaptor.getValue().getRefundRecordId()).isEqualTo(702L);
-        assertThat(salaryCaptor.getValue().getAmount()).isNegative();
+        verify(salaryDetailMapper, times(2)).insert(salaryCaptor.capture());
+        assertThat(salaryCaptor.getAllValues())
+                .extracting(SalaryDetail::getRoleCode)
+                .containsExactly("ONLINE_CUSTOMER_SERVICE", "DISTRIBUTOR");
+        assertThat(salaryCaptor.getAllValues())
+                .allSatisfy(detail -> {
+                    assertThat(detail.getAdjustmentType()).isEqualTo("REFUND_REVERSAL");
+                    assertThat(detail.getRefundRecordId()).isEqualTo(702L);
+                    assertThat(detail.getAmount()).isNegative();
+                });
+        ArgumentCaptor<OrderRefundRecord> refundCaptor = ArgumentCaptor.forClass(OrderRefundRecord.class);
+        verify(orderRefundRecordMapper).insert(refundCaptor.capture());
+        assertThat(refundCaptor.getValue().getReverseCustomerService()).isEqualTo(1);
+        assertThat(refundCaptor.getValue().getReverseDistributor()).isEqualTo(1);
     }
 
     @Test
@@ -758,6 +762,8 @@ class OrderServiceImplTest {
         existing.setRefundReason("duplicate submit");
         existing.setStatus("REGISTERED");
         existing.setIdempotencyKey("ORDER_REFUND:existing");
+        existing.setReverseCustomerService(1);
+        existing.setReverseDistributor(1);
         when(orderRefundRecordMapper.selectOne(any())).thenReturn(existing);
 
         OrderActionDTO dto = new OrderActionDTO();
@@ -796,6 +802,8 @@ class OrderServiceImplTest {
         existing.setRefundReason("same key");
         existing.setStatus("REGISTERED");
         existing.setIdempotencyKey("ORDER_REFUND:existing");
+        existing.setReverseCustomerService(1);
+        existing.setReverseDistributor(1);
         when(orderRefundRecordMapper.selectOne(any())).thenReturn(existing);
 
         OrderActionDTO dto = new OrderActionDTO();
@@ -835,6 +843,8 @@ class OrderServiceImplTest {
         existing.setRefundReason("race retry");
         existing.setStatus("REGISTERED");
         existing.setIdempotencyKey("ORDER_REFUND:race");
+        existing.setReverseCustomerService(1);
+        existing.setReverseDistributor(1);
         when(orderRefundRecordMapper.selectOne(any())).thenReturn(null, existing);
         when(orderRefundRecordMapper.insert(any(OrderRefundRecord.class)))
                 .thenThrow(new DuplicateKeyException("duplicate"));

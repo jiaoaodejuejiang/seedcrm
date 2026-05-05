@@ -74,6 +74,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private static final String REFUND_SCENE_STORE_SERVICE = "STORE_SERVICE";
     private static final String REFUND_SCENE_FINANCE_PAYMENT = "FINANCE_VERIFIED_PAYMENT";
     private static final String CONFIG_DEPOSIT_DIRECT_ENABLED = "deposit.direct.enabled";
+    private static final String CONFIG_FINANCE_REFUND_SALARY_REVERSAL_REQUIRED =
+            "finance.ledger.refund_salary_reversal_required";
     private static final String CONFIG_SERVICE_AMOUNT_EDIT_ROLES = "amount.visibility.service_confirm_edit_roles";
     private static final String CONFIG_APPOINTMENT_REASON_ALLOWED_CODES = "appointment.reason.allowed_codes";
     private static final String CONFIG_APPOINTMENT_REASON_REQUIRED_ACTIONS = "appointment.reason.required_actions";
@@ -430,6 +432,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         validateOrderId(orderActionDTO == null ? null : orderActionDTO.getOrderId());
         Order order = dbLockService.lockOrder(orderActionDTO.getOrderId());
         ensureOrderCustomerBound(order);
+        enforceFinanceRefundSalaryReversal(orderActionDTO);
         OrderRefundRecord existingRefund = findSameRefund(order, orderActionDTO);
         if (existingRefund != null) {
             attachRefundResult(order, existingRefund, true);
@@ -1280,13 +1283,14 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 && Boolean.TRUE.equals(orderActionDTO.getReverseCustomerService());
         boolean reverseDistributor = REFUND_SCENE_FINANCE_PAYMENT.equals(scene)
                 && Boolean.TRUE.equals(orderActionDTO.getReverseDistributor());
+        boolean reverseSalary = reverseStorePerformance || reverseCustomerService || reverseDistributor;
         return "{"
                 + "\"refundScene\":" + jsonString(scene)
                 + ",\"refundRecordId\":" + (refundRecord == null || refundRecord.getId() == null ? "null" : refundRecord.getId())
                 + ",\"refundIdempotencyKey\":" + jsonString(refundRecord == null ? null : refundRecord.getIdempotencyKey())
                 + ",\"platformChannel\":" + jsonString(orderActionDTO.getPlatformChannel())
                 + ",\"reverseStorePerformance\":" + reverseStorePerformance
-                + ",\"reverseSalary\":" + reverseStorePerformance
+                + ",\"reverseSalary\":" + reverseSalary
                 + ",\"reverseCustomerService\":" + reverseCustomerService
                 + ",\"reverseDistributor\":" + reverseDistributor
                 + ",\"fundsTransferred\":false"
@@ -1449,6 +1453,21 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         return values.stream()
                 .map(value -> value == null ? null : value.format(DATE_TIME_FORMATTER))
                 .toList();
+    }
+
+    private void enforceFinanceRefundSalaryReversal(OrderActionDTO orderActionDTO) {
+        if (orderActionDTO == null || !REFUND_SCENE_FINANCE_PAYMENT.equals(resolveRefundScene(orderActionDTO))) {
+            return;
+        }
+        if (!systemConfigService.getBoolean(CONFIG_FINANCE_REFUND_SALARY_REVERSAL_REQUIRED, true)) {
+            return;
+        }
+        if (Boolean.FALSE.equals(orderActionDTO.getReverseCustomerService())
+                || Boolean.FALSE.equals(orderActionDTO.getReverseDistributor())) {
+            throw new BusinessException("财务退款必须同步冲正客服和分销绩效");
+        }
+        orderActionDTO.setReverseCustomerService(true);
+        orderActionDTO.setReverseDistributor(true);
     }
 
     private void validateRefundRequest(Order order, OrderActionDTO orderActionDTO) {

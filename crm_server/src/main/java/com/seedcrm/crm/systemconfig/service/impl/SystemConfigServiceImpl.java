@@ -82,6 +82,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             "workflow.",
             "deposit.",
             "amount.",
+            "finance.",
             "clue.",
             "appointment.",
             "store.",
@@ -1214,6 +1215,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
             case "CLUE_DEDUP" -> validateClueDedupItem(item, capability);
             case "APPOINTMENT_REASON" -> validateAppointmentReasonItem(item, capability);
             case "FINANCE_VISIBILITY" -> validateFinanceVisibilityItem(item, capability);
+            case "FINANCE_LEDGER_BOUNDARY" -> validateFinanceLedgerBoundaryItem(item, capability);
             case "SERVICE_FORM_STALE_POLICY" -> validateServiceFormStalePolicyItem(item, capability);
             case "FORM_DESIGNER" -> validateFormDesignerItem(item, capability);
             case "FORM_DESIGNER_SCHEMA_SIZE" -> validateFormDesignerSchemaSizeItem(item, capability);
@@ -1352,6 +1354,42 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         }
         return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
                 capability.validatorCode(), "财务可见性配置校验通过", null);
+    }
+
+    private SystemConfigDtos.ValidationItemResponse validateFinanceLedgerBoundaryItem(RawDraftItem item,
+                                                                                     RawCapability capability) {
+        String normalizedKey = normalizeConfigKey(item.configKey());
+        if (normalizedKey.contains("payment")
+                || normalizedKey.contains("pay.")
+                || normalizedKey.contains("transfer")
+                || normalizedKey.contains("cash")
+                || normalizedKey.contains("funds")
+                || normalizedKey.contains("fund_flow")
+                || normalizedKey.contains("fund_transfer")) {
+            return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), "财务台账边界配置不能扩展为真实资金能力",
+                    "本系统只做台账、冲正和线下处理登记；支付、打款、提现和资金划拨仍应在外部平台处理。");
+        }
+        if (Set.of(
+                "finance.ledger.only_mode",
+                "finance.ledger.refund_salary_reversal_required",
+                "finance.ledger.distributor_withdraw_register_only").contains(normalizedKey)) {
+            if (!isBooleanText(item.afterValue())) {
+                return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                        capability.validatorCode(), "财务治理边界配置只允许 true 或 false",
+                        "请将配置值设置为 true。");
+            }
+            if (!"TRUE".equals(normalizeOrDefault(item.afterValue(), "false"))) {
+                return validationItem(item.configKey(), "BLOCK", capability.ownerModule(), capability.capabilityCode(),
+                        capability.validatorCode(), "财务台账边界当前不能关闭",
+                        "本系统不接管真实资金，退款必须薪资冲正，分销提现只做外部处理登记。");
+            }
+            return validationItem(item.configKey(), "PASS", capability.ownerModule(), capability.capabilityCode(),
+                    capability.validatorCode(), "财务台账边界校验通过", null);
+        }
+        return validationItem(item.configKey(), "WARN", capability.ownerModule(), capability.capabilityCode(),
+                capability.validatorCode(), "该财务台账 Key 已登记但没有专用消费模块",
+                "请确认该配置只影响台账、展示或登记口径，不触发真实资金动作。");
     }
 
     private SystemConfigDtos.ValidationItemResponse validateAppointmentReasonItem(RawDraftItem item,
@@ -1731,6 +1769,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 || normalized.startsWith("system.domain.")
                 || normalized.startsWith("workflow.")
                 || normalized.startsWith("amount.")
+                || normalized.startsWith("finance.")
                 || normalized.startsWith("douyin.")
                 || normalized.startsWith("wecom.")) {
             return "HIGH";
@@ -1759,7 +1798,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
                 || normalized.startsWith("store.")) {
             modules.add("门店服务");
         }
-        if (normalized.startsWith("amount.") || normalized.startsWith("payment.")) {
+        if (normalized.startsWith("amount.") || normalized.startsWith("payment.") || normalized.startsWith("finance.")) {
             modules.add("财务管理");
         }
         if (normalized.startsWith("distribution.") || normalized.startsWith("douyin.") || normalized.startsWith("wecom.")
@@ -1786,6 +1825,8 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         }
         if (normalized.startsWith("workflow.")) {
             warnings.add("流程配置会影响状态流转，建议先在系统流程页完成模拟验证。");
+        } else if (normalized.startsWith("finance.ledger.")) {
+            warnings.add("财务台账边界配置只允许控制记账、冲正和线下登记口径，不会发起真实收款、退款、提现或转账。");
         } else if (normalized.startsWith("amount.")) {
             warnings.add("金额可见规则会影响门店角色看到的定金、团购和核销金额。");
         } else if (normalized.startsWith("clue.dedup.")) {

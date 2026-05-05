@@ -89,7 +89,7 @@ public class SalarySettlementPolicyServiceImpl implements SalarySettlementPolicy
             throw new BusinessException("更新结算规则草稿失败");
         }
         SalarySettlementPolicy savedPolicy = policyMapper.selectById(policy.getId());
-        audit(savedPolicy, "SAVE_DRAFT", context, "保存结算/提现规则草稿");
+        audit(savedPolicy, "SAVE_DRAFT", context, "保存结算/线下处理登记规则草稿");
         return toResponse(savedPolicy);
     }
 
@@ -120,7 +120,7 @@ public class SalarySettlementPolicyServiceImpl implements SalarySettlementPolicy
         if (policyMapper.updateById(policy) <= 0) {
             throw new BusinessException("发布结算规则失败");
         }
-        audit(policy, "PUBLISH", context, "发布结算/提现规则");
+        audit(policy, "PUBLISH", context, "发布结算/线下处理登记规则");
         return toResponse(policy);
     }
 
@@ -135,7 +135,7 @@ public class SalarySettlementPolicyServiceImpl implements SalarySettlementPolicy
         if (policyMapper.updateById(policy) <= 0) {
             throw new BusinessException("停用结算规则失败");
         }
-        audit(policy, "DISABLE", context, "停用结算/提现规则");
+        audit(policy, "DISABLE", context, "停用结算/线下处理登记规则");
         return toResponse(policy);
     }
 
@@ -156,7 +156,7 @@ public class SalarySettlementPolicyServiceImpl implements SalarySettlementPolicy
             response.setSettlementMode(MODE_LEDGER_ONLY);
             response.setLedgerOnly(true);
             response.setMessage("未命中已发布规则；为资金安全，默认按只记账处理");
-            response.setNextAction("补充并发布结算/提现规则");
+            response.setNextAction("补充并发布结算/线下处理登记规则");
             return response;
         }
         response.setMatchedPolicy(toResponse(matchedPolicy));
@@ -166,7 +166,7 @@ public class SalarySettlementPolicyServiceImpl implements SalarySettlementPolicy
         response.setAutoApprove(MODE_WITHDRAW_DIRECT.equalsIgnoreCase(matchedPolicy.getSettlementMode()));
         response.setRequiresAudit(MODE_WITHDRAW_AUDIT.equalsIgnoreCase(matchedPolicy.getSettlementMode()));
         response.setNextAction(resolveNextAction(matchedPolicy));
-        response.setMessage("模拟匹配成功；本接口不创建结算单、不创建提现单、不写入资金流水");
+        response.setMessage("模拟匹配成功；本接口不创建结算单、不创建线下处理登记单、不写入资金流水");
         return response;
     }
 
@@ -318,13 +318,13 @@ public class SalarySettlementPolicyServiceImpl implements SalarySettlementPolicy
     private String resolveNextAction(SalarySettlementPolicy policy) {
         String mode = normalize(policy.getSettlementMode());
         if (MODE_LEDGER_ONLY.equals(mode)) {
-            return "按月生成内部员工结算单，只记账不提现";
+            return "按月生成内部员工结算台账，不发起真实资金处理";
         }
         if (MODE_WITHDRAW_DIRECT.equals(mode)) {
-            return "允许发起小额提现并自动通过";
+            return "登记外部已处理结果，不在本系统发起打款";
         }
         if (MODE_WITHDRAW_AUDIT.equals(mode)) {
-            return "允许发起提现申请，进入财务审核";
+            return "创建线下处理登记，进入财务审核确认";
         }
         return "按规则继续处理";
     }

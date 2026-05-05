@@ -258,11 +258,13 @@
         <label>
           <span>设计器引擎</span>
           <el-select v-model="templateForm.designerEngine">
-            <el-option label="系统轻量 Schema" value="INTERNAL_SCHEMA" />
-            <el-option label="Formily 适配" value="FORMILY" />
-            <el-option label="VForm 3 适配" value="VFORM3" />
-            <el-option label="阿里 LowCode Engine 适配" value="LOWCODE_ENGINE" />
-            <el-option label="JSON Schema 适配" value="JSON_SCHEMA" />
+            <el-option
+              v-for="item in designerEngineOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+              :disabled="item.disabled"
+            />
           </el-select>
         </label>
         <label>
@@ -278,14 +280,20 @@
         </label>
         <div class="template-form__wide designer-import-panel">
           <div>
-            <strong>第三方设计器导入</strong>
-            <span>支持 VForm 3、Formily、LowCode Engine、JSON Schema；纸质签名留位会保留，电子签名组件会拦截。</span>
+            <strong>设计器 Schema 导入</strong>
+            <span>{{ designerGovernanceText }}</span>
           </div>
           <div class="action-group">
-            <el-button plain @click="triggerImportSchema">导入设计器 JSON</el-button>
+            <el-button plain @click="triggerImportSchema">导入 Schema</el-button>
             <el-button plain @click="validateTemplateSchema">校验字段</el-button>
           </div>
           <input ref="schemaImportInputRef" class="hidden-file-input" type="file" accept=".json,application/json" @change="handleImportSchemaFile" />
+        </div>
+        <div class="template-form__wide designer-governance-panel">
+          <span>允许设计器：{{ allowedDesignerEngineLabels }}</span>
+          <span>Schema 上限：{{ designerSchemaLimitText }}</span>
+          <span>电子签名：已拦截 {{ blockedComponentPreview }}</span>
+          <span>手写签名留位：{{ designerGovernance.paperSignatureRequired ? '保存时强制保留' : '按模板配置' }}</span>
         </div>
         <div v-if="schemaImportReport" class="template-form__wide schema-import-report" :class="{ 'schema-import-report--blocked': schemaImportReport.blocked.length }">
           <div class="schema-import-report__header">
@@ -300,6 +308,7 @@
             <span>组件数量：{{ schemaImportReport.componentCount }}</span>
             <span>标准化版本：{{ schemaImportReport.version }}</span>
             <span>纸质签名：{{ schemaImportReport.paperSignatureReady ? '已保留' : '保存时补齐' }}</span>
+            <span>Schema 大小：{{ formatBytes(schemaImportReport.schemaBytes) }}</span>
           </div>
           <p v-if="schemaImportReport.blocked.length">拦截内容：{{ schemaImportReport.blocked.join('、') }}</p>
           <p v-else>已生成标准 Schema 预览；保存时后端会再次执行安全校验，草稿发布前不会影响门店正在使用的模板。</p>
@@ -344,8 +353,24 @@ import {
   saveServiceFormBinding,
   saveServiceFormTemplateDraft
 } from '../api/serviceFormTemplate'
+import { fetchSystemConfigs } from '../api/systemConfig'
 import { currentUser } from '../utils/auth'
 import { listStoreNames, loadSystemConsoleState } from '../utils/systemConsoleStore'
+
+const DEFAULT_DESIGNER_GOVERNANCE = {
+  allowedEngines: ['INTERNAL_SCHEMA', 'FORMILY', 'VFORM3', 'LOWCODE_ENGINE', 'JSON_SCHEMA'],
+  blockedComponents: ['signature', 'esign', 'electronicSignature', 'canvasSignature', 'html', 'iframe', 'script', 'webview'],
+  maxSchemaBytes: 200000,
+  paperSignatureRequired: true
+}
+
+const DESIGNER_ENGINE_OPTIONS = [
+  { label: '系统轻量 Schema', value: 'INTERNAL_SCHEMA' },
+  { label: 'Formily 适配', value: 'FORMILY' },
+  { label: 'VForm 3 适配', value: 'VFORM3' },
+  { label: '阿里 LowCode Engine 适配', value: 'LOWCODE_ENGINE' },
+  { label: 'JSON Schema 适配', value: 'JSON_SCHEMA' }
+]
 
 const fallbackState = reactive(loadSystemConsoleState())
 const activeTab = ref('templates')
@@ -359,6 +384,12 @@ const schemaImportReport = ref(null)
 const templates = ref([])
 const bindings = ref([])
 const previewResult = ref(null)
+const designerGovernance = reactive({
+  allowedEngines: [...DEFAULT_DESIGNER_GOVERNANCE.allowedEngines],
+  blockedComponents: [...DEFAULT_DESIGNER_GOVERNANCE.blockedComponents],
+  maxSchemaBytes: DEFAULT_DESIGNER_GOVERNANCE.maxSchemaBytes,
+  paperSignatureRequired: DEFAULT_DESIGNER_GOVERNANCE.paperSignatureRequired
+})
 
 const templatePagination = useTablePagination(computed(() => templates.value))
 const bindingPagination = useTablePagination(computed(() => bindings.value))
@@ -376,6 +407,27 @@ const previewTemplate = computed(() => previewResult.value?.template || null)
 const previewMessage = computed(() => previewResult.value?.message || '预览模式')
 const previewSections = computed(() => parsePreviewSections(previewTemplate.value?.configJson))
 const corePreviewFields = ['客户信息', '服务项目', '确认金额', '纸质签名留位']
+const designerEngineOptions = computed(() => {
+  const allowed = new Set(designerGovernance.allowedEngines)
+  const options = DESIGNER_ENGINE_OPTIONS.filter((item) => allowed.has(item.value))
+  const current = String(templateForm.designerEngine || '').toUpperCase()
+  if (current && !allowed.has(current)) {
+    options.push({
+      label: `${formatDesignerEngine(current)}（已停用）`,
+      value: current,
+      disabled: true
+    })
+  }
+  return options.length ? options : DESIGNER_ENGINE_OPTIONS.filter((item) => item.value === 'INTERNAL_SCHEMA')
+})
+const allowedDesignerEngineLabels = computed(() => designerGovernance.allowedEngines.map(formatDesignerEngine).join('、'))
+const designerSchemaLimitText = computed(() => formatBytes(designerGovernance.maxSchemaBytes))
+const blockedComponentPreview = computed(() => designerGovernance.blockedComponents.slice(0, 5).join('、') || '电子签名类组件')
+const designerGovernanceText = computed(() => {
+  const engines = allowedDesignerEngineLabels.value || '系统轻量 Schema'
+  const signatureText = designerGovernance.paperSignatureRequired ? '纸质签名留位会保留' : '纸质签名留位按模板配置'
+  return `允许导入 ${engines}；${signatureText}，电子签名和脚本类组件会拦截。`
+})
 
 const templateForm = reactive(createTemplateForm())
 const bindingForm = reactive(createBindingForm())
@@ -414,6 +466,7 @@ function createBindingForm(payload = {}) {
 async function loadAll() {
   loading.value = true
   try {
+    await loadDesignerGovernance()
     const [templateRows, bindingRows] = await Promise.all([fetchServiceFormTemplates(), fetchServiceFormBindings()])
     templates.value = Array.isArray(templateRows) ? templateRows : []
     bindings.value = Array.isArray(bindingRows) ? bindingRows : []
@@ -430,6 +483,42 @@ async function loadAll() {
   }
 }
 
+async function loadDesignerGovernance() {
+  try {
+    const rows = await fetchSystemConfigs('form_designer.')
+    const byKey = Array.isArray(rows)
+      ? rows.reduce((next, item) => {
+          next[item.configKey] = item.configValue
+          return next
+        }, {})
+      : {}
+    designerGovernance.allowedEngines = parseConfigCodes(
+      byKey['form_designer.allowed_engines'],
+      DEFAULT_DESIGNER_GOVERNANCE.allowedEngines
+    )
+    designerGovernance.blockedComponents = parseConfigItems(
+      byKey['form_designer.blocked_components'],
+      DEFAULT_DESIGNER_GOVERNANCE.blockedComponents
+    )
+    designerGovernance.maxSchemaBytes = parsePositiveInt(
+      byKey['form_designer.max_schema_bytes'],
+      DEFAULT_DESIGNER_GOVERNANCE.maxSchemaBytes
+    )
+    designerGovernance.paperSignatureRequired = parseConfigBoolean(
+      byKey['form_designer.paper_signature_required'],
+      DEFAULT_DESIGNER_GOVERNANCE.paperSignatureRequired
+    )
+    ensureAllowedDesignerEngine()
+  } catch {
+    Object.assign(designerGovernance, {
+      allowedEngines: [...DEFAULT_DESIGNER_GOVERNANCE.allowedEngines],
+      blockedComponents: [...DEFAULT_DESIGNER_GOVERNANCE.blockedComponents],
+      maxSchemaBytes: DEFAULT_DESIGNER_GOVERNANCE.maxSchemaBytes,
+      paperSignatureRequired: DEFAULT_DESIGNER_GOVERNANCE.paperSignatureRequired
+    })
+  }
+}
+
 function openTemplateEditor(row = null) {
   if (!canManageTemplates.value) {
     ElMessage.warning('当前角色只能预览模板，不能编辑全局模板')
@@ -437,7 +526,16 @@ function openTemplateEditor(row = null) {
   }
   Object.assign(templateForm, createTemplateForm(row || {}))
   schemaImportReport.value = buildSchemaImportReport(templateForm.rawSchemaJson || templateForm.normalizedSchemaJson)
+  ensureAllowedDesignerEngine()
   templateDialogVisible.value = true
+}
+
+function ensureAllowedDesignerEngine() {
+  const current = String(templateForm.designerEngine || '').toUpperCase()
+  if (designerGovernance.allowedEngines.includes(current)) {
+    return
+  }
+  templateForm.designerEngine = designerGovernance.allowedEngines[0] || 'INTERNAL_SCHEMA'
 }
 
 async function saveTemplateDraft() {
@@ -455,6 +553,15 @@ async function saveTemplateDraft() {
   }
   if (templateForm.normalizedSchemaJson && !isJsonLike(templateForm.normalizedSchemaJson)) {
     ElMessage.warning('系统标准 Schema JSON 格式不正确')
+    return
+  }
+  const oversize = firstOversizeSchema()
+  if (oversize) {
+    ElMessage.warning(`${oversize} 超过 ${designerSchemaLimitText.value}，请拆分模板或减少内嵌数据`)
+    return
+  }
+  if (!designerGovernance.allowedEngines.includes(String(templateForm.designerEngine || '').toUpperCase())) {
+    ElMessage.warning('当前设计器引擎不在系统允许范围内')
     return
   }
   templateForm.configJson = ensurePaperSignatureConfig(templateForm.configJson)
@@ -485,13 +592,21 @@ async function handleImportSchemaFile(event) {
     return
   }
   try {
+    if (file.size > designerGovernance.maxSchemaBytes) {
+      ElMessage.warning(`文件超过 ${designerSchemaLimitText.value}，请拆分模板或减少内嵌资源`)
+      return
+    }
     const text = await file.text()
+    if (schemaSizeBytes(text) > designerGovernance.maxSchemaBytes) {
+      ElMessage.warning(`Schema 超过 ${designerSchemaLimitText.value}，请拆分模板或减少内嵌资源`)
+      return
+    }
     const parsed = JSON.parse(text)
     const pretty = JSON.stringify(parsed, null, 2)
     templateForm.rawSchemaJson = pretty
     templateForm.normalizedSchemaJson = JSON.stringify(buildNormalizedSchemaPreview(parsed), null, 2)
     schemaImportReport.value = buildSchemaImportReport(pretty)
-    ElMessage.success('设计器 JSON 已导入，请校验字段后保存草稿')
+    ElMessage.success('Schema 已导入，请校验字段后保存草稿')
   } catch (error) {
     ElMessage.warning(`导入失败：${error.message || '文件不是有效 JSON'}`)
   } finally {
@@ -512,6 +627,11 @@ function validateTemplateSchema() {
   }
   if (templateForm.normalizedSchemaJson && !isJsonLike(templateForm.normalizedSchemaJson)) {
     ElMessage.warning('系统标准 Schema JSON 格式不正确')
+    return false
+  }
+  const oversize = firstOversizeSchema()
+  if (oversize) {
+    ElMessage.warning(`${oversize} 超过 ${designerSchemaLimitText.value}，请拆分模板或减少内嵌数据`)
     return false
   }
   templateForm.configJson = ensurePaperSignatureConfig(templateForm.configJson)
@@ -673,6 +793,38 @@ function parsePreviewSections(configJson) {
   return ['基础信息', '服务确认', '偏好与补充', '纸质签名留位']
 }
 
+function parseConfigCodes(value, fallback = []) {
+  const allowed = new Set(DESIGNER_ENGINE_OPTIONS.map((item) => item.value))
+  const codes = parseConfigItems(value, fallback)
+    .map((item) => item.toUpperCase().replace(/[-\s]+/g, '_'))
+    .filter((item) => allowed.has(item))
+  return codes.length ? [...new Set(codes)] : [...fallback]
+}
+
+function parseConfigItems(value, fallback = []) {
+  const items = String(value || '')
+    .split(/[,，\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+  return items.length ? [...new Set(items)] : [...fallback]
+}
+
+function parsePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(String(value || ''), 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function parseConfigBoolean(value, fallback) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (['true', '1', 'yes', 'on'].includes(normalized)) {
+    return true
+  }
+  if (['false', '0', 'no', 'off'].includes(normalized)) {
+    return false
+  }
+  return fallback
+}
+
 function isJsonLike(value) {
   if (!value || !String(value).trim()) {
     return true
@@ -686,6 +838,9 @@ function isJsonLike(value) {
 }
 
 function ensurePaperSignatureConfig(value) {
+  if (!designerGovernance.paperSignatureRequired) {
+    return value
+  }
   try {
     const parsed = JSON.parse(value || '{}')
     const sections = Array.isArray(parsed.sections) ? parsed.sections : []
@@ -701,6 +856,9 @@ function ensurePaperSignatureConfig(value) {
 }
 
 function ensurePaperSignatureNormalizedSchema(value) {
+  if (!designerGovernance.paperSignatureRequired) {
+    return value
+  }
   if (!value || !String(value).trim()) {
     return value
   }
@@ -733,13 +891,15 @@ function buildSchemaImportReport(value) {
     }
   }
   const stats = scanSchemaStats(schema)
-  const unsafe = findUnsafeSchemaText(JSON.stringify(schema))
+  const schemaText = JSON.stringify(schema)
+  const unsafe = findUnsafeSchemaText(schemaText)
   return {
     engineLabel: detectDesignerEngine(schema),
     fieldCount: stats.fieldCount,
     componentCount: stats.components.size,
     version: resolveSchemaVersion(schema),
-    paperSignatureReady: hasPaperSignaturePlaceholder(schema),
+    paperSignatureReady: !designerGovernance.paperSignatureRequired || hasPaperSignaturePlaceholder(schema),
+    schemaBytes: schemaSizeBytes(schemaText),
     blocked: unsafe ? [unsafe] : []
   }
 }
@@ -807,7 +967,7 @@ function normalizeSchemaToken(value) {
 }
 
 function buildNormalizedSchemaPreview(schema) {
-  return {
+  const normalized = {
     schemaVersion: 'service-form-template.v1',
     designerEngine: templateForm.designerEngine || 'INTERNAL_SCHEMA',
     designerEngineVersion: resolveSchemaVersion(schema),
@@ -830,10 +990,13 @@ function buildNormalizedSchemaPreview(schema) {
       'divider',
       'paperSignaturePlaceholder'
     ],
-    paperSignatureRequired: true,
-    printSignatureBlocks: ['customerHandwrittenSignature', 'storeOperator', 'signedDate'],
     schema
   }
+  if (designerGovernance.paperSignatureRequired) {
+    normalized.paperSignatureRequired = true
+    normalized.printSignatureBlocks = ['customerHandwrittenSignature', 'storeOperator', 'signedDate']
+  }
+  return normalized
 }
 
 function resolveSchemaVersion(schema) {
@@ -848,6 +1011,7 @@ function findUnsafeSchemaText(value) {
     return ''
   }
   const text = String(value).toLowerCase()
+  const normalizedText = normalizeSchemaToken(text)
   const blocked = [
     '<script',
     'javascript:',
@@ -860,7 +1024,42 @@ function findUnsafeSchemaText(value) {
     '"signature"',
     '"html"'
   ]
-  return blocked.find((item) => text.includes(item)) || ''
+  const staticBlocked = blocked.find((item) => text.includes(item))
+  if (staticBlocked) {
+    return staticBlocked
+  }
+  return designerGovernance.blockedComponents.find((item) => {
+    const normalized = normalizeSchemaToken(item)
+    return normalized && normalizedText.includes(normalized)
+  }) || ''
+}
+
+function schemaSizeBytes(value) {
+  return new Blob([String(value || '')]).size
+}
+
+function firstOversizeSchema() {
+  const items = [
+    ['模板配置 JSON', templateForm.configJson],
+    ['设计器原始 Schema', templateForm.rawSchemaJson],
+    ['系统标准 Schema', templateForm.normalizedSchemaJson]
+  ]
+  const matched = items.find(([, value]) => value && schemaSizeBytes(value) > designerGovernance.maxSchemaBytes)
+  return matched?.[0] || ''
+}
+
+function formatBytes(value) {
+  const size = Number(value || 0)
+  if (!Number.isFinite(size) || size <= 0) {
+    return '0 B'
+  }
+  if (size >= 1024 * 1024) {
+    return `${(size / 1024 / 1024).toFixed(1)} MB`
+  }
+  if (size >= 1024) {
+    return `${Math.round(size / 1024)} KB`
+  }
+  return `${size} B`
 }
 
 function ensureScopedStoreSelected() {
